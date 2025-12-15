@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.db import models
 
-from lexicon_base import BaseVideoOccurrence
+from .lexicon_base import BaseVideoOccurrence
 
 
 class VideoWordOccurrence(BaseVideoOccurrence):
@@ -14,7 +14,7 @@ class VideoWordOccurrence(BaseVideoOccurrence):
     )
 
     class Meta(BaseVideoOccurrence.Meta):
-        indexes = BaseVideoOccurrence.Meta.indexes + [
+        indexes = [
             models.Index(fields=["video", "word"], name="idx_vwo_video_word"),
             models.Index(fields=["subtitle", "word"], name="idx_vwo_sub_word"),
         ]
@@ -32,7 +32,7 @@ class VideoSentenceOccurrence(BaseVideoOccurrence):
     )
 
     class Meta(BaseVideoOccurrence.Meta):
-        indexes = BaseVideoOccurrence.Meta.indexes + [
+        indexes = [
             models.Index(fields=["video", "sentence"], name="idx_vso_video_sentence"),
             models.Index(fields=["subtitle", "sentence"], name="idx_vso_sub_sentence"),
         ]
@@ -56,7 +56,7 @@ class VideoExpressionOccurrence(BaseVideoOccurrence):
     example = models.TextField(blank=True, default="")
 
     class Meta(BaseVideoOccurrence.Meta):
-        indexes = BaseVideoOccurrence.Meta.indexes + [
+        indexes = [
             models.Index(fields=["video", "expression"], name="idx_veo_video_expr"),
             models.Index(fields=["subtitle", "expression"], name="idx_veo_sub_expr"),
         ]

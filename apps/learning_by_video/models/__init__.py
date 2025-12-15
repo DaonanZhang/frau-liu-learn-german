@@ -7,7 +7,6 @@ from .lexicon import (
 )
 from .user_data import LearningVideoUserData
 from .progress import VideoProgress
-from lexicon_base import BaseVideoOccurrence
 
 __all__ = [
     "Video",
@@ -17,5 +16,4 @@ __all__ = [
     "VideoExpressionOccurrence",
     "LearningVideoUserData",
     "VideoProgress",
-    "BaseVideoOccurrence",
 ]

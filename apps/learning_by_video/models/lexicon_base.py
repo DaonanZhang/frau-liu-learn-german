@@ -39,7 +39,3 @@ class BaseVideoOccurrence(models.Model):
 
     class Meta:
         abstract = True
-        indexes = [
-            models.Index(fields=["video", "time_start"], name="idx_%(class)s_video_ts"),
-            models.Index(fields=["subtitle", "time_start"], name="idx_%(class)s_sub_ts"),
-        ]

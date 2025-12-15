@@ -2,4 +2,4 @@ from django.apps import AppConfig
 
 
 class LearningConfig(AppConfig):
-    name = 'apps.learning'
+    name = 'apps.learning_by_video'

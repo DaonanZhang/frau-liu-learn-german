@@ -44,7 +44,9 @@ INSTALLED_APPS = [
     "corsheaders",
 
     "apps.accounts.apps.AccountsConfig",
-    "apps.learning.apps.LearningConfig",
+    "apps.learning_by_video.apps.LearningConfig",
+    "app.lexicon.apps.LexiconConfig",
+
 ]
 
 REST_FRAMEWORK = {

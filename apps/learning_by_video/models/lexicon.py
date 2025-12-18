@@ -15,8 +15,10 @@ class VideoWordOccurrence(BaseVideoOccurrence):
 
     class Meta(BaseVideoOccurrence.Meta):
         indexes = [
-            models.Index(fields=["video", "word"], name="idx_vwo_video_word"),
-            models.Index(fields=["subtitle", "word"], name="idx_vwo_sub_word"),
+            models.Index(fields=["video", "word"], name="vwo_v_w"),
+            models.Index(fields=["subtitle", "word"], name="vwo_s_w"),
+            models.Index(fields=["video", "time_start"], name="vwo_v_t"),
+            models.Index(fields=["subtitle", "time_start"], name="vwo_s_t"),
         ]
 
     def __str__(self) -> str:

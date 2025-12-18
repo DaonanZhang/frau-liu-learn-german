@@ -13,11 +13,13 @@ class Video(models.Model):
 
     # store media path/url; you can later move to a dedicated storage model
     video_url = models.URLField(blank=True, default="")
-    cover_letter_url = models.URLField(blank=True, default="")
+    cover_url = models.URLField(blank=True, default="")
 
     duration_seconds = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
+    is_published = models.BooleanField(default=False, db_index=True)
+    published_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     def __str__(self) -> str:
         return self.title

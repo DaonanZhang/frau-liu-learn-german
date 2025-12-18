@@ -21,8 +21,11 @@ class Subtitle(models.Model):
     translation = models.TextField(blank=True, default="")
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["video", "start", "end"], name="sub_v_se"),
+        ]
         indexes = [
-            models.Index(fields=["video", "start"], name="idx_sub_video_start"),
+            models.Index(fields=["video", "start"], name="sub_v_s"),
         ]
         ordering = ["video_id", "start"]
 

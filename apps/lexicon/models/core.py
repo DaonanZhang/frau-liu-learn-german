@@ -19,7 +19,7 @@ class WordText(BaseLexiconText):
     # 'gehen' is the lemma of 'geht' and 'ging'
     lemma = models.CharField(max_length=128, blank=True, default="")
     # der/die/das (grammatical gender/article)
-    article = models.CharField(max_length=10, choices=Article.choices, blank=True, default="", db_index=True)
+    article = models.CharField(max_length=10, choices=Article.choices, blank=True, default="", db_index=True, null=True)
 
     # optional: part of speech (keep minimal; you can expand later)
     class POS(models.TextChoices):

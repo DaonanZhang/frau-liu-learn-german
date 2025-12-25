@@ -1,0 +1,153 @@
+/* Stats */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.stats-item {
+  padding: 0.5rem 0.25rem;
+}
+
+.stats-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #111;
+}
+
+.stats-label {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #667085;
+}
+
+.tone-green {
+  color: #16a34a;
+}
+
+.tone-blue {
+  color: #2563eb;
+}
+
+/* Calendar */
+.cal-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cal-nav-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+}
+
+.cal-nav-btn:hover {
+  background: #f5f6f8;
+}
+
+.calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.cal-weekday {
+  font-size: 0.75rem;
+  color: #98a2b3;
+  text-align: center;
+  padding: 0.25rem 0;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.cal-day {
+  height: 2rem;
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #111;
+}
+
+.cal-day:hover {
+  background: #f5f6f8;
+}
+
+.cal-day.is-active {
+  background: #eaf3ff;
+  color: #1d4ed8;
+}
+
+.cal-day.is-selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 0.125rem rgba(37, 99, 235, 0.15);
+}
+
+/* Messages */
+.msg-collapse-btn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+}
+
+.msg-collapse-btn:hover {
+  background: #f5f6f8;
+}
+
+.msg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.msg-item {
+  border-radius: 0.75rem;
+  border: 1px solid #eaf0ff;
+  background: #f4f8ff;
+  padding: 0.75rem;
+}
+
+.msg-type {
+  font-size: 0.75rem;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.msg-title {
+  margin-top: 0.25rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #111;
+}
+
+.msg-desc {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.msg-date {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}

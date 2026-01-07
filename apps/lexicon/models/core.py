@@ -37,6 +37,8 @@ class WordText(BaseLexiconText):
 
     pos = models.CharField(max_length=16, choices=POS.choices, blank=True, default="", db_index=True)
 
+    splittable = models.BooleanField(default=False)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -64,6 +66,9 @@ class ExpressionText(BaseLexiconText):
     Aggregation anchor for an authentic expression / phrase.
     Expressions are usually shorter than sentences, but still fine with TextField.
     """
+
+    # "von .. sprechen"
+    prototype = models.TextField(null=True, blank=True, default="")
 
     class Meta:
         constraints = [

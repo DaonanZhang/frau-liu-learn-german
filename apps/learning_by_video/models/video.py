@@ -11,11 +11,16 @@ class Video(models.Model):
     description = models.TextField(blank=True, default="")
     difficulty = models.CharField(max_length=32, blank=True, default="", db_index=True)
 
-    # store media path/url; you can later move to a dedicated storage model
     video_url = models.URLField(blank=True, default="")
     cover_url = models.URLField(blank=True, default="")
 
     duration_seconds = models.PositiveIntegerField(default=0)
+
+    tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of tag strings associated with the video",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     is_published = models.BooleanField(default=False, db_index=True)

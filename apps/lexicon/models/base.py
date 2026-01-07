@@ -17,7 +17,9 @@ class BaseLexiconText(models.Model):
     text = models.TextField()  # keep flexible; subclasses may override with CharField if desired
     normalized_text = models.TextField(db_index=True, editable=False)
 
+    # Optional
     level = models.CharField(max_length=16, blank=True, default="", null=True)  # A1/A2/B1...
+
     similar_expressions = models.TextField(blank=True, default="", null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

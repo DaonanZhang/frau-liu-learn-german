@@ -67,7 +67,7 @@ class ExpressionText(BaseLexiconText):
     Expressions are usually shorter than sentences, but still fine with TextField.
     """
 
-    # "von .. sprechen"
+    # prototypical usage "von .. sprechen"
     prototype = models.TextField(null=True, blank=True, default="")
 
     class Meta:

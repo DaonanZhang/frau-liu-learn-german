@@ -16,6 +16,7 @@ class VideoListSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "title",
+            "creator",
             "description",
             "difficulty",
             "video_url",
@@ -41,6 +42,7 @@ class VideoDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "title",
+            "creator",
             "description",
             "difficulty",
             "video_url",

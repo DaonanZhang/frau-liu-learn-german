@@ -10,6 +10,7 @@ from apps.learning_by_video.views import (
     VideoSentenceOccurrenceViewSet,
     VideoViewSet,
     VideoWordOccurrenceViewSet,
+    VideoExerciseQuestionViewSet
 )
 
 router = DefaultRouter()
@@ -18,6 +19,7 @@ router.register(r"subtitles", SubtitleViewSet, basename="subtitles")
 router.register(r"occurrences/words", VideoWordOccurrenceViewSet, basename="occ-words")
 router.register(r"occurrences/sentences", VideoSentenceOccurrenceViewSet, basename="occ-sentences")
 router.register(r"occurrences/expressions", VideoExpressionOccurrenceViewSet, basename="occ-expressions")
+router.register(r"exercise-questions", VideoExerciseQuestionViewSet, basename="exercise-question")
 
 me_learning_video = LearningVideoUserDataViewSet.as_view({"get": "retrieve", "patch": "partial_update", "put": "update"})
 

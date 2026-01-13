@@ -6,6 +6,7 @@ from .occurrences import (
     VideoExpressionOccurrenceViewSet,
 )
 from .user_data import LearningVideoUserDataViewSet
+from .exercise import VideoExerciseQuestionViewSet
 
 __all__ = [
     "VideoViewSet",
@@ -14,4 +15,5 @@ __all__ = [
     "VideoSentenceOccurrenceViewSet",
     "VideoExpressionOccurrenceViewSet",
     "LearningVideoUserDataViewSet",
+    "VideoExerciseQuestionViewSet",
 ]

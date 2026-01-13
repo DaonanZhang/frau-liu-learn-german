@@ -7,12 +7,14 @@ class Video(models.Model):
     """
     Video content entity for the learning-by-video module.
     """
-    title = models.CharField(max_length=255, db_index=True)
+    title = models.CharField(max_length=512, db_index=True)
+    creator = models.CharField(max_length=255, blank=True, default="", db_index=True)
+
     description = models.TextField(blank=True, default="")
     difficulty = models.CharField(max_length=32, blank=True, default="", db_index=True)
 
     video_url = models.URLField(blank=True, default="")
-    cover_url = models.URLField(blank=True, default="")
+    cover_letter_url = models.URLField(blank=True, default="")
 
     duration_seconds = models.PositiveIntegerField(default=0)
 

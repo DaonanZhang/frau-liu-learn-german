@@ -31,11 +31,9 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
     filterset_fields = ["difficulty"]
     ordering_fields = ["created_at", "difficulty", "duration_seconds"]
     search_fields = ["title"]
+    permission_classes = [AllowAny]
 
     progress_policy = ProgressPolicy()
-
-    def get_permissions(self):
-        return [AllowAny()]
 
     def get_serializer_class(self):
         return VideoListSerializer if self.action == "list" else VideoDetailSerializer

@@ -33,7 +33,11 @@ class Command(BaseCommand):
         parser.add_argument("--file", required=True, help="Path to xlsx file")
         parser.add_argument("--video-id", type=int, required=True, help="Target Video PK")
         parser.add_argument("--sheet", default=SHEET_NAME_DEFAULT, help="Sheet name (default: exercise)")
-
+        parser.add_argument(
+            "--no-move",
+            action="store_true",
+            help="Do not move the xlsx file (used by import_xlsx_all).",
+        )
     @transaction.atomic
     def handle(self, *args, **options) -> None:
         xlsx_path = Path(options["file"])

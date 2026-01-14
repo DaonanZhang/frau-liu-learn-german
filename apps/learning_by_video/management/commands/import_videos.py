@@ -144,7 +144,7 @@ def _resolve_cover_source(cover_cell: str, xlsx_path: Path) -> Path | None:
 def _copy_cover_to_frontend_assets(*, cover_src: Path, title: str, repo_root: Path) -> str:
     """
     Copy cover into frontend assets folder and return frontend-relative path
-    to store in Video.cover_url.
+    to store in Video.cover_letter_url.
 
     Returned path example:
       /src/assets/learning_by_video_cover_letters/ETF_einfach_erklaert.png
@@ -181,12 +181,18 @@ class Command(BaseCommand):
             default="",
             help="Optional: import a single xlsx file. If omitted, imports all xlsx under learning_by_video/data/raw.",
         )
+        parser.add_argument(
+            "--no-move",
+            action="store_true",
+            help="Do not move the xlsx file (used by import_xlsx_all).",
+        )
 
     def handle(self, *args, **options) -> None:
         data_dir = _get_learning_by_video_data_dir()
         raw_dir = data_dir / "raw"
         processed_dir = data_dir / "processed"
         processed_dir.mkdir(parents=True, exist_ok=True)
+        no_move: bool = bool(options.get("no_move"))
 
         file_arg = (options.get("file") or "").strip()
         xlsx_files = [Path(file_arg)] if file_arg else sorted(raw_dir.glob("*.xlsx"))
@@ -224,11 +230,11 @@ class Command(BaseCommand):
                     tags = _parse_tags(str(row[COL_TAGS]).strip())
 
                     cover_cell = str(row[COL_COVER]).strip()
-                    cover_url = ""
+                    cover_letter_url = ""
 
                     cover_src = _resolve_cover_source(cover_cell, xlsx_path)
                     if cover_src is not None:
-                        cover_url = _copy_cover_to_frontend_assets(
+                        cover_letter_url = _copy_cover_to_frontend_assets(
                             cover_src=cover_src,
                             title=title,
                             repo_root=repo_root,
@@ -243,7 +249,7 @@ class Command(BaseCommand):
                             "description": description,
                             "duration_seconds": duration_seconds,
                             "tags": tags,
-                            "cover_url": cover_url,
+                            "cover_letter_url": cover_letter_url,
                         },
                     )
 
@@ -256,7 +262,8 @@ class Command(BaseCommand):
                     target = processed_dir / xlsx_path.name
                     xlsx_path.rename(target)
 
-                transaction.on_commit(_move_after_commit)
+                if not no_move:
+                    transaction.on_commit(_move_after_commit)
 
             self.stdout.write(self.style.SUCCESS(
                 f"OK: {xlsx_path.name} | videos created={created}, updated={updated} -> moved to processed/"

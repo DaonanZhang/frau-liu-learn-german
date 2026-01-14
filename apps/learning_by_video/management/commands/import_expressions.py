@@ -26,6 +26,11 @@ class Command(BaseCommand):
         parser.add_argument("--file", required=True, help="Path to the xlsx file")
         parser.add_argument("--video-id", type=int, required=True, help="Target Video PK")
         parser.add_argument("--sheet", default=SHEET_NAME_DEFAULT, help="Sheet name (default: expression)")
+        parser.add_argument(
+            "--no-move",
+            action="store_true",
+            help="Do not move the xlsx file (used by import_xlsx_all).",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options) -> None:
@@ -68,7 +73,7 @@ class Command(BaseCommand):
                 raise ValueError(f"Row {idx}: invalid subtitle ID: {subtitle_id_raw!r}") from e
 
             # Safety: ensure subtitle belongs to the given video
-            subtitle = Subtitle.objects.filter(pk=subtitle_id, video=video).only("id", "start", "end").first()
+            subtitle = Subtitle.objects.filter(external_id=subtitle_id, video=video).only("id", "start", "end").first()
             if subtitle is None:
                 raise ValueError(
                     f"Row {idx}: Subtitle id={subtitle_id} not found for video_id={video_id}. "

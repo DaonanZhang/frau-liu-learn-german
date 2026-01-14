@@ -74,6 +74,11 @@ class Command(BaseCommand):
             default="subtitle",
             help="Sheet name containing subtitle (default: subtitle).",
         )
+        parser.add_argument(
+            "--no-move",
+            action="store_true",
+            help="Do not move the xlsx file (used by import_xlsx_all).",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options) -> None:
@@ -90,7 +95,7 @@ class Command(BaseCommand):
 
         # Your columns:
         # 开始时间 结束时间 德文 中文 ID
-        required = {"开始时间", "结束时间", "德文", "中文"}
+        required = {"开始时间", "结束时间", "德文", "中文", "ID"}
         missing = required - set(df.columns)
         if missing:
             raise ValueError(f"{path.name}: Missing columns in sheet {sheet_name!r}: {sorted(missing)}")
@@ -112,6 +117,9 @@ class Command(BaseCommand):
             de = str(row["德文"]).strip()
             zh = str(row["中文"]).strip()
 
+            external_id_raw = str(row.get("ID", "")).strip()
+            external_id = int(float(external_id_raw)) if external_id_raw else None
+
             if not start_raw or not end_raw or not de:
                 skipped += 1
                 continue
@@ -127,6 +135,7 @@ class Command(BaseCommand):
                 start=start,
                 end=end,
                 defaults={
+                    "external_id": external_id,
                     "content": de,
                     "translation": zh,
                 },

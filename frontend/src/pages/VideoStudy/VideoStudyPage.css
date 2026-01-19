@@ -1,0 +1,638 @@
+.vs-page {
+  width: 100%;
+}
+
+.vs-grid {
+  display: grid;
+  grid-template-columns: 1.65fr 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+/* Panels / cards */
+.vs-panel,
+.vs-playerCard,
+.vs-descCard {
+  background: #fff;
+  border: 1px solid #eef0f2;
+  border-radius: 0.875rem;
+  box-shadow: 0 0.125rem 0.75rem rgba(16, 24, 40, 0.06);
+  overflow: hidden;
+}
+
+.vs-playerCard {
+  margin-bottom: 1rem;
+}
+
+/* Left area */
+.vs-playerHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.vs-backBtn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: #111827;
+  background: #f5f6f8;
+  border: 1px solid #e5e7eb;
+}
+
+.vs-titleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+}
+
+.vs-title {
+  font-size: 1.05rem;
+  font-weight: 750;
+  color: #111827;
+}
+
+.vs-meta {
+  font-size: 0.85rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.vs-dot {
+  margin: 0 0.35rem;
+}
+
+.vs-player {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.vs-playerPlaceholder {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vs-playerPlaceholderText {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.vs-descCard {
+  padding: 1rem;
+}
+
+.vs-descTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.vs-descText {
+  font-size: 0.9rem;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+/* Middle subtitles */
+.vs-panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.vs-panelTitle {
+  font-size: 0.95rem;
+  font-weight: 750;
+  color: #111827;
+}
+
+.vs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vs-toolBtn {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.6rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  color: #111827;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.vs-toolBtn.is-active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+
+.vs-subtitleList {
+  max-height: calc(100vh - 12rem);
+  overflow: auto;
+  padding: 0.75rem 1rem 1rem;
+}
+
+.vs-subtitleItem {
+  padding: 0.75rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid #f1f3f5;
+  margin-bottom: 0.75rem;
+}
+
+.vs-subTime {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 0.35rem;
+}
+
+.vs-subEn {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #111827;
+  line-height: 1.35;
+}
+
+.vs-subZh {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.vs-hl {
+  background: linear-gradient(to bottom, transparent 70%, rgba(34, 197, 94, 0.35) 70%);
+  padding: 0 0.08rem;
+  border-radius: 0.2rem;
+}
+
+/* Right lexicon panel */
+.vs-rightHeader {
+  padding: 0.85rem 1rem 1rem;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.vs-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.vs-tab {
+  flex: 1;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.vs-tab.is-active {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eef5ff;
+}
+
+.vs-subTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.vs-subTab {
+  padding: 0.35rem 0.6rem;
+  border-radius: 9999px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.vs-subTab.is-active {
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eef5ff;
+}
+
+.vs-actionsRow {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.vs-actionBtn {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  color: #111827;
+}
+
+.vs-actionBtn.is-primary {
+  border-color: #10b981;
+  background: #10b981;
+  color: #fff;
+}
+
+.vs-lexList {
+  max-height: calc(100vh - 16rem);
+  overflow: auto;
+  padding: 0.75rem 1rem 1rem;
+}
+
+.vs-lexCard {
+  border: 1px solid #e5e7eb;
+  border-radius: 0.875rem;
+  padding: 0.85rem;
+  margin-bottom: 0.75rem;
+  background: #fff;
+}
+
+.vs-lexTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vs-lexWord {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+.vs-audioBtn {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+}
+
+.vs-lexIpa {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.vs-lexMeaning {
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  color: #111827;
+}
+
+.vs-lexPos {
+  font-weight: 800;
+  color: #111827;
+}
+
+.vs-lexExtra {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.vs-lexExample {
+  margin-top: 0.65rem;
+  border-left: 3px solid #2563eb;
+  padding-left: 0.75rem;
+  background: #f8fbff;
+  border-radius: 0.75rem;
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+}
+
+.vs-lexExampleEn {
+  font-size: 0.9rem;
+  color: #111827;
+  line-height: 1.35;
+}
+
+.vs-lexExampleZh {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+  line-height: 1.35;
+}
+
+.vs-lexFooter {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.vs-lexBtn {
+  flex: 1;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.75rem;
+  border: 1px solid #2563eb;
+  background: #fff;
+  color: #2563eb;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.vs-eyeBtn {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+}
+
+/* Basic responsiveness (not a dedicated mobile design) */
+@media (max-width: 1200px) {
+  .vs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.vs-subEmpty {
+  padding: 0.75rem 0.25rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.vs-subtitleItem--clickable {
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.vs-subtitleItem--clickable:hover {
+  background: #f8fafc;
+  border-color: #e5e7eb;
+}
+
+.vs-subHeader {
+  position: relative;
+}
+
+.vs-subDe {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: #111827;
+  line-height: 1.35;
+}
+
+.vs-subMenu {
+  position: absolute;
+  top: 3.25rem;
+  right: 0;
+  width: 18rem;
+
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.9rem;
+  box-shadow: 0 0.4rem 1.5rem rgba(16, 24, 40, 0.16);
+
+  padding: 0.75rem;
+  z-index: 20;
+}
+
+.vs-subMenuTitle {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #6b7280;
+  padding: 0.25rem 0.25rem 0.6rem;
+}
+
+.vs-subMenuItem {
+  width: 100%;
+  border: 1px solid transparent;
+  background: #fff;
+  border-radius: 0.75rem;
+
+  padding: 0.65rem 0.65rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  cursor: pointer;
+}
+
+.vs-subMenuItem:hover {
+  background: #f8fafc;
+  border-color: #e5e7eb;
+}
+
+.vs-subMenuItemLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.vs-subMenuKey {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.7rem;
+
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-weight: 900;
+  color: #111827;
+}
+
+.vs-subMenuLabel {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+.vs-subMenuCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+
+  background: #10b981;
+  color: #fff;
+  font-weight: 900;
+}
+
+
+.vs-occ-hl {
+  background: linear-gradient(to bottom, transparent 70%, rgba(34, 197, 94, 0.35) 70%);
+  padding: 0 0.08rem;
+  border-radius: 0.2rem;
+}
+
+.vs-playMenu {
+  position: absolute;
+  top: 3.25rem;
+  right: 0;
+  width: 22rem;
+
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.9rem;
+  box-shadow: 0 0.4rem 1.5rem rgba(16, 24, 40, 0.16);
+
+  padding: 0.75rem;
+  z-index: 30;
+}
+
+.vs-playMenuSectionTitle {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #6b7280;
+  padding: 0.25rem 0.25rem 0.6rem;
+}
+
+.vs-playMenuItem {
+  width: 100%;
+  border: 1px solid transparent;
+  background: #fff;
+  border-radius: 0.75rem;
+  padding: 0.7rem 0.7rem;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  cursor: pointer;
+}
+
+.vs-playMenuItem:hover {
+  background: #f8fafc;
+  border-color: #e5e7eb;
+}
+
+.vs-playMenuItemLeft {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+.vs-playMenuCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+
+  background: #10b981;
+  color: #fff;
+  font-weight: 900;
+}
+
+.vs-playMenuDivider {
+  height: 1px;
+  background: #eef0f2;
+  margin: 0.6rem 0.25rem;
+}
+
+.vs-loopSettings {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #eef0f2;
+}
+
+.vs-loopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+}
+
+.vs-loopLabel {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #6b7280;
+}
+
+.vs-loopSelect {
+  height: 2.4rem;
+  padding: 0 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-weight: 800;
+  color: #111827;
+  cursor: pointer;
+
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  background-image: none;
+  padding-right: 0.75rem;
+}
+
+.vs-loopSelect::-ms-expand {
+  display: none;
+}
+
+.vs-toggle {
+  width: 3.2rem;
+  height: 1.9rem;
+  border-radius: 9999px;
+  border: 1px solid #e5e7eb;
+  background: #e5e7eb;
+  cursor: pointer;
+  position: relative;
+}
+
+.vs-toggle.is-on {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.vs-toggleKnob {
+  position: absolute;
+  top: 0.2rem;
+  left: 0.2rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 9999px;
+  background: #fff;
+  transition: transform 150ms ease;
+}
+
+.vs-toggle.is-on .vs-toggleKnob {
+  transform: translateX(1.3rem);
+}

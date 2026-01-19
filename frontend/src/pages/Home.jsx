@@ -1,31 +1,72 @@
 import { useEffect, useState } from "react";
-import { listVideos } from "../api/videos";
+
 import StatsCard from "../components/common/StatsCard";
 import CalendarCard from "../components/common/CalendarCard";
 import LearningMessagesCard from "../components/common/LearningMessagesCard";
+
 import VideoFilter from "../components/video/VideoFilter";
+import VideoGrid from "../components/video/VideoGrid";
+
+import { fetchVideoList } from "../api/learning_by_video/videos.js";
 
 export default function Home() {
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState("");
+  const [videos, setVideos] = useState([]);
+  const [loadingVideos, setLoadingVideos] = useState(true);
+  const [videosErrorText, setVideosErrorText] = useState("");
 
   useEffect(() => {
-    listVideos({ page: 1 })
-      .then(setData)
-      .catch((e) => setErr(e?.message || String(e)));
+    let aborted = false;
+
+    async function loadVideos() {
+      try {
+        setLoadingVideos(true);
+        setVideosErrorText("");
+
+        const { results } = await fetchVideoList({
+          ordering: "-created_at",
+        });
+
+        if (aborted) return;
+        setVideos(results);
+      } catch (err) {
+        if (aborted) return;
+        setVideosErrorText(err?.message ? String(err.message) : "Unknown error");
+      } finally {
+        if (!aborted) setLoadingVideos(false);
+      }
+    }
+
+    loadVideos();
+
+    return () => {
+      aborted = true;
+    };
   }, []);
 
   return (
-    <div style={{ display: "flex", gap: "1rem" }}>
-      <div style={{ width: "22rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <StatsCard />
-        <CalendarCard />
+    <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+      <div
+        style={{
+          width: "22rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+        }}
+      >
+        <StatsCard
+          stats={[
+            { label: "总视频数", value: String(videos.length) },
+            { label: "完成视频", value: "3", tone: "green" },
+            { label: "学习天数", value: "10", tone: "blue" },
+          ]}
+        />
+        <CalendarCard activeDays={[7, 10, 12, 20, 21]} />
         <LearningMessagesCard />
       </div>
 
-      <div style={{ flex: 1 }}>
-          <VideoFilter />
-        右侧内容区（后面放视频卡片 grid）
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <VideoFilter />
+        <VideoGrid videos={videos} loading={loadingVideos} errorText={videosErrorText} />
       </div>
     </div>
   );

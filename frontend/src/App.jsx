@@ -1,14 +1,14 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout.jsx";
 import Home from "./pages/Home.jsx";
-import VideoDetail from "./pages/VideoDetail.jsx";
+import VideoStudyPage from "./pages/VideoStudy/VideoStudyPage.jsx";
 
 const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
       { path: "/", element: <Home /> },
-      { path: "/videos/:videoId", element: <VideoDetail /> },
+      { path: "/videos/:videoId", element: <VideoStudyPage /> },
     ],
   },
 ]);

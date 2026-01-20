@@ -42,6 +42,9 @@ export default function SubtitlePanel({
   playbackSettings,
   onPlaybackSettingsChange,
   onRequestNextSubtitle,
+  isLexiconOpen,
+  onToggleLexicon,
+  activeSubtitleIndex,
 }) {
   const [subtitles, setSubtitles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +61,29 @@ export default function SubtitlePanel({
   const [playMenuOpen, setPlayMenuOpen] = useState(false);
 
   const menuRef = useRef(null);
+
+  /**
+   * Whether playback settings differ from the default configuration.
+   *
+   * Default:
+   * - videoMode: "single_play"
+   * - sentenceMode: "continuous"
+   * - loopCount: 1
+   * - autoNext: false
+   *
+   * @type {boolean}
+   */
+  const isPlaybackNonDefault =
+    playbackSettings?.videoMode !== "single_play" ||
+    playbackSettings?.sentenceMode !== "continuous" ||
+    playbackSettings?.loopCount !== 1 ||
+    playbackSettings?.autoNext === true;
+
+  const isRepeatEnabled =
+    playbackSettings?.videoMode === "single_loop" ||
+    playbackSettings?.sentenceMode === "loop";
+
+  const activeItemRef = useRef(null);
 
   useEffect(() => {
     let aborted = false;
@@ -148,6 +174,17 @@ export default function SubtitlePanel({
     };
   }, [menuOpen, playMenuOpen]);
 
+
+  // automatic subtitle rolling
+  useEffect(() => {
+    if (!activeItemRef.current) return;
+
+    activeItemRef.current.scrollIntoView({
+      block: "center",
+      behavior: "smooth",
+    });
+  }, [activeSubtitleIndex]);
+
   /**
    * Backend fields: id, video, start, end, content, translation
    * Mapping rules:
@@ -177,7 +214,9 @@ useEffect(() => {
   function handleSelectMode(nextMode) {
     setMode(nextMode);
     setMenuOpen(false);
+    setPlayMenuOpen(false);
   }
+
 
   function renderSubtitleText(item) {
     const showDe = mode === "bilingual" || mode === "de";
@@ -208,19 +247,61 @@ useEffect(() => {
 
         <div className="vs-toolbar" ref={menuRef}>
           <button
-            className="vs-toolBtn"
+            className={[
+              "vs-toolBtn",
+              (menuOpen || mode !== "bilingual") ? "is-active" : "",
+            ].filter(Boolean).join(" ")}
             type="button"
             aria-label="Subtitle language mode"
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => {
+              setPlayMenuOpen(false);
+              setMenuOpen((v) => !v);
+            }}
           >
             文A
           </button>
 
+
           <button
-              className="vs-toolBtn"
-              type="button"
-              aria-label="Playback settings"
-              onClick={() => setPlayMenuOpen((v) => !v)}
+            className={["vs-toolBtn", isLexiconOpen ? "is-active" : ""].filter(Boolean).join(" ")}
+            type="button"
+            aria-label="Toggle lexicon panel"
+            onClick={() => {
+              setMenuOpen(false);
+              setPlayMenuOpen(false);
+
+              if (onToggleLexicon) {
+                onToggleLexicon();
+              }
+            }}
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+            </svg>
+          </button>
+
+          <button
+            className={[
+              "vs-toolBtn",
+              (playMenuOpen || isPlaybackNonDefault || isRepeatEnabled) ? "is-active" : "",
+            ].filter(Boolean).join(" ")}
+            type="button"
+            aria-label="Playback settings"
+            onClick={() => {
+              setMenuOpen(false);
+              setPlayMenuOpen((v) => !v);
+            }}
           >
             <svg
               width="18"
@@ -387,10 +468,15 @@ useEffect(() => {
 
         {!loading &&
           !errorText &&
-          items.map((s) => (
+          items.map((s, index) => (
             <article
+              ref={index === activeSubtitleIndex ? activeItemRef : null}
               key={s.id}
-              className="vs-subtitleItem vs-subtitleItem--clickable"
+              className={[
+                "vs-subtitleItem",
+                "vs-subtitleItem--clickable",
+                index === activeSubtitleIndex ? "is-active" : "",
+              ].filter(Boolean).join(" ")}
               role="button"
               tabIndex={0}
               onClick={() => onSeek?.(s.start)}

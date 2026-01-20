@@ -111,8 +111,7 @@ export default function VideoStudyPage() {
 
   const [subtitleItems, setSubtitleItems] = useState([]);
   const [activeSubtitleIndex, setActiveSubtitleIndex] = useState(-1);
-
-  useEffect(() => {
+    useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) {
       return;
@@ -155,6 +154,28 @@ export default function VideoStudyPage() {
   }, []);
 
   useEffect(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      return;
+    }
+
+    function onTimeUpdate() {
+      const currentTime = videoElement.currentTime;
+      const index = findSubtitleIndexByTime(currentTime);
+
+      if (index !== -1 && index !== activeSubtitleIndex) {
+        setActiveSubtitleIndex(index);
+      }
+    }
+
+    videoElement.addEventListener("timeupdate", onTimeUpdate);
+
+    return () => {
+      videoElement.removeEventListener("timeupdate", onTimeUpdate);
+    };
+  }, [activeSubtitleIndex, subtitleItems]);
+
+  useEffect(() => {
     let aborted = false;
 
     async function loadVideo() {
@@ -182,6 +203,28 @@ export default function VideoStudyPage() {
     };
   }, [videoId]);
 
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      return;
+    }
+
+    function onPlay() {
+      // 如果还没有激活字幕，并且有字幕数据
+      if (activeSubtitleIndex === -1 && subtitleItems.length > 0) {
+        const first = subtitleItems[0];
+
+        setActiveSubtitleIndex(0);
+        videoElement.currentTime = Number(first.start || 0);
+      }
+    }
+
+    videoElement.addEventListener("play", onPlay);
+
+    return () => {
+      videoElement.removeEventListener("play", onPlay);
+    };
+  }, [activeSubtitleIndex, subtitleItems]);
   /**
    * Find subtitle by start time using a small tolerance to avoid float equality issues.
    *
@@ -196,10 +239,50 @@ export default function VideoStudyPage() {
     });
   }
 
-  /**
-   * Seek the HTMLVideoElement to a given time (seconds).
-   * This must live inside the component to access videoRef.
-   */
+  function handleSeek(seconds) {
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      return;
+    }
+
+    const targetTime = Number(seconds || 0);
+    videoElement.currentTime = targetTime >= 0 ? targetTime : 0;
+
+    const index = subtitleItems.findIndex(
+      (item) => Math.abs(Number(item.start) - targetTime) < 0.02
+    );
+
+    setActiveSubtitleIndex(index);
+
+    // 单句循环模式
+    if (playbackSettings.sentenceMode === "loop" && index !== -1) {
+      const subtitle = subtitleItems[index];
+
+      const start = Number(subtitle.start || 0);
+      const end = Number(subtitle.end || 0);
+
+      if (end > start) {
+        const infinite = playbackSettings.loopCount === "infinite";
+        const count = infinite ? 0 : Number(playbackSettings.loopCount || 1);
+
+        loopRef.current = {
+          enabled: true,
+          start,
+          end,
+          infinite,
+          remaining: count,
+        };
+
+        videoElement.currentTime = start;
+        videoElement.play();
+        return;
+      }
+    }
+
+    // 非单句循环 → 关闭 loop
+    loopRef.current.enabled = false;
+  }
+
   function handleSeek(seconds) {
     const videoElement = videoRef.current;
     if (!videoElement) {

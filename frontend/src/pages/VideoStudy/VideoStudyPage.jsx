@@ -51,6 +51,7 @@ export default function VideoStudyPage() {
     end: 0,
     remaining: 0,
     infinite: false,
+    lastLoopAt: 0,
   });
 
   /**
@@ -104,13 +105,55 @@ export default function VideoStudyPage() {
     loopRef.current.end = end;
     loopRef.current.infinite = infinite;
     loopRef.current.remaining = remaining;
+    loopRef.current.lastLoopAt = 0;
 
     el.currentTime = start;
+  }
+
+  /**
+   * Start playing a subtitle segment by index, and apply sentence looping if enabled.
+   *
+   * @param {number} index
+   * @returns {void}
+   */
+  function playSubtitleByIndex(index) {
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      return;
+    }
+
+    if (index < 0 || index >= subtitleItems.length) {
+      return;
+    }
+
+    const start = Number(subtitleItems[index]?.start ?? 0);
+    if (!Number.isFinite(start)) {
+      return;
+    }
+
+    setActiveSubtitleIndex(index);
+    activeSubtitleIndexRef.current = index;
+    videoElement.currentTime = start;
+
+    if (playbackSettings.sentenceMode === "loop") {
+      startSentenceLoopIfEnabled(index);
+    } else {
+      loopRef.current.enabled = false;
+    }
+
+    videoElement.play();
   }
 
 
   const [subtitleItems, setSubtitleItems] = useState([]);
   const [activeSubtitleIndex, setActiveSubtitleIndex] = useState(-1);
+
+  const activeSubtitleIndexRef = useRef(-1);
+
+  useEffect(() => {
+    activeSubtitleIndexRef.current = activeSubtitleIndex;
+  }, [activeSubtitleIndex]);
+
   useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) {
@@ -124,11 +167,6 @@ export default function VideoStudyPage() {
       if (nextIndex === prevIndex) {
         return prevIndex;
       }
-
-      if (playbackSettings.sentenceMode === "loop" && nextIndex !== -1) {
-        startSentenceLoopIfEnabled(nextIndex);
-      }
-
       return nextIndex;
     });
   }
@@ -142,19 +180,35 @@ export default function VideoStudyPage() {
       }
 
       if (videoElement.currentTime >= loopState.end - 0.05) {
+        const now = performance.now();
+        if (now - loopState.lastLoopAt < 250) {
+          return;
+        }
+        loopState.lastLoopAt = now;
         if (loopState.infinite) {
           videoElement.currentTime = loopState.start;
           return;
         }
 
-        loopState.remaining -= 1;
-
+        // finite looping: remaining means "how many MORE repeats to do"
         if (loopState.remaining > 0) {
+          loopState.remaining -= 1;
           videoElement.currentTime = loopState.start;
           return;
         }
 
         loopState.enabled = false;
+
+        if (playbackSettings.autoNext) {
+          const currentIndex = activeSubtitleIndexRef.current;
+          const nextIndex = currentIndex + 1;
+
+          if (nextIndex >= 0 && nextIndex < subtitleItems.length) {
+            playSubtitleByIndex(nextIndex);
+            return;
+          }
+        }
+
         videoElement.pause();
       }
     }
@@ -169,7 +223,13 @@ export default function VideoStudyPage() {
     return () => {
       videoElement.removeEventListener("timeupdate", onTimeUpdate);
     };
-  }, [playbackSettings.sentenceMode, subtitleItems]);
+  }, [
+    playbackSettings.sentenceMode,
+    playbackSettings.loopCount,
+    playbackSettings.autoNext,
+    subtitleItems,
+  ]);
+
   useEffect(() => {
     let aborted = false;
 
@@ -321,34 +381,16 @@ export default function VideoStudyPage() {
     const index = findSubtitleIndexByTime(targetTime);
 
     setActiveSubtitleIndex(index);
+    activeSubtitleIndexRef.current = index;
 
-    // 单句循环模式
     if (playbackSettings.sentenceMode === "loop" && index !== -1) {
-      const subtitle = subtitleItems[index];
-
-      const start = Number(subtitle.start || 0);
-      const end = Number(subtitle.end || 0);
-
-      if (end > start) {
-        const infinite = playbackSettings.loopCount === "infinite";
-        const count = infinite ? 0 : Number(playbackSettings.loopCount || 1);
-
-        loopRef.current = {
-          enabled: true,
-          start,
-          end,
-          infinite,
-          remaining: count,
-        };
-
-        videoElement.currentTime = start;
-        videoElement.play();
-        return;
-      }
+      startSentenceLoopIfEnabled(index);
+      videoElement.play();
+      return;
     }
 
-    // 非单句循环 → 关闭 loop
     loopRef.current.enabled = false;
+
   }
 
   const leftTitle = video?.title ?? "";

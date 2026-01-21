@@ -111,28 +111,42 @@ export default function VideoStudyPage() {
 
   const [subtitleItems, setSubtitleItems] = useState([]);
   const [activeSubtitleIndex, setActiveSubtitleIndex] = useState(-1);
-    useEffect(() => {
+  useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) {
       return;
     }
 
-    function onTimeUpdate() {
+  function syncActiveSubtitleByTime() {
+    const nextIndex = findSubtitleIndexByTime(videoElement.currentTime);
+
+    setActiveSubtitleIndex((prevIndex) => {
+      if (nextIndex === prevIndex) {
+        return prevIndex;
+      }
+
+      if (playbackSettings.sentenceMode === "loop" && nextIndex !== -1) {
+        startSentenceLoopIfEnabled(nextIndex);
+      }
+
+      return nextIndex;
+    });
+  }
+
+
+    function handleSentenceLoopTick() {
       const loopState = loopRef.current;
 
       if (!loopState.enabled) {
         return;
       }
 
-      // 到达句子结尾
       if (videoElement.currentTime >= loopState.end - 0.05) {
-        // 无限循环
         if (loopState.infinite) {
           videoElement.currentTime = loopState.start;
           return;
         }
 
-        // 有次数限制
         loopState.remaining -= 1;
 
         if (loopState.remaining > 0) {
@@ -140,32 +154,14 @@ export default function VideoStudyPage() {
           return;
         }
 
-        // 循环结束（本步：只停在这里）
         loopState.enabled = false;
         videoElement.pause();
       }
     }
 
-    videoElement.addEventListener("timeupdate", onTimeUpdate);
-
-    return () => {
-      videoElement.removeEventListener("timeupdate", onTimeUpdate);
-    };
-  }, []);
-
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    if (!videoElement) {
-      return;
-    }
-
     function onTimeUpdate() {
-      const currentTime = videoElement.currentTime;
-      const index = findSubtitleIndexByTime(currentTime);
-
-      if (index !== -1 && index !== activeSubtitleIndex) {
-        setActiveSubtitleIndex(index);
-      }
+      handleSentenceLoopTick();
+      syncActiveSubtitleByTime();
     }
 
     videoElement.addEventListener("timeupdate", onTimeUpdate);
@@ -173,8 +169,7 @@ export default function VideoStudyPage() {
     return () => {
       videoElement.removeEventListener("timeupdate", onTimeUpdate);
     };
-  }, [activeSubtitleIndex, subtitleItems]);
-
+  }, [playbackSettings.sentenceMode, subtitleItems]);
   useEffect(() => {
     let aborted = false;
 
@@ -210,12 +205,27 @@ export default function VideoStudyPage() {
     }
 
     function onPlay() {
-      // 如果还没有激活字幕，并且有字幕数据
-      if (activeSubtitleIndex === -1 && subtitleItems.length > 0) {
-        const first = subtitleItems[0];
+      if (subtitleItems.length <= 0) {
+        return;
+      }
 
-        setActiveSubtitleIndex(0);
-        videoElement.currentTime = Number(first.start || 0);
+      const byTime = findSubtitleIndexByTime(videoElement.currentTime);
+
+      if (byTime !== -1) {
+        setActiveSubtitleIndex(byTime);
+
+        if (playbackSettings.sentenceMode === "loop") {
+          startSentenceLoopIfEnabled(byTime);
+        }
+        return;
+      }
+
+      const first = subtitleItems[0];
+      setActiveSubtitleIndex(0);
+      videoElement.currentTime = Number(first.start || 0);
+
+      if (playbackSettings.sentenceMode === "loop") {
+        startSentenceLoopIfEnabled(0);
       }
     }
 
@@ -224,65 +234,81 @@ export default function VideoStudyPage() {
     return () => {
       videoElement.removeEventListener("play", onPlay);
     };
-  }, [activeSubtitleIndex, subtitleItems]);
-  /**
-   * Find subtitle by start time using a small tolerance to avoid float equality issues.
-   *
-   * @param {number} target - Target time in seconds.
-   * @returns {number}
-   */
-  function findSubtitleIndexByStart(target) {
-    const tolerance = 0.02;
-    return subtitleItems.findIndex((x) => {
-      const s = Number(x?.start ?? 0);
-      return Math.abs(s - target) <= tolerance;
-    });
-  }
+  }, [subtitleItems, playbackSettings.sentenceMode]);
 
-  function handleSeek(seconds) {
+
+  useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) {
       return;
     }
 
-    const targetTime = Number(seconds || 0);
-    videoElement.currentTime = targetTime >= 0 ? targetTime : 0;
+    function onSeeked() {
+      const nextIndex = findSubtitleIndexByTime(videoElement.currentTime);
+      setActiveSubtitleIndex((prevIndex) => {
+        if (nextIndex === prevIndex) {
+          return prevIndex;
+        }
 
-    const index = subtitleItems.findIndex(
-      (item) => Math.abs(Number(item.start) - targetTime) < 0.02
-    );
+        if (playbackSettings.sentenceMode === "loop" && nextIndex !== -1) {
+          startSentenceLoopIfEnabled(nextIndex);
+        } else {
+          loopRef.current.enabled = false;
+        }
 
-    setActiveSubtitleIndex(index);
+        return nextIndex;
+      });
+    }
 
-    // 单句循环模式
-    if (playbackSettings.sentenceMode === "loop" && index !== -1) {
-      const subtitle = subtitleItems[index];
+    videoElement.addEventListener("seeked", onSeeked);
 
-      const start = Number(subtitle.start || 0);
-      const end = Number(subtitle.end || 0);
+    return () => {
+      videoElement.removeEventListener("seeked", onSeeked);
+    };
+  }, [playbackSettings.sentenceMode, subtitleItems]);
 
-      if (end > start) {
-        const infinite = playbackSettings.loopCount === "infinite";
-        const count = infinite ? 0 : Number(playbackSettings.loopCount || 1);
 
-        loopRef.current = {
-          enabled: true,
-          start,
-          end,
-          infinite,
-          remaining: count,
-        };
+  /**
+   * Find subtitle index by current playback time.
+   * Uses [start, end) interval matching with a small tolerance.
+   *
+   * @param {number} currentTimeSeconds
+   * @returns {number}
+   */
+  function findSubtitleIndexByTime(currentTimeSeconds) {
+    const t = Number(currentTimeSeconds ?? 0);
+    if (!Number.isFinite(t)) {
+      return -1;
+    }
 
-        videoElement.currentTime = start;
-        videoElement.play();
-        return;
+    const tolerance = 0.03;
+
+    for (let index = 0; index < subtitleItems.length; index += 1) {
+      const start = Number(subtitleItems[index]?.start ?? 0);
+      const end = Number(subtitleItems[index]?.end ?? 0);
+
+      if (!Number.isFinite(start) || !Number.isFinite(end)) {
+        continue;
+      }
+
+      if (t >= start - tolerance && t < end - tolerance) {
+        return index;
       }
     }
 
-    // 非单句循环 → 关闭 loop
-    loopRef.current.enabled = false;
-  }
+    for (let index = subtitleItems.length - 1; index >= 0; index -= 1) {
+      const start = Number(subtitleItems[index]?.start ?? 0);
+      if (!Number.isFinite(start)) {
+        continue;
+      }
 
+      if (t >= start - tolerance) {
+        return index;
+      }
+    }
+
+    return -1;
+  }
   function handleSeek(seconds) {
     const videoElement = videoRef.current;
     if (!videoElement) {
@@ -292,9 +318,7 @@ export default function VideoStudyPage() {
     const targetTime = Number(seconds || 0);
     videoElement.currentTime = targetTime >= 0 ? targetTime : 0;
 
-    const index = subtitleItems.findIndex(
-      (item) => Math.abs(Number(item.start) - targetTime) < 0.02
-    );
+    const index = findSubtitleIndexByTime(targetTime);
 
     setActiveSubtitleIndex(index);
 

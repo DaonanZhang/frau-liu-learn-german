@@ -3,6 +3,8 @@ import { useParams, Link } from "react-router-dom";
 import "./VideoStudyPage.css";
 import { fetchVideoDetail } from "../../api/learning_by_video/videos.js";
 import SubtitlePanel from "./SubtitlePanel";
+import LexiconPanel from "./LexiconPanel";
+
 
 /**
  * Format duration seconds into mm:ss or h:mm:ss.
@@ -68,6 +70,12 @@ export default function VideoStudyPage() {
 
     videoElement.loop = playbackSettings.videoMode === "single_loop";
   }, [playbackSettings.videoMode]);
+
+  useEffect(() => {
+    if (playbackSettings.sentenceMode !== "loop") {
+      loopRef.current.enabled = false;
+    }
+  }, [playbackSettings.sentenceMode]);
 
   /**
    * Start looping the selected subtitle segment if sentence loop mode is enabled.
@@ -176,6 +184,12 @@ export default function VideoStudyPage() {
       const loopState = loopRef.current;
 
       if (!loopState.enabled) {
+        return;
+      }
+
+
+      if (playbackSettings.sentenceMode !== "loop") {
+        loopState.enabled = false;
         return;
       }
 
@@ -478,111 +492,34 @@ export default function VideoStudyPage() {
         </section>
 
         {/* Middle: subtitles */}
-        <section className="vs-middle">
-          <SubtitlePanel
-            videoId={videoId}
-            onSeek={handleSeek}
-            onSubtitlesLoaded={(items) => setSubtitleItems(items)}
-            playbackSettings={playbackSettings}
-            onPlaybackSettingsChange={(patch) =>
-              setPlaybackSettings((prev) => ({ ...prev, ...patch }))
-            }
-            isLexiconOpen={isLexiconOpen}
-            onToggleLexicon={() => setIsLexiconOpen((v) => !v)}
-            activeSubtitleIndex={activeSubtitleIndex}
-          />
-        </section>
+        <SubtitlePanel
+          videoId={videoId}
+          videoTitle={leftTitle}
+          videoRef={videoRef}
+          onSeek={handleSeek}
+          onSubtitlesLoaded={(items) => setSubtitleItems(items)}
+          playbackSettings={playbackSettings}
+          onPlaybackSettingsChange={(patch) =>
+            setPlaybackSettings((prev) => ({ ...prev, ...patch }))
+          }
+          isLexiconOpen={isLexiconOpen}
+          onToggleLexicon={() => setIsLexiconOpen((v) => !v)}
+          activeSubtitleIndex={activeSubtitleIndex}
+        />
 
         {/* Right: lexicon*/}
         {isLexiconOpen ? (
           <section className="vs-right">
-            <div className="vs-panel">
-              <div className="vs-rightHeader">
-                <div className="vs-rightHeaderTop">
-                  <div className="vs-rightHeaderTitle">单词面板</div>
-
-                  <button
-                    className="vs-rightCollapseBtn"
-                    type="button"
-                    aria-label="Collapse lexicon panel"
-                    onClick={() => setIsLexiconOpen(false)}
-                  >
-                    ×
-                  </button>
-                </div>
-
-                <div className="vs-tabs">
-                  <button className="vs-tab is-active" type="button">
-                    单词 (29)
-                  </button>
-                  <button className="vs-tab" type="button">
-                    短语 (10)
-                  </button>
-                  <button className="vs-tab" type="button">
-                    地道表达 (6)
-                  </button>
-                </div>
-
-                <div className="vs-subTabs">
-                  <button className="vs-subTab is-active" type="button">
-                    全部 (29)
-                  </button>
-                  <button className="vs-subTab" type="button">
-                    未标记 (29)
-                  </button>
-                  <button className="vs-subTab" type="button">
-                    认识 (0)
-                  </button>
-                  <button className="vs-subTab" type="button">
-                    不认识 (0)
-                  </button>
-                </div>
-
-                <div className="vs-actionsRow">
-                  <button className="vs-actionBtn" type="button">
-                    👁 隐藏中文
-                  </button>
-                  <button className="vs-actionBtn is-primary" type="button">
-                    👁 隐藏标注
-                  </button>
-                </div>
-              </div>
-
-              <div className="vs-lexList">
-                {mockLexicon.map((x) => (
-                  <article key={x.word} className="vs-lexCard">
-                    <div className="vs-lexTop">
-                      <div className="vs-lexWord">{x.word}</div>
-                      <button className="vs-audioBtn" type="button" aria-label="Play audio">
-                        🔊
-                      </button>
-                    </div>
-
-                    <div className="vs-lexIpa">{x.ipa}</div>
-
-                    <div className="vs-lexMeaning">
-                      <span className="vs-lexPos">{x.pos}</span> <span>{x.meaning}</span>
-                    </div>
-
-                    <div className="vs-lexExtra">{x.extra}</div>
-
-                    <div className="vs-lexExample">
-                      <div className="vs-lexExampleEn">“{x.exampleEn}”</div>
-                      <div className="vs-lexExampleZh">“{x.exampleZh}”</div>
-                    </div>
-
-                    <div className="vs-lexFooter">
-                      <button className="vs-lexBtn" type="button">
-                        📌 点选跳转
-                      </button>
-                      <button className="vs-eyeBtn" type="button" aria-label="Toggle visibility">
-                        👁
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
+            <LexiconPanel
+              videoId={videoId}
+              subtitleItems={subtitleItems}
+              activeSubtitleIndex={activeSubtitleIndex}
+              onSeek={handleSeek}
+              onClose={() => {
+                setIsLexiconOpen(false);
+              }}
+              mockLexicon={mockLexicon}
+            />
           </section>
         ) : null}
       </div>

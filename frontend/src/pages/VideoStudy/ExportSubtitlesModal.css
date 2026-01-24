@@ -1,0 +1,141 @@
+.exp-modalOverlay {
+	position: fixed;
+	inset: 0;
+	background: rgba(17, 24, 39, 0.55);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 80;
+	padding: 24px;
+}
+
+.exp-modal {
+	width: 100%;
+	max-width: 980px;
+	background: #ffffff;
+	border-radius: 18px;
+	box-shadow:
+		0 8px 30px rgba(0, 0, 0, 0.18),
+		0 24px 60px rgba(0, 0, 0, 0.14);
+	padding: 22px;
+}
+
+.exp-modalHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 18px;
+}
+
+.exp-modalTitle {
+	font-size: 22px;
+	font-weight: 700;
+	color: #111827;
+}
+
+.exp-closeBtn {
+	border: none;
+	border-radius: 12px;
+	background: #f3f4f6;
+	color: #111827;
+	padding: 10px 14px;
+	cursor: pointer;
+}
+
+.exp-modeRow {
+	display: grid;
+	grid-template-columns: 1fr 1fr 1fr;
+	gap: 14px;
+	margin-bottom: 18px;
+}
+
+.exp-modeBtn {
+	border: 1px solid #e5e7eb;
+	background: #ffffff;
+	border-radius: 14px;
+	padding: 14px 12px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.exp-modeBtn.is-active {
+	border-color: #2563eb;
+	box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.exp-previewCard {
+	border: 1px solid #e5e7eb;
+	border-radius: 16px;
+	padding: 18px;
+	background: #ffffff;
+}
+
+.exp-previewTitle {
+	text-align: center;
+	font-size: 26px;
+	font-weight: 800;
+	margin-bottom: 14px;
+}
+
+.exp-previewList {
+	max-height: 520px;
+	overflow: auto;
+	border-top: 1px solid #eef2f7;
+	margin-top: 12px;
+	padding-top: 10px;
+}
+
+.exp-previewItem {
+	padding: 14px 6px;
+	border-bottom: 1px solid #eef2f7;
+}
+
+.exp-time {
+	color: #6b7280;
+	font-size: 14px;
+	margin-bottom: 8px;
+}
+
+.exp-line {
+	font-size: 18px;
+	color: #111827;
+	margin-bottom: 6px;
+}
+
+.exp-lineSecondary {
+	color: #374151;
+}
+
+.exp-modalFooter {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 12px;
+	margin-top: 18px;
+}
+
+.exp-cancelBtn {
+	border: none;
+	border-radius: 12px;
+	background: #f3f4f6;
+	color: #111827;
+	padding: 12px 16px;
+	cursor: pointer;
+}
+
+.exp-exportBtn {
+	border: none;
+	border-radius: 12px;
+	background: #16a34a;
+	color: #ffffff;
+	padding: 12px 18px;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.exp-exportBtn:disabled,
+.exp-cancelBtn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}

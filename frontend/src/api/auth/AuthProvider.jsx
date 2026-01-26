@@ -36,11 +36,17 @@ export function AuthProvider({ children }) {
     }
   }, [user, reloadMe]);
 
+  const notifyLogin = useCallback(() => {
+    setLoading(true);
+    reloadMe();
+  }, [reloadMe]);
+
   const value = {
     user,
     loading,
     isAuthenticated: Boolean(user),
     reloadMe,
+    notifyLogin,
     logout: () => {
       clearAuthTokens();
       setUser(null);

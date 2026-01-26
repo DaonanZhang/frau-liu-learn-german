@@ -46,7 +46,6 @@ class User(AbstractUser):
     Custom user using telephone as login identifier.
     """
 
-    username = models.CharField(max_length=150, blank=True, null=True)
     email = models.EmailField(blank=True, null=True)
 
     telephone = models.CharField(

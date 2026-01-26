@@ -10,7 +10,7 @@ class UserDataReadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserData
-        fields = ("ui_language", "learning_language", "learning_days", "created_at", "updated_at")
+        fields = ("ui_language", "learning_language", "active_days", "last_active_date", "created_at", "updated_at")
         read_only_fields = fields
 
 

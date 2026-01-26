@@ -8,7 +8,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   const navigate = useNavigate();
-  const { isAuthenticated, loading } = useAuth();
+  const { notifyLogin, loading, isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
@@ -24,7 +24,7 @@ export default function LoginPage() {
 
     const result = await login(phone, password);
     if (result.ok) {
-      navigate("/", { replace: true });
+      notifyLogin();
     }
   };
 

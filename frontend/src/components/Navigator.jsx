@@ -27,7 +27,7 @@ export default function Navigator() {
 
         <nav className="nav-right">
           <button className="nav-btn primary">学习记录</button>
-          <button className="nav-btn">英语卡片</button>
+          <button className="nav-btn">德语卡片</button>
 
           <div className="nav-user">
             <span className="nav-username">欢迎，{displayName}</span>

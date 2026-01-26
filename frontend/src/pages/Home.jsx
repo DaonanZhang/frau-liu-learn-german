@@ -8,11 +8,18 @@ import VideoFilter from "../components/video/VideoFilter";
 import VideoGrid from "../components/video/VideoGrid";
 
 import { fetchVideoList } from "../api/learning_by_video/videos.js";
+import { markUserDailyActive } from "../api/user_data/userData";
 
 export default function Home() {
   const [videos, setVideos] = useState([]);
   const [loadingVideos, setLoadingVideos] = useState(true);
   const [videosErrorText, setVideosErrorText] = useState("");
+
+  useEffect(() => {
+    markUserDailyActive().catch(() => {
+      // silently fail, this should never block homepage rendering
+    });
+  }, []);
 
   useEffect(() => {
     let aborted = false;

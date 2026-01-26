@@ -5,6 +5,8 @@ from rest_framework import serializers
 
 from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.module import Module
+from apps.accounts.models.module_season import ModuleSeason
+from apps.accounts.serializers.module_season import ModuleSeasonMiniSerializer
 
 
 class ModuleMiniSerializer(serializers.ModelSerializer):
@@ -17,9 +19,12 @@ class ModuleMiniSerializer(serializers.ModelSerializer):
 
 
 class EntitlementReadSerializer(serializers.ModelSerializer):
-    """Read serializer for Entitlement."""
+    """
+    Read serializer for Entitlement.
+    """
 
     module = ModuleMiniSerializer(read_only=True)
+    season = ModuleSeasonMiniSerializer(read_only=True)
     scope = serializers.SerializerMethodField()
     is_valid_now = serializers.SerializerMethodField()
 
@@ -29,6 +34,7 @@ class EntitlementReadSerializer(serializers.ModelSerializer):
             "id",
             "scope",
             "module",
+            "season",
             "plan",
             "status",
             "starts_at",
@@ -40,20 +46,27 @@ class EntitlementReadSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_scope(self, obj: Entitlement) -> str:
-        return obj.module.key if obj.module_id else "platform"
+        if obj.module_id is None:
+            return "platform"
+        if obj.season_id is None:
+            return f"module:{obj.module.key}"
+        return f"module:{obj.module.key}:season:{obj.season.season_number}"
 
     def get_is_valid_now(self, obj: Entitlement) -> bool:
         return obj.is_valid_now(at=timezone.now())
 
 
 class EntitlementWriteSerializer(serializers.ModelSerializer):
-    """Write serializer for Entitlement (admin use)."""
+    """
+    Write serializer for Entitlement (admin use).
+    """
 
     class Meta:
         model = Entitlement
         fields = (
             "user",
             "module",
+            "season",
             "plan",
             "status",
             "starts_at",

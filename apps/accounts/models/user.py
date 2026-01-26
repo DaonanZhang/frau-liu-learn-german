@@ -7,41 +7,61 @@ from django.utils import timezone
 
 
 class CustomUserManager(UserManager):
-    def create_user(self, username: str | None = None, email: str | None = None, password: str | None = None, **extra_fields):
-        if not email:
-            raise ValueError("The Email must be set")
-        email = self.normalize_email(email)
+    def create_user(
+        self,
+        telephone: str,
+        password: str | None = None,
+        **extra_fields,
+    ):
+        if not telephone:
+            raise ValueError("The telephone must be set")
 
-        if not username:
-            username = email
+        user = self.model(
+            telephone=telephone,
+            username=telephone,
+            **extra_fields,
+        )
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
 
-        return super().create_user(username=username, email=email, password=password, **extra_fields)
-
-    def create_superuser(self, username: str | None = None, email: str | None = None, password: str | None = None, **extra_fields):
-        if not email:
-            raise ValueError("The Email must be set")
-        email = self.normalize_email(email)
-
-        if not username:
-            username = email
-
+    def create_superuser(
+        self,
+        telephone: str,
+        password: str | None = None,
+        **extra_fields,
+    ):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
 
-        return super().create_superuser(username=username, email=email, password=password, **extra_fields)
+        return self.create_user(
+            telephone=telephone,
+            password=password,
+            **extra_fields,
+        )
 
 
 class User(AbstractUser):
+    """
+    Custom user using telephone as login identifier.
+    """
+
     username = models.CharField(max_length=150, blank=True, null=True)
-    email = models.EmailField(unique=True)
+    email = models.EmailField(blank=True, null=True)
+
+    telephone = models.CharField(
+        max_length=15,
+        unique=True,
+        db_index=True,
+    )
 
     objects = CustomUserManager()
 
-    USERNAME_FIELD = "email"
+    USERNAME_FIELD = "telephone"
     REQUIRED_FIELDS: list[str] = []
 
     def __str__(self) -> str:
-        return self.email
+        return self.telephone
 
     @property
     def has_lifetime_access(self) -> bool:
@@ -51,5 +71,6 @@ class User(AbstractUser):
             plan=Entitlement.Plan.LIFETIME,
             status=Entitlement.Status.ACTIVE,
         ).filter(
-            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+            models.Q(expires_at__isnull=True)
+            | models.Q(expires_at__gt=now)
         ).exists()

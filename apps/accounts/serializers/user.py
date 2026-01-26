@@ -8,7 +8,9 @@ from apps.accounts.serializers.user_data import UserDataReadSerializer
 
 
 class UserMeReadSerializer(serializers.ModelSerializer):
-    """Read serializer for /users/me."""
+    """
+    Read serializer for /users/me.
+    """
 
     user_data = UserDataReadSerializer(read_only=True)
     entitlements = EntitlementReadSerializer(many=True, read_only=True)
@@ -18,6 +20,7 @@ class UserMeReadSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             "id",
+            "telephone",
             "username",
             "email",
             "is_staff",
@@ -36,4 +39,7 @@ class UserMeWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("email", "username")
+        fields = (
+            "username",
+            "email",
+        )

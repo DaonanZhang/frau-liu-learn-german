@@ -33,7 +33,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthLayout>
+    <AuthLayout className="auth-activate">
     <div className="auth-logo">
       <img
         src="/images/icon.jpeg"

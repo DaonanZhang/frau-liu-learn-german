@@ -34,12 +34,18 @@ export default function VideoCard({
 
   return (
     <article className="video-card">
-      <div
-        className="video-card__media"
-        onClick={onClick}
-        role="button"
-        tabIndex={0}
-      >
+        <div
+          className="video-card__media"
+          onClick={onClick}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onClick?.();
+            }
+          }}
+        >
         {coverSrc ? (
           <img
             className="video-card__cover"

@@ -89,11 +89,6 @@
   background: #f5f6f8;
 }
 
-.cal-day.is-active {
-  background: #eaf3ff;
-  color: #1d4ed8;
-}
-
 .cal-day.is-selected {
   border-color: #2563eb;
   box-shadow: 0 0 0 0.125rem rgba(37, 99, 235, 0.15);
@@ -150,4 +145,35 @@
   margin-top: 0.5rem;
   font-size: 0.75rem;
   color: #64748b;
+}
+
+
+.calendar-card-icon {
+  font-size: 1.1rem;
+  color: #3b82f6;
+}
+
+.cal-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.cal-day-empty {
+  border: none;
+  background: transparent;
+  cursor: default;
+}
+
+/* Active learning day (green) */
+.cal-day.is-active {
+  background-color: #dcfce7; /* very light green */
+  color: #166534;            /* dark green text */
+  border: 1px solid #86efac;
+}
+
+/* Active + selected (today & active) */
+.cal-day.is-active.is-selected {
+  background-color: #22c55e; /* solid green */
+  color: #ffffff;
+  border-color: #16a34a;
 }

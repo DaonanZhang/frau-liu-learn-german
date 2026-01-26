@@ -29,3 +29,22 @@ export function putLearningVideoUserData(body) {
     body,
   });
 }
+
+/**
+ * Patch module-level user data for learning-by-video.
+ *
+ * @param {{ completed_videos?: number, last_watched_video?: number | null }} payload
+ * @returns {Promise<{
+ *   id: number,
+ *   user_data: number,
+ *   completed_videos: number,
+ *   last_watched_video: number | null,
+ *   updated_at: string,
+ * }>}
+ */
+export async function updateLearningVideoUserData(payload) {
+  return apiFetch("/learning_by_video/learning-video-user-data/me/", {
+    method: "PATCH",
+    body: payload,
+  });
+}

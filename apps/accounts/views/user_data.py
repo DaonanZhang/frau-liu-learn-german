@@ -10,7 +10,6 @@ from rest_framework.response import Response
 from apps.accounts.models.user_data import UserData
 from apps.accounts.serializers.user_data import (
     UserDataReadSerializer,
-    UserDataWriteSerializer,
 )
 
 
@@ -28,8 +27,6 @@ class UserDataViewSet(viewsets.GenericViewSet):
     def get_serializer_class(self):
         if self.action in ("me",):
             return UserDataReadSerializer
-        if self.action in ("update_me",):
-            return UserDataWriteSerializer
         if self.action in ("mark_daily_active",):
             return UserDataReadSerializer
         return UserDataReadSerializer
@@ -70,29 +67,18 @@ class UserDataViewSet(viewsets.GenericViewSet):
         Returns:
             dict:
                 incremented: Whether active_days was incremented today.
-                user_data: Serialized UserData.
+                user_data: Serialized UserData (including active_dates if your serializer provides it).
         """
         obj = self._get_or_create_user_data(request)
 
-        if not hasattr(obj, "active_days") or not hasattr(obj, "last_active_date"):
+        model_method = getattr(obj, "mark_daily_active", None)
+        if not callable(model_method):
             return Response(
-                {
-                    "detail": (
-                        "UserData.active_days and/or UserData.last_active_date is missing. "
-                        "Please add the fields and run migrations."
-                    )
-                },
+                {"detail": "UserData.mark_daily_active() is missing."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        today = timezone.localdate()
-        incremented = False
-
-        if obj.last_active_date != today:
-            obj.active_days = int(obj.active_days or 0) + 1
-            obj.last_active_date = today
-            obj.save(update_fields=["active_days", "last_active_date", "updated_at"])
-            incremented = True
+        incremented = bool(model_method())
 
         out = UserDataReadSerializer(instance=obj, context={"request": request})
         return Response(

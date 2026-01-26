@@ -1,0 +1,34 @@
+/* 左上角 icon */
+.stats-card-icon {
+  font-size: 1.1rem;
+  color: #3b82f6; /* 可换主题色 */
+}
+
+/* 三列布局 */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+/* 每一项：上下居中 */
+.stats-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* 数字 */
+.stats-value {
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+/* 文案 */
+.stats-label {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+}

@@ -5,7 +5,7 @@ import VideoCard from "./VideoCard";
  * VideoGrid
  * - Pure layout component
  */
-export default function VideoGrid({ videos, loading, errorText }) {
+export default function VideoGrid({ videos, loading, errorText, onVideoClick }) {
   if (loading) {
     return <div className="video-grid__state">Loading videos…</div>;
   }
@@ -21,7 +21,13 @@ export default function VideoGrid({ videos, loading, errorText }) {
   return (
     <div className="video-grid">
       {videos.map((v) => (
-        <VideoCard key={v.id} video={v} />
+        <VideoCard
+          key={v.id}
+          video={v}
+          onClick={() => {
+            onVideoClick?.(v);
+          }}
+        />
       ))}
     </div>
   );

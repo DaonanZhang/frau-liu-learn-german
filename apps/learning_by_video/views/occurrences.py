@@ -14,6 +14,20 @@ from apps.learning_by_video.serializers import (
     VideoSentenceOccurrenceSerializer,
     VideoWordOccurrenceSerializer,
 )
+from django.db import models
+from django.db.models import OuterRef, Subquery, Value, Exists, Case, When
+from django.db.models.functions import Coalesce
+
+from apps.lexicon.models import (
+    OccurrenceKnowledgeState,
+    TextKnowledgeState,
+    UserWordMark,
+    UserSentenceMark,
+    UserExpressionMark,
+    UserWordOccurrenceMark,
+    UserSentenceOccurrenceMark,
+    UserExpressionOccurrenceMark,
+)
 
 
 class OccurrenceFilterMixin:
@@ -60,6 +74,76 @@ class OccurrenceFilterMixin:
 
         return qs
 
+    def annotate_user_mark_info(
+        self,
+        qs: QuerySet,
+        *,
+        occurrence_mark_model: type[models.Model],
+        text_mark_model: type[models.Model],
+        text_fk_field: str,
+    ) -> QuerySet:
+        """
+        Annotate queryset with:
+        - my_knowledge: KNOWN/UNKNOWN/UNMARKED (UNMARKED when no occurrence mark exists)
+        - marked_elsewhere: True when my_knowledge == UNMARKED but the text is globally marked
+          (UserXMark.global_state != UNMARKED)
+
+        Args:
+            qs:
+                Occurrence queryset.
+            occurrence_mark_model:
+                UserWordOccurrenceMark / UserSentenceOccurrenceMark / UserExpressionOccurrenceMark
+            text_mark_model:
+                UserWordMark / UserSentenceMark / UserExpressionMark
+            text_fk_field:
+                Field name on occurrence pointing to the text id ("word_id", "sentence_id", "expression_id").
+        """
+        user = getattr(self.request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return qs.annotate(
+                my_knowledge=Value(OccurrenceKnowledgeState.UNMARKED),
+                marked_elsewhere=Value(False),
+            )
+
+        # ---- occurrence-level mark (for my_knowledge) ----
+        occurrence_knowledge_subquery = occurrence_mark_model.objects.filter(
+            user=user,
+            occurrence_id=OuterRef("pk"),
+        ).values("knowledge")[:1]
+
+        # Fast boolean: does this occurrence have any mark row for user?
+        has_occurrence_mark = Exists(
+            occurrence_mark_model.objects.filter(
+                user=user,
+                occurrence_id=OuterRef("pk"),
+            )
+        )
+
+        # ---- text-level global mark (for elsewhere) ----
+        # Example for word: UserWordMark where word_id == OuterRef("word_id") and global_state != UNMARKED
+        globally_marked_text = Exists(
+            text_mark_model.objects.filter(
+                user=user,
+                **{text_fk_field: OuterRef(text_fk_field)},
+            ).exclude(
+                global_state=TextKnowledgeState.UNMARKED
+            )
+        )
+
+        return qs.annotate(
+            my_knowledge=Coalesce(
+                Subquery(occurrence_knowledge_subquery),
+                Value(OccurrenceKnowledgeState.UNMARKED),
+            ),
+            marked_elsewhere=Case(
+                When(
+                    condition=globally_marked_text & ~has_occurrence_mark,
+                    then=Value(True),
+                ),
+                default=Value(False),
+                output_field=models.BooleanField(),
+            ),
+        )
 
 class VideoWordOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewSet):
     serializer_class = VideoWordOccurrenceSerializer
@@ -69,7 +153,14 @@ class VideoWordOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = VideoWordOccurrence.objects.select_related("video", "subtitle", "word").all()
-        return self.filter_queryset_by_params(qs)
+        qs = self.filter_queryset_by_params(qs)
+        qs = self.annotate_user_mark_info(
+            qs,
+            occurrence_mark_model=UserWordOccurrenceMark,
+            text_mark_model=UserWordMark,
+            text_fk_field="word_id",
+        )
+        return qs
 
 
 class VideoSentenceOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewSet):
@@ -80,7 +171,15 @@ class VideoSentenceOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewSet
 
     def get_queryset(self):
         qs = VideoSentenceOccurrence.objects.select_related("video", "subtitle", "sentence").all()
-        return self.filter_queryset_by_params(qs)
+        qs = self.filter_queryset_by_params(qs)
+        qs = self.annotate_user_mark_info(
+            qs,
+            occurrence_mark_model=UserSentenceOccurrenceMark,
+            text_mark_model=UserSentenceMark,
+            text_fk_field="sentence_id",
+        )
+        return qs
+
 
 
 class VideoExpressionOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewSet):
@@ -91,4 +190,11 @@ class VideoExpressionOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewS
 
     def get_queryset(self):
         qs = VideoExpressionOccurrence.objects.select_related("video", "subtitle", "expression").all()
-        return self.filter_queryset_by_params(qs)
+        qs = self.filter_queryset_by_params(qs)
+        qs = self.annotate_user_mark_info(
+            qs,
+            occurrence_mark_model=UserExpressionOccurrenceMark,
+            text_mark_model=UserExpressionMark,
+            text_fk_field="expression_id",
+        )
+        return qs

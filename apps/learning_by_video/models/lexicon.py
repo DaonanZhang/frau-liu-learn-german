@@ -5,6 +5,7 @@ from django.db import models
 from .lexicon_base import BaseVideoOccurrence
 
 
+
 class VideoWordOccurrence(BaseVideoOccurrence):
     word = models.ForeignKey(
         "lexicon.WordText",

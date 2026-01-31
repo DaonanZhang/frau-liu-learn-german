@@ -103,6 +103,7 @@ export default function SubtitlePanel({
     playbackSettings?.sentenceMode === "loop";
 
   const activeItemRef = useRef(null);
+  const subtitleListRef = useRef(null);
 
   useEffect(() => {
     if (panelShape !== "cloze") {
@@ -202,13 +203,47 @@ export default function SubtitlePanel({
 
   // automatic subtitle rolling
   useEffect(() => {
-    if (!activeItemRef.current) return;
+    const containerElement = subtitleListRef.current;
+    const activeElement = activeItemRef.current;
 
-    activeItemRef.current.scrollIntoView({
-      block: "center",
+    if (!containerElement || !activeElement) {
+      return;
+    }
+
+    const containerRect = containerElement.getBoundingClientRect();
+    const activeRect = activeElement.getBoundingClientRect();
+
+    const topPadding = 8;
+    const bottomPadding = 8;
+
+    const visibleTop = containerRect.top + topPadding;
+    const visibleBottom = containerRect.bottom - bottomPadding;
+
+    const isAboveVisibleArea = activeRect.top < visibleTop;
+    const isBelowVisibleArea = activeRect.bottom > visibleBottom;
+
+    if (!isAboveVisibleArea && !isBelowVisibleArea) {
+      return;
+    }
+
+    const currentScrollTop = containerElement.scrollTop;
+
+    let nextScrollTop = currentScrollTop;
+
+    if (isAboveVisibleArea) {
+      const deltaTop = activeRect.top - containerRect.top;
+      nextScrollTop = currentScrollTop + deltaTop - topPadding;
+    } else if (isBelowVisibleArea) {
+      const deltaBottom = activeRect.bottom - containerRect.bottom;
+      nextScrollTop = currentScrollTop + deltaBottom + bottomPadding;
+    }
+
+    containerElement.scrollTo({
+      top: nextScrollTop,
       behavior: "smooth",
     });
   }, [activeSubtitleIndex]);
+
 
   /**
    * Backend fields: id, video, start, end, content, translation
@@ -668,7 +703,7 @@ export default function SubtitlePanel({
         </div>
       </div>
 
-      <div className="vs-subtitleList">
+      <div className="vs-subtitleList" ref={subtitleListRef}>
         {loading && <div className="vs-subEmpty">Loading subtitles…</div>}
 
         {!loading && errorText && (

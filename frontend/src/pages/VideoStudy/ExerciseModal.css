@@ -1,0 +1,393 @@
+/* Overlay */
+.exModalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* prevent horizontal overflow */
+  overflow-x: hidden;
+}
+
+/* Modal shell */
+.exModalShell {
+  width: min(980px, 100%);
+  max-height: min(84vh, 820px);
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+}
+
+/* Header */
+.exModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 14px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.exModalHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.exIconButton {
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: #ffffff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.exIconButton:active {
+  transform: translateY(1px);
+}
+
+.exModalTitleWrap {
+  min-width: 0;
+}
+
+.exModalTitle {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exModalSubtitle {
+  font-size: 12px;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.exCloseButton {
+  border: none;
+  background: transparent;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+
+.exCloseButton:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* Body layout */
+.exModalBody {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+/* Outline (left) */
+.exOutline {
+  width: 220px;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+
+  transition: width 140ms ease;
+}
+
+.exOutline.isClosed {
+  width: 0;
+  border-right: none;
+}
+
+.exOutlineHeader {
+  padding: 12px 12px;
+  font-weight: 700;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.exOutline.isClosed .exOutlineHeader {
+  display: none;
+}
+
+.exOutlineList {
+  padding: 8px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  overflow: auto;
+  min-height: 0;
+}
+
+.exOutline.isClosed .exOutlineList {
+  display: none;
+}
+
+.exOutlineItem {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+
+  /* avoid overflow */
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.exOutlineItem.isActive {
+  border-color: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+
+  font-weight: 800;
+  position: relative;
+}
+
+.exOutlineItemIndex {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.exOutlineItemLabel {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 700;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Main */
+.exMain {
+  flex: 1;
+  min-width: 0;
+  padding: 14px;
+  overflow: auto;
+  overflow-x: hidden;
+}
+
+/* States */
+.exStateBox {
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  border-radius: 14px;
+  padding: 16px;
+  background: #ffffff;
+}
+
+.exStateBoxError {
+  border-color: rgba(255, 0, 0, 0.25);
+}
+
+.exStateTitle {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.exStateText {
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}
+
+/* Card */
+.exCard {
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  border-radius: 16px;
+  padding: 16px;
+  background: #ffffff;
+
+  /* prevent overflow */
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.exQuestionMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.exBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.exPrompt {
+  margin: 0 0 14px 0;
+  font-size: 15px;
+  line-height: 1.45;
+
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Options */
+.exOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.exOptionRow {
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.exOptionRow.isSelected {
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
+}
+
+.exOptionButton {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 12px 12px;
+
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+
+  /* no horizontal overflow */
+  max-width: 100%;
+}
+
+.exOptionText {
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Feedback under the selected option */
+.exFeedback {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+
+  /* no horizontal overflow */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.exFeedback.isCorrect {
+  background: rgba(0, 180, 70, 0.10);
+}
+
+.exFeedback.isWrong {
+  background: rgba(230, 60, 60, 0.10);
+}
+
+.exFeedbackHeader {
+  font-weight: 900;
+  margin-bottom: 6px;
+}
+
+.exFeedbackText {
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.95;
+  line-height: 1.5;
+}
+
+
+/* Navigation */
+.exNav {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.exNavButton {
+  border: 1px solid rgba(0, 0, 0, 0.16);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.exNavButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.exNavButtonPrimary {
+  border-color: rgba(0, 0, 0, 0.22);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.10);
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .exModalOverlay {
+    padding: 10px;
+  }
+
+  .exOutline {
+    width: 180px;
+  }
+
+  .exMain {
+    padding: 12px;
+  }
+}
+
+
+/* Answer state colors (used by outline items and selected options) */
+.exOutlineItem.isAnsweredCorrect {
+  background: rgba(0, 180, 70, 0.10);
+  border-color: rgba(0, 180, 70, 0.22);
+}
+
+.exOutlineItem.isAnsweredWrong {
+  background: rgba(230, 60, 60, 0.10);
+  border-color: rgba(230, 60, 60, 0.22);
+}
+
+/* Selected option background color after answering */
+.exOptionRow.isAnsweredCorrect {
+  background: rgba(0, 180, 70, 0.10);
+  border-color: rgba(0, 180, 70, 0.22);
+}
+
+.exOptionRow.isAnsweredWrong {
+  background: rgba(230, 60, 60, 0.10);
+  border-color: rgba(230, 60, 60, 0.22);
+}

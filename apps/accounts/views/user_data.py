@@ -17,7 +17,6 @@ class UserDataViewSet(viewsets.GenericViewSet):
     """
     UserData endpoints:
     - GET   /user-data/me/
-    - PATCH /user-data/me/
     - POST  /user-data/mark-daily-active/
     """
 
@@ -40,21 +39,6 @@ class UserDataViewSet(viewsets.GenericViewSet):
         obj = self._get_or_create_user_data(request)
         serializer = UserDataReadSerializer(instance=obj, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
-
-    @action(detail=False, methods=["patch"], url_path="me")
-    def update_me(self, request: Request) -> Response:
-        obj = self._get_or_create_user_data(request)
-        serializer = UserDataWriteSerializer(
-            instance=obj,
-            data=request.data,
-            partial=True,
-            context={"request": request},
-        )
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        out = UserDataReadSerializer(instance=obj, context={"request": request})
-        return Response(out.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], url_path="mark-daily-active")
     def mark_daily_active(self, request: Request) -> Response:

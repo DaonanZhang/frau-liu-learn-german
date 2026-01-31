@@ -4,6 +4,7 @@ import "./VideoStudyPage.css";
 import { fetchVideoDetail } from "../../api/learning_by_video/videos.js";
 import SubtitlePanel from "./SubtitlePanel";
 import LexiconPanel from "./LexiconPanel";
+import ExerciseModal from "./ExerciseModal";
 
 
 /**
@@ -45,6 +46,39 @@ export default function VideoStudyPage() {
    * @type {[boolean, Function]}
    */
   const [isLexiconOpen, setIsLexiconOpen] = useState(true);
+
+  const [isMobile, setIsMobile] = useState(false);
+
+  const [isExerciseOpen, setIsExerciseOpen] = useState(false);
+
+  useEffect(() => {
+    const mediaQueryList = window.matchMedia("(max-width: 1023px)");
+
+    function syncMobileState() {
+      setIsMobile(mediaQueryList.matches);
+    }
+
+    syncMobileState();
+
+    if (mediaQueryList.addEventListener) {
+      mediaQueryList.addEventListener("change", syncMobileState);
+      return () => {
+        mediaQueryList.removeEventListener("change", syncMobileState);
+      };
+    }
+
+    // Safari fallback
+    mediaQueryList.addListener(syncMobileState);
+    return () => {
+      mediaQueryList.removeListener(syncMobileState);
+    };
+  }, []);
+
+  const leftTitle = video?.title ?? "";
+  const leftDuration = video?.duration_seconds ? formatDurationLabel(video.duration_seconds) : "";
+  const leftDifficulty = video?.difficulty ?? "";
+  const leftDescription = video?.description ?? "";
+  const leftVideoUrl = video?.video_url ?? "";
 
 
   const loopRef = useRef({
@@ -168,16 +202,16 @@ export default function VideoStudyPage() {
       return;
     }
 
-  function syncActiveSubtitleByTime() {
-    const nextIndex = findSubtitleIndexByTime(videoElement.currentTime);
+    function syncActiveSubtitleByTime() {
+      const nextIndex = findSubtitleIndexByTime(videoElement.currentTime);
 
-    setActiveSubtitleIndex((prevIndex) => {
-      if (nextIndex === prevIndex) {
-        return prevIndex;
-      }
-      return nextIndex;
-    });
-  }
+      setActiveSubtitleIndex((prevIndex) => {
+        if (nextIndex === prevIndex) {
+          return prevIndex;
+        }
+        return nextIndex;
+      });
+    }
 
 
     function handleSentenceLoopTick() {
@@ -238,6 +272,7 @@ export default function VideoStudyPage() {
       videoElement.removeEventListener("timeupdate", onTimeUpdate);
     };
   }, [
+    leftVideoUrl,
     playbackSettings.sentenceMode,
     playbackSettings.loopCount,
     playbackSettings.autoNext,
@@ -308,7 +343,7 @@ export default function VideoStudyPage() {
     return () => {
       videoElement.removeEventListener("play", onPlay);
     };
-  }, [subtitleItems, playbackSettings.sentenceMode]);
+  }, [leftVideoUrl, subtitleItems, playbackSettings.sentenceMode]);
 
 
   useEffect(() => {
@@ -339,7 +374,7 @@ export default function VideoStudyPage() {
     return () => {
       videoElement.removeEventListener("seeked", onSeeked);
     };
-  }, [playbackSettings.sentenceMode, subtitleItems]);
+  }, [leftVideoUrl, playbackSettings.sentenceMode, subtitleItems]);
 
 
   /**
@@ -365,7 +400,7 @@ export default function VideoStudyPage() {
         continue;
       }
 
-      if (t >= start - tolerance && t < end - tolerance) {
+      if (t >= start - tolerance && t < end + tolerance) {
         return index;
       }
     }
@@ -407,38 +442,11 @@ export default function VideoStudyPage() {
 
   }
 
-  const leftTitle = video?.title ?? "";
-  const leftDuration = video?.duration_seconds ? formatDurationLabel(video.duration_seconds) : "";
-  const leftDifficulty = video?.difficulty ?? "";
-  const leftDescription = video?.description ?? "";
-  const leftVideoUrl = video?.video_url ?? "";
-
   const durationLabel = leftDuration ? `时长：${leftDuration}` : "时长：-";
   const difficultyLabel = leftDifficulty ? `难度：${leftDifficulty}` : "难度：-";
 
-  const mockLexicon = useMemo(
-    () => [
-      {
-        word: "futuristic",
-        ipa: "/ˌfjuː.tʃərˈɪs.tɪk/",
-        pos: "adj.",
-        meaning: "未来感的；超前的",
-        extra: "ultramodern, forward-looking",
-        exampleEn: "Shanghai, China's futuristic megacity.",
-        exampleZh: "上海，中国充满未来感的特大城市。",
-      },
-      {
-        word: "megacity",
-        ipa: "/ˈmeɡəˌsɪti/",
-        pos: "n.",
-        meaning: "特大城市；超级城市",
-        extra: "metropolis, urban center",
-        exampleEn: "Shanghai, China's futuristic megacity.",
-        exampleZh: "上海，中国充满未来感的特大城市。",
-      },
-    ],
-    []
-  );
+  const shouldShowSubtitlePanel = !isMobile || !isLexiconOpen;
+  const shouldShowLexiconPanel = !isMobile ? isLexiconOpen : isLexiconOpen;
 
   return (
     <div className="vs-page">
@@ -452,6 +460,19 @@ export default function VideoStudyPage() {
               </Link>
 
               <div className="vs-titleRow">
+
+                <div className="vs-playerActions">
+                  <button
+                    type="button"
+                    className="vs-actionBtn"
+                    onClick={() => {
+                      setIsExerciseOpen(true);
+                    }}
+                    disabled={loadingVideo || !videoId}
+                  >
+                    Übungen
+                  </button>
+                </div>
                 <div className="vs-title">{loadingVideo ? "Loading…" : leftTitle || "Untitled"}</div>
 
                 <div className="vs-meta">
@@ -492,23 +513,27 @@ export default function VideoStudyPage() {
         </section>
 
         {/* Middle: subtitles */}
-        <SubtitlePanel
-          videoId={videoId}
-          videoTitle={leftTitle}
-          videoRef={videoRef}
-          onSeek={handleSeek}
-          onSubtitlesLoaded={(items) => setSubtitleItems(items)}
-          playbackSettings={playbackSettings}
-          onPlaybackSettingsChange={(patch) =>
-            setPlaybackSettings((prev) => ({ ...prev, ...patch }))
-          }
-          isLexiconOpen={isLexiconOpen}
-          onToggleLexicon={() => setIsLexiconOpen((v) => !v)}
-          activeSubtitleIndex={activeSubtitleIndex}
-        />
+        {shouldShowSubtitlePanel ? (
+          <SubtitlePanel
+            videoId={videoId}
+            videoTitle={leftTitle}
+            videoRef={videoRef}
+            onSeek={handleSeek}
+            onSubtitlesLoaded={(items) => setSubtitleItems(items)}
+            playbackSettings={playbackSettings}
+            onPlaybackSettingsChange={(patch) =>
+              setPlaybackSettings((prev) => ({ ...prev, ...patch }))
+            }
+            isLexiconOpen={isLexiconOpen}
+            onToggleLexicon={() => {
+              setIsLexiconOpen((prevValue) => !prevValue);
+            }}
+            activeSubtitleIndex={activeSubtitleIndex}
+          />
+        ) : null}
 
         {/* Right: lexicon*/}
-        {isLexiconOpen ? (
+        {shouldShowLexiconPanel ? (
           <section className="vs-right">
             <LexiconPanel
               videoId={videoId}
@@ -518,10 +543,18 @@ export default function VideoStudyPage() {
               onClose={() => {
                 setIsLexiconOpen(false);
               }}
-              mockLexicon={mockLexicon}
             />
           </section>
         ) : null}
+
+
+        <ExerciseModal
+          isOpen={isExerciseOpen}
+          onClose={() => {
+            setIsExerciseOpen(false);
+          }}
+          videoId={videoId}
+        />
       </div>
     </div>
   );

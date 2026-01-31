@@ -4,11 +4,7 @@ import {
   fetchWordOccurrences,
 } from "../../api/learning_by_video/occurrences";
 
-import {
-  buildVideoMarksSets,
-  fetchMarksForVideo,
-  toggleVideoOccurrenceMark,
-} from "../../api/learning_by_video/marks"
+import { toggleVideoOccurrenceMark } from "../../api/learning_by_video/marks";
 
 /**
  * @typedef {"word"|"expression"} LexiconKind
@@ -142,10 +138,29 @@ function EyeIcon({ isHidden }) {
 
 function TargetIcon() {
   return (
-    <svg className="vs-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10Z" stroke="currentColor" strokeWidth="2" />
-      <path d="M12 18c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6Z" stroke="currentColor" strokeWidth="2" />
-      <path d="M12 14c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2Z" stroke="currentColor" strokeWidth="2" />
+    <svg
+      className="vs-icon"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M12 18c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M12 14c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2Z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
     </svg>
   );
 }
@@ -364,33 +379,81 @@ export default function LexiconPanel({
 
         const nextEntries = buildLexiconEntries(words, expressions);
 
-        const [wordScope, expressionScope] = await Promise.all([
-          fetchMarksForVideo({ contentType: "word", videoId: Number(videoId) }),
-          fetchMarksForVideo({ contentType: "expression", videoId: Number(videoId) }),
-        ]);
-
-        const wordSets = buildVideoMarksSets(wordScope);
-        const expressionSets = buildVideoMarksSets(expressionScope);
-
         /**
-         * @param {number|null} occurrenceId
-         * @param {{knownSet:Set<number>, unknownSet:Set<number>, elsewhereSet:Set<number>}} sets
+         * @param {any} occurrence
          * @returns {"known"|"not_known"|"elsewhere"|"unmarked"}
          */
-        function resolveUiStateByOccurrence(occurrenceId, sets) {
-          if (!occurrenceId) {
-            return "unmarked";
-          }
+        function resolveUiStateFromOccurrence(occurrence) {
+          const knowledge = String(occurrence?.my_knowledge || "UNMARKED").toUpperCase();
+          const markedElsewhere = occurrence?.marked_elsewhere === true;
 
-          if (sets.knownSet.has(occurrenceId)) {
+          if (knowledge === "KNOWN") {
             return "known";
           }
 
-          if (sets.unknownSet.has(occurrenceId)) {
+          if (knowledge === "UNKNOWN") {
             return "not_known";
           }
 
-          if (sets.elsewhereSet.has(occurrenceId)) {
+          if (knowledge === "UNMARKED" && markedElsewhere) {
+            return "elsewhere";
+          }
+
+          return "unmarked";
+        }
+
+        /** @type {Record<number, "known"|"not_known"|"elsewhere"|"unmarked">} */
+        const uiStateByOccurrenceId = {};
+
+        for (const occurrence of words) {
+          const occurrenceId = Number(occurrence?.id);
+          if (!Number.isFinite(occurrenceId) || occurrenceId <= 0) {
+            continue;
+          }
+          uiStateByOccurrenceId[occurrenceId] = resolveUiStateFromOccurrence(occurrence);
+        }
+
+        for (const occurrence of expressions) {
+          const occurrenceId = Number(occurrence?.id);
+          if (!Number.isFinite(occurrenceId) || occurrenceId <= 0) {
+            continue;
+          }
+          uiStateByOccurrenceId[occurrenceId] = resolveUiStateFromOccurrence(occurrence);
+        }
+
+        /**
+         * Aggregate entry state from all its occurrences (preferred over occurrenceIds[0]).
+         *
+         * Priority:
+         * - any known => known
+         * - else any not_known => not_known
+         * - else any elsewhere => elsewhere
+         * - else unmarked
+         *
+         * @param {number[]} occurrenceIds
+         * @returns {"known"|"not_known"|"elsewhere"|"unmarked"}
+         */
+        function aggregateEntryStateByOccurrences(occurrenceIds) {
+          let hasElsewhere = false;
+
+          for (const occurrenceIdValue of occurrenceIds || []) {
+            const occurrenceId = Number(occurrenceIdValue);
+            const state = uiStateByOccurrenceId[occurrenceId];
+
+            if (state === "known") {
+              return "known";
+            }
+
+            if (state === "not_known") {
+              return "not_known";
+            }
+
+            if (state === "elsewhere") {
+              hasElsewhere = true;
+            }
+          }
+
+          if (hasElsewhere) {
             return "elsewhere";
           }
 
@@ -401,18 +464,11 @@ export default function LexiconPanel({
         const nextKnowledgeByKey = {};
 
         for (const entry of nextEntries) {
-          const firstOccurrenceId =
-            Array.isArray(entry.occurrenceIds) && entry.occurrenceIds.length > 0
-              ? Number(entry.occurrenceIds[0])
-              : null;
-
-          const sets = entry.kind === "word" ? wordSets : expressionSets;
-          nextKnowledgeByKey[entry.key] = resolveUiStateByOccurrence(firstOccurrenceId, sets);
+          nextKnowledgeByKey[entry.key] = aggregateEntryStateByOccurrences(entry.occurrenceIds);
         }
 
         setEntries(nextEntries);
         setKnowledgeByKey(nextKnowledgeByKey);
-
       } catch (error) {
         if (aborted) {
           return;
@@ -538,7 +594,6 @@ export default function LexiconPanel({
     postOccurrenceMark(entry, "UNMARKED");
   }
 
-
   function findStartBySubtitleId(subtitleId) {
     if (!subtitleItems || subtitleItems.length <= 0) {
       return null;
@@ -605,7 +660,10 @@ export default function LexiconPanel({
   }, [entries, activeKind, onlyCurrentSubtitle, currentSubtitleId]);
 
   const wordCount = useMemo(() => entries.filter((x) => x.kind === "word").length, [entries]);
-  const expressionCount = useMemo(() => entries.filter((x) => x.kind === "expression").length, [entries]);
+  const expressionCount = useMemo(
+    () => entries.filter((x) => x.kind === "expression").length,
+    [entries]
+  );
 
   return (
     <div className="vs-panel">
@@ -629,7 +687,9 @@ export default function LexiconPanel({
 
         <div className="vs-tabs">
           <button
-            className={["vs-tab", activeKind === "word" ? "is-active" : ""].filter(Boolean).join(" ")}
+            className={["vs-tab", activeKind === "word" ? "is-active" : ""]
+              .filter(Boolean)
+              .join(" ")}
             type="button"
             onClick={() => {
               setActiveKind("word");
@@ -639,7 +699,9 @@ export default function LexiconPanel({
           </button>
 
           <button
-            className={["vs-tab", activeKind === "expression" ? "is-active" : ""].filter(Boolean).join(" ")}
+            className={["vs-tab", activeKind === "expression" ? "is-active" : ""]
+              .filter(Boolean)
+              .join(" ")}
             type="button"
             onClick={() => {
               setActiveKind("expression");
@@ -651,7 +713,9 @@ export default function LexiconPanel({
 
         <div className="vs-actionsRow">
           <button
-            className={["vs-actionBtn", onlyCurrentSubtitle ? "is-primary" : ""].filter(Boolean).join(" ")}
+            className={["vs-actionBtn", onlyCurrentSubtitle ? "is-primary" : ""]
+              .filter(Boolean)
+              .join(" ")}
             type="button"
             onClick={() => {
               setOnlyCurrentSubtitle((prev) => !prev);
@@ -679,14 +743,15 @@ export default function LexiconPanel({
           ? filteredEntries.map((entry) => {
               const isWord = entry.kind === "word";
               const hideChinese = hiddenChineseByKey[entry.key] === true;
-              const knowledgeState = knowledgeByKey[entry.key] || "unknown";
+              const knowledgeState = knowledgeByKey[entry.key] || "unmarked";
 
               const posLabel = posToLabel(entry.pos);
               const splittableLabel = entry.splittable === true ? "trennbar" : "";
               const showMetaLine = Boolean(posLabel || splittableLabel);
 
               const firstSubtitleId = entry.subtitleIds.length > 0 ? entry.subtitleIds[0] : null;
-              const subtitleItem = firstSubtitleId !== null ? findSubtitleById(firstSubtitleId) : null;
+              const subtitleItem =
+                firstSubtitleId !== null ? findSubtitleById(firstSubtitleId) : null;
 
               // SubtitlePanel provides items as {id, start, end, de, zh}
               const subtitleDe = normalizeText(subtitleItem?.de);
@@ -700,7 +765,9 @@ export default function LexiconPanel({
                     knowledgeState === "known" ? "is-known" : "",
                     knowledgeState === "not_known" ? "is-not-known" : "",
                     knowledgeState === "elsewhere" ? "is-elsewhere" : "",
-                  ].filter(Boolean).join(" ")}
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   tabIndex={0}
                 >
                   <div className="vs-lexHeaderRow">
@@ -711,7 +778,7 @@ export default function LexiconPanel({
                         className="vs-lexMarkBtn vs-lexMarkBtn--known"
                         type="button"
                         onClick={() => {
-                          handleMarkKnown(entry.key);
+                          handleMarkKnown(entry);
                         }}
                       >
                         认识
@@ -721,7 +788,7 @@ export default function LexiconPanel({
                         className="vs-lexMarkBtn vs-lexMarkBtn--not-known"
                         type="button"
                         onClick={() => {
-                          handleMarkNotKnown(entry.key);
+                          handleMarkNotKnown(entry);
                         }}
                       >
                         不认识
@@ -737,14 +804,20 @@ export default function LexiconPanel({
                         <span className="vs-lexMeaningMeta">
                           {posLabel ? <span className="vs-lexPos">{posLabel}</span> : null}
                           {splittableLabel ? <span className="vs-lexMetaDot">·</span> : null}
-                          {splittableLabel ? <span className="vs-lexMetaText">{splittableLabel}</span> : null}
+                          {splittableLabel ? (
+                            <span className="vs-lexMetaText">{splittableLabel}</span>
+                          ) : null}
                         </span>
                       ) : null}
                     </div>
                   ) : null}
 
-                  {(subtitleDe || subtitleZh) ? (
-                    <div className="vs-lexSubtitleCard" role="group" aria-label="Subtitle example">
+                  {subtitleDe || subtitleZh ? (
+                    <div
+                      className="vs-lexSubtitleCard"
+                      role="group"
+                      aria-label="Subtitle example"
+                    >
                       {subtitleDe ? <div className="vs-lexSubtitleDe">{subtitleDe}</div> : null}
                       {!hideChinese && subtitleZh ? (
                         <div className="vs-lexSubtitleZh">{subtitleZh}</div>
@@ -766,7 +839,9 @@ export default function LexiconPanel({
                     </button>
 
                     <button
-                      className={["vs-eyeBtn", hideChinese ? "is-off" : "is-on"].filter(Boolean).join(" ")}
+                      className={["vs-eyeBtn", hideChinese ? "is-off" : "is-on"]
+                        .filter(Boolean)
+                        .join(" ")}
                       type="button"
                       aria-label={hideChinese ? "Show Chinese" : "Hide Chinese"}
                       onClick={() => {

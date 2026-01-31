@@ -6,6 +6,7 @@ from apps.learning_by_video.models import (
     VideoSentenceOccurrence,
     VideoExpressionOccurrence,
 )
+from apps.lexicon.models import OccurrenceKnowledgeState
 
 
 class BaseOccurrenceReadSerializer(serializers.ModelSerializer):
@@ -30,6 +31,12 @@ class VideoWordOccurrenceSerializer(BaseOccurrenceReadSerializer):
     word_pos = serializers.CharField(source="word.pos", read_only=True)
     word_splittable = serializers.BooleanField(source="word.splittable", read_only=True)
 
+    my_knowledge = serializers.ChoiceField(
+        choices=OccurrenceKnowledgeState.choices,
+        read_only=True,
+    )
+    marked_elsewhere = serializers.BooleanField(read_only=True)
+
     class Meta(BaseOccurrenceReadSerializer.Meta):
         model = VideoWordOccurrence
         fields = BaseOccurrenceReadSerializer.Meta.fields + [
@@ -39,14 +46,28 @@ class VideoWordOccurrenceSerializer(BaseOccurrenceReadSerializer):
             "word_article",
             "word_pos",
             "word_splittable",
+            "my_knowledge",
+            "marked_elsewhere",
         ]
         read_only_fields = fields
 
 class VideoSentenceOccurrenceSerializer(BaseOccurrenceReadSerializer):
     sentence_text = serializers.CharField(source="sentence.text", read_only=True)
+
+    my_knowledge = serializers.ChoiceField(
+        choices=OccurrenceKnowledgeState.choices,
+        read_only=True,
+    )
+    marked_elsewhere = serializers.BooleanField(read_only=True)
+
     class Meta(BaseOccurrenceReadSerializer.Meta):
         model = VideoSentenceOccurrence
-        fields = BaseOccurrenceReadSerializer.Meta.fields + ["sentence", "sentence_text"]
+        fields = BaseOccurrenceReadSerializer.Meta.fields + [
+            "sentence",
+            "sentence_text",
+            "my_knowledge",
+            "marked_elsewhere",
+        ]
         read_only_fields = fields
 
 
@@ -54,11 +75,20 @@ class VideoExpressionOccurrenceSerializer(BaseOccurrenceReadSerializer):
     expression_text = serializers.CharField(source="expression.text", read_only=True)
     expression_prototype = serializers.CharField(source="expression.prototype", read_only=True)
 
+
+    my_knowledge = serializers.ChoiceField(
+        choices=OccurrenceKnowledgeState.choices,
+        read_only=True,
+    )
+    marked_elsewhere = serializers.BooleanField(read_only=True)
+
     class Meta(BaseOccurrenceReadSerializer.Meta):
         model = VideoExpressionOccurrence
         fields = BaseOccurrenceReadSerializer.Meta.fields + [
             "expression",
             "expression_text",
             "expression_prototype",
+            "my_knowledge",
+            "marked_elsewhere",
         ]
         read_only_fields = fields

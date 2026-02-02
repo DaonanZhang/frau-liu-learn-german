@@ -505,6 +505,7 @@ export default function VideoStudyPage() {
           <div className="vs-descCard">
             <div className="vs-descTitle">视频简介</div>
             <div className="vs-descText">{loadingVideo ? "Loading…" : leftDescription || "暂无简介"}</div>
+          </div>
 
             <div className="vs-descActions">
               <button
@@ -525,7 +526,6 @@ export default function VideoStudyPage() {
                 {isExerciseOpen ? "跟读模式" : "练习模式"}
               </button>
             </div>
-          </div>
         </section>
 
         {/* Middle: subtitles */}

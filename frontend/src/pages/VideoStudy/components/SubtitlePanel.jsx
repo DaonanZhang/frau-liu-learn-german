@@ -7,13 +7,16 @@ import {
 } from "../../../api/learning_by_video/occurrences.js";
 import { ShadowingPracticeBar } from "./ShadowingPracticeBar.jsx";
 import ExportSubtitlesModal from "./ExportSubtitlesModal.jsx";
+import FillInExerciseModal from "./FillInExerciseModal.jsx";
 
 /**
  * Format seconds to m:ss or h:mm:ss.
  */
 function formatTime(seconds) {
   const s = Number(seconds || 0);
-  if (!Number.isFinite(s) || s < 0) return "0:00";
+  if (!Number.isFinite(s) || s < 0) {
+    return "0:00";
+  }
 
   const hours = Math.floor(s / 3600);
   const minutes = Math.floor((s % 3600) / 60);
@@ -26,16 +29,103 @@ function formatTime(seconds) {
 }
 
 /**
- * SubtitlePanel
+ * Compute merged match ranges for patterns in text (case-insensitive).
  *
- * Requirements:
- * - Fetch subtitles related to videoId
- * - Render as a fixed-height scrollable list
- * - Click subtitle to seek video to subtitle.start
- * - Provide a language mode switch:
- *   - Bilingual: translation (German) + content (Chinese)
- *   - German: translation only
- *   - Chinese: content only
+ * @param {string} text - Source text.
+ * @param {string[]} patterns - Patterns to match.
+ * @returns {{start: number, end: number}[]} Merged ranges.
+ */
+function computeMergedRanges(text, patterns) {
+  const safeText = String(text || "");
+  if (!safeText) {
+    return [];
+  }
+  if (!patterns || patterns.length === 0) {
+    return [];
+  }
+
+  const lower = safeText.toLowerCase();
+  const ranges = [];
+
+  patterns.forEach((pattern) => {
+    const normalizedPattern = String(pattern ?? "").trim();
+    if (!normalizedPattern) {
+      return;
+    }
+
+    const patternLower = normalizedPattern.toLowerCase();
+    let startIndex = 0;
+
+    while (startIndex < lower.length) {
+      const idx = lower.indexOf(patternLower, startIndex);
+      if (idx === -1) {
+        break;
+      }
+
+      ranges.push({ start: idx, end: idx + patternLower.length });
+      startIndex = idx + patternLower.length;
+    }
+  });
+
+  if (ranges.length === 0) {
+    return [];
+  }
+
+  ranges.sort((a, b) => a.start - b.start || a.end - b.end);
+
+  const merged = [];
+  for (const r of ranges) {
+    const last = merged[merged.length - 1];
+    if (!last || r.start > last.end) {
+      merged.push({ ...r });
+    } else {
+      last.end = Math.max(last.end, r.end);
+    }
+  }
+
+  return merged;
+}
+
+/**
+ * Build prompt with multiple blanks for given ranges.
+ *
+ * @param {string} fullText - Full sentence.
+ * @param {{start:number,end:number}[]} ranges - Non-overlapping ranges, sorted.
+ * @returns {string} Prompt with blanks.
+ */
+function buildMultiClozePrompt(fullText, ranges) {
+  const safeText = String(fullText || "");
+  if (!safeText) {
+    return safeText;
+  }
+  if (!ranges || ranges.length === 0) {
+    return safeText;
+  }
+
+  const parts = [];
+  let cursor = 0;
+
+  ranges.forEach((range) => {
+    const startIndex = Math.max(0, Math.min(safeText.length, Number(range.start)));
+    const endIndex = Math.max(startIndex, Math.min(safeText.length, Number(range.end)));
+
+    if (startIndex > cursor) {
+      parts.push(safeText.slice(cursor, startIndex));
+    }
+
+    parts.push("____");
+    cursor = endIndex;
+  });
+
+  if (cursor < safeText.length) {
+    parts.push(safeText.slice(cursor));
+  }
+
+  return parts.join("");
+}
+
+/**
+ * SubtitlePanel
  */
 export default function SubtitlePanel({
   videoId,
@@ -69,29 +159,11 @@ export default function SubtitlePanel({
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
-
-    /**
-   * Cloze reveal state:
-   * - key: `${subtitleId}:${start}-${end}`
-   * - value: boolean (true = revealed)
-   *
-   * @type {[Record<string, boolean>, Function]}
-   */
-  const [revealedMap, setRevealedMap] = useState({});
+  const [isFillInModalOpen, setIsFillInModalOpen] = useState(false);
+  const [activeExerciseKey, setActiveExerciseKey] = useState("");
 
   const menuRef = useRef(null);
 
-  /**
-   * Whether playback settings differ from the default configuration.
-   *
-   * Default:
-   * - videoMode: "single_play"
-   * - sentenceMode: "continuous"
-   * - loopCount: 1
-   * - autoNext: false
-   *
-   * @type {boolean}
-   */
   const isPlaybackNonDefault =
     playbackSettings?.videoMode !== "single_play" ||
     playbackSettings?.sentenceMode !== "continuous" ||
@@ -106,12 +178,6 @@ export default function SubtitlePanel({
   const subtitleListRef = useRef(null);
 
   useEffect(() => {
-    if (panelShape !== "cloze") {
-      setRevealedMap({});
-    }
-  }, [panelShape]);
-
-  useEffect(() => {
     let aborted = false;
 
     async function loadSubtitles() {
@@ -121,23 +187,32 @@ export default function SubtitlePanel({
 
         const data = await fetchSubtitlesByVideo(videoId);
 
-        if (aborted) return;
+        if (aborted) {
+          return;
+        }
         setSubtitles(Array.isArray(data) ? data : []);
       } catch (err) {
-        if (aborted) return;
+        if (aborted) {
+          return;
+        }
         setErrorText(err?.message ? String(err.message) : "Failed to load subtitles");
         setSubtitles([]);
       } finally {
-        if (!aborted) setLoading(false);
+        if (!aborted) {
+          setLoading(false);
+        }
       }
     }
 
-    if (videoId) loadSubtitles();
+    if (videoId) {
+      loadSubtitles();
+    }
 
     return () => {
       aborted = true;
     };
   }, [videoId]);
+
   useEffect(() => {
     let aborted = false;
 
@@ -149,17 +224,25 @@ export default function SubtitlePanel({
           fetchExpressionOccurrences({ video: videoId }),
         ]);
 
-        if (aborted) return;
+        if (aborted) {
+          return;
+        }
 
         const nextMap = {};
 
         function add(subtitleId, text) {
-          if (subtitleId === undefined || subtitleId === null) return;
+          if (subtitleId === undefined || subtitleId === null) {
+            return;
+          }
           const value = String(text ?? "").trim();
-          if (!value) return;
+          if (!value) {
+            return;
+          }
 
           const key = String(subtitleId);
-          if (!nextMap[key]) nextMap[key] = [];
+          if (!nextMap[key]) {
+            nextMap[key] = [];
+          }
           nextMap[key].push(value);
         }
 
@@ -173,25 +256,36 @@ export default function SubtitlePanel({
 
         setOccMap(nextMap);
       } catch (_err) {
-        if (!aborted) setOccMap({});
+        if (!aborted) {
+          setOccMap({});
+        }
       }
     }
 
-    if (videoId) loadOccurrences();
+    if (videoId) {
+      loadOccurrences();
+    }
 
     return () => {
       aborted = true;
     };
   }, [videoId]);
 
-
   useEffect(() => {
     function onDocMouseDown(e) {
-      if (!menuRef.current) return;
-      if (menuRef.current.contains(e.target)) return;
+      if (!menuRef.current) {
+        return;
+      }
+      if (menuRef.current.contains(e.target)) {
+        return;
+      }
 
-      if (menuOpen) setMenuOpen(false);
-      if (playMenuOpen) setPlayMenuOpen(false);
+      if (menuOpen) {
+        setMenuOpen(false);
+      }
+      if (playMenuOpen) {
+        setPlayMenuOpen(false);
+      }
     }
 
     document.addEventListener("mousedown", onDocMouseDown);
@@ -199,7 +293,6 @@ export default function SubtitlePanel({
       document.removeEventListener("mousedown", onDocMouseDown);
     };
   }, [menuOpen, playMenuOpen]);
-
 
   // automatic subtitle rolling
   useEffect(() => {
@@ -244,31 +337,24 @@ export default function SubtitlePanel({
     });
   }, [activeSubtitleIndex]);
 
-
-  /**
-   * Backend fields: id, video, start, end, content, translation
-   * Mapping rules:
-   * - content: Chinese
-   * - translation: German
-   */
   const items = useMemo(() => {
     return subtitles.map((s) => ({
       id: s.id,
       start: Number(s.start || 0),
       end: Number(s.end || 0),
       timeLabel: formatTime(s.start),
-
-      // Backend field semantics:
-      // - content: German
-      // - translation: Chinese
       de: s.content || "",
       zh: s.translation || "",
     }));
   }, [subtitles]);
 
   useEffect(() => {
-    if (!items || items.length === 0) return;
-    onSubtitlesLoaded?.(items);
+    if (!items || items.length === 0) {
+      return;
+    }
+    if (onSubtitlesLoaded) {
+      onSubtitlesLoaded(items);
+    }
   }, [items, onSubtitlesLoaded]);
 
   function handleSelectMode(nextMode) {
@@ -277,7 +363,6 @@ export default function SubtitlePanel({
     setPlayMenuOpen(false);
   }
 
-
   /**
    * Format seconds to SRT time format: HH:MM:SS,mmm
    *
@@ -285,13 +370,16 @@ export default function SubtitlePanel({
    * @returns {string} SRT timestamp.
    */
   function formatSrtTimestamp(seconds) {
-      const totalMs = Math.max(0, Math.floor(Number(seconds || 0) * 1000));
-      const hours = Math.floor(totalMs / 3600000);
-      const minutes = Math.floor((totalMs % 3600000) / 60000);
-      const secs = Math.floor((totalMs % 60000) / 1000);
-      const ms = totalMs % 1000;
+    const totalMs = Math.max(0, Math.floor(Number(seconds || 0) * 1000));
+    const hours = Math.floor(totalMs / 3600000);
+    const minutes = Math.floor((totalMs % 3600000) / 60000);
+    const secs = Math.floor((totalMs % 60000) / 1000);
+    const ms = totalMs % 1000;
 
-      return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(
+      2,
+      "0"
+    )},${String(ms).padStart(3, "0")}`;
   }
 
   /**
@@ -300,47 +388,170 @@ export default function SubtitlePanel({
    * @returns {void}
    */
   function handleExportSubtitles() {
-      const exportItems = items || [];
-      if (!exportItems.length) {
-          return;
+    const exportItems = items || [];
+    if (!exportItems.length) {
+      return;
+    }
+
+    const lines = [];
+
+    exportItems.forEach((subtitleItem, index) => {
+      const start = formatSrtTimestamp(subtitleItem.start);
+      const end = formatSrtTimestamp(subtitleItem.end);
+
+      lines.push(String(index + 1));
+      lines.push(`${start} --> ${end}`);
+
+      const german = String(subtitleItem.de || "").trim();
+      const chinese = String(subtitleItem.zh || "").trim();
+
+      if (german) {
+        lines.push(german);
+      }
+      if (chinese) {
+        lines.push(chinese);
       }
 
-      const lines = [];
+      lines.push("");
+    });
 
-      exportItems.forEach((subtitleItem, index) => {
-          const start = formatSrtTimestamp(subtitleItem.start);
-          const end = formatSrtTimestamp(subtitleItem.end);
+    const content = lines.join("\n");
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const objectUrl = URL.createObjectURL(blob);
 
-          lines.push(String(index + 1));
-          lines.push(`${start} --> ${end}`);
+    const linkElement = document.createElement("a");
+    linkElement.href = objectUrl;
+    linkElement.download = `subtitles-${String(videoId || "video")}.srt`;
+    document.body.appendChild(linkElement);
+    linkElement.click();
+    linkElement.remove();
 
-          const german = String(subtitleItem.de || "").trim();
-          const chinese = String(subtitleItem.zh || "").trim();
-
-          if (german) {
-              lines.push(german);
-          }
-          if (chinese) {
-              lines.push(chinese);
-          }
-
-          lines.push("");
-      });
-
-      const content = lines.join("\n");
-      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-      const objectUrl = URL.createObjectURL(blob);
-
-      const linkElement = document.createElement("a");
-      linkElement.href = objectUrl;
-      linkElement.download = `subtitles-${String(videoId || "video")}.srt`;
-      document.body.appendChild(linkElement);
-      linkElement.click();
-      linkElement.remove();
-
-      URL.revokeObjectURL(objectUrl);
+    URL.revokeObjectURL(objectUrl);
   }
 
+  /**
+   * Play a single subtitle segment once (auto pause at endSeconds).
+   *
+   * @param {number} startSeconds - Segment start.
+   * @param {number} endSeconds - Segment end.
+   * @returns {void}
+   */
+  function playSegmentOnce(startSeconds, endSeconds) {
+    const start = Number(startSeconds || 0);
+    const end = Number(endSeconds || 0);
+
+    if (onSeek) {
+      onSeek(start);
+    }
+
+    const videoElement = videoRef?.current;
+    if (!videoElement) {
+      return;
+    }
+
+    if (typeof videoElement.currentTime === "number") {
+      videoElement.currentTime = start;
+    }
+
+    const handleTimeUpdate = () => {
+      const current = Number(videoRef?.current?.currentTime || 0);
+      if (end > 0 && current >= end - 0.03) {
+        videoRef.current.pause();
+        videoRef.current.removeEventListener("timeupdate", handleTimeUpdate);
+      }
+    };
+
+    videoElement.addEventListener("timeupdate", handleTimeUpdate);
+
+    const playResult = videoElement.play();
+    if (playResult && typeof playResult.catch === "function") {
+      playResult.catch(() => {
+        videoElement.removeEventListener("timeupdate", handleTimeUpdate);
+      });
+    }
+  }
+
+  const exercisePlan = useMemo(() => {
+    const plan = [];
+
+    items.forEach((subtitleItem) => {
+      const patterns = occMap[String(subtitleItem.id)] || [];
+      const ranges = computeMergedRanges(subtitleItem.de, patterns);
+
+      if (!ranges || ranges.length === 0) {
+        return;
+      }
+
+      const blanks = ranges.map((range) => {
+        const answerText = String(subtitleItem.de || "").slice(range.start, range.end);
+        return {
+          startIndex: range.start,
+          endIndex: range.end,
+          answerText,
+        };
+      });
+
+      const promptText = buildMultiClozePrompt(subtitleItem.de, ranges);
+
+      plan.push({
+        exerciseKey: String(subtitleItem.id),
+        subtitleId: subtitleItem.id,
+        promptText,
+        blanks,
+        startSeconds: Number(subtitleItem.start || 0),
+        endSeconds: Number(subtitleItem.end || 0),
+        prevExerciseKey: "",
+        nextExerciseKey: "",
+      });
+    });
+
+    for (let i = 0; i < plan.length; i += 1) {
+      plan[i].prevExerciseKey = i > 0 ? plan[i - 1].exerciseKey : "";
+      plan[i].nextExerciseKey = i < plan.length - 1 ? plan[i + 1].exerciseKey : "";
+    }
+
+    return plan;
+  }, [items, occMap]);
+
+  const exerciseByKey = useMemo(() => {
+    const map = {};
+    exercisePlan.forEach((node) => {
+      map[node.exerciseKey] = node;
+    });
+    return map;
+  }, [exercisePlan]);
+
+  const activeExercise = activeExerciseKey ? exerciseByKey[activeExerciseKey] : null;
+  const hasNextExercise = Boolean(activeExercise?.nextExerciseKey);
+  const hasPrevExercise = Boolean(activeExercise?.prevExerciseKey);
+
+  function openExerciseModal(exerciseKey) {
+    const safeKey = String(exerciseKey || "");
+    if (!safeKey) {
+      return;
+    }
+
+    setActiveExerciseKey(safeKey);
+    setIsFillInModalOpen(true);
+  }
+
+  function goToNextExercise() {
+    if (!activeExercise || !activeExercise.nextExerciseKey) {
+      return;
+    }
+
+    setActiveExerciseKey(activeExercise.nextExerciseKey);
+    setIsFillInModalOpen(true);
+  }
+
+  function goToPrevExercise() {
+    if (!activeExercise || !activeExercise.prevExerciseKey) {
+      return;
+    }
+
+    setActiveExerciseKey(activeExercise.prevExerciseKey);
+    setIsFillInModalOpen(true);
+  }
 
   function renderSubtitleText(item) {
     const showDe = mode === "bilingual" || mode === "de";
@@ -351,21 +562,18 @@ export default function SubtitlePanel({
       <>
         {showDe && item.de ? (
           <div className="vs-subDe">
-            {panelShape === "cloze"
-              ? renderWithClozeMask({
-                  text: item.de,
-                  patterns,
-                  subtitleId: item.id,
-                  revealedMap,
-                  onToggleReveal: (maskKey) => {
-                    setRevealedMap((prev) => {
-                      const next = { ...prev };
-                      next[maskKey] = !Boolean(prev[maskKey]);
-                      return next;
-                    });
-                  },
-                })
-              : renderWithHighlights(item.de, patterns, highlightEnabled)}
+            {panelShape === "cloze" ? (
+              renderWithClozeMask({
+                text: item.de,
+                patterns,
+                subtitleId: item.id,
+                onOpenExercise: (exerciseKey) => {
+                  openExerciseModal(exerciseKey);
+                },
+              })
+            ) : (
+              renderWithHighlights(item.de, patterns, highlightEnabled)
+            )}
           </div>
         ) : null}
 
@@ -388,8 +596,10 @@ export default function SubtitlePanel({
             className={[
               "vs-toolBtn",
               "ui-tooltip",
-              (menuOpen || mode !== "bilingual") ? "is-active" : "",
-            ].filter(Boolean).join(" ")}
+              menuOpen || mode !== "bilingual" ? "is-active" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             type="button"
             data-tooltip="切换字幕显示语言"
             aria-label="Subtitle language mode"
@@ -401,9 +611,10 @@ export default function SubtitlePanel({
             文A
           </button>
 
-
           <button
-            className={["vs-toolBtn", "ui-tooltip", isLexiconOpen ? "is-active" : ""].filter(Boolean).join(" ")}
+            className={["vs-toolBtn", "ui-tooltip", isLexiconOpen ? "is-active" : ""]
+              .filter(Boolean)
+              .join(" ")}
             type="button"
             data-tooltip={isLexiconOpen ? "收起词典面板" : "打开词典面板"}
             aria-label="Toggle lexicon panel"
@@ -437,7 +648,9 @@ export default function SubtitlePanel({
               "vs-toolBtn",
               "ui-tooltip",
               panelShape === "shadowing" ? "is-active" : "",
-            ].filter(Boolean).join(" ")}
+            ]
+              .filter(Boolean)
+              .join(" ")}
             type="button"
             data-tooltip={panelShape === "shadowing" ? "退出跟读练习" : "进入跟读练习"}
             aria-label="Shadowing practice"
@@ -476,7 +689,9 @@ export default function SubtitlePanel({
               "vs-toolBtn",
               "ui-tooltip",
               panelShape === "cloze" ? "is-active" : "",
-            ].filter(Boolean).join(" ")}
+            ]
+              .filter(Boolean)
+              .join(" ")}
             type="button"
             data-tooltip={panelShape === "cloze" ? "退出填写练习" : "进入填写练习"}
             aria-label="Cloze practice"
@@ -513,8 +728,10 @@ export default function SubtitlePanel({
             className={[
               "vs-toolBtn",
               "ui-tooltip",
-              (playMenuOpen || isPlaybackNonDefault || isRepeatEnabled) ? "is-active" : "",
-            ].filter(Boolean).join(" ")}
+              playMenuOpen || isPlaybackNonDefault || isRepeatEnabled ? "is-active" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
             type="button"
             data-tooltip="播放设置"
             aria-label="Playback settings"
@@ -577,7 +794,9 @@ export default function SubtitlePanel({
                 className={`vs-subMenuItem ${mode === "bilingual" ? "is-active" : ""}`}
                 type="button"
                 role="menuitem"
-                onClick={() => handleSelectMode("bilingual")}
+                onClick={() => {
+                  handleSelectMode("bilingual");
+                }}
               >
                 <div className="vs-subMenuItemLeft">
                   <span className="vs-subMenuKey">文A</span>
@@ -590,7 +809,9 @@ export default function SubtitlePanel({
                 className={`vs-subMenuItem ${mode === "de" ? "is-active" : ""}`}
                 type="button"
                 role="menuitem"
-                onClick={() => handleSelectMode("de")}
+                onClick={() => {
+                  handleSelectMode("de");
+                }}
               >
                 <div className="vs-subMenuItemLeft">
                   <span className="vs-subMenuKey">DE</span>
@@ -603,7 +824,9 @@ export default function SubtitlePanel({
                 className={`vs-subMenuItem ${mode === "zh" ? "is-active" : ""}`}
                 type="button"
                 role="menuitem"
-                onClick={() => handleSelectMode("zh")}
+                onClick={() => {
+                  handleSelectMode("zh");
+                }}
               >
                 <div className="vs-subMenuItemLeft">
                   <span className="vs-subMenuKey">中</span>
@@ -621,7 +844,11 @@ export default function SubtitlePanel({
               <button
                 className="vs-playMenuItem"
                 type="button"
-                onClick={() => onPlaybackSettingsChange?.({ videoMode: "single_play" })}
+                onClick={() => {
+                  if (onPlaybackSettingsChange) {
+                    onPlaybackSettingsChange({ videoMode: "single_play" });
+                  }
+                }}
               >
                 <span className="vs-playMenuItemLeft">单集播放</span>
                 {playbackSettings?.videoMode === "single_play" ? <span className="vs-playMenuCheck">✓</span> : null}
@@ -630,7 +857,11 @@ export default function SubtitlePanel({
               <button
                 className="vs-playMenuItem"
                 type="button"
-                onClick={() => onPlaybackSettingsChange?.({ videoMode: "single_loop" })}
+                onClick={() => {
+                  if (onPlaybackSettingsChange) {
+                    onPlaybackSettingsChange({ videoMode: "single_loop" });
+                  }
+                }}
               >
                 <span className="vs-playMenuItemLeft">单集循环</span>
                 {playbackSettings?.videoMode === "single_loop" ? <span className="vs-playMenuCheck">✓</span> : null}
@@ -643,7 +874,11 @@ export default function SubtitlePanel({
               <button
                 className="vs-playMenuItem"
                 type="button"
-                onClick={() => onPlaybackSettingsChange?.({ sentenceMode: "continuous" })}
+                onClick={() => {
+                  if (onPlaybackSettingsChange) {
+                    onPlaybackSettingsChange({ sentenceMode: "continuous" });
+                  }
+                }}
               >
                 <span className="vs-playMenuItemLeft">连续播放</span>
                 {playbackSettings?.sentenceMode === "continuous" ? <span className="vs-playMenuCheck">✓</span> : null}
@@ -652,13 +887,15 @@ export default function SubtitlePanel({
               <button
                 className="vs-playMenuItem"
                 type="button"
-                onClick={() =>
-                  onPlaybackSettingsChange?.({
-                    sentenceMode: "loop",
-                    loopCount: playbackSettings?.loopCount ?? 1,
-                    autoNext: playbackSettings?.autoNext ?? false,
-                  })
-                }
+                onClick={() => {
+                  if (onPlaybackSettingsChange) {
+                    onPlaybackSettingsChange({
+                      sentenceMode: "loop",
+                      loopCount: playbackSettings?.loopCount ?? 1,
+                      autoNext: playbackSettings?.autoNext ?? false,
+                    });
+                  }
+                }}
               >
                 <span className="vs-playMenuItemLeft">单句循环</span>
                 {playbackSettings?.sentenceMode === "loop" ? <span className="vs-playMenuCheck">✓</span> : null}
@@ -672,9 +909,13 @@ export default function SubtitlePanel({
                     <select
                       className="vs-loopSelect"
                       value={String(playbackSettings?.loopCount ?? 1)}
-                      onChange={(e) =>
-                        onPlaybackSettingsChange?.({ loopCount: e.target.value === "infinite" ? "infinite" : Number(e.target.value) })
-                      }
+                      onChange={(e) => {
+                        if (onPlaybackSettingsChange) {
+                          onPlaybackSettingsChange({
+                            loopCount: e.target.value === "infinite" ? "infinite" : Number(e.target.value),
+                          });
+                        }
+                      }}
                     >
                       <option value="1">1次</option>
                       <option value="2">2次</option>
@@ -691,7 +932,11 @@ export default function SubtitlePanel({
                       className={["vs-toggle", playbackSettings?.autoNext ? "is-on" : ""].filter(Boolean).join(" ")}
                       type="button"
                       aria-label="Toggle auto next sentence"
-                      onClick={() => onPlaybackSettingsChange?.({ autoNext: !playbackSettings?.autoNext })}
+                      onClick={() => {
+                        if (onPlaybackSettingsChange) {
+                          onPlaybackSettingsChange({ autoNext: !playbackSettings?.autoNext });
+                        }
+                      }}
                     >
                       <span className="vs-toggleKnob" />
                     </button>
@@ -706,13 +951,9 @@ export default function SubtitlePanel({
       <div className="vs-subtitleList" ref={subtitleListRef}>
         {loading && <div className="vs-subEmpty">Loading subtitles…</div>}
 
-        {!loading && errorText && (
-          <div className="vs-subEmpty">Failed to load subtitles: {errorText}</div>
-        )}
+        {!loading && errorText && <div className="vs-subEmpty">Failed to load subtitles: {errorText}</div>}
 
-        {!loading && !errorText && items.length === 0 && (
-          <div className="vs-subEmpty">No subtitles available</div>
-        )}
+        {!loading && !errorText && items.length === 0 && <div className="vs-subEmpty">No subtitles available</div>}
 
         {!loading &&
           !errorText &&
@@ -724,14 +965,22 @@ export default function SubtitlePanel({
                 "vs-subtitleItem",
                 "vs-subtitleItem--clickable",
                 index === activeSubtitleIndex ? "is-active" : "",
-              ].filter(Boolean).join(" ")}
+              ]
+                .filter(Boolean)
+                .join(" ")}
               role="button"
               tabIndex={0}
-              onClick={() => onSeek?.(subtitleItem.start)}
+              onClick={() => {
+                if (onSeek) {
+                  onSeek(subtitleItem.start);
+                }
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
-                  onSeek?.(subtitleItem.start);
+                  if (onSeek) {
+                    onSeek(subtitleItem.start);
+                  }
                 }
               }}
             >
@@ -748,7 +997,6 @@ export default function SubtitlePanel({
               ) : null}
             </article>
           ))}
-
       </div>
 
       <ExportSubtitlesModal
@@ -760,33 +1008,72 @@ export default function SubtitlePanel({
         }}
       />
 
+      <FillInExerciseModal
+        isOpen={isFillInModalOpen}
+        exerciseKey={activeExercise?.exerciseKey || ""}
+        titleText={"填写练习"}
+        promptText={activeExercise?.promptText || ""}
+        blanks={activeExercise?.blanks || []}
+        hasPrev={hasPrevExercise}
+        hasNext={hasNextExercise}
+        onPlay={() => {
+          if (activeExercise) {
+            playSegmentOnce(activeExercise.startSeconds, activeExercise.endSeconds);
+          }
+        }}
+        onPrev={() => {
+          goToPrevExercise();
+        }}
+        onNext={() => {
+          goToNextExercise();
+        }}
+        onClose={() => {
+          setIsFillInModalOpen(false);
+        }}
+      />
     </div>
   );
+
+  function renderSubtitleText(item) {
+    const showDe = mode === "bilingual" || mode === "de";
+    const showZh = mode === "bilingual" || mode === "zh";
+    const patterns = occMap[String(item.id)] || [];
+
+    return (
+      <>
+        {showDe && item.de ? (
+          <div className="vs-subDe">
+            {panelShape === "cloze" ? (
+              renderWithClozeMask({
+                text: item.de,
+                patterns,
+                subtitleId: item.id,
+                onOpenExercise: (exerciseKey) => {
+                  openExerciseModal(exerciseKey);
+                },
+              })
+            ) : (
+              renderWithHighlights(item.de, patterns, highlightEnabled)
+            )}
+          </div>
+        ) : null}
+
+        {showZh && item.zh ? (
+          <div className={mode === "zh" ? "vs-subDe" : "vs-subZh"}>
+            {renderWithHighlights(item.zh, patterns, highlightEnabled)}
+          </div>
+        ) : null}
+      </>
+    );
+  }
 }
 
 /**
  * Render text with cloze masks applied to matched patterns.
  *
- * Behavior:
- * - Matching is case-insensitive.
- * - Overlapping matches are merged.
- * - Each mask is clickable to toggle reveal/hide.
- *
- * @param {Object} params - Parameters.
- * @param {string} params.text - Source text to render.
- * @param {string[]} params.patterns - Patterns to mask.
- * @param {string|number} params.subtitleId - Subtitle id (for stable keys).
- * @param {Record<string, boolean>} params.revealedMap - Reveal state map.
- * @param {(maskKey: string) => void} params.onToggleReveal - Toggle handler.
  * @returns {string|JSX.Element[]} Rendered content.
  */
-function renderWithClozeMask({
-  text,
-  patterns,
-  subtitleId,
-  revealedMap,
-  onToggleReveal,
-}) {
+function renderWithClozeMask({ text, patterns, subtitleId, onOpenExercise }) {
   if (!text) {
     return text;
   }
@@ -795,26 +1082,80 @@ function renderWithClozeMask({
     return text;
   }
 
+  const merged = computeMergedRanges(text, patterns);
+  if (merged.length === 0) {
+    return text;
+  }
+
+  const parts = [];
+  let cursor = 0;
+
+  merged.forEach((m, index) => {
+    if (m.start > cursor) {
+      parts.push(<span key={`t-${index}-${cursor}`}>{text.slice(cursor, m.start)}</span>);
+    }
+
+    const answerText = text.slice(m.start, m.end);
+    const exerciseKey = String(subtitleId);
+
+    parts.push(
+      <button
+        key={`m-${index}-${m.start}`}
+        type="button"
+        className="vs-occ-mask"
+        aria-label="Open fill-in modal"
+        onClick={(event) => {
+          event.stopPropagation();
+
+          if (typeof onOpenExercise === "function") {
+            onOpenExercise(exerciseKey);
+          }
+        }}
+      >
+        {answerText}
+      </button>
+    );
+
+    cursor = m.end;
+  });
+
+  if (cursor < text.length) {
+    parts.push(<span key={`t-end-${cursor}`}>{text.slice(cursor)}</span>);
+  }
+
+  return parts;
+}
+
+function renderWithHighlights(text, patterns, highlightEnabled) {
+  if (!highlightEnabled) {
+    return text;
+  }
+  if (!text) {
+    return text;
+  }
+  if (!patterns || patterns.length === 0) {
+    return text;
+  }
+
   const lower = text.toLowerCase();
   const ranges = [];
 
-  patterns.forEach((pattern) => {
-    const normalizedPattern = String(pattern ?? "").trim();
-    if (!normalizedPattern) {
+  patterns.forEach((p) => {
+    const pat = String(p).trim();
+    if (!pat) {
       return;
     }
 
-    const patternLower = normalizedPattern.toLowerCase();
+    const patLower = pat.toLowerCase();
     let startIndex = 0;
 
     while (startIndex < lower.length) {
-      const idx = lower.indexOf(patternLower, startIndex);
+      const idx = lower.indexOf(patLower, startIndex);
       if (idx === -1) {
         break;
       }
-
-      ranges.push({ start: idx, end: idx + patternLower.length });
-      startIndex = idx + patternLower.length;
+      ranges.push({ start: idx, end: idx + patLower.length });
+      startIndex = idx + patLower.length;
     }
   });
 
@@ -832,81 +1173,6 @@ function renderWithClozeMask({
     } else {
       last.end = Math.max(last.end, r.end);
     }
-  }
-
-  const parts = [];
-  let cursor = 0;
-
-  merged.forEach((m, index) => {
-    if (m.start > cursor) {
-      parts.push(
-        <span key={`t-${index}-${cursor}`}>{text.slice(cursor, m.start)}</span>
-      );
-    }
-
-    const maskKey = `${String(subtitleId)}:${m.start}-${m.end}`;
-    const isRevealed = Boolean(revealedMap?.[maskKey]);
-
-    parts.push(
-      <button
-        key={`m-${index}-${m.start}`}
-        type="button"
-        className={[
-          "vs-occ-mask",
-          isRevealed ? "is-revealed" : "",
-        ].filter(Boolean).join(" ")}
-        aria-label={isRevealed ? "Hide word" : "Reveal word"}
-        onClick={(event) => {
-          event.stopPropagation();
-          onToggleReveal(maskKey);
-        }}
-      >
-        {text.slice(m.start, m.end)}
-      </button>
-    );
-
-    cursor = m.end;
-  });
-
-  if (cursor < text.length) {
-    parts.push(<span key={`t-end-${cursor}`}>{text.slice(cursor)}</span>);
-  }
-
-  return parts;
-}
-
-function renderWithHighlights(text, patterns, highlightEnabled) {
-  if (!highlightEnabled) return text;
-  if (!text) return text;
-  if (!patterns || patterns.length === 0) return text;
-
-  const lower = text.toLowerCase();
-  const ranges = [];
-
-  patterns.forEach((p) => {
-    const pat = String(p).trim();
-    if (!pat) return;
-
-    const patLower = pat.toLowerCase();
-    let startIndex = 0;
-
-    while (startIndex < lower.length) {
-      const idx = lower.indexOf(patLower, startIndex);
-      if (idx === -1) break;
-      ranges.push({ start: idx, end: idx + patLower.length });
-      startIndex = idx + patLower.length;
-    }
-  });
-
-  if (ranges.length === 0) return text;
-
-  ranges.sort((a, b) => a.start - b.start || a.end - b.end);
-
-  const merged = [];
-  for (const r of ranges) {
-    const last = merged[merged.length - 1];
-    if (!last || r.start > last.end) merged.push({ ...r });
-    else last.end = Math.max(last.end, r.end);
   }
 
   const parts = [];

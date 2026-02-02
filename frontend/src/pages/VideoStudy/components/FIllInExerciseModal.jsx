@@ -4,71 +4,169 @@ import "./FillInExerciseModal.css";
 /**
  * Normalize a user input for comparison.
  *
- * @param {string} rawValue - User raw input value.
- * @returns {string} Normalized value for comparison.
+ * @param {string} rawValue - Raw input.
+ * @returns {string} Normalized input.
  */
 function normalizeInputValue(rawValue) {
   const safeValue = String(rawValue || "");
   return safeValue.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+
+function renderPromptWithInlineInputs({
+  exerciseKey,
+  promptText,
+  blankList,
+  userValues,
+  setUserValues,
+  inputRefs,
+  isCorrect,
+  isLockedAsWrong,
+  isCheckDisabled,
+  handleCheckAnswer,
+  resultState,
+}) {
+  const text = String(promptText || "");
+  const parts = text.split("____");
+
+  const blankCount = Math.max(0, (parts.length - 1));
+  const expectedCount = Array.isArray(blankList) ? blankList.length : 0;
+  const count = Math.min(blankCount, expectedCount);
+
+  const nodes = [];
+
+  for (let index = 0; index < parts.length; index += 1) {
+    const chunkText = parts[index];
+    if (chunkText) {
+      nodes.push(
+        <span key={`${exerciseKey}-t-${index}`} className="fim-sentenceText">
+          {chunkText}
+        </span>
+      );
+    }
+
+    if (index < count) {
+      const answerText = String(blankList[index]?.answerText || "");
+      const showReveal = resultState === "wrong2";
+
+      nodes.push(
+        <span key={`${exerciseKey}-w-${index}`} className="fim-inlineWrap">
+          <input
+            ref={(node) => {
+              if (node) {
+                inputRefs.current[index] = node;
+              }
+            }}
+            className="fim-inlineInput"
+            value={userValues[index] || ""}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setUserValues((prev) => {
+                const next = [...prev];
+                next[index] = nextValue;
+                return next;
+              });
+            }}
+            disabled={isCorrect || isLockedAsWrong}
+            inputMode="text"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                if (!isCheckDisabled) {
+                  handleCheckAnswer();
+                }
+              }
+            }}
+          />
+
+          {showReveal ? (
+            <span className="fim-inlineAnswer" aria-label="Correct answer">
+              {answerText}
+            </span>
+          ) : null}
+        </span>
+      );
+    }
+  }
+
+  return <span className="fim-sentence">{nodes}</span>;
+}
+
+
 /**
  * FillInExerciseModal
  *
- * Props:
- * - isOpen: Whether the modal is visible.
- * - onClose: Close handler.
- * - promptText: The sentence/question shown in the modal.
- * - answerText: The expected answer.
- * - titleText: Optional title text.
- *
  * @param {Object} props - Component props.
  * @param {boolean} props.isOpen - Whether modal is visible.
- * @param {Function} props.onClose - Close handler.
- * @param {string} props.promptText - Prompt text to display.
- * @param {string} props.answerText - Expected answer text.
- * @param {string=} props.titleText - Optional modal title.
- * @returns {JSX.Element|null} Modal component.
+ * @param {() => void} props.onClose - Close handler.
+ * @param {string} props.exerciseKey - Stable key; changing it resets modal state.
+ * @param {string} props.promptText - Sentence with blanks.
+ * @param {Array<{answerText: string}>} props.blanks - Blank definitions.
+ * @param {boolean} props.hasPrev - Whether previous exercise exists.
+ * @param {boolean} props.hasNext - Whether next exercise exists.
+ * @param {() => void} props.onPlay - Play this sentence once.
+ * @param {() => void} props.onPrev - Go to previous exercise.
+ * @param {() => void} props.onNext - Go to next exercise.
+ * @param {string=} props.titleText - Optional title.
+ * @returns {JSX.Element|null} Modal.
  */
 export default function FillInExerciseModal({
   isOpen,
   onClose,
+  exerciseKey,
   promptText,
-  answerText,
+  blanks,
+  hasPrev,
+  hasNext,
+  onPlay,
+  onPrev,
+  onNext,
   titleText,
 }) {
-  const [userInputValue, setUserInputValue] = useState("");
+  const inputRefs = useRef([]);
   const [attemptCount, setAttemptCount] = useState(0);
   const [resultState, setResultState] = useState("idle"); // idle | correct | wrong1 | wrong2
   const [shouldShake, setShouldShake] = useState(false);
 
-  const inputRef = useRef(null);
+  const blankList = useMemo(() => {
+    return Array.isArray(blanks) ? blanks : [];
+  }, [blanks]);
 
-  const normalizedAnswer = useMemo(() => {
-    return normalizeInputValue(answerText);
-  }, [answerText]);
+  const [userValues, setUserValues] = useState([]);
+
+  const normalizedAnswers = useMemo(() => {
+    return blankList.map((b) => normalizeInputValue(b?.answerText));
+  }, [blankList]);
+
+  const normalizedUserValues = useMemo(() => {
+    return userValues.map((v) => normalizeInputValue(v));
+  }, [userValues]);
 
   const isLockedAsWrong = resultState === "wrong2";
   const isCorrect = resultState === "correct";
+
+  const allFilled = normalizedUserValues.length === normalizedAnswers.length &&
+    normalizedUserValues.every((v) => Boolean(v));
+
+  const isCheckDisabled = !allFilled || isCorrect || isLockedAsWrong || normalizedAnswers.length === 0;
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
 
-    // Reset modal state every time it opens.
-    setUserInputValue("");
     setAttemptCount(0);
     setResultState("idle");
     setShouldShake(false);
+    setUserValues(blankList.map(() => ""));
 
-    // Focus input on open.
+    inputRefs.current = [];
+
     window.setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
+      if (inputRefs.current[0]) {
+        inputRefs.current[0].focus();
       }
     }, 0);
-  }, [isOpen]);
+  }, [isOpen, exerciseKey, blankList]);
 
   useEffect(() => {
     if (!shouldShake) {
@@ -97,7 +195,25 @@ export default function FillInExerciseModal({
   }
 
   /**
-   * Check user answer and update state.
+   * Reset current exercise UI state.
+   *
+   * @returns {void}
+   */
+  function resetExerciseState() {
+    setAttemptCount(0);
+    setResultState("idle");
+    setShouldShake(false);
+    setUserValues(blankList.map(() => ""));
+
+    window.setTimeout(() => {
+      if (inputRefs.current[0]) {
+        inputRefs.current[0].focus();
+      }
+    }, 0);
+  }
+
+  /**
+   * Check answers and update state.
    *
    * @returns {void}
    */
@@ -108,17 +224,16 @@ export default function FillInExerciseModal({
     if (isLockedAsWrong) {
       return;
     }
-
-    const normalizedUserInput = normalizeInputValue(userInputValue);
-
-    if (!normalizedUserInput) {
-      setResultState("wrong1");
-      setAttemptCount((prev) => prev + 1);
-      triggerShake();
+    if (!allFilled) {
       return;
     }
 
-    if (normalizedUserInput === normalizedAnswer) {
+    const isAllCorrect = normalizedAnswers.every((ans, index) => {
+      const userValue = normalizedUserValues[index] || "";
+      return userValue === ans;
+    });
+
+    if (isAllCorrect) {
       setResultState("correct");
       return;
     }
@@ -139,9 +254,9 @@ export default function FillInExerciseModal({
   }
 
   /**
-   * Handle overlay click (close).
+   * Handle overlay click.
    *
-   * @param {React.MouseEvent} event - Click event.
+   * @param {React.MouseEvent} event - Mouse event.
    * @returns {void}
    */
   function handleOverlayClick(event) {
@@ -154,29 +269,28 @@ export default function FillInExerciseModal({
     }
   }
 
-  /**
-   * Handle keydown (ESC closes).
-   *
-   * @param {KeyboardEvent} event - Keyboard event.
-   * @returns {void}
-   */
-  function handleGlobalKeyDown(event) {
-    if (!isOpen) {
-      return;
-    }
-
-    if (event.key === "Escape") {
-      onClose();
-    }
-  }
-
   useEffect(() => {
-    window.addEventListener("keydown", handleGlobalKeyDown);
+    /**
+     * Handle global keydown.
+     *
+     * @param {KeyboardEvent} event - Keyboard event.
+     * @returns {void}
+     */
+    function handleGlobalKeyDown(event) {
+      if (!isOpen) {
+        return;
+      }
 
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
     return () => {
       window.removeEventListener("keydown", handleGlobalKeyDown);
     };
-  });
+  }, [isOpen, onClose]);
 
   if (!isOpen) {
     return null;
@@ -196,7 +310,7 @@ export default function FillInExerciseModal({
     <div className="fim-overlay" role="dialog" aria-modal="true" onMouseDown={handleOverlayClick}>
       <div className={modalStateClassName}>
         <div className="fim-header">
-          <div className="fim-title">{titleText || "填空练习"}</div>
+          <div className="fim-title">{titleText || "填写练习"}</div>
 
           <button type="button" className="fim-closeButton" onClick={onClose} aria-label="Close">
             ×
@@ -204,82 +318,127 @@ export default function FillInExerciseModal({
         </div>
 
         <div className="fim-body">
-          <div className="fim-prompt">{promptText}</div>
-
-          <div className="fim-inputRow">
-            <input
-              ref={inputRef}
-              className="fim-input"
-              value={userInputValue}
-              onChange={(event) => {
-                setUserInputValue(event.target.value);
-              }}
-              placeholder="在这里输入你记得的单词…"
-              disabled={isCorrect}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  handleCheckAnswer();
-                }
-              }}
-            />
-
-            <button
-              type="button"
-              className="fim-primaryButton"
-              onClick={handleCheckAnswer}
-              disabled={isCorrect}
-            >
-              检查
-            </button>
+          <div className="fim-prompt fim-prompt--big">
+            {renderPromptWithInlineInputs({
+              exerciseKey,
+              promptText,
+              blankList,
+              userValues,
+              setUserValues,
+              inputRefs,
+              isCorrect,
+              isLockedAsWrong,
+              isCheckDisabled,
+              handleCheckAnswer,
+              resultState,
+            })}
           </div>
 
-          {resultState === "wrong1" && (
-            <div className="fim-feedback fim-feedback--warn">Fast richtig</div>
-          )}
-
-          {resultState === "wrong2" && (
-            <div className="fim-feedback fim-feedback--error">
-              正确答案是：<span className="fim-answerReveal">{answerText}</span>
+          <div className="fim-form">
+            <div className="fim-checkRow">
+              <button
+                type="button"
+                className="fim-primaryButton"
+                onClick={handleCheckAnswer}
+                disabled={isCheckDisabled}
+              >
+                检查
+              </button>
             </div>
-          )}
+          </div>
 
-          {resultState === "correct" && (
-            <div className="fim-feedback fim-feedback--success">✅ 对了！</div>
-          )}
+          {resultState === "wrong1" ? (
+            <div className="fim-feedback fim-feedback--warn">Fast richtig</div>
+          ) : null}
 
-          <div className="fim-footer">
+          {resultState === "correct" ? (
+            <div className="fim-feedback fim-feedback--success">✅ 全对了！</div>
+          ) : null}
+
+          <div className="fim-playerBar" aria-label="Exercise controls">
             <button
               type="button"
-              className="fim-secondaryButton"
+              className="fim-iconBtn"
+              aria-label="Previous"
               onClick={() => {
-                setUserInputValue("");
-                setAttemptCount(0);
-                setResultState("idle");
-                setShouldShake(false);
-                if (inputRef.current) {
-                  inputRef.current.focus();
+                if (typeof onPrev === "function") {
+                  onPrev();
                 }
               }}
-              disabled={isCorrect}
+              disabled={!hasPrev}
             >
-              再试一次
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M19 20L9 12l10-8v16Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                <path d="M5 5v14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
             </button>
 
-            <button type="button" className="fim-secondaryButton" onClick={onClose}>
-              关闭
+            <button
+              type="button"
+              className="fim-iconBtn"
+              aria-label="Retry"
+              onClick={() => {
+                resetExerciseState();
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M21 12a9 9 0 1 1-2.64-6.36"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M21 3v6h-6"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
 
-            <div className="fim-attemptHint">尝试次数：{attemptCount}/2</div>
+            <button
+              type="button"
+              className="fim-iconBtn fim-iconBtn--primary"
+              aria-label="Play"
+              onClick={() => {
+                if (typeof onPlay === "function") {
+                  onPlay();
+                }
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M8 5v14l11-7L8 5Z" fill="currentColor" />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              className="fim-iconBtn"
+              aria-label="Next"
+              onClick={() => {
+                if (typeof onNext === "function") {
+                  onNext();
+                }
+              }}
+              disabled={!hasNext}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M5 4l10 8-10 8V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                <path d="M19 5v14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
         </div>
 
-        {resultState === "correct" && (
+        {resultState === "correct" ? (
           <div className="fim-confetti" aria-hidden="true">
             {Array.from({ length: 24 }).map((_, index) => (
               <span key={index} className="fim-confettiPiece" />
             ))}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

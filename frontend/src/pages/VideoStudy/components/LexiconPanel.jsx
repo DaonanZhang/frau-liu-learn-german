@@ -2,12 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import {
   fetchExpressionOccurrences,
   fetchWordOccurrences,
-} from "../../api/learning_by_video/occurrences";
+} from "../../../api/learning_by_video/occurrences.js";
 
-import { toggleVideoOccurrenceMark } from "../../api/learning_by_video/marks";
+import { toggleVideoOccurrenceMark } from "../../../api/learning_by_video/marks.js";
 
 /**
  * @typedef {"word"|"expression"} LexiconKind
+ */
+
+/**
+ * @typedef {"all"|"unmarked"|"known"|"not_known"} StatusFilter
  */
 
 /**
@@ -23,6 +27,7 @@ import { toggleVideoOccurrenceMark } from "../../api/learning_by_video/marks";
  * @property {string} surface
  * @property {number|null} entityId
  * @property {number[]} occurrenceIds
+ * @property {string|null} article
  */
 
 function normalizeText(text) {
@@ -44,6 +49,24 @@ function uniqueNumberArray(numbers) {
     result.push(num);
   }
   return result;
+}
+
+function articleToLabel(articleValue) {
+  const normalized = String(articleValue ?? "").trim().toLowerCase();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (normalized === "plural") {
+    return "Pl.";
+  }
+
+  if (normalized === "der" || normalized === "die" || normalized === "das") {
+    return normalized;
+  }
+
+  return normalized;
 }
 
 function posToLabel(posValue) {
@@ -138,29 +161,10 @@ function EyeIcon({ isHidden }) {
 
 function TargetIcon() {
   return (
-    <svg
-      className="vs-icon"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10Z"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <path
-        d="M12 18c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6Z"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <path
-        d="M12 14c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2Z"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
+    <svg className="vs-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10Z" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 18c3.3 0 6-2.7 6-6s-2.7-6-6-6-6 2.7-6 6 2.7 6 6 6Z" stroke="currentColor" strokeWidth="2" />
+      <path d="M12 14c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2Z" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
 }
@@ -221,6 +225,10 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
       existing.translation = nextEntry.translation;
     }
 
+    if ((existing.article === null || existing.article === undefined) && nextEntry.article) {
+      existing.article = nextEntry.article;
+    }
+
     if (!existing.pos && nextEntry.pos) {
       existing.pos = nextEntry.pos;
     }
@@ -252,6 +260,7 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
 
     const occurrenceId = toIntOrNull(occurrence?.id);
     const wordId = toIntOrNull(occurrence?.word);
+    const article = normalizeText(occurrence?.word_article);
 
     upsert(
       entryKey,
@@ -259,6 +268,7 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
         key: entryKey,
         kind: "word",
         title: wordText,
+        article: article ? article : null,
         translation: normalizeText(occurrence?.translation),
         pos: normalizeText(occurrence?.word_pos),
         splittable:
@@ -298,6 +308,7 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
         key: entryKey,
         kind: "expression",
         title: title,
+        article: null,
         translation: normalizeText(occurrence?.translation),
         pos: "",
         splittable: null,
@@ -339,6 +350,7 @@ export default function LexiconPanel({
   const [entries, setEntries] = useState(/** @type {LexiconEntry[]} */ ([]));
   const [activeKind, setActiveKind] = useState(/** @type {LexiconKind} */ ("word"));
   const [onlyCurrentSubtitle, setOnlyCurrentSubtitle] = useState(false);
+  const [statusFilter, setStatusFilter] = useState(/** @type {StatusFilter} */ ("all"));
 
   // per card: hide Chinese (meaning + subtitle zh)
   const [hiddenChineseByKey, setHiddenChineseByKey] = useState({});
@@ -422,7 +434,7 @@ export default function LexiconPanel({
         }
 
         /**
-         * Aggregate entry state from all its occurrences (preferred over occurrenceIds[0]).
+         * Aggregate entry state from all its occurrences.
          *
          * Priority:
          * - any known => known
@@ -645,7 +657,7 @@ export default function LexiconPanel({
     }
   }
 
-  const filteredEntries = useMemo(() => {
+  const baseEntries = useMemo(() => {
     let list = entries;
 
     if (activeKind) {
@@ -659,11 +671,53 @@ export default function LexiconPanel({
     return list;
   }, [entries, activeKind, onlyCurrentSubtitle, currentSubtitleId]);
 
+  const statusCounts = useMemo(() => {
+    let known = 0;
+    let notKnown = 0;
+    let unmarked = 0;
+
+    for (const entry of baseEntries) {
+      const state = knowledgeByKey[entry.key] || "unmarked";
+
+      if (state === "known") {
+        known += 1;
+      } else if (state === "not_known") {
+        notKnown += 1;
+      } else {
+        unmarked += 1;
+      }
+    }
+
+    return {
+      all: baseEntries.length,
+      known,
+      not_known: notKnown,
+      unmarked,
+    };
+  }, [baseEntries, knowledgeByKey]);
+
+  const filteredEntries = useMemo(() => {
+    if (statusFilter === "all") {
+      return baseEntries;
+    }
+
+    return baseEntries.filter((entry) => {
+      const state = knowledgeByKey[entry.key] || "unmarked";
+
+      if (statusFilter === "known") {
+        return state === "known";
+      }
+
+      if (statusFilter === "not_known") {
+        return state === "not_known";
+      }
+
+      return state === "unmarked" || state === "elsewhere";
+    });
+  }, [baseEntries, knowledgeByKey, statusFilter]);
+
   const wordCount = useMemo(() => entries.filter((x) => x.kind === "word").length, [entries]);
-  const expressionCount = useMemo(
-    () => entries.filter((x) => x.kind === "expression").length,
-    [entries]
-  );
+  const expressionCount = useMemo(() => entries.filter((x) => x.kind === "expression").length, [entries]);
 
   return (
     <div className="vs-panel">
@@ -687,35 +741,78 @@ export default function LexiconPanel({
 
         <div className="vs-tabs">
           <button
-            className={["vs-tab", activeKind === "word" ? "is-active" : ""]
-              .filter(Boolean)
-              .join(" ")}
+            className={["vs-tab", activeKind === "word" ? "is-active" : ""].filter(Boolean).join(" ")}
             type="button"
             onClick={() => {
               setActiveKind("word");
+              setStatusFilter("all");
             }}
           >
             单词 ({wordCount})
           </button>
 
           <button
-            className={["vs-tab", activeKind === "expression" ? "is-active" : ""]
-              .filter(Boolean)
-              .join(" ")}
+            className={["vs-tab", activeKind === "expression" ? "is-active" : ""].filter(Boolean).join(" ")}
             type="button"
             onClick={() => {
               setActiveKind("expression");
+              setStatusFilter("all");
             }}
           >
             地道表达 ({expressionCount})
           </button>
         </div>
 
+        <div className="vs-actionsRow vs-statusRow">
+          <button
+            className={["vs-actionBtn", statusFilter === "all" ? "is-primary" : ""].filter(Boolean).join(" ")}
+            type="button"
+            onClick={() => {
+              setStatusFilter("all");
+            }}
+            disabled={loading}
+          >
+            全部 ({statusCounts.all})
+          </button>
+
+          <button
+            className={["vs-actionBtn", statusFilter === "unmarked" ? "is-primary" : ""].filter(Boolean).join(" ")}
+            type="button"
+            onClick={() => {
+              setStatusFilter("unmarked");
+            }}
+            disabled={loading}
+          >
+            未标记 ({statusCounts.unmarked})
+          </button>
+
+          <button
+            className={["vs-actionBtn", statusFilter === "known" ? "is-primary" : ""].filter(Boolean).join(" ")}
+            type="button"
+            onClick={() => {
+              setStatusFilter("known");
+            }}
+            disabled={loading}
+          >
+            认识 ({statusCounts.known})
+          </button>
+
+          <button
+            className={["vs-actionBtn", statusFilter === "not_known" ? "is-primary" : ""].filter(Boolean).join(" ")}
+            type="button"
+            onClick={() => {
+              setStatusFilter("not_known");
+            }}
+            disabled={loading}
+          >
+            不认识 ({statusCounts.not_known})
+          </button>
+        </div>
+
+
         <div className="vs-actionsRow">
           <button
-            className={["vs-actionBtn", onlyCurrentSubtitle ? "is-primary" : ""]
-              .filter(Boolean)
-              .join(" ")}
+            className={["vs-actionBtn", onlyCurrentSubtitle ? "is-primary" : ""].filter(Boolean).join(" ")}
             type="button"
             onClick={() => {
               setOnlyCurrentSubtitle((prev) => !prev);
@@ -726,6 +823,7 @@ export default function LexiconPanel({
             {onlyCurrentSubtitle ? "仅当前字幕" : "全部字幕"}
           </button>
         </div>
+
       </div>
 
       <div className="vs-lexList">
@@ -741,7 +839,6 @@ export default function LexiconPanel({
 
         {!loading && !errorText
           ? filteredEntries.map((entry) => {
-              const isWord = entry.kind === "word";
               const hideChinese = hiddenChineseByKey[entry.key] === true;
               const knowledgeState = knowledgeByKey[entry.key] || "unmarked";
 
@@ -750,10 +847,8 @@ export default function LexiconPanel({
               const showMetaLine = Boolean(posLabel || splittableLabel);
 
               const firstSubtitleId = entry.subtitleIds.length > 0 ? entry.subtitleIds[0] : null;
-              const subtitleItem =
-                firstSubtitleId !== null ? findSubtitleById(firstSubtitleId) : null;
+              const subtitleItem = firstSubtitleId !== null ? findSubtitleById(firstSubtitleId) : null;
 
-              // SubtitlePanel provides items as {id, start, end, de, zh}
               const subtitleDe = normalizeText(subtitleItem?.de);
               const subtitleZh = normalizeText(subtitleItem?.zh);
 
@@ -765,13 +860,29 @@ export default function LexiconPanel({
                     knowledgeState === "known" ? "is-known" : "",
                     knowledgeState === "not_known" ? "is-not-known" : "",
                     knowledgeState === "elsewhere" ? "is-elsewhere" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
+                  ].filter(Boolean).join(" ")}
                   tabIndex={0}
                 >
                   <div className="vs-lexHeaderRow">
-                    <div className="vs-lexWord">{entry.title}</div>
+
+                    <div className="vs-lexWord">
+                      {entry.kind === "word" ? (
+                        (() => {
+                          const articleLabel = articleToLabel(entry.article);
+                          if (!articleLabel) {
+                            return <span className="vs-lexWordText">{entry.title}</span>;
+                          }
+                          return (
+                            <>
+                              <span className="vs-lexArticle">{articleLabel}</span>
+                              <span className="vs-lexWordText">{entry.title}</span>
+                            </>
+                          );
+                        })()
+                      ) : (
+                        <span className="vs-lexWordText">{entry.title}</span>
+                      )}
+                    </div>
 
                     <div className="vs-lexHoverActions" aria-label="Knowledge actions">
                       <button
@@ -804,20 +915,14 @@ export default function LexiconPanel({
                         <span className="vs-lexMeaningMeta">
                           {posLabel ? <span className="vs-lexPos">{posLabel}</span> : null}
                           {splittableLabel ? <span className="vs-lexMetaDot">·</span> : null}
-                          {splittableLabel ? (
-                            <span className="vs-lexMetaText">{splittableLabel}</span>
-                          ) : null}
+                          {splittableLabel ? <span className="vs-lexMetaText">{splittableLabel}</span> : null}
                         </span>
                       ) : null}
                     </div>
                   ) : null}
 
-                  {subtitleDe || subtitleZh ? (
-                    <div
-                      className="vs-lexSubtitleCard"
-                      role="group"
-                      aria-label="Subtitle example"
-                    >
+                  {(subtitleDe || subtitleZh) ? (
+                    <div className="vs-lexSubtitleCard" role="group" aria-label="Subtitle example">
                       {subtitleDe ? <div className="vs-lexSubtitleDe">{subtitleDe}</div> : null}
                       {!hideChinese && subtitleZh ? (
                         <div className="vs-lexSubtitleZh">{subtitleZh}</div>
@@ -839,9 +944,7 @@ export default function LexiconPanel({
                     </button>
 
                     <button
-                      className={["vs-eyeBtn", hideChinese ? "is-off" : "is-on"]
-                        .filter(Boolean)
-                        .join(" ")}
+                      className={["vs-eyeBtn", hideChinese ? "is-off" : "is-on"].filter(Boolean).join(" ")}
                       type="button"
                       aria-label={hideChinese ? "Show Chinese" : "Hide Chinese"}
                       onClick={() => {

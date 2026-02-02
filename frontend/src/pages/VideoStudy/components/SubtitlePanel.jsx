@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchSubtitlesByVideo } from "../../api/learning_by_video/subtitles";
+import { fetchSubtitlesByVideo } from "../../../api/learning_by_video/subtitles.js";
 import {
   fetchWordOccurrences,
   fetchSentenceOccurrences,
   fetchExpressionOccurrences,
-} from "../../api/learning_by_video/occurrences";
-import { ShadowingPracticeBar } from "./ShadowingPracticeBar";
-import ExportSubtitlesModal from "./ExportSubtitlesModal";
+} from "../../../api/learning_by_video/occurrences.js";
+import { ShadowingPracticeBar } from "./ShadowingPracticeBar.jsx";
+import ExportSubtitlesModal from "./ExportSubtitlesModal.jsx";
 
 /**
  * Format seconds to m:ss or h:mm:ss.

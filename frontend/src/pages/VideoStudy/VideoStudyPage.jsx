@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import "./VideoStudyPage.css";
 import { fetchVideoDetail } from "../../api/learning_by_video/videos.js";
-import SubtitlePanel from "./SubtitlePanel";
-import LexiconPanel from "./LexiconPanel";
-import ExerciseModal from "./ExerciseModal";
+import SubtitlePanel from "./components/SubtitlePanel.jsx";
+import LexiconPanel from "./components/LexiconPanel.jsx";
+import ExercisePanel from "./components/ExercisePanel.jsx";
 
 
 /**
@@ -445,12 +445,21 @@ export default function VideoStudyPage() {
   const durationLabel = leftDuration ? `时长：${leftDuration}` : "时长：-";
   const difficultyLabel = leftDifficulty ? `难度：${leftDifficulty}` : "难度：-";
 
-  const shouldShowSubtitlePanel = !isMobile || !isLexiconOpen;
-  const shouldShowLexiconPanel = !isMobile ? isLexiconOpen : isLexiconOpen;
+  const shouldShowExercisePanel = isExerciseOpen;
+
+  const shouldShowSubtitlePanel = !shouldShowExercisePanel && (!isMobile || !isLexiconOpen);
+  const shouldShowLexiconPanel = !shouldShowExercisePanel && isLexiconOpen;
 
   return (
     <div className="vs-page">
-      <div className={["vs-grid", !isLexiconOpen ? "vs-grid--no-right" : ""].filter(Boolean).join(" ")}>
+      <div
+        className={[
+          "vs-grid",
+          (!isLexiconOpen || isExerciseOpen) ? "vs-grid--no-right" : "",
+          isExerciseOpen ? "vs-grid--exercise" : "",
+        ].filter(Boolean).join(" ")}
+      >
+
         {/* Left: video player */}
         <section className="vs-left">
           <div className="vs-playerCard">
@@ -460,19 +469,6 @@ export default function VideoStudyPage() {
               </Link>
 
               <div className="vs-titleRow">
-
-                <div className="vs-playerActions">
-                  <button
-                    type="button"
-                    className="vs-actionBtn"
-                    onClick={() => {
-                      setIsExerciseOpen(true);
-                    }}
-                    disabled={loadingVideo || !videoId}
-                  >
-                    Übungen
-                  </button>
-                </div>
                 <div className="vs-title">{loadingVideo ? "Loading…" : leftTitle || "Untitled"}</div>
 
                 <div className="vs-meta">
@@ -509,6 +505,26 @@ export default function VideoStudyPage() {
           <div className="vs-descCard">
             <div className="vs-descTitle">视频简介</div>
             <div className="vs-descText">{loadingVideo ? "Loading…" : leftDescription || "暂无简介"}</div>
+
+            <div className="vs-descActions">
+              <button
+                type="button"
+                className="vs-exerciseBtn"
+                onClick={() => {
+                  setIsExerciseOpen((prevValue) => {
+                    return !prevValue;
+                  });
+
+                  // optional but recommended: when entering exercise mode, keep lexicon closed for a stable layout
+                  if (!isExerciseOpen) {
+                    setIsLexiconOpen(false);
+                  }
+                }}
+                disabled={loadingVideo || !videoId}
+              >
+                {isExerciseOpen ? "跟读模式" : "练习模式"}
+              </button>
+            </div>
           </div>
         </section>
 
@@ -548,13 +564,17 @@ export default function VideoStudyPage() {
         ) : null}
 
 
-        <ExerciseModal
-          isOpen={isExerciseOpen}
-          onClose={() => {
-            setIsExerciseOpen(false);
-          }}
-          videoId={videoId}
-        />
+        {shouldShowExercisePanel ? (
+          <section className="vs-right">
+            <ExercisePanel
+              isOpen={isExerciseOpen}
+              onClose={() => {
+                setIsExerciseOpen(false);
+              }}
+              videoId={videoId}
+            />
+          </section>
+        ) : null}
       </div>
     </div>
   );

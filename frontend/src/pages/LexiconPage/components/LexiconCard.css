@@ -1,0 +1,225 @@
+/* card base: match vs-lexCard sizing */
+.lp-card {
+	border: 1px solid #e5e7eb;
+	border-radius: 0.875rem;
+	padding: 0.85rem;
+	background: #ffffff;
+	transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.lp-card:hover,
+.lp-card:focus-within {
+	transform: translateY(-2px);
+	box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
+}
+
+/* IMPORTANT: unmarked has NO extra color */
+.lp-card.is-known {
+	background: rgba(16, 185, 129, 0.06);
+	border-color: rgba(16, 185, 129, 0.28);
+}
+
+.lp-card.is-not-known {
+	background: rgba(239, 68, 68, 0.06);
+	border-color: rgba(239, 68, 68, 0.28);
+}
+
+.lp-card.is-elsewhere {
+	background: rgba(255, 230, 140, 0.35);
+	border-color: rgba(255, 200, 60, 0.65);
+}
+
+.lp-cardHeaderRow {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.lp-cardWord {
+	font-size: 1.05rem;
+	font-weight: 800;
+	color: #111827;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+/* mark actions: like vs-lexHoverActions (only show on hover/focus) */
+.lp-cardMarkActions {
+	display: flex;
+	gap: 0.6rem;
+
+	opacity: 0;
+	pointer-events: none;
+	transform: translateY(-2px);
+	transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.lp-card:hover .lp-cardMarkActions,
+.lp-card:focus-within .lp-cardMarkActions {
+	opacity: 1;
+	pointer-events: auto;
+	transform: translateY(0);
+}
+
+/* buttons: outline default, filled when active */
+.lp-markBtn {
+	height: 2.25rem;
+	padding: 0 0.85rem;
+	border-radius: 0.75rem;
+	border: 1px solid #e5e7eb;
+	background: #fff;
+	cursor: pointer;
+	font-weight: 800;
+	color: #111827;
+	transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.lp-markBtn--known {
+	border-color: #10b981;
+	color: #10b981;
+}
+
+.lp-markBtn--not-known {
+	border-color: #ef4444;
+	color: #ef4444;
+}
+
+.lp-markBtn--known.is-active {
+	background: #10b981;
+	border-color: #10b981;
+	color: #ffffff;
+}
+
+.lp-markBtn--not-known.is-active {
+	background: #ef4444;
+	border-color: #ef4444;
+	color: #ffffff;
+}
+
+.lp-meaningRow {
+	margin-top: 0.6rem;
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+}
+
+.lp-meaningText {
+	font-size: 1.05rem;
+	font-weight: 800;
+	color: #111827;
+}
+
+.lp-meaningPos {
+	font-size: 0.95rem;
+	font-weight: 800;
+	color: #111827;
+	opacity: 0.9;
+}
+
+/* Example card uses your vs-lexSubtitleCard sizes */
+.lp-exampleCard {
+	margin-top: 0.75rem;
+	border-left: 4px solid #2563eb;
+	background: #f8fbff;
+	border-radius: 0.75rem;
+	padding: 0.75rem 0.85rem;
+}
+
+.lp-exampleDe {
+	font-size: 0.95rem;
+	font-weight: 750;
+	color: #111827;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.lp-exampleZh {
+	margin-top: 0.35rem;
+	font-size: 0.9rem;
+	color: #6b7280;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.lp-cardFooter {
+	margin-top: 0.75rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.lp-footerSpacer {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* per-card eye button identical behavior to vs-eyeBtn */
+.lp-eyeBtn {
+	width: 2.5rem;
+	height: 2.5rem;
+	border-radius: 0.75rem;
+	border: 1px solid #e5e7eb;
+	background: #fff;
+	cursor: pointer;
+
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+
+	padding: 0;
+	line-height: 1;
+}
+
+.lp-eyeBtn.is-on {
+	border-color: #e5e7eb;
+	background: #fff;
+	color: #111827;
+}
+
+.lp-eyeBtn.is-off {
+	border-color: #2563eb;
+	background: #eef5ff;
+	color: #2563eb;
+}
+
+.lp-icon {
+	display: block;
+}
+
+
+.vs-lexCard {
+  position: relative;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.875rem;
+  padding: 0.85rem;
+  margin-bottom: 0.75rem;
+  background: #fff;
+}
+
+/* --- Article badge next to word title --- */
+.lp-cardWord {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
+.lp-articleBadge {
+	font-size: 12px;
+	line-height: 1.2;
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: rgba(0, 0, 0, 0.06);
+	color: rgba(0, 0, 0, 0.7);
+	white-space: nowrap;
+	flex: 0 0 auto;
+}
+
+.lp-wordText {
+	min-width: 0;
+}

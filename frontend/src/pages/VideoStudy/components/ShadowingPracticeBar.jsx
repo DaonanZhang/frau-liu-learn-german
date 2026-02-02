@@ -3,7 +3,7 @@ import {
 	buildRecordingKey,
 	loadRecordingBlob,
 	saveRecordingBlob,
-} from "../../api/learning_by_video/shadowingStorage.js";
+} from "../../../api/learning_by_video/shadowingStorage.js";
 import "./ShadowingPractice.css";
 
 /**

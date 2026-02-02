@@ -57,9 +57,9 @@
   color: #fff;
 }
 
-.nav-btn.ghost {
-  background: transparent;
-  border: 1px solid #ddd;
+.nav-btn:not(.ghost):hover {
+  background: #1677ff;
+  color: #fff;
 }
 
 .nav-user {

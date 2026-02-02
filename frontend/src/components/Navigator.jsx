@@ -20,18 +20,40 @@ export default function Navigator() {
   return (
     <header className="navigator">
       <div className="nav-container">
-        <div className="nav-left">
-          <img src="/images/icon.jpeg" alt="logo" className="nav-logo" />
-          <span className="nav-title">跟着符号刘学德语</span>
-        </div>
+
+      <div
+        className="nav-left"
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          navigate("/");
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            navigate("/");
+          }
+        }}
+      >
+        <img src="/images/icon.jpeg" alt="logo" className="nav-logo" />
+        <span className="nav-title">跟着符号刘学德语</span>
+      </div>
 
         <nav className="nav-right">
-          <button className="nav-btn primary">学习记录</button>
-          <button className="nav-btn">德语卡片</button>
+          <button className="nav-btn">学习记录</button>
+
+          <button
+            className="nav-btn"
+            type="button"
+            onClick={() => {
+              navigate("/lexicon");
+            }}
+          >
+            德语卡片
+          </button>
 
           <div className="nav-user">
             <span className="nav-username">欢迎，{displayName}</span>
-            <button className="nav-btn ghost" onClick={handleLogout}>
+            <button className="nav-btn" onClick={handleLogout}>
               登出
             </button>
           </div>

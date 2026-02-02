@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { exportSubtitlesToWord } from "../../api/learning_by_video/exportSubtitlesToWord.js";
+import { exportSubtitlesToWord } from "../../../api/learning_by_video/exportSubtitlesToWord.js";
 import "./ExportSubtitlesModal.css";
 
 /**

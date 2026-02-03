@@ -1,154 +1,264 @@
 .lp-root {
-	display: flex;
-	min-height: 100vh;
-	width: 100%;
-	background: #ffffff;
-	overflow-x: hidden;
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  background: #ffffff;
+  overflow-x: hidden;
 }
 
 .lp-main {
-	flex: 1 1 auto;
-	min-width: 0;
-	display: flex;
-	flex-direction: column;
-	padding: 0;
-	overflow-x: hidden;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow-x: hidden;
 }
 
 .lp-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 0.75rem;
-	flex-wrap: wrap;
-	padding: 0.85rem 1rem 1rem;
-	border-bottom: 1px solid #f1f3f5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1rem 1rem;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .lp-headerLeft {
-	display: flex;
-	flex-direction: column;
-	gap: 0.25rem;
-	min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
 }
 
 .lp-title {
-	font-size: 0.95rem;
-	font-weight: 800;
-	color: #111827;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #111827;
 }
 
 .lp-subtitle {
-	font-size: 0.85rem;
-	color: #6b7280;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	max-width: 60rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60rem;
+}
+
+.lp-headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .lp-eyeToggle {
-	width: 2.25rem;
-	height: 2.25rem;
-	border-radius: 0.75rem;
-	border: 1px solid #e5e7eb;
-	background: #fff;
-	cursor: pointer;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
 
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 
-	padding: 0;
-	line-height: 1;
-	color: #111827;
+  padding: 0;
+  line-height: 1;
+  color: #111827;
 }
 
 .lp-eyeToggle.is-active {
-	border-color: #2563eb;
-	background: #eef5ff;
-	color: #2563eb;
+  border-color: #2563eb;
+  background: #eef5ff;
+  color: #2563eb;
 }
 
 .lp-tabsRow {
-	display: flex;
-	gap: 0.5rem;
-	padding: 0.85rem 1rem 0;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem 0;
 }
 
 .lp-tab {
-	flex: 1;
-	padding: 0.55rem 0.7rem;
-	border-radius: 0.75rem;
-	border: 1px solid #e5e7eb;
-	background: #fff;
-	cursor: pointer;
-	font-weight: 700;
-	color: #6b7280;
+  flex: 1;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  color: #6b7280;
 }
 
 .lp-tab.is-active {
-	border-color: #2563eb;
-	color: #2563eb;
-	background: #eef5ff;
+  border-color: #2563eb;
+  color: #2563eb;
+  background: #eef5ff;
 }
 
 .lp-filtersRow {
-	display: flex;
-	gap: 0.75rem;
-	padding: 1.5rem 1rem 1rem;
-	flex-wrap: wrap;
-	border-bottom: 1px solid #f1f3f5;
+  display: flex;
+  gap: 0.75rem;
+  padding: 1.5rem 1rem 1rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #f1f3f5;
 }
 
 .lp-pill {
-	padding: 0.5rem 0.75rem;
-	border-radius: 0.75rem;
-	border: 1px solid #e5e7eb;
-	background: #fff;
-	cursor: pointer;
-	font-weight: 700;
-	color: #111827;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 700;
+  color: #111827;
 }
 
 .lp-pill.is-active {
-	border-color: #10b981;
-	background: #10b981;
-	color: #fff;
+  border-color: #10b981;
+  background: #10b981;
+  color: #fff;
 }
 
 .lp-stateBox {
-	padding: 0.75rem 1rem;
-	color: #6b7280;
-	font-size: 0.9rem;
+  padding: 0.75rem 1rem;
+  color: #6b7280;
+  font-size: 0.9rem;
 }
 
 .lp-grid {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 0.75rem;
-	padding: 0.75rem 1rem 1rem;
-	overflow-x: hidden;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 0.75rem 1rem 1rem;
+  overflow-x: hidden;
 }
 
 @media (max-width: 1280px) {
-	.lp-grid {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
+  .lp-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1024px) {
-	.lp-root {
-		flex-direction: column;
-	}
+  .lp-root {
+    flex-direction: column;
+  }
 
-	.lp-grid {
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-	}
+  .lp-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
-	.lp-grid {
-		grid-template-columns: minmax(0, 1fr);
-	}
+  .lp-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ====================================================== */
+/* Mobile-only (<990px): drawer already OK + row + carousel */
+/* ====================================================== */
+
+@media (max-width: 990px) {
+  .lp-root--mobile {
+    position: relative;
+  }
+
+  /* Drawer (kept, since you said it's good) */
+  .lp-sidebarSlot--drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    height: 100vh;
+    width: min(22rem, 86vw);
+    background: #ffffff;
+    transform: translateX(-105%);
+    transition: transform 160ms ease;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    overflow-y: auto;
+  }
+
+  .lp-sidebarSlot--open {
+    transform: translateX(0);
+  }
+
+  .lp-mobileOverlay {
+    display: none;
+  }
+
+  .lp-mobileOverlay--open {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    background: rgba(0, 0, 0, 0.35);
+  }
+
+  .lp-sidebarToggle {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: #ffffff;
+    border-radius: 999px;
+    padding: 0.45rem 0.85rem;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #111827;
+  }
+
+  .lp-sidebarToggle:active {
+    background: rgba(0, 0, 0, 0.04);
+    transform: scale(0.99);
+  }
+
+  /* 1) Filters: MUST be in one row */
+  .lp-filtersRow {
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 1rem 1rem 0.85rem;
+  }
+
+  .lp-pill {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .lp-filtersRow::-webkit-scrollbar {
+    height: 0;
+  }
+
+  /* 2) Cards: horizontal carousel (one per view) */
+  .lp-grid--carousel {
+    display: flex;
+    flex-direction: row;
+    gap: 0.75rem;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+
+    scroll-snap-type: x mandatory;
+
+    padding: 1rem 1rem 1.25rem;
+
+    /* subtle background to feel like a "track" */
+    background: #f5f7fb;
+  }
+
+  .lp-grid--carousel::-webkit-scrollbar {
+    height: 0;
+  }
+
+  .lp-carouselItem {
+    flex: 0 0 88%;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+  }
 }

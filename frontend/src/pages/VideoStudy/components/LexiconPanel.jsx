@@ -4,7 +4,7 @@ import {
   fetchWordOccurrences,
 } from "../../../api/learning_by_video/occurrences.js";
 
-import { toggleVideoOccurrenceMark } from "../../../api/learning_by_video/marks.js";
+import { toggleVideoOccurrenceMark } from "../../../api/learning_by_video/marks_occurrences.js";
 
 /**
  * @typedef {"word"|"expression"} LexiconKind

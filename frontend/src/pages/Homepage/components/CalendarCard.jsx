@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import Card from "./Card";
+import Card from "./Card.jsx";
 import "./dashboardCards.css";
 
 /**

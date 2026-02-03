@@ -1,4 +1,4 @@
-import Card from "./Card";
+import Card from "./Card.jsx";
 import "./dashboardCards.css";
 
 export default function LearningMessagesCard({

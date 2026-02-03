@@ -8,7 +8,7 @@ from .lexicon import (
 from .user_data import LearningVideoUserData
 from .progress import VideoProgress
 from .exercise import VideoExerciseQuestion, VideoExerciseOption
-
+from .user_video_mark import LearningVideoUserVideoMark
 __all__ = [
     "Video",
     "Subtitle",
@@ -18,5 +18,6 @@ __all__ = [
     "LearningVideoUserData",
     "VideoProgress",
     "VideoExerciseQuestion",
-    "VideoExerciseOption"
+    "VideoExerciseOption",
+    "LearningVideoUserVideoMark"
 ]

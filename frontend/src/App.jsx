@@ -5,6 +5,7 @@ import VideoStudyPage from "./pages/VideoStudy/VideoStudyPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import ActivatePage from "./pages/ActivatePage.jsx";
 import LexiconPage from "./pages/LexiconPage/LexiconPage.jsx";
+import LearningRecordPage from "./pages/RecordPage/LearningRecordPage.jsx";
 
 import { AuthProvider } from "./api/auth";
 
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
       { path: "/", element: <Home /> },
       { path: "/videos/:videoId", element: <VideoStudyPage /> },
       { path: "/lexicon", element: <LexiconPage /> },
+      { path: "/learning-records", element: <LearningRecordPage /> },
     ],
   },
 ]);

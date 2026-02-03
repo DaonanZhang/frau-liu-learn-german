@@ -15,9 +15,6 @@ class LearningVideoUserData(models.Model):
         on_delete=models.CASCADE,
         related_name="learning_video_user_data",
     )
-
-    completed_videos = models.PositiveIntegerField(default=0)
-
     last_watched_video = models.ForeignKey(
         "learning_by_video.Video",
         on_delete=models.SET_NULL,

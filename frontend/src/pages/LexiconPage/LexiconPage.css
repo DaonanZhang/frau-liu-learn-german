@@ -1,3 +1,5 @@
+/* ===== your existing styles (kept) ===== */
+
 .lp-root {
   display: flex;
   min-height: 100vh;
@@ -159,16 +161,14 @@
   }
 }
 
-/* ====================================================== */
-/* Mobile-only (<990px): drawer already OK + row + carousel */
-/* ====================================================== */
+/* ===== Mobile-only additions ===== */
 
 @media (max-width: 990px) {
   .lp-root--mobile {
     position: relative;
   }
 
-  /* Drawer (kept, since you said it's good) */
+  /* drawer (kept) */
   .lp-sidebarSlot--drawer {
     position: fixed;
     top: 0;
@@ -210,55 +210,98 @@
     color: #111827;
   }
 
-  .lp-sidebarToggle:active {
-    background: rgba(0, 0, 0, 0.04);
-    transform: scale(0.99);
-  }
-
-  /* 1) Filters: MUST be in one row */
+  /* 1) filters: strictly one row */
   .lp-filtersRow {
     flex-wrap: nowrap;
     gap: 0.5rem;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
+    overflow: hidden;
     padding: 1rem 1rem 0.85rem;
   }
 
   .lp-pill {
-    flex: 0 0 auto;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.5rem 0.5rem;
+    font-size: 0.85rem;
+    text-align: center;
     white-space: nowrap;
   }
 
-  .lp-filtersRow::-webkit-scrollbar {
-    height: 0;
-  }
-
-  /* 2) Cards: horizontal carousel (one per view) */
-  .lp-grid--carousel {
-    display: flex;
-    flex-direction: row;
-    gap: 0.75rem;
-
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-
-    scroll-snap-type: x mandatory;
-
-    padding: 1rem 1rem 1.25rem;
-
-    /* subtle background to feel like a "track" */
+  /* 2) real swipe-carousel (not a horizontal list) */
+  .lp-carousel {
+    position: relative;
+    padding: 1rem 0.75rem 2rem;
     background: #f5f7fb;
+    touch-action: pan-y;
+    user-select: none;
   }
 
-  .lp-grid--carousel::-webkit-scrollbar {
-    height: 0;
+	.lp-carouselCard {
+	  position: relative;
+	  top: auto;
+	  left: auto;
+	  width: 96%;
+	  margin: 0 auto;
+	  transform: none;
+	  transition: transform 220ms ease, opacity 220ms ease;
+	}
+
+
+.lp-carouselCard--current {
+  opacity: 1;
+  transform: none;
+}
+
+  /* previous card slightly visible on the left */
+  .lp-carouselCard--prev {
+    opacity: 0.55;
+    transform: translateX(calc(-50% - 68%)) scale(0.96);
+    z-index: 2;
+    pointer-events: none;
   }
 
-  .lp-carouselItem {
-    flex: 0 0 88%;
-    scroll-snap-align: center;
-    scroll-snap-stop: always;
+  /* next card slightly visible on the right */
+  .lp-carouselCard--next {
+    opacity: 0.55;
+    transform: translateX(calc(-50% + 68%)) scale(0.96);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* space reservation so following content doesn't overlap */
+  .lp-carousel {
+    min-height: 520px;
+  }
+
+  .lp-carouselHint {
+    position: absolute;
+    left: 50%;
+    bottom: 0.7rem;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .lp-carouselNav {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    background: #fff;
+    cursor: pointer;
+    font-size: 1.1rem;
+    line-height: 1;
+  }
+
+  .lp-carouselNav:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .lp-carouselCounter {
+    font-size: 0.85rem;
+    color: rgba(17, 24, 39, 0.7);
+    font-weight: 700;
   }
 }

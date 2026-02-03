@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { fetchVideoList } from "../../api/learning_by_video/videos";
@@ -378,6 +378,24 @@ function safeArray(response) {
   return [];
 }
 
+/**
+ * Clamp value into [min, max]
+ *
+ * @param {number} value - Value to clamp.
+ * @param {number} min - Min.
+ * @param {number} max - Max.
+ * @returns {number} Clamped value.
+ */
+function clampNumber(value, min, max) {
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
+
 export default function LexiconPage() {
   const navigate = useNavigate();
   const isMobileView = useIsMobileView(990);
@@ -387,15 +405,14 @@ export default function LexiconPage() {
 
   const [isVideosLoading, setIsVideosLoading] = useState(false);
   const [videos, setVideos] = useState([]);
-
   const [selectedVideoId, setSelectedVideoId] = useState(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
-  const [entries, setEntries] = useState(/** @type {LexiconEntry[]} */ ([]));
-  const [activeKind, setActiveKind] = useState(/** @type {LexiconKind} */ ("word"));
-  const [statusFilter, setStatusFilter] = useState(/** @type {StatusFilter} */ ("all"));
+  const [entries, setEntries] = useState([]);
+  const [activeKind, setActiveKind] = useState("word");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const [knowledgeByKey, setKnowledgeByKey] = useState({});
   const [hiddenChineseByKey, setHiddenChineseByKey] = useState({});
@@ -403,11 +420,26 @@ export default function LexiconPage() {
 
   const [subtitlesById, setSubtitlesById] = useState({});
 
+  const [mobileActiveIndex, setMobileActiveIndex] = useState(0);
+
+  const dragRef = useRef({
+    isDragging: false,
+    startX: 0,
+    deltaX: 0,
+    startTime: 0,
+  });
+
   useEffect(() => {
     if (!isMobileView) {
       setIsMobileSidebarOpen(false);
     }
   }, [isMobileView]);
+
+  useEffect(() => {
+    if (isMobileView) {
+      setMobileActiveIndex(0);
+    }
+  }, [isMobileView, activeKind, statusFilter, selectedVideoId]);
 
   const loadVideos = useCallback(async () => {
     setIsVideosLoading(true);
@@ -635,6 +667,13 @@ export default function LexiconPage() {
     });
   }, [baseEntries, knowledgeByKey, statusFilter]);
 
+  useEffect(() => {
+    setMobileActiveIndex((previous) => {
+      const maxIndex = Math.max(0, filteredEntries.length - 1);
+      return clampNumber(previous, 0, maxIndex);
+    });
+  }, [filteredEntries.length]);
+
   const wordCount = useMemo(() => entries.filter((x) => x.kind === "word").length, [entries]);
   const expressionCount = useMemo(
     () => entries.filter((x) => x.kind === "expression").length,
@@ -697,6 +736,149 @@ export default function LexiconPage() {
     },
     [knowledgeByKey, postOccurrenceMark]
   );
+
+  const activeEntry = useMemo(() => {
+    if (!isMobileView) {
+      return null;
+    }
+    if (filteredEntries.length <= 0) {
+      return null;
+    }
+    return filteredEntries[mobileActiveIndex] || null;
+  }, [filteredEntries, isMobileView, mobileActiveIndex]);
+
+  const prevEntry = useMemo(() => {
+    if (!isMobileView) {
+      return null;
+    }
+    if (filteredEntries.length <= 0) {
+      return null;
+    }
+    return mobileActiveIndex > 0 ? filteredEntries[mobileActiveIndex - 1] : null;
+  }, [filteredEntries, isMobileView, mobileActiveIndex]);
+
+  const nextEntry = useMemo(() => {
+    if (!isMobileView) {
+      return null;
+    }
+    if (filteredEntries.length <= 0) {
+      return null;
+    }
+    return mobileActiveIndex < filteredEntries.length - 1
+      ? filteredEntries[mobileActiveIndex + 1]
+      : null;
+  }, [filteredEntries, isMobileView, mobileActiveIndex]);
+
+  const handleGoPrev = useCallback(() => {
+    setMobileActiveIndex((previous) => Math.max(0, previous - 1));
+  }, []);
+
+  const handleGoNext = useCallback(() => {
+    setMobileActiveIndex((previous) => Math.min(filteredEntries.length - 1, previous + 1));
+  }, [filteredEntries.length]);
+
+  const handlePointerDown = useCallback((event) => {
+    if (!isMobileView) {
+      return;
+    }
+
+    dragRef.current = {
+      isDragging: true,
+      startX: event.clientX,
+      deltaX: 0,
+      startTime: Date.now(),
+    };
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+  }, [isMobileView]);
+
+  const handlePointerMove = useCallback((event) => {
+    if (!isMobileView) {
+      return;
+    }
+
+    if (!dragRef.current.isDragging) {
+      return;
+    }
+
+    dragRef.current.deltaX = event.clientX - dragRef.current.startX;
+  }, [isMobileView]);
+
+  const handlePointerUp = useCallback(() => {
+    if (!isMobileView) {
+      return;
+    }
+
+    if (!dragRef.current.isDragging) {
+      return;
+    }
+
+    const deltaX = dragRef.current.deltaX;
+    const elapsedMs = Date.now() - dragRef.current.startTime;
+
+    dragRef.current.isDragging = false;
+    dragRef.current.deltaX = 0;
+
+    const threshold = 60;
+    const fastSwipe = elapsedMs < 240 && Math.abs(deltaX) > 30;
+
+    if (deltaX <= -threshold || (fastSwipe && deltaX < 0)) {
+      handleGoNext();
+      return;
+    }
+
+    if (deltaX >= threshold || (fastSwipe && deltaX > 0)) {
+      handleGoPrev();
+    }
+  }, [handleGoNext, handleGoPrev, isMobileView]);
+
+  /**
+   * Render one LexiconCard with subtitle mapping.
+   *
+   * @param {LexiconEntry|null} entry - Entry.
+   * @param {"prev"|"current"|"next"} slot - slot.
+   * @returns {JSX.Element|null}
+   */
+  function renderMobileCard(entry, slot) {
+    if (!entry) {
+      return null;
+    }
+
+    const knowledgeState = knowledgeByKey[entry.key] || "unmarked";
+    const isHiddenLocal = hiddenChineseByKey[entry.key] === true;
+    const isChineseHidden = isChineseHiddenGlobal || isHiddenLocal;
+
+    const firstSubtitleId =
+      Array.isArray(entry.subtitleIds) && entry.subtitleIds.length > 0
+        ? toIntOrNull(entry.subtitleIds[0])
+        : null;
+
+    const subtitleItem = firstSubtitleId ? subtitlesById[firstSubtitleId] : null;
+
+    const subtitleContent = normalizeText(subtitleItem?.content);
+    const subtitleTranslation = normalizeText(subtitleItem?.translation);
+
+    return (
+      <div className={["lp-carouselCard", `lp-carouselCard--${slot}`].join(" ")}>
+        <LexiconCard
+          entry={entry}
+          knowledgeState={knowledgeState}
+          isChineseHidden={isChineseHidden}
+          onToggleKnown={onToggleKnown}
+          onToggleNotKnown={onToggleNotKnown}
+          onToggleChinese={() => {
+            onToggleCardChinese(entry.key);
+          }}
+          subtitleContent={subtitleContent}
+          subtitleTranslation={subtitleTranslation}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={["lp-root", isMobileView ? "lp-root--mobile" : ""].filter(Boolean).join(" ")}>
@@ -852,46 +1034,82 @@ export default function LexiconPage() {
         {!isLoading && !errorText && filteredEntries.length <= 0 ? <div className="lp-stateBox"></div> : null}
 
         {!isLoading && !errorText ? (
-          <section
-            className={[
-              "lp-grid",
-              isMobileView ? "lp-grid--carousel" : "",
-            ].filter(Boolean).join(" ")}
-            aria-label="Lexicon cards"
-          >
-            {filteredEntries.map((entry) => {
-              const knowledgeState = knowledgeByKey[entry.key] || "unmarked";
-              const isHiddenLocal = hiddenChineseByKey[entry.key] === true;
-              const isChineseHidden = isChineseHiddenGlobal || isHiddenLocal;
+          <>
+            {isMobileView ? (
+              <section
+                className="lp-carousel"
+                aria-label="Lexicon cards carousel"
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              >
+                {renderMobileCard(activeEntry, "current")}
 
-              const firstSubtitleId =
-                Array.isArray(entry.subtitleIds) && entry.subtitleIds.length > 0
-                  ? toIntOrNull(entry.subtitleIds[0])
-                  : null;
-
-              const subtitleItem = firstSubtitleId ? subtitlesById[firstSubtitleId] : null;
-
-              const subtitleContent = normalizeText(subtitleItem?.content);
-              const subtitleTranslation = normalizeText(subtitleItem?.translation);
-
-              return (
-                <div className={isMobileView ? "lp-carouselItem" : ""} key={entry.key}>
-                  <LexiconCard
-                    entry={entry}
-                    knowledgeState={knowledgeState}
-                    isChineseHidden={isChineseHidden}
-                    onToggleKnown={onToggleKnown}
-                    onToggleNotKnown={onToggleNotKnown}
-                    onToggleChinese={() => {
-                      onToggleCardChinese(entry.key);
+                <div className="lp-carouselHint">
+                  <button
+                    type="button"
+                    className="lp-carouselNav"
+                    onClick={() => {
+                      handleGoPrev();
                     }}
-                    subtitleContent={subtitleContent}
-                    subtitleTranslation={subtitleTranslation}
-                  />
+                    disabled={mobileActiveIndex <= 0}
+                  >
+                    ‹
+                  </button>
+
+                  <div className="lp-carouselCounter">
+                    {filteredEntries.length > 0 ? mobileActiveIndex + 1 : 0}/{filteredEntries.length}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="lp-carouselNav"
+                    onClick={() => {
+                      handleGoNext();
+                    }}
+                    disabled={mobileActiveIndex >= filteredEntries.length - 1}
+                  >
+                    ›
+                  </button>
                 </div>
-              );
-            })}
-          </section>
+              </section>
+            ) : (
+              <section className="lp-grid" aria-label="Lexicon cards">
+                {filteredEntries.map((entry) => {
+                  const knowledgeState = knowledgeByKey[entry.key] || "unmarked";
+                  const isHiddenLocal = hiddenChineseByKey[entry.key] === true;
+                  const isChineseHidden = isChineseHiddenGlobal || isHiddenLocal;
+
+                  const firstSubtitleId =
+                    Array.isArray(entry.subtitleIds) && entry.subtitleIds.length > 0
+                      ? toIntOrNull(entry.subtitleIds[0])
+                      : null;
+
+                  const subtitleItem = firstSubtitleId ? subtitlesById[firstSubtitleId] : null;
+
+                  const subtitleContent = normalizeText(subtitleItem?.content);
+                  const subtitleTranslation = normalizeText(subtitleItem?.translation);
+
+                  return (
+                    <LexiconCard
+                      key={entry.key}
+                      entry={entry}
+                      knowledgeState={knowledgeState}
+                      isChineseHidden={isChineseHidden}
+                      onToggleKnown={onToggleKnown}
+                      onToggleNotKnown={onToggleNotKnown}
+                      onToggleChinese={() => {
+                        onToggleCardChinese(entry.key);
+                      }}
+                      subtitleContent={subtitleContent}
+                      subtitleTranslation={subtitleTranslation}
+                    />
+                  );
+                })}
+              </section>
+            )}
+          </>
         ) : null}
       </main>
     </div>

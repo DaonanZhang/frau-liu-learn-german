@@ -231,26 +231,37 @@
   .lp-carousel {
     position: relative;
     padding: 1rem 0.75rem 2rem;
-    background: #f5f7fb;
+    background: transparent;
     touch-action: pan-y;
     user-select: none;
   }
 
-	.lp-carouselCard {
-	  position: relative;
-	  top: auto;
-	  left: auto;
-	  width: 96%;
-	  margin: 0 auto;
-	  transform: none;
-	  transition: transform 220ms ease, opacity 220ms ease;
-	}
+  .lp-carouselCard {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: 96%;
+    margin: 0 auto;
+    transform: none;
+    transition:
+      transform 180ms ease-out,
+      opacity 180ms ease-out;
+  }
 
-
-.lp-carouselCard--current {
-  opacity: 1;
-  transform: none;
+  .lp-carouselCard.is-enter-from-right {
+  transform: translateX(12px);
+  opacity: 0.96;
 }
+
+.lp-carouselCard.is-enter-from-left {
+  transform: translateX(-12px);
+  opacity: 0.96;
+}
+
+  .lp-carouselCard--current {
+    opacity: 1;
+    transform: translateX(0);
+  }
 
   /* previous card slightly visible on the left */
   .lp-carouselCard--prev {
@@ -268,38 +279,57 @@
     pointer-events: none;
   }
 
-  /* space reservation so following content doesn't overlap */
-  .lp-carousel {
-    min-height: 520px;
-  }
+.lp-carousel {
+  min-height: 0;
+  padding-bottom: 10rem;
+  margin-top: 1rem;
+}
 
-  .lp-carouselHint {
-    position: absolute;
-    left: 50%;
-    bottom: 0.7rem;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  .lp-carouselNav {
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 999px;
-    border: 1px solid rgba(0, 0, 0, 0.12);
-    background: #fff;
-    cursor: pointer;
-    font-size: 1.1rem;
-    line-height: 1;
-  }
 
   .lp-carouselNav:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
 
-  .lp-carouselCounter {
+  .lp-main {
+    background: #f5f7fb;
+  }
+
+
+    /* Player bar (mobile carousel controls) */
+  .lp-playerBar {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #eef2f7;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+  }
+
+  .lp-iconBtn {
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #0f172a;
+  }
+
+  .lp-iconBtn:hover {
+    background: #f8fafc;
+  }
+
+  .lp-iconBtn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .lp-counterText {
     font-size: 0.85rem;
     color: rgba(17, 24, 39, 0.7);
     font-weight: 700;

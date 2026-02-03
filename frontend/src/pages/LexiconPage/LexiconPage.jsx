@@ -1044,35 +1044,45 @@ export default function LexiconPage() {
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
               >
+
                 {renderMobileCard(activeEntry, "current")}
 
-                <div className="lp-carouselHint">
+                <div className="lp-playerBar" aria-label="Carousel controls">
                   <button
                     type="button"
-                    className="lp-carouselNav"
+                    className="lp-iconBtn"
+                    aria-label="Previous"
                     onClick={() => {
                       handleGoPrev();
                     }}
                     disabled={mobileActiveIndex <= 0}
                   >
-                    ‹
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M19 20L9 12l10-8v16Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                      <path d="M5 5v14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
                   </button>
 
-                  <div className="lp-carouselCounter">
+                  <div className="lp-counterText">
                     {filteredEntries.length > 0 ? mobileActiveIndex + 1 : 0}/{filteredEntries.length}
                   </div>
 
                   <button
                     type="button"
-                    className="lp-carouselNav"
+                    className="lp-iconBtn"
+                    aria-label="Next"
                     onClick={() => {
                       handleGoNext();
                     }}
                     disabled={mobileActiveIndex >= filteredEntries.length - 1}
                   >
-                    ›
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M5 4l10 8-10 8V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                      <path d="M19 5v14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
                   </button>
                 </div>
+
               </section>
             ) : (
               <section className="lp-grid" aria-label="Lexicon cards">

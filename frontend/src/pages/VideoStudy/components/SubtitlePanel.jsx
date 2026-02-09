@@ -375,6 +375,26 @@ export default function SubtitlePanel({
     });
   }, [activeSubtitleIndex]);
 
+  useEffect(() => {
+    if (!isMobile) {
+      return;
+    }
+
+    const activeElement = activeItemRef.current;
+    if (!activeElement) {
+      return;
+    }
+
+    // Fallback for cases where the list isn't scrollable (mobile full-page).
+    requestAnimationFrame(() => {
+      activeElement.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+    });
+  }, [activeSubtitleIndex, isMobile]);
+
   const items = useMemo(() => {
     return subtitles.map((s) => ({
       id: s.id,
@@ -1006,7 +1026,12 @@ export default function SubtitlePanel({
         </div>
       ) : null}
 
-      <div className="vs-subtitleList" ref={subtitleListRef}>
+      <div
+        className={["vs-subtitleList", activePanelShape === "shadowing" ? "is-shadowing" : ""]
+          .filter(Boolean)
+          .join(" ")}
+        ref={subtitleListRef}
+      >
         {loading && <div className="vs-subEmpty">Loading subtitles…</div>}
 
         {!loading && errorText && <div className="vs-subEmpty">Failed to load subtitles: {errorText}</div>}
@@ -1062,22 +1087,33 @@ export default function SubtitlePanel({
           <div className="vs-mobileBar">
             <button
               type="button"
-              className="vs-mobileBtn"
+              className="vs-mobileBtn vs-mobileBarItem"
               onClick={() => {
                 setMobileSheet("mode");
               }}
             >
+              <span className="vs-mobileBtnIcon" aria-hidden="true">
+                文A
+              </span>
               <span className="vs-mobileBtnLabel">双语</span>
             </button>
 
             <button
               type="button"
-              className="vs-mobileBtn"
+              className="vs-mobileBtn vs-mobileBarItem"
               onClick={() => {
                 setMobileSheet("speed");
               }}
             >
-              <span className="vs-mobileBtnLabel">{Number.isFinite(playbackRate) ? `${playbackRate}x` : "1x"}</span>
+              <span className="vs-mobileBtnIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="8" />
+                  <path d="M12 8v4l3 2" />
+                </svg>
+              </span>
+              <span className="vs-mobileBtnLabel">
+                {Number.isFinite(playbackRate) ? `${playbackRate}x` : "1x"}
+              </span>
             </button>
 
             <button
@@ -1086,49 +1122,70 @@ export default function SubtitlePanel({
               onClick={handleTogglePlay}
               aria-label={isPlaying ? "Pause video" : "Play video"}
             >
-              {isPlaying ? "暂停" : "播放"}
+              {isPlaying ? (
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="6" y="5" width="4" height="14" />
+                  <rect x="14" y="5" width="4" height="14" />
+                </svg>
+              ) : (
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              )}
             </button>
 
             <button
               type="button"
-              className={["vs-mobileBtn", showLoopActive ? "is-active" : ""].filter(Boolean).join(" ")}
+              className={["vs-mobileBtn", "vs-mobileBarItem", showLoopActive ? "is-active" : ""]
+                .filter(Boolean)
+                .join(" ")}
               onClick={() => {
-                if (!onPlaybackSettingsChange) {
-                  return;
-                }
-                if (playbackSettings?.sentenceMode === "loop") {
-                  onPlaybackSettingsChange({ sentenceMode: "continuous" });
-                } else {
-                  onPlaybackSettingsChange({
-                    sentenceMode: "loop",
-                    loopCount: playbackSettings?.loopCount ?? 1,
-                    autoNext: playbackSettings?.autoNext ?? false,
-                  });
-                }
+                setMobileSheet("loop");
               }}
             >
+              <span className="vs-mobileBtnIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M3 12a9 9 0 0 1 15.5-6.4" />
+                  <path d="M19 4v5h-5" />
+                  <path d="M21 12a9 9 0 0 1-15.5 6.4" />
+                  <path d="M5 20v-5h5" />
+                </svg>
+              </span>
               <span className="vs-mobileBtnLabel">循环</span>
             </button>
 
             <button
               type="button"
-              className={["vs-mobileBtn", activePanelShape === "cloze" ? "is-active" : ""].filter(Boolean).join(" ")}
-              onClick={() => {
-                togglePanelShape("cloze");
-              }}
-            >
-              <span className="vs-mobileBtnLabel">精读</span>
-            </button>
-
-            <button
-              type="button"
-              className="vs-mobileMoreBtn"
+              className="vs-mobileMoreBtn vs-mobileBarItem"
               onClick={() => {
                 setMobileSheet("more");
               }}
               aria-label="More settings"
             >
-              ...
+              <span className="vs-mobileBtnIcon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <circle cx="5" cy="12" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="19" cy="12" r="2" />
+                </svg>
+              </span>
+              <span className="vs-mobileBtnLabel">更多</span>
             </button>
           </div>
 
@@ -1247,17 +1304,120 @@ export default function SubtitlePanel({
                       >
                         {activePanelShape === "cloze" ? "退出精读" : "进入精读"}
                       </button>
+                    </div>
+                  </>
+                ) : null}
+
+                {mobileSheet === "loop" ? (
+                  <>
+                    <div className="vs-mobileSheetTitle">播放设置</div>
+                    <div className="vs-mobileSheetList">
                       <button
                         type="button"
                         className="vs-mobileSheetItem"
                         onClick={() => {
-                          setIsExportModalOpen(true);
-                          setMobileSheet("");
+                          if (onPlaybackSettingsChange) {
+                            onPlaybackSettingsChange({ videoMode: "single_play" });
+                          }
                         }}
                       >
-                        导出字幕
+                        单集播放
+                        {playbackSettings?.videoMode === "single_play" ? (
+                          <span className="vs-mobileSheetCheck">✓</span>
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          if (onPlaybackSettingsChange) {
+                            onPlaybackSettingsChange({ videoMode: "single_loop" });
+                          }
+                        }}
+                      >
+                        单集循环
+                        {playbackSettings?.videoMode === "single_loop" ? (
+                          <span className="vs-mobileSheetCheck">✓</span>
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          if (onPlaybackSettingsChange) {
+                            onPlaybackSettingsChange({ sentenceMode: "continuous" });
+                          }
+                        }}
+                      >
+                        连续播放
+                        {playbackSettings?.sentenceMode === "continuous" ? (
+                          <span className="vs-mobileSheetCheck">✓</span>
+                        ) : null}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          if (onPlaybackSettingsChange) {
+                            onPlaybackSettingsChange({
+                              sentenceMode: "loop",
+                              loopCount: playbackSettings?.loopCount ?? 1,
+                              autoNext: playbackSettings?.autoNext ?? false,
+                            });
+                          }
+                        }}
+                      >
+                        单句循环
+                        {playbackSettings?.sentenceMode === "loop" ? (
+                          <span className="vs-mobileSheetCheck">✓</span>
+                        ) : null}
                       </button>
                     </div>
+
+                    {playbackSettings?.sentenceMode === "loop" ? (
+                      <div className="vs-mobileSheetGroup">
+                        <div className="vs-mobileSheetSubTitle">循环次数</div>
+                        <div className="vs-mobileSheetList">
+                          {[1, 2, 3, 4, 5, "infinite"].map((count) => (
+                            <button
+                              key={String(count)}
+                              type="button"
+                              className="vs-mobileSheetItem"
+                              onClick={() => {
+                                if (onPlaybackSettingsChange) {
+                                  onPlaybackSettingsChange({
+                                    loopCount: count === "infinite" ? "infinite" : Number(count),
+                                  });
+                                }
+                              }}
+                            >
+                              {count === "infinite" ? "无限次" : `${count}次`}
+                              {String(playbackSettings?.loopCount ?? 1) === String(count) ? (
+                                <span className="vs-mobileSheetCheck">✓</span>
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="vs-mobileSheetSubTitle">自动下句</div>
+                        <div className="vs-mobileSheetList">
+                          <button
+                            type="button"
+                            className="vs-mobileSheetItem"
+                            onClick={() => {
+                              if (onPlaybackSettingsChange) {
+                                onPlaybackSettingsChange({ autoNext: !playbackSettings?.autoNext });
+                              }
+                            }}
+                          >
+                            {playbackSettings?.autoNext ? "已开启" : "已关闭"}
+                            <span className="vs-mobileSheetCheck">
+                              {playbackSettings?.autoNext ? "✓" : ""}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </>
                 ) : null}
 

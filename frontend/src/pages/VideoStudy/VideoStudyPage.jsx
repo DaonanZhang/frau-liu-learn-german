@@ -654,7 +654,7 @@ export default function VideoStudyPage() {
 
         {/* Right: lexicon*/}
         {shouldShowLexiconPanel ? (
-          <section className={isMobile ? "vs-right vs-right--modal" : "vs-right"}>
+          <section className={isMobile ? "vs-right vs-right--page" : "vs-right"}>
             <LexiconPanel
               videoId={videoId}
               subtitleItems={subtitleItems}
@@ -669,7 +669,7 @@ export default function VideoStudyPage() {
 
 
         {shouldShowExercisePanel ? (
-          <section className={isMobile ? "vs-right vs-right--modal" : "vs-right"}>
+          <section className={isMobile ? "vs-right vs-right--modal vs-right--modal--clear" : "vs-right"}>
             <ExercisePanel
               isOpen={isExerciseOpen}
               onClose={() => {
@@ -696,7 +696,10 @@ export default function VideoStudyPage() {
           }}
           aria-label="Toggle exercise mode"
         >
-          B
+          <span className="vs-mobileFabIcon" aria-hidden="true">
+            题
+          </span>
+          <span className="vs-mobileFabLabel">题目</span>
         </button>
       ) : null}
     </div>

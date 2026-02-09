@@ -346,6 +346,9 @@ export default function LexiconPanel({
 }) {
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileStage, setMobileStage] = useState("overview");
+  const [expandedKeys, setExpandedKeys] = useState({});
 
   const [entries, setEntries] = useState(/** @type {LexiconEntry[]} */ ([]));
   const [activeKind, setActiveKind] = useState(/** @type {LexiconKind} */ ("word"));
@@ -506,6 +509,49 @@ export default function LexiconPanel({
       aborted = true;
     };
   }, [videoId]);
+
+  useEffect(() => {
+    const mediaQueryList = window.matchMedia("(max-width: 768px)");
+
+    function syncMobileState() {
+      setIsMobile(mediaQueryList.matches);
+    }
+
+    syncMobileState();
+
+    if (mediaQueryList.addEventListener) {
+      mediaQueryList.addEventListener("change", syncMobileState);
+      return () => {
+        mediaQueryList.removeEventListener("change", syncMobileState);
+      };
+    }
+
+    mediaQueryList.addListener(syncMobileState);
+    return () => {
+      mediaQueryList.removeListener(syncMobileState);
+    };
+  }, []);
+
+  function toggleExpand(key) {
+    const safeKey = String(key || "");
+    if (!safeKey) {
+      return;
+    }
+    setExpandedKeys((prev) => ({
+      ...prev,
+      [safeKey]: !prev[safeKey],
+    }));
+  }
+
+  function closeOrBack() {
+    if (isMobile && mobileStage === "cards") {
+      setMobileStage("overview");
+      return;
+    }
+    if (onClose) {
+      onClose();
+    }
+  }
 
   function toggleHideChinese(entryKey) {
     setHiddenChineseByKey((prev) => {
@@ -718,12 +764,23 @@ export default function LexiconPanel({
 
   const wordCount = useMemo(() => entries.filter((x) => x.kind === "word").length, [entries]);
   const expressionCount = useMemo(() => entries.filter((x) => x.kind === "expression").length, [entries]);
+  const mobileKindLabel = activeKind === "expression" ? "表达卡" : "单词卡";
+  const mobileEntries = filteredEntries.filter((entry) => entry.kind === activeKind);
 
   return (
     <div className="vs-panel">
       <div className="vs-rightHeader">
         <div className="vs-rightHeaderTop">
-          <div className="vs-rightHeaderTitle">单词面板</div>
+          <button
+            className="vs-lexMobileBack"
+            type="button"
+            aria-label="Back"
+            onClick={closeOrBack}
+          >
+            ‹
+          </button>
+
+          <div className="vs-rightHeaderTitle">{isMobile ? "英语卡片" : "单词面板"}</div>
 
           <button
             className="vs-rightCollapseBtn"
@@ -739,93 +796,180 @@ export default function LexiconPanel({
           </button>
         </div>
 
-        <div className="vs-tabs">
+        {!isMobile ? (
+          <>
+            <div className="vs-tabs">
+              <button
+                className={["vs-tab", activeKind === "word" ? "is-active" : ""].filter(Boolean).join(" ")}
+                type="button"
+                onClick={() => {
+                  setActiveKind("word");
+                  setStatusFilter("all");
+                }}
+              >
+                单词 ({wordCount})
+              </button>
+
+              <button
+                className={["vs-tab", activeKind === "expression" ? "is-active" : ""].filter(Boolean).join(" ")}
+                type="button"
+                onClick={() => {
+                  setActiveKind("expression");
+                  setStatusFilter("all");
+                }}
+              >
+                地道表达 ({expressionCount})
+              </button>
+            </div>
+
+            <div className="vs-actionsRow vs-statusRow">
+              <button
+                className={["vs-actionBtn", statusFilter === "all" ? "is-primary" : ""].filter(Boolean).join(" ")}
+                type="button"
+                onClick={() => {
+                  setStatusFilter("all");
+                }}
+                disabled={loading}
+              >
+                全部 ({statusCounts.all})
+              </button>
+
+              <button
+                className={["vs-actionBtn", statusFilter === "unmarked" ? "is-primary" : ""].filter(Boolean).join(" ")}
+                type="button"
+                onClick={() => {
+                  setStatusFilter("unmarked");
+                }}
+                disabled={loading}
+              >
+                未标记 ({statusCounts.unmarked})
+              </button>
+
+              <button
+                className={["vs-actionBtn", statusFilter === "known" ? "is-primary" : ""].filter(Boolean).join(" ")}
+                type="button"
+                onClick={() => {
+                  setStatusFilter("known");
+                }}
+                disabled={loading}
+              >
+                认识 ({statusCounts.known})
+              </button>
+
+              <button
+                className={["vs-actionBtn", statusFilter === "not_known" ? "is-primary" : ""].filter(Boolean).join(" ")}
+                type="button"
+                onClick={() => {
+                  setStatusFilter("not_known");
+                }}
+                disabled={loading}
+              >
+                不认识 ({statusCounts.not_known})
+              </button>
+            </div>
+
+            <div className="vs-actionsRow">
+              <button
+                className={["vs-actionBtn", onlyCurrentSubtitle ? "is-primary" : ""].filter(Boolean).join(" ")}
+                type="button"
+                onClick={() => {
+                  setOnlyCurrentSubtitle((prev) => !prev);
+                }}
+                disabled={currentSubtitleId === null}
+                aria-label="Toggle filter by current subtitle"
+              >
+                {onlyCurrentSubtitle ? "仅当前字幕" : "全部字幕"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="vs-lexMobileFilters">
+            <button
+              className={["vs-lexFilterBtn", statusFilter === "all" ? "is-active" : ""].filter(Boolean).join(" ")}
+              type="button"
+              onClick={() => {
+                setStatusFilter("all");
+              }}
+              disabled={loading}
+            >
+              全部
+            </button>
+            <button
+              className={["vs-lexFilterBtn", statusFilter === "unmarked" ? "is-active" : ""]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              onClick={() => {
+                setStatusFilter("unmarked");
+              }}
+              disabled={loading}
+            >
+              未标记
+            </button>
+            <button
+              className={["vs-lexFilterBtn", statusFilter === "known" ? "is-active" : ""]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              onClick={() => {
+                setStatusFilter("known");
+              }}
+              disabled={loading}
+            >
+              认识
+            </button>
+            <button
+              className={["vs-lexFilterBtn", statusFilter === "not_known" ? "is-active" : ""]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              onClick={() => {
+                setStatusFilter("not_known");
+              }}
+              disabled={loading}
+            >
+              不认识
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isMobile && mobileStage === "overview" ? (
+        <div className="vs-lexMobileKinds">
           <button
-            className={["vs-tab", activeKind === "word" ? "is-active" : ""].filter(Boolean).join(" ")}
+            className="vs-lexKindCard is-word"
             type="button"
             onClick={() => {
               setActiveKind("word");
-              setStatusFilter("all");
+              setMobileStage("cards");
             }}
           >
-            单词 ({wordCount})
+            <span>单词卡</span>
+            <span className="vs-lexKindCount">{wordCount}</span>
           </button>
 
           <button
-            className={["vs-tab", activeKind === "expression" ? "is-active" : ""].filter(Boolean).join(" ")}
+            className="vs-lexKindCard is-expression"
             type="button"
             onClick={() => {
               setActiveKind("expression");
-              setStatusFilter("all");
+              setMobileStage("cards");
             }}
           >
-            地道表达 ({expressionCount})
+            <span>表达卡</span>
+            <span className="vs-lexKindCount">{expressionCount}</span>
           </button>
         </div>
+      ) : null}
 
-        <div className="vs-actionsRow vs-statusRow">
-          <button
-            className={["vs-actionBtn", statusFilter === "all" ? "is-primary" : ""].filter(Boolean).join(" ")}
-            type="button"
-            onClick={() => {
-              setStatusFilter("all");
-            }}
-            disabled={loading}
-          >
-            全部 ({statusCounts.all})
-          </button>
-
-          <button
-            className={["vs-actionBtn", statusFilter === "unmarked" ? "is-primary" : ""].filter(Boolean).join(" ")}
-            type="button"
-            onClick={() => {
-              setStatusFilter("unmarked");
-            }}
-            disabled={loading}
-          >
-            未标记 ({statusCounts.unmarked})
-          </button>
-
-          <button
-            className={["vs-actionBtn", statusFilter === "known" ? "is-primary" : ""].filter(Boolean).join(" ")}
-            type="button"
-            onClick={() => {
-              setStatusFilter("known");
-            }}
-            disabled={loading}
-          >
-            认识 ({statusCounts.known})
-          </button>
-
-          <button
-            className={["vs-actionBtn", statusFilter === "not_known" ? "is-primary" : ""].filter(Boolean).join(" ")}
-            type="button"
-            onClick={() => {
-              setStatusFilter("not_known");
-            }}
-            disabled={loading}
-          >
-            不认识 ({statusCounts.not_known})
-          </button>
+      {isMobile && mobileStage === "cards" ? (
+        <div className="vs-lexMobileMeta">
+          <span>{mobileKindLabel}</span>
+          <span>{mobileEntries.length > 0 ? `1/${mobileEntries.length}` : "0/0"}</span>
         </div>
+      ) : null}
 
-
-        <div className="vs-actionsRow">
-          <button
-            className={["vs-actionBtn", onlyCurrentSubtitle ? "is-primary" : ""].filter(Boolean).join(" ")}
-            type="button"
-            onClick={() => {
-              setOnlyCurrentSubtitle((prev) => !prev);
-            }}
-            disabled={currentSubtitleId === null}
-            aria-label="Toggle filter by current subtitle"
-          >
-            {onlyCurrentSubtitle ? "仅当前字幕" : "全部字幕"}
-          </button>
-        </div>
-
-      </div>
-
+      {(!isMobile || mobileStage === "cards") ? (
       <div className="vs-lexList">
         {loading ? <div className="vs-subEmpty">Loading…</div> : null}
 
@@ -833,14 +977,15 @@ export default function LexiconPanel({
           <div className="vs-subEmpty">Failed to load: {errorText}</div>
         ) : null}
 
-        {!loading && !errorText && filteredEntries.length <= 0 ? (
+        {!loading && !errorText && (isMobile ? mobileEntries.length : filteredEntries.length) <= 0 ? (
           <div className="vs-subEmpty">No items</div>
         ) : null}
 
         {!loading && !errorText
-          ? filteredEntries.map((entry) => {
+          ? (isMobile ? mobileEntries : filteredEntries).map((entry) => {
               const hideChinese = hiddenChineseByKey[entry.key] === true;
               const knowledgeState = knowledgeByKey[entry.key] || "unmarked";
+              const isExpanded = expandedKeys[entry.key] === true;
 
               const posLabel = posToLabel(entry.pos);
               const splittableLabel = entry.splittable === true ? "trennbar" : "";
@@ -857,6 +1002,7 @@ export default function LexiconPanel({
                   key={entry.key}
                   className={[
                     "vs-lexCard",
+                    isMobile ? "vs-lexCard--mobile" : "",
                     knowledgeState === "known" ? "is-known" : "",
                     knowledgeState === "not_known" ? "is-not-known" : "",
                     knowledgeState === "elsewhere" ? "is-elsewhere" : "",
@@ -907,7 +1053,19 @@ export default function LexiconPanel({
                     </div>
                   </div>
 
-                  {!hideChinese && entry.translation ? (
+                  {isMobile ? (
+                    <button
+                      className="vs-lexReveal"
+                      type="button"
+                      onClick={() => {
+                        toggleExpand(entry.key);
+                      }}
+                    >
+                      {isExpanded ? "收起释义" : "点击显示释义"}
+                    </button>
+                  ) : null}
+
+                  {!hideChinese && entry.translation && (!isMobile || isExpanded) ? (
                     <div className="vs-lexMeaning">
                       <span className="vs-lexMeaningText">{entry.translation}</span>
 
@@ -921,7 +1079,7 @@ export default function LexiconPanel({
                     </div>
                   ) : null}
 
-                  {(subtitleDe || subtitleZh) ? (
+                  {(subtitleDe || subtitleZh) && (!isMobile || isExpanded) ? (
                     <div className="vs-lexSubtitleCard" role="group" aria-label="Subtitle example">
                       {subtitleDe ? <div className="vs-lexSubtitleDe">{subtitleDe}</div> : null}
                       {!hideChinese && subtitleZh ? (
@@ -930,35 +1088,38 @@ export default function LexiconPanel({
                     </div>
                   ) : null}
 
-                  <div className="vs-lexFooter">
-                    <button
-                      className="vs-lexBtn"
-                      type="button"
-                      onClick={() => {
-                        handleJumpToEntry(entry);
-                      }}
-                      disabled={entry.subtitleIds.length <= 0}
-                    >
-                      <TargetIcon />
-                      <span>点读跳转</span>
-                    </button>
+                  {(!isMobile || isExpanded) ? (
+                    <div className="vs-lexFooter">
+                      <button
+                        className="vs-lexBtn"
+                        type="button"
+                        onClick={() => {
+                          handleJumpToEntry(entry);
+                        }}
+                        disabled={entry.subtitleIds.length <= 0}
+                      >
+                        <TargetIcon />
+                        <span>点读跳转</span>
+                      </button>
 
-                    <button
-                      className={["vs-eyeBtn", hideChinese ? "is-off" : "is-on"].filter(Boolean).join(" ")}
-                      type="button"
-                      aria-label={hideChinese ? "Show Chinese" : "Hide Chinese"}
-                      onClick={() => {
-                        toggleHideChinese(entry.key);
-                      }}
-                    >
-                      <EyeIcon isHidden={hideChinese} />
-                    </button>
-                  </div>
+                      <button
+                        className={["vs-eyeBtn", hideChinese ? "is-off" : "is-on"].filter(Boolean).join(" ")}
+                        type="button"
+                        aria-label={hideChinese ? "Show Chinese" : "Hide Chinese"}
+                        onClick={() => {
+                          toggleHideChinese(entry.key);
+                        }}
+                      >
+                        <EyeIcon isHidden={hideChinese} />
+                      </button>
+                    </div>
+                  ) : null}
                 </article>
               );
             })
           : null}
       </div>
+      ) : null}
     </div>
   );
 }

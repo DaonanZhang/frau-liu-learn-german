@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import re
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -28,7 +29,7 @@ class ProgressPolicy:
 class VideoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Video.objects.all().order_by("-created_at")
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
-    filterset_fields = ["difficulty"]
+    filterset_fields = ["difficulty", "creator", "duration_seconds"]
     ordering_fields = ["created_at", "difficulty", "duration_seconds"]
     search_fields = ["title"]
     permission_classes = [AllowAny]
@@ -37,6 +38,72 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_serializer_class(self):
         return VideoListSerializer if self.action == "list" else VideoDetailSerializer
+
+    def _parse_list_param(self, name: str) -> list[str]:
+        params = self.request.query_params
+        raw_items: list[str] = []
+
+        for item in params.getlist(name):
+            raw_items.extend(str(item).split(","))
+
+        cleaned = [item.strip() for item in raw_items if str(item).strip()]
+        return cleaned
+
+    @staticmethod
+    def _normalize_topic_value(raw: str) -> list[str]:
+        separators = re.compile(r"[,\uFF0C\u3001]")  # , ， 、
+        quote_trim = re.compile(r'^[\"\'“”‘’]+|[\"\'“”‘’]+$')
+        parts = separators.split(str(raw))
+        cleaned = []
+        for part in parts:
+            value = quote_trim.sub("", part.strip())
+            if value:
+                cleaned.append(value)
+        return cleaned
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        difficulties = self._parse_list_param("difficulty")
+        if difficulties:
+            qs = qs.filter(difficulty__in=difficulties)
+
+        creators = self._parse_list_param("creator")
+        if creators:
+            qs = qs.filter(creator__in=creators)
+
+        durations_raw = self._parse_list_param("duration")
+        if durations_raw:
+            durations: list[int] = []
+            for value in durations_raw:
+                try:
+                    parsed = int(value)
+                except (TypeError, ValueError):
+                    continue
+                durations.append(parsed)
+            if durations:
+                qs = qs.filter(duration_seconds__in=durations)
+
+        topics = self._parse_list_param("topic")
+        if topics:
+            normalized_topics: set[str] = set()
+            for tag in topics:
+                normalized_topics.update(self._normalize_topic_value(tag))
+
+            if normalized_topics:
+                matched_ids: list[int] = []
+                for item in qs.values("id", "tags"):
+                    tags = item.get("tags") or []
+                    if not isinstance(tags, list):
+                        continue
+                    tag_values: set[str] = set()
+                    for raw in tags:
+                        tag_values.update(self._normalize_topic_value(raw))
+                    if tag_values & normalized_topics:
+                        matched_ids.append(item["id"])
+                qs = qs.filter(id__in=matched_ids)
+
+        return qs
 
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         instance: Video = self.get_object()
@@ -65,6 +132,37 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
             },
         )
         return Response(serializer.data)
+
+    @action(
+        detail=False,
+        methods=["get"],
+        permission_classes=[AllowAny],
+        url_path="meta",
+    )
+    def meta(self, request: Request) -> Response:
+        qs = Video.objects.all()
+
+        difficulties = sorted({item for item in qs.values_list("difficulty", flat=True) if item})
+        creators = sorted({item for item in qs.values_list("creator", flat=True) if item})
+
+        durations = sorted({int(item) for item in qs.values_list("duration_seconds", flat=True) if item is not None})
+
+        topics: set[str] = set()
+        for tags in qs.values_list("tags", flat=True):
+            if isinstance(tags, list):
+                for tag in tags:
+                    if tag:
+                        for cleaned in self._normalize_topic_value(tag):
+                            topics.add(cleaned)
+
+        payload = {
+            "difficulties": difficulties,
+            "creators": creators,
+            "topics": sorted(topics),
+            "durations": durations,
+            "total_count": qs.count(),
+        }
+        return Response(payload)
 
     def _normalize_progress_payload(self, *, video: Video, current_time: float | None, completed: bool | None) -> tuple[float | None, bool | None]:
         """

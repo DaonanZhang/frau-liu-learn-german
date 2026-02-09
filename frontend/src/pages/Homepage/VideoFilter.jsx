@@ -1,6 +1,28 @@
+import { useEffect, useRef, useState } from "react";
+
 import "./VideoFilter.css";
 
-function FilterField({ icon, label, value = "全部", onClick }) {
+function FilterField({
+  icon,
+  label,
+  options = [],
+  selected = [],
+  onChange,
+  formatOption = (value) => String(value),
+  isOpen = false,
+  onToggle,
+}) {
+  const displayValue = selected.length ? selected.map(formatOption).join("、") : "全部";
+
+  function handleToggle(value) {
+    if (!onChange) return;
+    if (selected.includes(value)) {
+      onChange(selected.filter((item) => item !== value));
+    } else {
+      onChange([...selected, value]);
+    }
+  }
+
   return (
     <div className="vf-field">
       <div className="vf-label">
@@ -10,57 +32,134 @@ function FilterField({ icon, label, value = "全部", onClick }) {
         <span>{label}</span>
       </div>
 
-      {/* 先用 button 做静态占位，未来你再接 dropdown */}
-      <button className="vf-select" type="button" onClick={onClick}>
-        <span className="vf-select__value">{value}</span>
+      <button
+        className="vf-select"
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+      >
+        <span className="vf-select__value">{displayValue}</span>
         <span className="vf-select__chevron" aria-hidden="true">
           ▼
         </span>
       </button>
+
+      {isOpen && (
+        <div className="vf-options">
+          <button
+            className="vf-clear"
+            type="button"
+            onClick={() => onChange?.([])}
+          >
+            全部
+          </button>
+          {options.map((option) => (
+            <label key={String(option)} className="vf-option">
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                onChange={() => handleToggle(option)}
+              />
+              <span>{formatOption(option)}</span>
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 export default function VideoFilter({
-  difficultyValue = "全部",
-  durationValue = "全部",
-  creatorValue = "全部",
-  topicValue = "全部",
-  // 未来扩展：你可以传 onChange 或 onClick handlers
-  onDifficultyClick,
-  onDurationClick,
-  onCreatorClick,
-  onTopicClick,
+  difficultyOptions = [],
+  durationOptions = [],
+  creatorOptions = [],
+  topicOptions = [],
+  selectedDifficulties = [],
+  selectedDurations = [],
+  selectedCreators = [],
+  selectedTopics = [],
+  onDifficultyChange,
+  onDurationChange,
+  onCreatorChange,
+  onTopicChange,
 }) {
+  const rootRef = useRef(null);
+  const [openKey, setOpenKey] = useState("");
+
+  useEffect(() => {
+    function handleOutside(event) {
+      const root = rootRef.current;
+      if (!root) return;
+      if (!root.contains(event.target)) {
+        setOpenKey("");
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("touchstart", handleOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("touchstart", handleOutside);
+    };
+  }, []);
+
+  const formatDuration = (value) => {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds <= 0) return "未知时长";
+    const minutes = Math.round(seconds / 60);
+    return `${minutes}分钟`;
+  };
+
   return (
-    <section className="vf-card">
+    <section className="vf-card" ref={rootRef}>
       <div className="vf-grid">
         <FilterField
           icon={<DifficultyIcon />}
           label="视频难度"
-          value={difficultyValue}
-          onClick={onDifficultyClick}
+          options={difficultyOptions}
+          selected={selectedDifficulties}
+          onChange={onDifficultyChange}
+          isOpen={openKey === "difficulty"}
+          onToggle={() =>
+            setOpenKey((prev) => (prev === "difficulty" ? "" : "difficulty"))
+          }
         />
 
         <FilterField
           icon={<DurationIcon />}
           label="视频时长"
-          value={durationValue}
-          onClick={onDurationClick}
+          options={durationOptions}
+          selected={selectedDurations}
+          onChange={onDurationChange}
+          formatOption={formatDuration}
+          isOpen={openKey === "duration"}
+          onToggle={() =>
+            setOpenKey((prev) => (prev === "duration" ? "" : "duration"))
+          }
         />
 
         <FilterField
           icon={<CreatorIcon />}
           label="视频博主"
-          value={creatorValue}
-          onClick={onCreatorClick}
+          options={creatorOptions}
+          selected={selectedCreators}
+          onChange={onCreatorChange}
+          isOpen={openKey === "creator"}
+          onToggle={() =>
+            setOpenKey((prev) => (prev === "creator" ? "" : "creator"))
+          }
         />
 
         <FilterField
           icon={<TopicIcon />}
           label="视频话题"
-          value={topicValue}
-          onClick={onTopicClick}
+          options={topicOptions}
+          selected={selectedTopics}
+          onChange={onTopicChange}
+          isOpen={openKey === "topic"}
+          onToggle={() =>
+            setOpenKey((prev) => (prev === "topic" ? "" : "topic"))
+          }
         />
       </div>
     </section>

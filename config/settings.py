@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "apps.accounts.apps.AccountsConfig",
     "apps.learning_by_video.apps.LearningConfig",
     "apps.lexicon.apps.LexiconConfig",
+    "apps.announcement.apps.AnnouncementConfig",
 ]
 
 REST_FRAMEWORK = {

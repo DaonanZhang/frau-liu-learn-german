@@ -24,10 +24,20 @@ function normalizeList(data) {
  * - difficulty
  * - ordering: created_at, difficulty, duration_seconds
  */
-export async function fetchVideoList({ search, difficulty, ordering } = {}) {
+export async function fetchVideoList({
+  search,
+  difficulty,
+  creator,
+  topic,
+  duration,
+  ordering,
+} = {}) {
   const sp = new URLSearchParams();
   if (search) sp.set("search", search);
-  if (difficulty) sp.set("difficulty", difficulty);
+  if (difficulty && difficulty.length) sp.set("difficulty", difficulty.join(","));
+  if (creator && creator.length) sp.set("creator", creator.join(","));
+  if (topic && topic.length) sp.set("topic", topic.join(","));
+  if (duration && duration.length) sp.set("duration", duration.join(","));
   if (ordering) sp.set("ordering", ordering);
 
   const qs = sp.toString();

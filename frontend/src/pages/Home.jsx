@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 
 import StatsCard from "../pages/Homepage/components/StatsCard.jsx";
 import CalendarCard from "../pages/Homepage/components/CalendarCard";
-import LearningMessagesCard from "../pages/Homepage/components/LearningMessagesCard";
+import Announcement from "../pages/Homepage/components/Announcement";
 
 import VideoFilter from "../pages/Homepage/VideoFilter";
 import VideoGrid from "../pages/Homepage/VideoGrid";
 
 import { fetchVideoList } from "../api/learning_by_video/videos.js";
+import { fetchVideoMeta } from "../api/learning_by_video/video_meta.js";
 import { markDailyActiveAndGetUserData } from "../api/user_data/userData";
 import { fetchLearningVideoUserData } from "../api/learning_by_video/userData";
 
@@ -96,8 +97,43 @@ export default function Home() {
   const [videoMarkById, setVideoMarkById] = useState({});
   const requestedMarkIdsRef = useRef(new Set());
 
+  const [videoMeta, setVideoMeta] = useState({
+    difficulties: [],
+    creators: [],
+    topics: [],
+    durations: [],
+    totalCount: 0,
+  });
+
+  const [selectedDifficulties, setSelectedDifficulties] = useState([]);
+  const [selectedCreators, setSelectedCreators] = useState([]);
+  const [selectedTopics, setSelectedTopics] = useState([]);
+  const [selectedDurations, setSelectedDurations] = useState([]);
+
   const isMobileView = useMaxWidth(990);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  function normalizeTopicMeta(rawTopics) {
+    if (!Array.isArray(rawTopics)) {
+      return [];
+    }
+
+    const results = [];
+    const separators = /[,\uFF0C\u3001]/; // , ， 、
+    const quoteTrim = /^[\"'“”‘’]+|[\"'“”‘’]+$/g;
+    rawTopics.forEach((item) => {
+      if (item == null) return;
+      const str = String(item);
+      str.split(separators).forEach((part) => {
+        const cleaned = part.trim().replace(quoteTrim, "");
+        if (cleaned) {
+          results.push(cleaned);
+        }
+      });
+    });
+
+    return Array.from(new Set(results));
+  }
 
   useEffect(() => {
     if (!isMobileView) {
@@ -266,6 +302,31 @@ export default function Home() {
   useEffect(() => {
     let aborted = false;
 
+    fetchVideoMeta()
+      .then((data) => {
+        if (aborted) {
+          return;
+        }
+        setVideoMeta({
+          difficulties: Array.isArray(data?.difficulties) ? data.difficulties : [],
+          creators: Array.isArray(data?.creators) ? data.creators : [],
+          topics: normalizeTopicMeta(data?.topics),
+          durations: Array.isArray(data?.durations) ? data.durations : [],
+          totalCount: Number.isFinite(Number(data?.total_count)) ? Number(data.total_count) : 0,
+        });
+      })
+      .catch(() => {
+        // silently fail
+      });
+
+    return () => {
+      aborted = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let aborted = false;
+
     async function loadVideos() {
       try {
         setLoadingVideos(true);
@@ -273,6 +334,10 @@ export default function Home() {
 
         const response = await fetchVideoList({
           ordering: "-created_at",
+          difficulty: selectedDifficulties,
+          creator: selectedCreators,
+          topic: selectedTopics,
+          duration: selectedDurations,
         });
 
         if (aborted) {
@@ -298,11 +363,14 @@ export default function Home() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [selectedDifficulties, selectedCreators, selectedTopics, selectedDurations]);
 
   const totalVideoCount = useMemo(() => {
+    if (Number.isFinite(Number(videoMeta.totalCount)) && videoMeta.totalCount > 0) {
+      return Number(videoMeta.totalCount);
+    }
     return Array.isArray(videos) ? videos.length : 0;
-  }, [videos]);
+  }, [videoMeta.totalCount, videos]);
 
   const completedVideos = useMemo(() => {
     return toSafeNumber(learningVideoUserData?.completed_count);
@@ -359,11 +427,24 @@ export default function Home() {
 
           <StatsCard stats={stats} />
           <CalendarCard activeDates={userData?.active_dates || []} maxPastMonths={3} />
-          <LearningMessagesCard />
+          <Announcement />
 
           {isMobileView && (
             <div className="home-mobile-filter">
-              <VideoFilter />
+              <VideoFilter
+                difficultyOptions={videoMeta.difficulties}
+                durationOptions={videoMeta.durations}
+                creatorOptions={videoMeta.creators}
+                topicOptions={videoMeta.topics}
+                selectedDifficulties={selectedDifficulties}
+                selectedDurations={selectedDurations}
+                selectedCreators={selectedCreators}
+                selectedTopics={selectedTopics}
+                onDifficultyChange={setSelectedDifficulties}
+                onDurationChange={setSelectedDurations}
+                onCreatorChange={setSelectedCreators}
+                onTopicChange={setSelectedTopics}
+              />
             </div>
           )}
         </div>
@@ -391,7 +472,22 @@ export default function Home() {
           </div>
         )}
 
-        {!isMobileView && <VideoFilter />}
+        {!isMobileView && (
+          <VideoFilter
+            difficultyOptions={videoMeta.difficulties}
+            durationOptions={videoMeta.durations}
+            creatorOptions={videoMeta.creators}
+            topicOptions={videoMeta.topics}
+            selectedDifficulties={selectedDifficulties}
+            selectedDurations={selectedDurations}
+            selectedCreators={selectedCreators}
+            selectedTopics={selectedTopics}
+            onDifficultyChange={setSelectedDifficulties}
+            onDurationChange={setSelectedDurations}
+            onCreatorChange={setSelectedCreators}
+            onTopicChange={setSelectedTopics}
+          />
+        )}
 
         <VideoGrid
           videos={videos}

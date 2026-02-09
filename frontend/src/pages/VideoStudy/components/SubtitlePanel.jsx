@@ -139,6 +139,9 @@ export default function SubtitlePanel({
   isLexiconOpen,
   onToggleLexicon,
   activeSubtitleIndex,
+  panelShape,
+  onPanelShapeChange,
+  isMobile,
 }) {
   const [subtitles, setSubtitles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -154,8 +157,7 @@ export default function SubtitlePanel({
 
   const [playMenuOpen, setPlayMenuOpen] = useState(false);
 
-  // "normal" | "shadowing" | "cloze"
-  const [panelShape, setPanelShape] = useState("normal");
+  const activePanelShape = panelShape || "normal";
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
@@ -163,6 +165,9 @@ export default function SubtitlePanel({
   const [activeExerciseKey, setActiveExerciseKey] = useState("");
 
   const menuRef = useRef(null);
+  const mobileSheetRef = useRef(null);
+  const [mobileSheet, setMobileSheet] = useState("");
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const isPlaybackNonDefault =
     playbackSettings?.videoMode !== "single_play" ||
@@ -279,6 +284,9 @@ export default function SubtitlePanel({
       if (menuRef.current.contains(e.target)) {
         return;
       }
+      if (mobileSheetRef.current && mobileSheetRef.current.contains(e.target)) {
+        return;
+      }
 
       if (menuOpen) {
         setMenuOpen(false);
@@ -286,13 +294,43 @@ export default function SubtitlePanel({
       if (playMenuOpen) {
         setPlayMenuOpen(false);
       }
+      if (mobileSheet) {
+        setMobileSheet("");
+      }
     }
 
     document.addEventListener("mousedown", onDocMouseDown);
     return () => {
       document.removeEventListener("mousedown", onDocMouseDown);
     };
-  }, [menuOpen, playMenuOpen]);
+  }, [menuOpen, playMenuOpen, mobileSheet]);
+
+  useEffect(() => {
+    const videoElement = videoRef?.current;
+    if (!videoElement) {
+      return;
+    }
+
+    function handlePlay() {
+      setIsPlaying(true);
+    }
+
+    function handlePause() {
+      setIsPlaying(false);
+    }
+
+    videoElement.addEventListener("play", handlePlay);
+    videoElement.addEventListener("pause", handlePause);
+    videoElement.addEventListener("ended", handlePause);
+
+    setIsPlaying(!videoElement.paused);
+
+    return () => {
+      videoElement.removeEventListener("play", handlePlay);
+      videoElement.removeEventListener("pause", handlePause);
+      videoElement.removeEventListener("ended", handlePause);
+    };
+  }, [videoRef]);
 
   // automatic subtitle rolling
   useEffect(() => {
@@ -361,6 +399,7 @@ export default function SubtitlePanel({
     setMode(nextMode);
     setMenuOpen(false);
     setPlayMenuOpen(false);
+    setMobileSheet("");
   }
 
   /**
@@ -562,7 +601,7 @@ export default function SubtitlePanel({
       <>
         {showDe && item.de ? (
           <div className="vs-subDe">
-            {panelShape === "cloze" ? (
+            {activePanelShape === "cloze" ? (
               renderWithClozeMask({
                 text: item.de,
                 patterns,
@@ -586,367 +625,386 @@ export default function SubtitlePanel({
     );
   }
 
+  function setPanelShapeSafe(nextShape) {
+    if (onPanelShapeChange) {
+      onPanelShapeChange(nextShape);
+    }
+  }
+
+  function togglePanelShape(nextShape) {
+    if (activePanelShape === nextShape) {
+      setPanelShapeSafe("normal");
+      return;
+    }
+    setPanelShapeSafe(nextShape);
+  }
+
+  function handleTogglePlay() {
+    const videoElement = videoRef?.current;
+    if (!videoElement) {
+      return;
+    }
+    if (videoElement.paused) {
+      videoElement.play();
+    } else {
+      videoElement.pause();
+    }
+  }
+
+  const playbackRate = Number(playbackSettings?.playbackRate || 1);
+  const showLoopActive = playbackSettings?.sentenceMode === "loop";
+
   return (
     <div className="vs-panel">
-      <div className="vs-panelHeader vs-subHeader">
-        <div className="vs-panelTitle">动态字幕</div>
+      {!isMobile ? (
+        <div className="vs-panelHeader vs-subHeader">
+          <div className="vs-panelTitle">动态字幕</div>
 
-        <div className="vs-toolbar" ref={menuRef}>
-          <button
-            className={[
-              "vs-toolBtn",
-              "ui-tooltip",
-              menuOpen || mode !== "bilingual" ? "is-active" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            type="button"
-            data-tooltip="切换字幕显示语言"
-            aria-label="Subtitle language mode"
-            onClick={() => {
-              setPlayMenuOpen(false);
-              setMenuOpen((v) => !v);
-            }}
-          >
-            文A
-          </button>
-
-          <button
-            className={["vs-toolBtn", "ui-tooltip", isLexiconOpen ? "is-active" : ""]
-              .filter(Boolean)
-              .join(" ")}
-            type="button"
-            data-tooltip={isLexiconOpen ? "收起词典面板" : "打开词典面板"}
-            aria-label="Toggle lexicon panel"
-            onClick={() => {
-              setMenuOpen(false);
-              setPlayMenuOpen(false);
-
-              if (onToggleLexicon) {
-                onToggleLexicon();
-              }
-            }}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          <div className="vs-toolbar" ref={menuRef}>
+            <button
+              className={[
+                "vs-toolBtn",
+                "ui-tooltip",
+                menuOpen || mode !== "bilingual" ? "is-active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              data-tooltip="切换字幕显示语言"
+              aria-label="Subtitle language mode"
+              onClick={() => {
+                setPlayMenuOpen(false);
+                setMenuOpen((v) => !v);
+              }}
             >
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
-            </svg>
-          </button>
+              文A
+            </button>
 
-          <button
-            className={[
-              "vs-toolBtn",
-              "ui-tooltip",
-              panelShape === "shadowing" ? "is-active" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            type="button"
-            data-tooltip={panelShape === "shadowing" ? "退出跟读练习" : "进入跟读练习"}
-            aria-label="Shadowing practice"
-            onClick={() => {
-              setMenuOpen(false);
-              setPlayMenuOpen(false);
+            <button
+              className={["vs-toolBtn", "ui-tooltip", isLexiconOpen ? "is-active" : ""]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              data-tooltip={isLexiconOpen ? "收起词典面板" : "打开词典面板"}
+              aria-label="Toggle lexicon panel"
+              onClick={() => {
+                setMenuOpen(false);
+                setPlayMenuOpen(false);
 
-              setPanelShape((prevShape) => {
-                if (prevShape === "shadowing") {
-                  return "normal";
+                if (onToggleLexicon) {
+                  onToggleLexicon();
                 }
-                return "shadowing";
-              });
-            }}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+              }}
             >
-              <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" />
-              <path d="M19 11a7 7 0 0 1-14 0" />
-              <path d="M12 18v4" />
-              <path d="M8 22h8" />
-            </svg>
-          </button>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+              </svg>
+            </button>
 
-          <button
-            className={[
-              "vs-toolBtn",
-              "ui-tooltip",
-              panelShape === "cloze" ? "is-active" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            type="button"
-            data-tooltip={panelShape === "cloze" ? "退出填写练习" : "进入填写练习"}
-            aria-label="Cloze practice"
-            onClick={() => {
-              setMenuOpen(false);
-              setPlayMenuOpen(false);
-
-              setPanelShape((prevShape) => {
-                if (prevShape === "cloze") {
-                  return "normal";
-                }
-                return "cloze";
-              });
-            }}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+            <button
+              className={[
+                "vs-toolBtn",
+                "ui-tooltip",
+                activePanelShape === "shadowing" ? "is-active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              data-tooltip={activePanelShape === "shadowing" ? "退出跟读练习" : "进入跟读练习"}
+              aria-label="Shadowing practice"
+              onClick={() => {
+                setMenuOpen(false);
+                setPlayMenuOpen(false);
+                togglePanelShape("shadowing");
+              }}
             >
-              <rect x="4" y="4" width="16" height="16" rx="3" />
-              <path d="M8 16h8" />
-              <path d="M9 9h6" />
-            </svg>
-          </button>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z" />
+                <path d="M19 11a7 7 0 0 1-14 0" />
+                <path d="M12 18v4" />
+                <path d="M8 22h8" />
+              </svg>
+            </button>
 
-          <button
-            className={[
-              "vs-toolBtn",
-              "ui-tooltip",
-              playMenuOpen || isPlaybackNonDefault || isRepeatEnabled ? "is-active" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            type="button"
-            data-tooltip="播放设置"
-            aria-label="Playback settings"
-            onClick={() => {
-              setMenuOpen(false);
-              setPlayMenuOpen((v) => !v);
-            }}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+            <button
+              className={[
+                "vs-toolBtn",
+                "ui-tooltip",
+                activePanelShape === "cloze" ? "is-active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              data-tooltip={activePanelShape === "cloze" ? "退出填写练习" : "进入填写练习"}
+              aria-label="Cloze practice"
+              onClick={() => {
+                setMenuOpen(false);
+                setPlayMenuOpen(false);
+                togglePanelShape("cloze");
+              }}
             >
-              <polyline points="1 4 1 10 7 10" />
-              <polyline points="23 20 23 14 17 14" />
-              <path d="M20.49 9A9 9 0 0 0 5.51 5.51L1 10" />
-              <path d="M3.51 15A9 9 0 0 0 18.49 18.49L23 14" />
-            </svg>
-          </button>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="4" y="4" width="16" height="16" rx="3" />
+                <path d="M8 16h8" />
+                <path d="M9 9h6" />
+              </svg>
+            </button>
 
-          <button
-            className={["vs-toolBtn", "ui-tooltip"].join(" ")}
-            data-tooltip="导出字幕"
-            type="button"
-            aria-label="Export subtitles"
-            onClick={() => {
-              setMenuOpen(false);
-              setPlayMenuOpen(false);
-              setIsExportModalOpen(true);
-            }}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+            <button
+              className={[
+                "vs-toolBtn",
+                "ui-tooltip",
+                playMenuOpen || isPlaybackNonDefault || isRepeatEnabled ? "is-active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              data-tooltip="播放设置"
+              aria-label="Playback settings"
+              onClick={() => {
+                setMenuOpen(false);
+                setPlayMenuOpen((v) => !v);
+              }}
             >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <path d="M7 10l5 5 5-5" />
-              <path d="M12 15V3" />
-            </svg>
-          </button>
-
-          {menuOpen ? (
-            <div className="vs-subMenu" role="menu" aria-label="Subtitle language menu">
-              <div className="vs-subMenuTitle">字幕</div>
-
-              <button
-                className={`vs-subMenuItem ${mode === "bilingual" ? "is-active" : ""}`}
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  handleSelectMode("bilingual");
-                }}
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
               >
-                <div className="vs-subMenuItemLeft">
-                  <span className="vs-subMenuKey">文A</span>
-                  <span className="vs-subMenuLabel">双语</span>
-                </div>
-                {mode === "bilingual" ? <span className="vs-subMenuCheck">✓</span> : null}
-              </button>
+                <polyline points="1 4 1 10 7 10" />
+                <polyline points="23 20 23 14 17 14" />
+                <path d="M20.49 9A9 9 0 0 0 5.51 5.51L1 10" />
+                <path d="M3.51 15A9 9 0 0 0 18.49 18.49L23 14" />
+              </svg>
+            </button>
 
-              <button
-                className={`vs-subMenuItem ${mode === "de" ? "is-active" : ""}`}
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  handleSelectMode("de");
-                }}
+            <button
+              className={["vs-toolBtn", "ui-tooltip"].join(" ")}
+              data-tooltip="导出字幕"
+              type="button"
+              aria-label="Export subtitles"
+              onClick={() => {
+                setMenuOpen(false);
+                setPlayMenuOpen(false);
+                setIsExportModalOpen(true);
+              }}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
               >
-                <div className="vs-subMenuItemLeft">
-                  <span className="vs-subMenuKey">DE</span>
-                  <span className="vs-subMenuLabel">德语</span>
-                </div>
-                {mode === "de" ? <span className="vs-subMenuCheck">✓</span> : null}
-              </button>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <path d="M7 10l5 5 5-5" />
+                <path d="M12 15V3" />
+              </svg>
+            </button>
 
-              <button
-                className={`vs-subMenuItem ${mode === "zh" ? "is-active" : ""}`}
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  handleSelectMode("zh");
-                }}
-              >
-                <div className="vs-subMenuItemLeft">
-                  <span className="vs-subMenuKey">中</span>
-                  <span className="vs-subMenuLabel">中文</span>
-                </div>
-                {mode === "zh" ? <span className="vs-subMenuCheck">✓</span> : null}
-              </button>
-            </div>
-          ) : null}
+            {menuOpen ? (
+              <div className="vs-subMenu" role="menu" aria-label="Subtitle language menu">
+                <div className="vs-subMenuTitle">字幕</div>
 
-          {playMenuOpen ? (
-            <div className="vs-playMenu" role="menu" aria-label="Playback menu">
-              <div className="vs-playMenuSectionTitle">视频</div>
-
-              <button
-                className="vs-playMenuItem"
-                type="button"
-                onClick={() => {
-                  if (onPlaybackSettingsChange) {
-                    onPlaybackSettingsChange({ videoMode: "single_play" });
-                  }
-                }}
-              >
-                <span className="vs-playMenuItemLeft">单集播放</span>
-                {playbackSettings?.videoMode === "single_play" ? <span className="vs-playMenuCheck">✓</span> : null}
-              </button>
-
-              <button
-                className="vs-playMenuItem"
-                type="button"
-                onClick={() => {
-                  if (onPlaybackSettingsChange) {
-                    onPlaybackSettingsChange({ videoMode: "single_loop" });
-                  }
-                }}
-              >
-                <span className="vs-playMenuItemLeft">单集循环</span>
-                {playbackSettings?.videoMode === "single_loop" ? <span className="vs-playMenuCheck">✓</span> : null}
-              </button>
-
-              <div className="vs-playMenuDivider" />
-
-              <div className="vs-playMenuSectionTitle">句子</div>
-
-              <button
-                className="vs-playMenuItem"
-                type="button"
-                onClick={() => {
-                  if (onPlaybackSettingsChange) {
-                    onPlaybackSettingsChange({ sentenceMode: "continuous" });
-                  }
-                }}
-              >
-                <span className="vs-playMenuItemLeft">连续播放</span>
-                {playbackSettings?.sentenceMode === "continuous" ? <span className="vs-playMenuCheck">✓</span> : null}
-              </button>
-
-              <button
-                className="vs-playMenuItem"
-                type="button"
-                onClick={() => {
-                  if (onPlaybackSettingsChange) {
-                    onPlaybackSettingsChange({
-                      sentenceMode: "loop",
-                      loopCount: playbackSettings?.loopCount ?? 1,
-                      autoNext: playbackSettings?.autoNext ?? false,
-                    });
-                  }
-                }}
-              >
-                <span className="vs-playMenuItemLeft">单句循环</span>
-                {playbackSettings?.sentenceMode === "loop" ? <span className="vs-playMenuCheck">✓</span> : null}
-              </button>
-
-              {playbackSettings?.sentenceMode === "loop" ? (
-                <div className="vs-loopSettings">
-                  <div className="vs-loopRow">
-                    <span className="vs-loopLabel">循环次数：</span>
-
-                    <select
-                      className="vs-loopSelect"
-                      value={String(playbackSettings?.loopCount ?? 1)}
-                      onChange={(e) => {
-                        if (onPlaybackSettingsChange) {
-                          onPlaybackSettingsChange({
-                            loopCount: e.target.value === "infinite" ? "infinite" : Number(e.target.value),
-                          });
-                        }
-                      }}
-                    >
-                      <option value="1">1次</option>
-                      <option value="2">2次</option>
-                      <option value="3">3次</option>
-                      <option value="4">4次</option>
-                      <option value="5">5次</option>
-                      <option value="infinite">无限次</option>
-                    </select>
+                <button
+                  className={`vs-subMenuItem ${mode === "bilingual" ? "is-active" : ""}`}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    handleSelectMode("bilingual");
+                  }}
+                >
+                  <div className="vs-subMenuItemLeft">
+                    <span className="vs-subMenuKey">文A</span>
+                    <span className="vs-subMenuLabel">双语</span>
                   </div>
+                  {mode === "bilingual" ? <span className="vs-subMenuCheck">✓</span> : null}
+                </button>
 
-                  <div className="vs-loopRow">
-                    <span className="vs-loopLabel">自动下句：</span>
-                    <button
-                      className={["vs-toggle", playbackSettings?.autoNext ? "is-on" : ""].filter(Boolean).join(" ")}
-                      type="button"
-                      aria-label="Toggle auto next sentence"
-                      onClick={() => {
-                        if (onPlaybackSettingsChange) {
-                          onPlaybackSettingsChange({ autoNext: !playbackSettings?.autoNext });
-                        }
-                      }}
-                    >
-                      <span className="vs-toggleKnob" />
-                    </button>
+                <button
+                  className={`vs-subMenuItem ${mode === "de" ? "is-active" : ""}`}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    handleSelectMode("de");
+                  }}
+                >
+                  <div className="vs-subMenuItemLeft">
+                    <span className="vs-subMenuKey">DE</span>
+                    <span className="vs-subMenuLabel">德语</span>
                   </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+                  {mode === "de" ? <span className="vs-subMenuCheck">✓</span> : null}
+                </button>
+
+                <button
+                  className={`vs-subMenuItem ${mode === "zh" ? "is-active" : ""}`}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    handleSelectMode("zh");
+                  }}
+                >
+                  <div className="vs-subMenuItemLeft">
+                    <span className="vs-subMenuKey">中</span>
+                    <span className="vs-subMenuLabel">中文</span>
+                  </div>
+                  {mode === "zh" ? <span className="vs-subMenuCheck">✓</span> : null}
+                </button>
+              </div>
+            ) : null}
+
+            {playMenuOpen ? (
+              <div className="vs-playMenu" role="menu" aria-label="Playback menu">
+                <div className="vs-playMenuSectionTitle">视频</div>
+
+                <button
+                  className="vs-playMenuItem"
+                  type="button"
+                  onClick={() => {
+                    if (onPlaybackSettingsChange) {
+                      onPlaybackSettingsChange({ videoMode: "single_play" });
+                    }
+                  }}
+                >
+                  <span className="vs-playMenuItemLeft">单集播放</span>
+                  {playbackSettings?.videoMode === "single_play" ? <span className="vs-playMenuCheck">✓</span> : null}
+                </button>
+
+                <button
+                  className="vs-playMenuItem"
+                  type="button"
+                  onClick={() => {
+                    if (onPlaybackSettingsChange) {
+                      onPlaybackSettingsChange({ videoMode: "single_loop" });
+                    }
+                  }}
+                >
+                  <span className="vs-playMenuItemLeft">单集循环</span>
+                  {playbackSettings?.videoMode === "single_loop" ? <span className="vs-playMenuCheck">✓</span> : null}
+                </button>
+
+                <div className="vs-playMenuDivider" />
+
+                <div className="vs-playMenuSectionTitle">句子</div>
+
+                <button
+                  className="vs-playMenuItem"
+                  type="button"
+                  onClick={() => {
+                    if (onPlaybackSettingsChange) {
+                      onPlaybackSettingsChange({ sentenceMode: "continuous" });
+                    }
+                  }}
+                >
+                  <span className="vs-playMenuItemLeft">连续播放</span>
+                  {playbackSettings?.sentenceMode === "continuous" ? <span className="vs-playMenuCheck">✓</span> : null}
+                </button>
+
+                <button
+                  className="vs-playMenuItem"
+                  type="button"
+                  onClick={() => {
+                    if (onPlaybackSettingsChange) {
+                      onPlaybackSettingsChange({
+                        sentenceMode: "loop",
+                        loopCount: playbackSettings?.loopCount ?? 1,
+                        autoNext: playbackSettings?.autoNext ?? false,
+                      });
+                    }
+                  }}
+                >
+                  <span className="vs-playMenuItemLeft">单句循环</span>
+                  {playbackSettings?.sentenceMode === "loop" ? <span className="vs-playMenuCheck">✓</span> : null}
+                </button>
+
+                {playbackSettings?.sentenceMode === "loop" ? (
+                  <div className="vs-loopSettings">
+                    <div className="vs-loopRow">
+                      <span className="vs-loopLabel">循环次数：</span>
+
+                      <select
+                        className="vs-loopSelect"
+                        value={String(playbackSettings?.loopCount ?? 1)}
+                        onChange={(e) => {
+                          if (onPlaybackSettingsChange) {
+                            onPlaybackSettingsChange({
+                              loopCount: e.target.value === "infinite" ? "infinite" : Number(e.target.value),
+                            });
+                          }
+                        }}
+                      >
+                        <option value="1">1次</option>
+                        <option value="2">2次</option>
+                        <option value="3">3次</option>
+                        <option value="4">4次</option>
+                        <option value="5">5次</option>
+                        <option value="infinite">无限次</option>
+                      </select>
+                    </div>
+
+                    <div className="vs-loopRow">
+                      <span className="vs-loopLabel">自动下句：</span>
+                      <button
+                        className={["vs-toggle", playbackSettings?.autoNext ? "is-on" : ""].filter(Boolean).join(" ")}
+                        type="button"
+                        aria-label="Toggle auto next sentence"
+                        onClick={() => {
+                          if (onPlaybackSettingsChange) {
+                            onPlaybackSettingsChange({ autoNext: !playbackSettings?.autoNext });
+                          }
+                        }}
+                      >
+                        <span className="vs-toggleKnob" />
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       <div className="vs-subtitleList" ref={subtitleListRef}>
         {loading && <div className="vs-subEmpty">Loading subtitles…</div>}
@@ -987,7 +1045,7 @@ export default function SubtitlePanel({
               <div className="vs-subTime">{subtitleItem.timeLabel}</div>
               {renderSubtitleText(subtitleItem)}
 
-              {panelShape === "shadowing" ? (
+              {activePanelShape === "shadowing" ? (
                 <ShadowingPracticeBar
                   videoRef={videoRef}
                   videoId={videoId}
@@ -998,6 +1056,225 @@ export default function SubtitlePanel({
             </article>
           ))}
       </div>
+
+      {isMobile ? (
+        <>
+          <div className="vs-mobileBar">
+            <button
+              type="button"
+              className="vs-mobileBtn"
+              onClick={() => {
+                setMobileSheet("mode");
+              }}
+            >
+              <span className="vs-mobileBtnLabel">双语</span>
+            </button>
+
+            <button
+              type="button"
+              className="vs-mobileBtn"
+              onClick={() => {
+                setMobileSheet("speed");
+              }}
+            >
+              <span className="vs-mobileBtnLabel">{Number.isFinite(playbackRate) ? `${playbackRate}x` : "1x"}</span>
+            </button>
+
+            <button
+              type="button"
+              className="vs-mobileMainBtn"
+              onClick={handleTogglePlay}
+              aria-label={isPlaying ? "Pause video" : "Play video"}
+            >
+              {isPlaying ? "暂停" : "播放"}
+            </button>
+
+            <button
+              type="button"
+              className={["vs-mobileBtn", showLoopActive ? "is-active" : ""].filter(Boolean).join(" ")}
+              onClick={() => {
+                if (!onPlaybackSettingsChange) {
+                  return;
+                }
+                if (playbackSettings?.sentenceMode === "loop") {
+                  onPlaybackSettingsChange({ sentenceMode: "continuous" });
+                } else {
+                  onPlaybackSettingsChange({
+                    sentenceMode: "loop",
+                    loopCount: playbackSettings?.loopCount ?? 1,
+                    autoNext: playbackSettings?.autoNext ?? false,
+                  });
+                }
+              }}
+            >
+              <span className="vs-mobileBtnLabel">循环</span>
+            </button>
+
+            <button
+              type="button"
+              className={["vs-mobileBtn", activePanelShape === "cloze" ? "is-active" : ""].filter(Boolean).join(" ")}
+              onClick={() => {
+                togglePanelShape("cloze");
+              }}
+            >
+              <span className="vs-mobileBtnLabel">精读</span>
+            </button>
+
+            <button
+              type="button"
+              className="vs-mobileMoreBtn"
+              onClick={() => {
+                setMobileSheet("more");
+              }}
+              aria-label="More settings"
+            >
+              ...
+            </button>
+          </div>
+
+          {mobileSheet ? (
+            <div
+              className="vs-mobileSheetOverlay"
+              onClick={() => {
+                setMobileSheet("");
+              }}
+            >
+              <div
+                className="vs-mobileSheet"
+                role="dialog"
+                aria-modal="true"
+                ref={mobileSheetRef}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                <div className="vs-mobileSheetHandle" />
+                {mobileSheet === "mode" ? (
+                  <>
+                    <div className="vs-mobileSheetTitle">字幕模式</div>
+                    <div className="vs-mobileSheetList">
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          handleSelectMode("bilingual");
+                        }}
+                      >
+                        双语
+                        {mode === "bilingual" ? <span className="vs-mobileSheetCheck">✓</span> : null}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          handleSelectMode("de");
+                        }}
+                      >
+                        德语
+                        {mode === "de" ? <span className="vs-mobileSheetCheck">✓</span> : null}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          handleSelectMode("zh");
+                        }}
+                      >
+                        中文
+                        {mode === "zh" ? <span className="vs-mobileSheetCheck">✓</span> : null}
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                {mobileSheet === "speed" ? (
+                  <>
+                    <div className="vs-mobileSheetTitle">播放倍速</div>
+                    <div className="vs-mobileSheetList">
+                      {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
+                        <button
+                          key={rate}
+                          type="button"
+                          className="vs-mobileSheetItem"
+                          onClick={() => {
+                            if (onPlaybackSettingsChange) {
+                              onPlaybackSettingsChange({ playbackRate: rate });
+                            }
+                            setMobileSheet("");
+                          }}
+                        >
+                          {rate}x
+                          {playbackRate === rate ? <span className="vs-mobileSheetCheck">✓</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
+                {mobileSheet === "more" ? (
+                  <>
+                    <div className="vs-mobileSheetTitle">更多功能</div>
+                    <div className="vs-mobileSheetList">
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          if (onToggleLexicon) {
+                            onToggleLexicon();
+                          }
+                          setMobileSheet("");
+                        }}
+                      >
+                        {isLexiconOpen ? "收起词典" : "打开词典"}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          togglePanelShape("shadowing");
+                          setMobileSheet("");
+                        }}
+                      >
+                        {activePanelShape === "shadowing" ? "退出跟读" : "进入跟读"}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          togglePanelShape("cloze");
+                          setMobileSheet("");
+                        }}
+                      >
+                        {activePanelShape === "cloze" ? "退出精读" : "进入精读"}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          setIsExportModalOpen(true);
+                          setMobileSheet("");
+                        }}
+                      >
+                        导出字幕
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                <button
+                  type="button"
+                  className="vs-mobileSheetClose"
+                  onClick={() => {
+                    setMobileSheet("");
+                  }}
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
 
       <ExportSubtitlesModal
         isOpen={isExportModalOpen}
@@ -1043,7 +1320,7 @@ export default function SubtitlePanel({
       <>
         {showDe && item.de ? (
           <div className="vs-subDe">
-            {panelShape === "cloze" ? (
+            {activePanelShape === "cloze" ? (
               renderWithClozeMask({
                 text: item.de,
                 patterns,

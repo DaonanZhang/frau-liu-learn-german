@@ -38,6 +38,7 @@ export default function VideoStudyPage() {
     sentenceMode: "continuous",    // "continuous" | "loop"
     loopCount: 1,                  // number | "infinite"
     autoNext: false,
+    playbackRate: 1,
   });
 
   /**
@@ -50,6 +51,17 @@ export default function VideoStudyPage() {
   const [isMobile, setIsMobile] = useState(false);
 
   const [isExerciseOpen, setIsExerciseOpen] = useState(false);
+  const [panelShape, setPanelShape] = useState("normal");
+
+  const [pipOffset, setPipOffset] = useState({ x: 0, y: 0 });
+  const pipDragRef = useRef({
+    dragging: false,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+    pointerId: null,
+  });
 
   useEffect(() => {
     const mediaQueryList = window.matchMedia("(max-width: 1023px)");
@@ -73,6 +85,12 @@ export default function VideoStudyPage() {
       mediaQueryList.removeListener(syncMobileState);
     };
   }, []);
+
+  useEffect(() => {
+    if (isMobile) {
+      setIsLexiconOpen(false);
+    }
+  }, [isMobile]);
 
   const leftTitle = video?.title ?? "";
   const leftDuration = video?.duration_seconds ? formatDurationLabel(video.duration_seconds) : "";
@@ -104,6 +122,15 @@ export default function VideoStudyPage() {
 
     videoElement.loop = playbackSettings.videoMode === "single_loop";
   }, [playbackSettings.videoMode]);
+
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      return;
+    }
+    const rate = Number(playbackSettings.playbackRate || 1);
+    videoElement.playbackRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+  }, [playbackSettings.playbackRate, leftVideoUrl]);
 
   useEffect(() => {
     if (playbackSettings.sentenceMode !== "loop") {
@@ -447,8 +474,61 @@ export default function VideoStudyPage() {
 
   const shouldShowExercisePanel = isExerciseOpen;
 
-  const shouldShowSubtitlePanel = !shouldShowExercisePanel && (!isMobile || !isLexiconOpen);
+  const shouldShowSubtitlePanel = !shouldShowExercisePanel;
   const shouldShowLexiconPanel = !shouldShowExercisePanel && isLexiconOpen;
+
+  function handlePipPointerDown(event) {
+    if (!isMobile || panelShape !== "shadowing") {
+      return;
+    }
+    if (event.button !== 0 && event.pointerType !== "touch") {
+      return;
+    }
+
+    const state = pipDragRef.current;
+    state.dragging = true;
+    state.startX = event.clientX;
+    state.startY = event.clientY;
+    state.originX = pipOffset.x;
+    state.originY = pipOffset.y;
+    state.pointerId = event.pointerId;
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch (_err) {
+      // ignore
+    }
+  }
+
+  function handlePipPointerMove(event) {
+    const state = pipDragRef.current;
+    if (!state.dragging) {
+      return;
+    }
+
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    setPipOffset({
+      x: state.originX + dx,
+      y: state.originY + dy,
+    });
+  }
+
+  function handlePipPointerUp(event) {
+    const state = pipDragRef.current;
+    if (!state.dragging) {
+      return;
+    }
+    state.dragging = false;
+
+    try {
+      if (state.pointerId !== null) {
+        event.currentTarget.releasePointerCapture(state.pointerId);
+      }
+    } catch (_err) {
+      // ignore
+    }
+  }
 
   return (
     <div className="vs-page">
@@ -457,12 +537,27 @@ export default function VideoStudyPage() {
           "vs-grid",
           (!isLexiconOpen || isExerciseOpen) ? "vs-grid--no-right" : "",
           isExerciseOpen ? "vs-grid--exercise" : "",
+          isMobile ? "vs-grid--mobile" : "",
         ].filter(Boolean).join(" ")}
       >
 
         {/* Left: video player */}
         <section className="vs-left">
-          <div className="vs-playerCard">
+          <div
+            className={[
+              "vs-playerCard",
+              isMobile && panelShape === "shadowing" ? "vs-playerCard--pip" : "",
+            ].filter(Boolean).join(" ")}
+            style={
+              isMobile && panelShape === "shadowing"
+                ? { transform: `translate(${pipOffset.x}px, ${pipOffset.y}px)` }
+                : undefined
+            }
+            onPointerDown={handlePipPointerDown}
+            onPointerMove={handlePipPointerMove}
+            onPointerUp={handlePipPointerUp}
+            onPointerCancel={handlePipPointerUp}
+          >
             <div className="vs-playerHeader">
               <Link to="/" className="vs-backBtn" aria-label="Back">
                 ‹
@@ -502,11 +597,14 @@ export default function VideoStudyPage() {
             </div>
           </div>
 
-          <div className="vs-descCard">
-            <div className="vs-descTitle">视频简介</div>
-            <div className="vs-descText">{loadingVideo ? "Loading…" : leftDescription || "暂无简介"}</div>
-          </div>
+          {!isMobile ? (
+            <div className="vs-descCard">
+              <div className="vs-descTitle">视频简介</div>
+              <div className="vs-descText">{loadingVideo ? "Loading…" : leftDescription || "暂无简介"}</div>
+            </div>
+          ) : null}
 
+          {!isMobile ? (
             <div className="vs-descActions">
               <button
                 type="button"
@@ -526,6 +624,7 @@ export default function VideoStudyPage() {
                 {isExerciseOpen ? "跟读模式" : "练习模式"}
               </button>
             </div>
+          ) : null}
         </section>
 
         {/* Middle: subtitles */}
@@ -545,12 +644,17 @@ export default function VideoStudyPage() {
               setIsLexiconOpen((prevValue) => !prevValue);
             }}
             activeSubtitleIndex={activeSubtitleIndex}
+            panelShape={panelShape}
+            onPanelShapeChange={(nextShape) => {
+              setPanelShape(nextShape);
+            }}
+            isMobile={isMobile}
           />
         ) : null}
 
         {/* Right: lexicon*/}
         {shouldShowLexiconPanel ? (
-          <section className="vs-right">
+          <section className={isMobile ? "vs-right vs-right--modal" : "vs-right"}>
             <LexiconPanel
               videoId={videoId}
               subtitleItems={subtitleItems}
@@ -565,7 +669,7 @@ export default function VideoStudyPage() {
 
 
         {shouldShowExercisePanel ? (
-          <section className="vs-right">
+          <section className={isMobile ? "vs-right vs-right--modal" : "vs-right"}>
             <ExercisePanel
               isOpen={isExerciseOpen}
               onClose={() => {
@@ -576,6 +680,25 @@ export default function VideoStudyPage() {
           </section>
         ) : null}
       </div>
+
+      {isMobile ? (
+        <button
+          type="button"
+          className="vs-mobileFab"
+          onClick={() => {
+            setIsExerciseOpen((prevValue) => {
+              return !prevValue;
+            });
+
+            if (!isExerciseOpen) {
+              setIsLexiconOpen(false);
+            }
+          }}
+          aria-label="Toggle exercise mode"
+        >
+          B
+        </button>
+      ) : null}
     </div>
   );
 }

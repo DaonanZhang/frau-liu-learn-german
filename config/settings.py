@@ -15,6 +15,8 @@ import environ
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+env = environ.Env()
+
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
 environ.Env.read_env(BASE_DIR / ".env")

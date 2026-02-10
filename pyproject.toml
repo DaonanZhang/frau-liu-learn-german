@@ -14,6 +14,7 @@ dependencies = [
     "djangorestframework-simplejwt>=5.5.1",
     "djangorestframework-stubs>=3.16.7",
     "drf-spectacular>=0.29.0",
+    "gunicorn>=25.0.3",
     "openpyxl>=3.1.5",
     "pandas>=2.3.3",
     "pandas-stubs~=2.3.3",

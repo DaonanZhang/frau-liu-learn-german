@@ -375,25 +375,7 @@ export default function SubtitlePanel({
     });
   }, [activeSubtitleIndex]);
 
-  useEffect(() => {
-    if (!isMobile) {
-      return;
-    }
-
-    const activeElement = activeItemRef.current;
-    if (!activeElement) {
-      return;
-    }
-
-    // Fallback for cases where the list isn't scrollable (mobile full-page).
-    requestAnimationFrame(() => {
-      activeElement.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-        inline: "nearest",
-      });
-    });
-  }, [activeSubtitleIndex, isMobile]);
+  // Note: avoid scrollIntoView here because it can scroll the whole page.
 
   const items = useMemo(() => {
     return subtitles.map((s) => ({

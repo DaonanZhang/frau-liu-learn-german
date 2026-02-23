@@ -18,6 +18,7 @@ import {
   setVideoFavorite,
   setVideoCompleted,
 } from "../api/learning_by_video/mark_videos.js";
+import useBodyScrollLock from "../hooks/useBodyScrollLock";
 
 import "./Home.css";
 
@@ -112,6 +113,7 @@ export default function Home() {
 
   const isMobileView = useMaxWidth(990);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  useBodyScrollLock(isMobileView && isMobileSidebarOpen);
 
   function normalizeTopicMeta(rawTopics) {
     if (!Array.isArray(rawTopics)) {

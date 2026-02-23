@@ -5,6 +5,7 @@ import { fetchVideoDetail } from "../../api/learning_by_video/videos.js";
 import SubtitlePanel from "./components/SubtitlePanel.jsx";
 import LexiconPanel from "./components/LexiconPanel.jsx";
 import ExercisePanel from "./components/ExercisePanel.jsx";
+import useBodyScrollLock from "../../hooks/useBodyScrollLock";
 
 
 /**
@@ -52,6 +53,7 @@ export default function VideoStudyPage() {
 
   const [isExerciseOpen, setIsExerciseOpen] = useState(false);
   const [panelShape, setPanelShape] = useState("normal");
+  useBodyScrollLock(isMobile && (isLexiconOpen || isExerciseOpen));
 
   const [pipOffset, setPipOffset] = useState({ x: 0, y: 0 });
   const pipDragRef = useRef({
@@ -97,6 +99,15 @@ export default function VideoStudyPage() {
   const leftDifficulty = video?.difficulty ?? "";
   const leftDescription = video?.description ?? "";
   const leftVideoUrl = video?.video_url ?? "";
+
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      return;
+    }
+    videoElement.setAttribute("playsinline", "");
+    videoElement.setAttribute("webkit-playsinline", "");
+  }, [leftVideoUrl]);
 
 
   const loopRef = useRef({
@@ -584,6 +595,7 @@ export default function VideoStudyPage() {
                   ref={videoRef}
                   className="vs-playerPlaceholder"
                   controls
+                  playsInline
                   preload="metadata"
                   src={leftVideoUrl}
                 />

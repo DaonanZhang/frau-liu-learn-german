@@ -18,7 +18,7 @@ def verify_registration_code(code: str):
     """
     payload = verify_activation_code(code)
     if not payload:
-        raise ValueError("Invalid or expired activation code")
+        raise ValueError("验证码错误，请检查后再试。")
 
     return payload
 
@@ -40,7 +40,7 @@ def register_user_with_activation_code(
 
     User = apps.get_model("accounts", "User")
     UserData = apps.get_model("accounts", "UserData")
-    LearningVideoUserData = apps.get_model("accounts", "LearningVideoUserData")
+    LearningVideoUserData = apps.get_model("learning_by_video", "LearningVideoUserData")
 
     if User.objects.filter(telephone=telephone).exists():
         raise ValueError("Telephone already registered")

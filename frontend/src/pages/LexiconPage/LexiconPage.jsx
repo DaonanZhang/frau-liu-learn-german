@@ -12,6 +12,7 @@ import { toggleVideoOccurrenceMark } from "../../api/learning_by_video/marks_occ
 import Sidebar from "./components/Sidebar.jsx";
 import LexiconCard from "./components/LexiconCard";
 import { EyeIcon } from "./components/Icons";
+import useBodyScrollLock from "../../hooks/useBodyScrollLock";
 
 import "./LexiconPage.css";
 
@@ -402,6 +403,7 @@ export default function LexiconPage() {
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  useBodyScrollLock(isMobileView && isMobileSidebarOpen);
 
   const [isVideosLoading, setIsVideosLoading] = useState(false);
   const [videos, setVideos] = useState([]);

@@ -181,6 +181,9 @@
     transition: transform 160ms ease;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
     overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
   }
 
   .lp-sidebarSlot--open {
@@ -197,6 +200,7 @@
     inset: 0;
     z-index: 25;
     background: rgba(0, 0, 0, 0.35);
+    touch-action: none;
   }
 
   .lp-sidebarToggle {

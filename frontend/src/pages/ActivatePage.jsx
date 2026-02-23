@@ -97,7 +97,7 @@ export default function ActivatePage() {
       </div>
 
       <h1 className="auth-title">账号激活</h1>
-      <p className="auth-subtitle">专为油管英语口语设计的学习网站</p>
+      <p className="auth-subtitle">Dein Weg zum Deutsch</p>
 
       <Stepper current={step} />
 

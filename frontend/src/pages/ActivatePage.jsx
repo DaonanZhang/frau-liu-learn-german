@@ -97,7 +97,7 @@ export default function ActivatePage() {
       </div>
 
       <h1 className="auth-title">账号激活</h1>
-      <p className="auth-subtitle">Dein Weg zum Deutsch</p>
+      <p className="auth-subtitle">专为德语学习设计的网站</p>
 
       <Stepper current={step} />
 

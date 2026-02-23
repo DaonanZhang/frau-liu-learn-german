@@ -385,121 +385,129 @@ export default function Home() {
   }, [totalVideoCount, completedVideos, activeDays]);
 
   return (
-    <div className={`home-layout ${isMobileView ? "home-layout--mobile" : ""}`}>
-      <div
-        className={`home-mobile-overlay ${
-          isMobileView && isMobileSidebarOpen ? "home-mobile-overlay--open" : ""
-        }`}
-        role="button"
-        tabIndex={0}
-        onClick={() => {
-          setIsMobileSidebarOpen(false);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Escape") {
+    <div className="home-page">
+      <div className={`home-layout ${isMobileView ? "home-layout--mobile" : ""}`}>
+        <div
+          className={`home-mobile-overlay ${
+            isMobileView && isMobileSidebarOpen ? "home-mobile-overlay--open" : ""
+          }`}
+          role="button"
+          tabIndex={0}
+          onClick={() => {
             setIsMobileSidebarOpen(false);
-          }
-        }}
-      />
-
-      <aside
-        className={`home-left ${
-          isMobileView ? "home-left--drawer" : ""
-        } ${isMobileView && isMobileSidebarOpen ? "home-left--open" : ""}`}
-        aria-hidden={isMobileView && !isMobileSidebarOpen}
-      >
-        <div className="home-left-content">
-          {isMobileView && (
-            <div className="home-drawer-header">
-              <div className="home-drawer-title">学习面板</div>
-              <button
-                className="home-drawer-close"
-                type="button"
-                onClick={() => {
-                  setIsMobileSidebarOpen(false);
-                }}
-                aria-label="Close drawer"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-
-          <StatsCard stats={stats} />
-          <CalendarCard activeDates={userData?.active_dates || []} maxPastMonths={3} />
-          <Announcement />
-
-          {isMobileView && (
-            <div className="home-mobile-filter">
-              <VideoFilter
-                difficultyOptions={videoMeta.difficulties}
-                durationOptions={videoMeta.durations}
-                creatorOptions={videoMeta.creators}
-                topicOptions={videoMeta.topics}
-                selectedDifficulties={selectedDifficulties}
-                selectedDurations={selectedDurations}
-                selectedCreators={selectedCreators}
-                selectedTopics={selectedTopics}
-                onDifficultyChange={setSelectedDifficulties}
-                onDurationChange={setSelectedDurations}
-                onCreatorChange={setSelectedCreators}
-                onTopicChange={setSelectedTopics}
-              />
-            </div>
-          )}
-        </div>
-      </aside>
-
-      <main className="home-right">
-        {isMobileView && (
-          <div
-            className="home-mobile-toolbar"
-            role="button"
-            tabIndex={0}
-            onClick={() => {
-              setIsMobileSidebarOpen(true);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                setIsMobileSidebarOpen(true);
-              }
-            }}
-          >
-            <div className="home-mobile-toolbar-content">
-              <span className="home-mobile-toolbar-icon">☰</span>
-              <span className="home-mobile-toolbar-text">学习面板</span>
-            </div>
-          </div>
-        )}
-
-        {!isMobileView && (
-          <VideoFilter
-            difficultyOptions={videoMeta.difficulties}
-            durationOptions={videoMeta.durations}
-            creatorOptions={videoMeta.creators}
-            topicOptions={videoMeta.topics}
-            selectedDifficulties={selectedDifficulties}
-            selectedDurations={selectedDurations}
-            selectedCreators={selectedCreators}
-            selectedTopics={selectedTopics}
-            onDifficultyChange={setSelectedDifficulties}
-            onDurationChange={setSelectedDurations}
-            onCreatorChange={setSelectedCreators}
-            onTopicChange={setSelectedTopics}
-          />
-        )}
-
-        <VideoGrid
-          videos={videos}
-          loading={loadingVideos}
-          errorText={videosErrorText}
-          onVideoClick={handleOpenVideo}
-          videoMarkById={videoMarkById}
-          onInitLoadMark={handleInitLoadMark}
-          onToggleFavorite={handleToggleFavorite}
-          onToggleCompleted={handleToggleCompleted}
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setIsMobileSidebarOpen(false);
+            }
+          }}
         />
-      </main>
+
+        <aside
+          className={`home-left ${
+            isMobileView ? "home-left--drawer" : ""
+          } ${isMobileView && isMobileSidebarOpen ? "home-left--open" : ""}`}
+          aria-hidden={isMobileView && !isMobileSidebarOpen}
+        >
+          <div className="home-left-content">
+            {isMobileView && (
+              <div className="home-drawer-header">
+                <div className="home-drawer-title">学习面板</div>
+                <button
+                  className="home-drawer-close"
+                  type="button"
+                  onClick={() => {
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  aria-label="Close drawer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            <StatsCard stats={stats} />
+            <CalendarCard activeDates={userData?.active_dates || []} maxPastMonths={3} />
+            <Announcement />
+
+            {isMobileView && (
+              <div className="home-mobile-filter">
+                <VideoFilter
+                  difficultyOptions={videoMeta.difficulties}
+                  durationOptions={videoMeta.durations}
+                  creatorOptions={videoMeta.creators}
+                  topicOptions={videoMeta.topics}
+                  selectedDifficulties={selectedDifficulties}
+                  selectedDurations={selectedDurations}
+                  selectedCreators={selectedCreators}
+                  selectedTopics={selectedTopics}
+                  onDifficultyChange={setSelectedDifficulties}
+                  onDurationChange={setSelectedDurations}
+                  onCreatorChange={setSelectedCreators}
+                  onTopicChange={setSelectedTopics}
+                />
+              </div>
+            )}
+          </div>
+        </aside>
+
+        <main className="home-right">
+          {isMobileView && (
+            <div
+              className="home-mobile-toolbar"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                setIsMobileSidebarOpen(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  setIsMobileSidebarOpen(true);
+                }
+              }}
+            >
+              <div className="home-mobile-toolbar-content">
+                <span className="home-mobile-toolbar-icon">☰</span>
+                <span className="home-mobile-toolbar-text">学习面板</span>
+              </div>
+            </div>
+          )}
+
+          {!isMobileView && (
+            <VideoFilter
+              difficultyOptions={videoMeta.difficulties}
+              durationOptions={videoMeta.durations}
+              creatorOptions={videoMeta.creators}
+              topicOptions={videoMeta.topics}
+              selectedDifficulties={selectedDifficulties}
+              selectedDurations={selectedDurations}
+              selectedCreators={selectedCreators}
+              selectedTopics={selectedTopics}
+              onDifficultyChange={setSelectedDifficulties}
+              onDurationChange={setSelectedDurations}
+              onCreatorChange={setSelectedCreators}
+              onTopicChange={setSelectedTopics}
+            />
+          )}
+
+          <VideoGrid
+            videos={videos}
+            loading={loadingVideos}
+            errorText={videosErrorText}
+            onVideoClick={handleOpenVideo}
+            videoMarkById={videoMarkById}
+            onInitLoadMark={handleInitLoadMark}
+            onToggleFavorite={handleToggleFavorite}
+            onToggleCompleted={handleToggleCompleted}
+          />
+        </main>
+      </div>
+
+      <footer className="home-footer">
+        <a href=" " rel="noreferrer" target="_blank">
+          皖公网安备34182202342323号
+        </a>
+      </footer>
     </div>
   );
 }

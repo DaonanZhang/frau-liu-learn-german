@@ -251,12 +251,12 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
   }
 
   for (const occurrence of wordOccurrences) {
-    const wordText = normalizeText(occurrence?.word_text);
-    if (!wordText) {
+    const word_lemma = normalizeText(occurrence?.word_lemma);
+    if (!word_lemma) {
       continue;
     }
 
-    const entryKey = `word:${wordText.toLowerCase()}`;
+    const entryKey = `word:${word_lemma.toLowerCase()}`;
 
     const occurrenceId = toIntOrNull(occurrence?.id);
     const wordId = toIntOrNull(occurrence?.word);
@@ -267,7 +267,7 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
       {
         key: entryKey,
         kind: "word",
-        title: wordText,
+        title: word_lemma,
         article: article ? article : null,
         translation: normalizeText(occurrence?.translation),
         pos: normalizeText(occurrence?.word_pos),

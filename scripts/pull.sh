@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 echo "=============================="
 echo " Frau Liu Learn German Deploy "
@@ -16,7 +16,7 @@ git pull
 echo ""
 echo "▶ Step 2: check Django migrations"
 
-# 2.1 检查是否有未生成的 migration
+# 2.1 Check if there are model changes without migrations
 echo "  - checking for model changes without migrations"
 if uv run python manage.py makemigrations --check --dry-run; then
   echo "  ✓ no missing migrations"
@@ -27,31 +27,31 @@ else
   exit 1
 fi
 
-# 2.2 显示 migrate 计划（仅提示）
+# 2.2 Show migration plan
 echo ""
 echo "  - migration plan"
 uv run python manage.py migrate --plan
 
-# 2.3 执行 migrate
+# 2.3 Apply migrations
 echo ""
 echo "  - applying migrations"
 uv run python manage.py migrate
 
 echo ""
 echo "▶ Step 3: deploy backend (Django)"
-if [ -f "./deploy_backend.sh" ]; then
-  ./deploy_backend.sh
+if [ -f "./scripts/deploy_backend.sh" ]; then
+  bash ./scripts/deploy_backend.sh
 else
-  echo "⚠ deploy_backend.sh not found, restarting service directly"
+  echo "⚠ scripts/deploy_backend.sh not found, restarting service directly"
   sudo systemctl restart frau-liu
 fi
 
 echo ""
 echo "▶ Step 4: deploy frontend (React)"
-if [ -f "./deploy_frontend.sh" ]; then
-  ./deploy_frontend.sh
+if [ -f "./scripts/deploy_frontend.sh" ]; then
+  bash ./scripts/deploy_frontend.sh
 else
-  echo "⚠ deploy_frontend.sh not found, skipping frontend deploy"
+  echo "⚠ scripts/deploy_frontend.sh not found, skipping frontend deploy"
 fi
 
 echo ""

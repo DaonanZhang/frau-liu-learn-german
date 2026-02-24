@@ -170,6 +170,8 @@ export default function SubtitlePanel({
   const mobileSheetRef = useRef(null);
   const [mobileSheet, setMobileSheet] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const allowFullscreenRef = useRef(false);
 
   const isPlaybackNonDefault =
     playbackSettings?.videoMode !== "single_play" ||
@@ -384,6 +386,60 @@ export default function SubtitlePanel({
       videoElement.removeEventListener("loadedmetadata", syncPlayState);
       videoElement.removeEventListener("seeking", syncPlayState);
       videoElement.removeEventListener("waiting", syncPlayState);
+    };
+  }, [videoRef, videoUrl]);
+
+  useEffect(() => {
+    const videoElement = videoRef?.current;
+    if (!videoElement) {
+      return;
+    }
+
+    function syncFullscreenState() {
+      if (document.fullscreenElement) {
+        setIsFullscreen(true);
+        return;
+      }
+
+      const presentationMode = videoElement.webkitPresentationMode;
+      if (presentationMode) {
+        setIsFullscreen(presentationMode === "fullscreen");
+        return;
+      }
+
+      setIsFullscreen(false);
+    }
+
+    function handleWebkitBeginFullscreen() {
+      if (!allowFullscreenRef.current) {
+        if (typeof videoElement.webkitExitFullscreen === "function") {
+          videoElement.webkitExitFullscreen();
+        }
+        if (typeof videoElement.webkitSetPresentationMode === "function") {
+          videoElement.webkitSetPresentationMode("inline");
+        }
+        return;
+      }
+      setIsFullscreen(true);
+    }
+
+    function handleWebkitEndFullscreen() {
+      allowFullscreenRef.current = false;
+      setIsFullscreen(false);
+    }
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    videoElement.addEventListener("webkitbeginfullscreen", handleWebkitBeginFullscreen);
+    videoElement.addEventListener("webkitendfullscreen", handleWebkitEndFullscreen);
+    videoElement.addEventListener("webkitpresentationmodechanged", syncFullscreenState);
+
+    syncFullscreenState();
+
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      videoElement.removeEventListener("webkitbeginfullscreen", handleWebkitBeginFullscreen);
+      videoElement.removeEventListener("webkitendfullscreen", handleWebkitEndFullscreen);
+      videoElement.removeEventListener("webkitpresentationmodechanged", syncFullscreenState);
     };
   }, [videoRef, videoUrl]);
 
@@ -730,6 +786,43 @@ export default function SubtitlePanel({
       videoElement.play();
     } else {
       videoElement.pause();
+    }
+  }
+
+  function handleToggleFullscreen() {
+    const videoElement = videoRef?.current;
+    if (!videoElement) {
+      return;
+    }
+
+    if (isFullscreen) {
+      allowFullscreenRef.current = false;
+
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+      if (typeof videoElement.webkitExitFullscreen === "function") {
+        videoElement.webkitExitFullscreen();
+      }
+      if (typeof videoElement.webkitSetPresentationMode === "function") {
+        videoElement.webkitSetPresentationMode("inline");
+      }
+      setIsFullscreen(false);
+      return;
+    }
+
+    allowFullscreenRef.current = true;
+
+    if (videoElement.requestFullscreen) {
+      videoElement.requestFullscreen().catch(() => {});
+      return;
+    }
+    if (typeof videoElement.webkitEnterFullscreen === "function") {
+      videoElement.webkitEnterFullscreen();
+      return;
+    }
+    if (typeof videoElement.webkitSetPresentationMode === "function") {
+      videoElement.webkitSetPresentationMode("fullscreen");
     }
   }
 
@@ -1345,6 +1438,16 @@ export default function SubtitlePanel({
                         }}
                       >
                         {isLexiconOpen ? "收起词典" : "打开词典"}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          handleToggleFullscreen();
+                          setMobileSheet("");
+                        }}
+                      >
+                        {isFullscreen ? "退出全屏" : "进入全屏"}
                       </button>
                       <button
                         type="button"

@@ -135,7 +135,7 @@ def _parse_tags(raw: str) -> list[str]:
 
 def _slugify_filename(text: str) -> str:
     """
-    Make a safe filename stem from a title.
+    Make a safe filename stem from a title (no underscores).
 
     Args:
         text: Title to slugify.
@@ -143,7 +143,9 @@ def _slugify_filename(text: str) -> str:
     Returns:
         A filesystem- and URL-friendly slug (max 80 chars).
     """
-    stem = re.sub(r"[^\w\-]+", "_", (text or "").strip(), flags=re.UNICODE).strip("_")
+    s = (text or "").replace("_", " ").strip()
+    stem = re.sub(r"[^\w\-]+", " ", s, flags=re.UNICODE)
+    stem = re.sub(r"\s+", " ", stem).strip()
     stem = stem[:80] or "video"
     return stem
 
@@ -160,7 +162,7 @@ def _pick_title(row: pd.Series) -> str:
     return ""
 
 
-def _normalize_cover_key(text: str) -> str:
+def _normalize_media_key(text: str) -> str:
     """
     Normalize a title/filename to a matching key:
     - NFKC normalize
@@ -184,11 +186,54 @@ def _build_cover_file_map() -> dict[str, str]:
         if not path.is_file():
             continue
         stem = path.stem
-        key = _normalize_cover_key(stem)
+        key = _normalize_media_key(stem)
         # keep first match; avoid overwriting in case of collisions
         if key and key not in file_map:
             file_map[key] = path.name
     return file_map
+
+
+def _build_video_file_map() -> dict[str, str]:
+    """
+    Build a mapping from normalized filename stem -> actual filename.
+    """
+    video_dir = _get_project_root() / "frontend" / "public" / "resources" / "learning_by_video_video"
+    if not video_dir.exists():
+        return {}
+
+    file_map: dict[str, str] = {}
+    for path in video_dir.iterdir():
+        if not path.is_file():
+            continue
+        stem = path.stem
+        key = _normalize_media_key(stem)
+        if key and key not in file_map:
+            file_map[key] = path.name
+    return file_map
+
+
+def _find_media_filename(title: str, file_map: dict[str, str]) -> str:
+    """
+    Find best matching filename by normalized title.
+    - exact match preferred
+    - fallback: partial match (either contains)
+    """
+    if not title or not file_map:
+        return ""
+    key = _normalize_media_key(title)
+    if key in file_map:
+        return file_map[key]
+
+    best = ""
+    best_len = 0
+    for k, filename in file_map.items():
+        if not k:
+            continue
+        if k in key or key in k:
+            if len(k) > best_len:
+                best = filename
+                best_len = len(k)
+    return best
 
 
 class Command(BaseCommand):
@@ -218,6 +263,7 @@ class Command(BaseCommand):
         processed_dir = data_dir / "processed"
         processed_dir.mkdir(parents=True, exist_ok=True)
         cover_file_map = _build_cover_file_map()
+        video_file_map = _build_video_file_map()
 
         no_move: bool = bool(options.get("no_move"))
         file_arg = (options.get("file") or "").strip()
@@ -278,13 +324,27 @@ class Command(BaseCommand):
                     else:
                         cover_filename = ""
                         if original_title and cover_file_map:
-                            key = _normalize_cover_key(original_title)
+                            key = _normalize_media_key(original_title)
                             cover_filename = cover_file_map.get(key, "")
                         if cover_filename:
                             cover_letter_url = f"/resources/learning_by_video_cover_letters/{cover_filename}"
                         else:
                             cover_letter_url = f"/resources/learning_by_video_cover_letters/{title_slug}"
-                    video_url = link_raw or f"/resources/learning_by_video_video/{title_slug}"
+
+                    video_filename = ""
+                    if original_title and video_file_map:
+                        video_filename = _find_media_filename(original_title, video_file_map)
+
+                    # Prefer local file (assumed to exist with English original title)
+                    if video_filename:
+                        video_url = f"/resources/learning_by_video_video/{video_filename}"
+                    elif link_raw:
+                        if link_raw.startswith(("http://", "https://", "/")):
+                            video_url = link_raw
+                        else:
+                            video_url = f"/resources/learning_by_video_video/{link_raw}"
+                    else:
+                        video_url = f"/resources/learning_by_video_video/{title_slug}"
 
                     obj, was_created = Video.objects.update_or_create(
                         title=title,

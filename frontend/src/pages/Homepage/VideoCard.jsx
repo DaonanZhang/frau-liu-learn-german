@@ -5,26 +5,13 @@ function getCoverCandidates(base) {
   if (!base) {
     return [];
   }
-  const trimmed = String(base).trim();
-  if (!trimmed) {
-    return [];
+  if (/\.png$/i.test(base)) {
+    return [base, base.replace(/\.png$/i, ".jpg")];
   }
-
-  const candidates = [trimmed];
-
-  const baseNoQuery = trimmed.split("?")[0].split("#")[0];
-  const match = baseNoQuery.match(/^(.*)\.([a-z0-9]+)$/i);
-  const stem = match ? match[1] : baseNoQuery;
-
-  const exts = ["jpg", "jpeg", "png"];
-  for (const ext of exts) {
-    const candidate = `${stem}.${ext}`;
-    if (!candidates.includes(candidate)) {
-      candidates.push(candidate);
-    }
+  if (/\.jpe?g$/i.test(base)) {
+    return [base, base.replace(/\.jpe?g$/i, ".png")];
   }
-
-  return candidates;
+  return [`${base}.png`, `${base}.jpg`];
 }
 
 function formatDuration(seconds) {

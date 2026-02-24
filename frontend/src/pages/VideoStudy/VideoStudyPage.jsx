@@ -608,7 +608,7 @@ export default function VideoStudyPage() {
                 <video
                   ref={videoRef}
                   className="vs-playerPlaceholder"
-                  controls={!isMobile}
+                  controls
                   playsInline
                   preload="metadata"
                   src={leftVideoUrl}

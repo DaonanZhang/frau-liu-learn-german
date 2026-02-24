@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchExpressionOccurrences,
   fetchWordOccurrences,
@@ -343,12 +343,15 @@ export default function LexiconPanel({
   activeSubtitleIndex,
   onSeek,
   onClose,
+  focusRequest,
 }) {
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   const [mobileStage, setMobileStage] = useState("overview");
   const [expandedKeys, setExpandedKeys] = useState({});
+  const [focusedKey, setFocusedKey] = useState("");
+  const entryRefs = useRef({});
 
   const [entries, setEntries] = useState(/** @type {LexiconEntry[]} */ ([]));
   const [activeKind, setActiveKind] = useState(/** @type {LexiconKind} */ ("word"));
@@ -531,6 +534,35 @@ export default function LexiconPanel({
       mediaQueryList.removeListener(syncMobileState);
     };
   }, []);
+
+  useEffect(() => {
+    if (!focusRequest || !focusRequest.key || !focusRequest.kind) {
+      return;
+    }
+
+    const focusKey = String(focusRequest.key);
+    const nextKind = focusRequest.kind === "expression" ? "expression" : "word";
+
+    setActiveKind(nextKind);
+    setStatusFilter("all");
+    setFocusedKey(focusKey);
+
+    if (isMobile) {
+      setMobileStage("cards");
+    }
+  }, [focusRequest, isMobile]);
+
+  useEffect(() => {
+    if (!focusRequest || !focusRequest.key) {
+      return;
+    }
+
+    const focusKey = String(focusRequest.key);
+    const el = entryRefs.current[focusKey];
+    if (el && typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [focusRequest, entries, activeKind, statusFilter, onlyCurrentSubtitle]);
 
   function toggleExpand(key) {
     const safeKey = String(key || "");
@@ -780,7 +812,7 @@ export default function LexiconPanel({
             ‹
           </button>
 
-          <div className="vs-rightHeaderTitle">{isMobile ? "英语卡片" : "单词面板"}</div>
+          <div className="vs-rightHeaderTitle">{isMobile ? "德语卡片" : "单词面板"}</div>
 
           <button
             className="vs-rightCollapseBtn"
@@ -1000,12 +1032,20 @@ export default function LexiconPanel({
               return (
                 <article
                   key={entry.key}
+                  ref={(el) => {
+                    if (el) {
+                      entryRefs.current[entry.key] = el;
+                    } else {
+                      delete entryRefs.current[entry.key];
+                    }
+                  }}
                   className={[
                     "vs-lexCard",
                     isMobile ? "vs-lexCard--mobile" : "",
                     knowledgeState === "known" ? "is-known" : "",
                     knowledgeState === "not_known" ? "is-not-known" : "",
                     knowledgeState === "elsewhere" ? "is-elsewhere" : "",
+                    entry.key === focusedKey ? "is-focused" : "",
                   ].filter(Boolean).join(" ")}
                   tabIndex={0}
                 >

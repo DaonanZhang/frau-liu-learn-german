@@ -639,6 +639,20 @@
   background: linear-gradient(to bottom, transparent 70%, rgba(34, 197, 94, 0.35) 70%);
   padding: 0 0.08rem;
   border-radius: 0.2rem;
+  border: none;
+  font: inherit;
+  color: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline;
+}
+
+.vs-occ-hl.is-clickable {
+  cursor: pointer;
+}
+
+.vs-occ-hl.is-clickable:hover {
+  background: linear-gradient(to bottom, transparent 65%, rgba(34, 197, 94, 0.55) 65%);
 }
 
 .vs-playMenu {
@@ -971,6 +985,11 @@
 .vs-lexCard:focus-within {
   transform: translateY(-2px);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
+}
+
+.vs-lexCard.is-focused {
+  border-color: #facc15;
+  box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.35), 0 10px 22px rgba(0, 0, 0, 0.08);
 }
 
 .vs-lexMeaning {

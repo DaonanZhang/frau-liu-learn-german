@@ -131,6 +131,7 @@ export default function SubtitlePanel({
   videoId,
   videoTitle,
   videoRef,
+  videoUrl,
   onSeek,
   onSubtitlesLoaded,
   playbackSettings,
@@ -138,6 +139,7 @@ export default function SubtitlePanel({
   onRequestNextSubtitle,
   isLexiconOpen,
   onToggleLexicon,
+  onRequestLexiconFocus,
   activeSubtitleIndex,
   panelShape,
   onPanelShapeChange,
@@ -234,29 +236,78 @@ export default function SubtitlePanel({
         }
 
         const nextMap = {};
+        const seenBySubtitle = {};
 
-        function add(subtitleId, text) {
+        function normalizeMatchText(value) {
+          return String(value ?? "").trim();
+        }
+
+        function addOccurrence(subtitleId, occurrence) {
           if (subtitleId === undefined || subtitleId === null) {
             return;
           }
-          const value = String(text ?? "").trim();
-          if (!value) {
+
+          if (!occurrence || !occurrence.matchText) {
             return;
           }
 
           const key = String(subtitleId);
           if (!nextMap[key]) {
             nextMap[key] = [];
+            seenBySubtitle[key] = new Set();
           }
-          nextMap[key].push(value);
+
+          const dedupeKey = [
+            occurrence.kind || "unknown",
+            occurrence.focusKey || "",
+            occurrence.matchText.toLowerCase(),
+          ].join("|");
+
+          if (seenBySubtitle[key].has(dedupeKey)) {
+            return;
+          }
+          seenBySubtitle[key].add(dedupeKey);
+          nextMap[key].push(occurrence);
         }
 
-        words.forEach((o) => add(o.subtitle, o.word_text));
-        sentences.forEach((o) => add(o.subtitle, o.sentence_text));
-        expressions.forEach((o) => add(o.subtitle, o.expression_text));
+        words.forEach((o) => {
+          const matchText = normalizeMatchText(o?.word_text);
+          const lemmaText = normalizeMatchText(o?.word_lemma);
+          if (!matchText) {
+            return;
+          }
+          addOccurrence(o.subtitle, {
+            kind: "word",
+            matchText,
+            focusKey: lemmaText ? `word:${lemmaText.toLowerCase()}` : "",
+          });
+        });
 
-        Object.keys(nextMap).forEach((k) => {
-          nextMap[k] = Array.from(new Set(nextMap[k]));
+        sentences.forEach((o) => {
+          const matchText = normalizeMatchText(o?.sentence_text);
+          if (!matchText) {
+            return;
+          }
+          addOccurrence(o.subtitle, {
+            kind: "sentence",
+            matchText,
+            focusKey: "",
+          });
+        });
+
+        expressions.forEach((o) => {
+          const surfaceText = normalizeMatchText(o?.expression_text);
+          const prototypeText = normalizeMatchText(o?.expression_prototype);
+          const titleText = prototypeText || surfaceText;
+          const matchText = surfaceText || titleText;
+          if (!matchText) {
+            return;
+          }
+          addOccurrence(o.subtitle, {
+            kind: "expression",
+            matchText,
+            focusKey: titleText ? `expression:${titleText.toLowerCase()}` : "",
+          });
         });
 
         setOccMap(nextMap);
@@ -311,26 +362,30 @@ export default function SubtitlePanel({
       return;
     }
 
-    function handlePlay() {
-      setIsPlaying(true);
+    function syncPlayState() {
+      setIsPlaying(!videoElement.paused && !videoElement.ended);
     }
 
-    function handlePause() {
-      setIsPlaying(false);
-    }
+    videoElement.addEventListener("play", syncPlayState);
+    videoElement.addEventListener("playing", syncPlayState);
+    videoElement.addEventListener("pause", syncPlayState);
+    videoElement.addEventListener("ended", syncPlayState);
+    videoElement.addEventListener("loadedmetadata", syncPlayState);
+    videoElement.addEventListener("seeking", syncPlayState);
+    videoElement.addEventListener("waiting", syncPlayState);
 
-    videoElement.addEventListener("play", handlePlay);
-    videoElement.addEventListener("pause", handlePause);
-    videoElement.addEventListener("ended", handlePause);
-
-    setIsPlaying(!videoElement.paused);
+    syncPlayState();
 
     return () => {
-      videoElement.removeEventListener("play", handlePlay);
-      videoElement.removeEventListener("pause", handlePause);
-      videoElement.removeEventListener("ended", handlePause);
+      videoElement.removeEventListener("play", syncPlayState);
+      videoElement.removeEventListener("playing", syncPlayState);
+      videoElement.removeEventListener("pause", syncPlayState);
+      videoElement.removeEventListener("ended", syncPlayState);
+      videoElement.removeEventListener("loadedmetadata", syncPlayState);
+      videoElement.removeEventListener("seeking", syncPlayState);
+      videoElement.removeEventListener("waiting", syncPlayState);
     };
-  }, [videoRef]);
+  }, [videoRef, videoUrl]);
 
   // automatic subtitle rolling
   useEffect(() => {
@@ -516,7 +571,7 @@ export default function SubtitlePanel({
     const plan = [];
 
     items.forEach((subtitleItem) => {
-      const patterns = occMap[String(subtitleItem.id)] || [];
+      const patterns = (occMap[String(subtitleItem.id)] || []).map((o) => o.matchText);
       const ranges = computeMergedRanges(subtitleItem.de, patterns);
 
       if (!ranges || ranges.length === 0) {
@@ -597,7 +652,8 @@ export default function SubtitlePanel({
   function renderSubtitleText(item) {
     const showDe = mode === "bilingual" || mode === "de";
     const showZh = mode === "bilingual" || mode === "zh";
-    const patterns = occMap[String(item.id)] || [];
+    const occurrences = occMap[String(item.id)] || [];
+    const patterns = occurrences.map((o) => o.matchText);
 
     return (
       <>
@@ -613,14 +669,38 @@ export default function SubtitlePanel({
                 },
               })
             ) : (
-              renderWithHighlights(item.de, patterns, highlightEnabled)
+              renderWithHighlights({
+                text: item.de,
+                occurrences,
+                highlightEnabled,
+                onHighlightClick: (occurrence) => {
+                  if (typeof onRequestLexiconFocus === "function") {
+                    onRequestLexiconFocus({
+                      key: occurrence?.focusKey,
+                      kind: occurrence?.kind,
+                    });
+                  }
+                },
+              })
             )}
           </div>
         ) : null}
 
         {showZh && item.zh ? (
           <div className={mode === "zh" ? "vs-subDe" : "vs-subZh"}>
-            {renderWithHighlights(item.zh, patterns, highlightEnabled)}
+            {renderWithHighlights({
+              text: item.zh,
+              occurrences,
+              highlightEnabled,
+              onHighlightClick: (occurrence) => {
+                if (typeof onRequestLexiconFocus === "function") {
+                  onRequestLexiconFocus({
+                    key: occurrence?.focusKey,
+                    kind: occurrence?.kind,
+                  });
+                }
+              },
+            })}
           </div>
         ) : null}
       </>
@@ -1456,7 +1536,8 @@ export default function SubtitlePanel({
   function renderSubtitleText(item) {
     const showDe = mode === "bilingual" || mode === "de";
     const showZh = mode === "bilingual" || mode === "zh";
-    const patterns = occMap[String(item.id)] || [];
+    const occurrences = occMap[String(item.id)] || [];
+    const patterns = occurrences.map((o) => o.matchText);
 
     return (
       <>
@@ -1472,14 +1553,38 @@ export default function SubtitlePanel({
                 },
               })
             ) : (
-              renderWithHighlights(item.de, patterns, highlightEnabled)
+              renderWithHighlights({
+                text: item.de,
+                occurrences,
+                highlightEnabled,
+                onHighlightClick: (occurrence) => {
+                  if (typeof onRequestLexiconFocus === "function") {
+                    onRequestLexiconFocus({
+                      key: occurrence?.focusKey,
+                      kind: occurrence?.kind,
+                    });
+                  }
+                },
+              })
             )}
           </div>
         ) : null}
 
         {showZh && item.zh ? (
           <div className={mode === "zh" ? "vs-subDe" : "vs-subZh"}>
-            {renderWithHighlights(item.zh, patterns, highlightEnabled)}
+            {renderWithHighlights({
+              text: item.zh,
+              occurrences,
+              highlightEnabled,
+              onHighlightClick: (occurrence) => {
+                if (typeof onRequestLexiconFocus === "function") {
+                  onRequestLexiconFocus({
+                    key: occurrence?.focusKey,
+                    kind: occurrence?.kind,
+                  });
+                }
+              },
+            })}
           </div>
         ) : null}
       </>
@@ -1545,26 +1650,16 @@ function renderWithClozeMask({ text, patterns, subtitleId, onOpenExercise }) {
   return parts;
 }
 
-function renderWithHighlights(text, patterns, highlightEnabled) {
-  if (!highlightEnabled) {
-    return text;
-  }
-  if (!text) {
-    return text;
-  }
-  if (!patterns || patterns.length === 0) {
-    return text;
-  }
-
-  const lower = text.toLowerCase();
+function buildOccurrenceRanges(text, occurrences) {
+  const safeText = String(text || "");
+  const lower = safeText.toLowerCase();
   const ranges = [];
 
-  patterns.forEach((p) => {
-    const pat = String(p).trim();
+  occurrences.forEach((occurrence) => {
+    const pat = String(occurrence?.matchText || "").trim();
     if (!pat) {
       return;
     }
-
     const patLower = pat.toLowerCase();
     let startIndex = 0;
 
@@ -1573,11 +1668,53 @@ function renderWithHighlights(text, patterns, highlightEnabled) {
       if (idx === -1) {
         break;
       }
-      ranges.push({ start: idx, end: idx + patLower.length });
+      ranges.push({ start: idx, end: idx + patLower.length, occurrence });
       startIndex = idx + patLower.length;
     }
   });
 
+  return ranges;
+}
+
+function pickPreferredOccurrence(occurrences) {
+  if (!occurrences || occurrences.length === 0) {
+    return null;
+  }
+
+  let best = null;
+  let bestScore = -1;
+
+  occurrences.forEach((occurrence) => {
+    if (!occurrence) {
+      return;
+    }
+    const kind = String(occurrence.kind || "");
+    const kindScore = kind === "expression" ? 3 : kind === "word" ? 2 : 1;
+    const focusBoost = occurrence.focusKey ? 1 : 0;
+    const lengthScore = String(occurrence.matchText || "").length;
+    const score = kindScore * 1000 + focusBoost * 10 + lengthScore;
+
+    if (score > bestScore) {
+      best = occurrence;
+      bestScore = score;
+    }
+  });
+
+  return best;
+}
+
+function renderWithHighlights({ text, occurrences, highlightEnabled, onHighlightClick }) {
+  if (!highlightEnabled) {
+    return text;
+  }
+  if (!text) {
+    return text;
+  }
+  if (!occurrences || occurrences.length === 0) {
+    return text;
+  }
+
+  const ranges = buildOccurrenceRanges(text, occurrences);
   if (ranges.length === 0) {
     return text;
   }
@@ -1588,9 +1725,14 @@ function renderWithHighlights(text, patterns, highlightEnabled) {
   for (const r of ranges) {
     const last = merged[merged.length - 1];
     if (!last || r.start > last.end) {
-      merged.push({ ...r });
+      merged.push({
+        start: r.start,
+        end: r.end,
+        occurrences: [r.occurrence],
+      });
     } else {
       last.end = Math.max(last.end, r.end);
+      last.occurrences.push(r.occurrence);
     }
   }
 
@@ -1601,11 +1743,32 @@ function renderWithHighlights(text, patterns, highlightEnabled) {
     if (m.start > cursor) {
       parts.push(<span key={`t-${i}-${cursor}`}>{text.slice(cursor, m.start)}</span>);
     }
-    parts.push(
-      <span key={`h-${i}-${m.start}`} className="vs-occ-hl">
-        {text.slice(m.start, m.end)}
-      </span>
-    );
+
+    const focusOccurrence = pickPreferredOccurrence(m.occurrences);
+    const slice = text.slice(m.start, m.end);
+
+    if (focusOccurrence?.focusKey && typeof onHighlightClick === "function") {
+      parts.push(
+        <button
+          key={`h-${i}-${m.start}`}
+          type="button"
+          className="vs-occ-hl is-clickable"
+          onClick={(event) => {
+            event.stopPropagation();
+            onHighlightClick(focusOccurrence);
+          }}
+        >
+          {slice}
+        </button>
+      );
+    } else {
+      parts.push(
+        <span key={`h-${i}-${m.start}`} className="vs-occ-hl">
+          {slice}
+        </span>
+      );
+    }
+
     cursor = m.end;
   });
 

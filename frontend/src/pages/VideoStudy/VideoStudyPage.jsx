@@ -47,11 +47,12 @@ export default function VideoStudyPage() {
    *
    * @type {[boolean, Function]}
    */
-  const [isLexiconOpen, setIsLexiconOpen] = useState(true);
+  const [isLexiconOpen, setIsLexiconOpen] = useState(false);
 
   const [isMobile, setIsMobile] = useState(false);
 
   const [isExerciseOpen, setIsExerciseOpen] = useState(false);
+  const [lexiconFocusRequest, setLexiconFocusRequest] = useState(null);
   const [panelShape, setPanelShape] = useState("normal");
   useBodyScrollLock(isMobile && (isLexiconOpen || isExerciseOpen));
 
@@ -488,6 +489,19 @@ export default function VideoStudyPage() {
   const shouldShowSubtitlePanel = !shouldShowExercisePanel;
   const shouldShowLexiconPanel = !shouldShowExercisePanel && isLexiconOpen;
 
+  function handleLexiconFocusRequest(nextFocus) {
+    if (!nextFocus || !nextFocus.key || !nextFocus.kind) {
+      return;
+    }
+
+    setIsLexiconOpen(true);
+    setLexiconFocusRequest({
+      key: String(nextFocus.key),
+      kind: nextFocus.kind,
+      nonce: Date.now(),
+    });
+  }
+
   function handlePipPointerDown(event) {
     if (!isMobile || panelShape !== "shadowing") {
       return;
@@ -651,10 +665,12 @@ export default function VideoStudyPage() {
             onPlaybackSettingsChange={(patch) =>
               setPlaybackSettings((prev) => ({ ...prev, ...patch }))
             }
+            videoUrl={leftVideoUrl}
             isLexiconOpen={isLexiconOpen}
             onToggleLexicon={() => {
               setIsLexiconOpen((prevValue) => !prevValue);
             }}
+            onRequestLexiconFocus={handleLexiconFocusRequest}
             activeSubtitleIndex={activeSubtitleIndex}
             panelShape={panelShape}
             onPanelShapeChange={(nextShape) => {
@@ -672,6 +688,7 @@ export default function VideoStudyPage() {
               subtitleItems={subtitleItems}
               activeSubtitleIndex={activeSubtitleIndex}
               onSeek={handleSeek}
+              focusRequest={lexiconFocusRequest}
               onClose={() => {
                 setIsLexiconOpen(false);
               }}

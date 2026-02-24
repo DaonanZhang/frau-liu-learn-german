@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from pathlib import Path
 
 import pandas as pd
@@ -14,18 +15,28 @@ from apps.learning_by_video.models import Video
 
 SHEET_NAME = "video description"
 
-# Expected columns in the sheet
+# Expected columns in the sheet (support old + new headers)
 COL_TITLE = "标题"
+COL_TITLE_ZH = "中文标题"
+COL_TITLE_ORIG = "原标题"
 COL_CREATOR = "创作者"
 COL_DIFFICULTY = "难度"
 COL_TAGS = "tags"
 COL_DESC = "简介"
 COL_DURATION = "时长"
+COL_COVER = "封面"
+COL_LINK = "链接"
 
 
 def _get_learning_by_video_data_dir() -> Path:
     app_config = apps.get_app_config("learning_by_video")
     return Path(app_config.path) / "data"
+
+
+def _get_project_root() -> Path:
+    app_config = apps.get_app_config("learning_by_video")
+    # app path: <root>/apps/learning_by_video
+    return Path(app_config.path).resolve().parents[1]
 
 
 def _parse_duration_to_seconds(raw: str) -> int:
@@ -54,6 +65,15 @@ def _parse_duration_to_seconds(raw: str) -> int:
         minutes = int(m.group(1))
         seconds = int(m.group(2))
         return minutes * 60 + seconds
+
+    # formats like 2'44''30''' or 3'01'' or 4'11'266'''
+    if "'" in s or "’" in s:
+        parts = re.findall(r"\d+", s)
+        if len(parts) >= 2:
+            minutes = int(parts[0])
+            seconds = int(parts[1])
+            ms = int(parts[2]) if len(parts) >= 3 else 0
+            return int(minutes * 60 + seconds + ms / 1000.0)
 
     # 3min / 3 min
     m = re.match(r"^\s*(\d+)\s*min\s*$", s, flags=re.IGNORECASE)
@@ -107,9 +127,9 @@ def _parse_tags(raw: str) -> list[str]:
     except json.JSONDecodeError:
         pass
 
-    # fallback: split by commas
+    # fallback: split by common separators
     s = s.strip().strip("[]")
-    parts = [p.strip().strip('"').strip("'") for p in s.split(",")]
+    parts = [p.strip().strip('"').strip("'") for p in re.split(r"[;,，；、|]+", s)]
     return [p for p in parts if p]
 
 
@@ -126,6 +146,49 @@ def _slugify_filename(text: str) -> str:
     stem = re.sub(r"[^\w\-]+", "_", (text or "").strip(), flags=re.UNICODE).strip("_")
     stem = stem[:80] or "video"
     return stem
+
+
+def _pick_title(row: pd.Series) -> str:
+    """
+    Prefer Chinese title if present, then original title, then legacy '标题'.
+    """
+    for col in (COL_TITLE_ZH, COL_TITLE_ORIG, COL_TITLE):
+        if col in row:
+            value = str(row[col]).strip()
+            if value:
+                return value
+    return ""
+
+
+def _normalize_cover_key(text: str) -> str:
+    """
+    Normalize a title/filename to a matching key:
+    - NFKC normalize
+    - keep only alnum characters
+    - lowercase
+    """
+    s = unicodedata.normalize("NFKC", text or "")
+    return "".join(ch.lower() for ch in s if ch.isalnum())
+
+
+def _build_cover_file_map() -> dict[str, str]:
+    """
+    Build a mapping from normalized filename stem -> actual filename.
+    """
+    cover_dir = _get_project_root() / "frontend" / "public" / "resources" / "learning_by_video_cover_letters"
+    if not cover_dir.exists():
+        return {}
+
+    file_map: dict[str, str] = {}
+    for path in cover_dir.iterdir():
+        if not path.is_file():
+            continue
+        stem = path.stem
+        key = _normalize_cover_key(stem)
+        # keep first match; avoid overwriting in case of collisions
+        if key and key not in file_map:
+            file_map[key] = path.name
+    return file_map
 
 
 class Command(BaseCommand):
@@ -154,6 +217,7 @@ class Command(BaseCommand):
         raw_dir = data_dir / "raw"
         processed_dir = data_dir / "processed"
         processed_dir.mkdir(parents=True, exist_ok=True)
+        cover_file_map = _build_cover_file_map()
 
         no_move: bool = bool(options.get("no_move"))
         file_arg = (options.get("file") or "").strip()
@@ -173,9 +237,13 @@ class Command(BaseCommand):
                     engine="openpyxl",
                 ).fillna("")
 
-                required = {COL_TITLE, COL_CREATOR, COL_DIFFICULTY, COL_TAGS, COL_DESC, COL_DURATION}
+                required = {COL_CREATOR, COL_DIFFICULTY, COL_TAGS, COL_DESC, COL_DURATION}
                 missing = required - set(df.columns)
-                if missing:
+                has_title = any(col in df.columns for col in (COL_TITLE, COL_TITLE_ZH, COL_TITLE_ORIG))
+                if missing or not has_title:
+                    if not has_title:
+                        missing = set(missing)
+                        missing.add("标题/中文标题/原标题")
                     raise ValueError(
                         f"{xlsx_path.name}: missing columns in sheet '{SHEET_NAME}': {sorted(missing)}"
                     )
@@ -184,10 +252,11 @@ class Command(BaseCommand):
                 updated = 0
 
                 for _, row in df.iterrows():
-                    title = str(row[COL_TITLE]).strip()
+                    title = _pick_title(row)
                     if not title:
                         continue
 
+                    original_title = str(row.get(COL_TITLE_ORIG, "")).strip()
                     creator = str(row[COL_CREATOR]).strip()
                     difficulty = str(row[COL_DIFFICULTY]).strip()
                     description = str(row[COL_DESC]).strip()
@@ -196,9 +265,26 @@ class Command(BaseCommand):
 
                     title_slug = _slugify_filename(title)
 
+                    # Prefer explicit link/cover if provided, otherwise derive from slug.
+                    cover_raw = str(row.get(COL_COVER, "")).strip()
+                    link_raw = str(row.get(COL_LINK, "")).strip()
+
                     # NOTE: no extension here, as requested (only slugified title)
-                    cover_letter_url = f"/resources/learning_by_video_cover_letters/{title_slug}"
-                    video_url = f"/resources/learning_by_video_video/{title_slug}"
+                    if cover_raw:
+                        if cover_raw.startswith(("http://", "https://", "/")):
+                            cover_letter_url = cover_raw
+                        else:
+                            cover_letter_url = f"/resources/learning_by_video_cover_letters/{cover_raw}"
+                    else:
+                        cover_filename = ""
+                        if original_title and cover_file_map:
+                            key = _normalize_cover_key(original_title)
+                            cover_filename = cover_file_map.get(key, "")
+                        if cover_filename:
+                            cover_letter_url = f"/resources/learning_by_video_cover_letters/{cover_filename}"
+                        else:
+                            cover_letter_url = f"/resources/learning_by_video_cover_letters/{title_slug}"
+                    video_url = link_raw or f"/resources/learning_by_video_video/{title_slug}"
 
                     obj, was_created = Video.objects.update_or_create(
                         title=title,

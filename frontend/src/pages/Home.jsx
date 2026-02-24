@@ -37,6 +37,33 @@ function toSafeNumber(value) {
 }
 
 /**
+ * Group raw duration seconds into minute buckets for filters.
+ *
+ * @param {Array<unknown>} rawDurations - Duration seconds from API.
+ * @returns {{options: number[], lookup: Map<number, number[]>}}
+ */
+function buildDurationBuckets(rawDurations) {
+  const lookup = new Map();
+  if (!Array.isArray(rawDurations)) {
+    return { options: [], lookup };
+  }
+
+  rawDurations.forEach((value) => {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+      return;
+    }
+    const minutes = Math.max(1, Math.round(seconds / 60));
+    const existing = lookup.get(minutes) || [];
+    existing.push(seconds);
+    lookup.set(minutes, existing);
+  });
+
+  const options = Array.from(lookup.keys()).sort((a, b) => a - b);
+  return { options, lookup };
+}
+
+/**
  * Build dashboard stats for StatsCard.
  *
  * @param {number} totalVideoCount - Total number of videos.
@@ -282,6 +309,41 @@ export default function Home() {
     };
   }, []);
 
+  const durationBuckets = useMemo(() => {
+    return buildDurationBuckets(videoMeta.durations);
+  }, [videoMeta.durations]);
+
+  const selectedDurationSeconds = useMemo(() => {
+    if (!selectedDurations.length) {
+      return [];
+    }
+    const results = [];
+    selectedDurations.forEach((minutesValue) => {
+      const minutes = Number(minutesValue);
+      if (!Number.isFinite(minutes)) {
+        return;
+      }
+      const bucket = durationBuckets.lookup.get(minutes) || [];
+      bucket.forEach((seconds) => results.push(seconds));
+    });
+    return results;
+  }, [selectedDurations, durationBuckets]);
+
+  useEffect(() => {
+    if (!selectedDurations.length) {
+      return;
+    }
+    const allowed = new Set(durationBuckets.options);
+    const next = selectedDurations.filter((value) => allowed.has(Number(value)));
+    if (
+      next.length === selectedDurations.length &&
+      next.every((value, index) => value === selectedDurations[index])
+    ) {
+      return;
+    }
+    setSelectedDurations(next);
+  }, [durationBuckets.options, selectedDurations]);
+
   useEffect(() => {
     let aborted = false;
 
@@ -339,7 +401,7 @@ export default function Home() {
           difficulty: selectedDifficulties,
           creator: selectedCreators,
           topic: selectedTopics,
-          duration: selectedDurations,
+          duration: selectedDurationSeconds,
         });
 
         if (aborted) {
@@ -365,7 +427,12 @@ export default function Home() {
     return () => {
       aborted = true;
     };
-  }, [selectedDifficulties, selectedCreators, selectedTopics, selectedDurations]);
+  }, [
+    selectedDifficulties,
+    selectedCreators,
+    selectedTopics,
+    selectedDurationSeconds,
+  ]);
 
   const totalVideoCount = useMemo(() => {
     if (Number.isFinite(Number(videoMeta.totalCount)) && videoMeta.totalCount > 0) {
@@ -436,7 +503,7 @@ export default function Home() {
               <div className="home-mobile-filter">
                 <VideoFilter
                   difficultyOptions={videoMeta.difficulties}
-                  durationOptions={videoMeta.durations}
+                  durationOptions={durationBuckets.options}
                   creatorOptions={videoMeta.creators}
                   topicOptions={videoMeta.topics}
                   selectedDifficulties={selectedDifficulties}
@@ -478,7 +545,7 @@ export default function Home() {
           {!isMobileView && (
             <VideoFilter
               difficultyOptions={videoMeta.difficulties}
-              durationOptions={videoMeta.durations}
+              durationOptions={durationBuckets.options}
               creatorOptions={videoMeta.creators}
               topicOptions={videoMeta.topics}
               selectedDifficulties={selectedDifficulties}

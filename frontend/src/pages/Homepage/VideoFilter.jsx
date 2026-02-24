@@ -104,9 +104,8 @@ export default function VideoFilter({
   }, []);
 
   const formatDuration = (value) => {
-    const seconds = Number(value);
-    if (!Number.isFinite(seconds) || seconds <= 0) return "未知时长";
-    const minutes = Math.round(seconds / 60);
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes) || minutes <= 0) return "未知时长";
     return `${minutes}分钟`;
   };
 

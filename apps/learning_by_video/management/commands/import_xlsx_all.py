@@ -46,9 +46,13 @@ def _resolve_video_id_from_xlsx(xlsx_path: Path) -> int:
         engine="openpyxl",
     ).fillna("")
 
-    required = {"标题", "创作者"}
+    required = {"创作者"}
     missing = required - set(df.columns)
-    if missing:
+    has_title = any(col in df.columns for col in ("标题", "中文标题", "原标题"))
+    if missing or not has_title:
+        if not has_title:
+            missing = set(missing)
+            missing.add("标题/中文标题/原标题")
         raise ValueError(
             f"{xlsx_path.name}: missing columns in sheet {SHEET_VIDEO_DESCRIPTION!r}: {sorted(missing)}"
         )
@@ -56,7 +60,14 @@ def _resolve_video_id_from_xlsx(xlsx_path: Path) -> int:
     if df.shape[0] < 1:
         raise ValueError(f"{xlsx_path.name}: sheet {SHEET_VIDEO_DESCRIPTION!r} has no rows")
 
-    title = str(df.iloc[0]["标题"]).strip()
+    row0 = df.iloc[0]
+    title = ""
+    for col in ("中文标题", "原标题", "标题"):
+        if col in df.columns:
+            value = str(row0[col]).strip()
+            if value:
+                title = value
+                break
     creator = str(df.iloc[0]["创作者"]).strip()
 
     if not title:
@@ -69,6 +80,25 @@ def _resolve_video_id_from_xlsx(xlsx_path: Path) -> int:
             f"(title={title!r}, creator={creator!r})."
         )
     return int(video.id)
+
+
+def _resolve_sheet_name(xlsx_path: Path, preferred: str, fallbacks: list[str]) -> str:
+    """
+    Resolve sheet name with fallbacks (case-insensitive).
+    """
+    xls = pd.ExcelFile(xlsx_path)
+    sheets = xls.sheet_names
+    if preferred in sheets:
+        return preferred
+    lower_map = {name.lower(): name for name in sheets}
+    if preferred.lower() in lower_map:
+        return lower_map[preferred.lower()]
+    for fb in fallbacks:
+        if fb in sheets:
+            return fb
+        if fb.lower() in lower_map:
+            return lower_map[fb.lower()]
+    raise ValueError(f"{xlsx_path.name}: worksheet named '{preferred}' not found")
 
 
 class Command(BaseCommand):
@@ -150,12 +180,17 @@ class Command(BaseCommand):
                     no_move=True,
                 )
 
-                # 4) Import exercises
+                # 4) Import exercises (allow alternate sheet names like "EXERCISES")
+                resolved_exercise_sheet = _resolve_sheet_name(
+                    xlsx_path,
+                    exercise_sheet,
+                    fallbacks=["EXERCISES", "Exercises"],
+                )
                 call_command(
                     "import_exercises",
                     file=str(xlsx_path),
                     video_id=video_id,
-                    sheet=exercise_sheet,
+                    sheet=resolved_exercise_sheet,
                     no_move=True,
                 )
 

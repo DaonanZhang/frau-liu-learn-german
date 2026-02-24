@@ -1,5 +1,18 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./VideoCard.css";
+
+function getCoverCandidates(base) {
+  if (!base) {
+    return [];
+  }
+  if (/\.png$/i.test(base)) {
+    return [base, base.replace(/\.png$/i, ".jpg")];
+  }
+  if (/\.jpe?g$/i.test(base)) {
+    return [base, base.replace(/\.jpe?g$/i, ".png")];
+  }
+  return [`${base}.png`, `${base}.jpg`];
+}
 
 function formatDuration(seconds) {
   const secondsNumber = Number(seconds || 0);
@@ -111,9 +124,19 @@ export default function VideoCard({
     onInitLoadMark(videoId);
   }, [videoId, onInitLoadMark]);
 
-  const coverSrc = video?.cover_letter_url || "";
+  const coverSrcBase = video?.cover_letter_url || "";
+  const coverCandidates = useMemo(
+    () => getCoverCandidates(coverSrcBase),
+    [coverSrcBase]
+  );
+  const [coverIndex, setCoverIndex] = useState(0);
+  const coverSrc = coverCandidates[coverIndex] || "";
   const durationLabel = formatDuration(video?.duration_seconds);
   const dateLabel = formatDate(video?.created_at);
+
+  useEffect(() => {
+    setCoverIndex(0);
+  }, [coverSrcBase]);
 
   const shouldKeepActionsVisible = Boolean(isFavorite || isCompleted);
 
@@ -138,6 +161,11 @@ export default function VideoCard({
             className="video-card__cover"
             src={coverSrc}
             alt={video?.title || "video"}
+            onError={() => {
+              if (coverIndex + 1 < coverCandidates.length) {
+                setCoverIndex(coverIndex + 1);
+              }
+            }}
           />
         ) : (
           <div className="video-card__cover video-card__cover--placeholder" />

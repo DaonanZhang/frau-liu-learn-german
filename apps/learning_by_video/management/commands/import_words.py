@@ -15,7 +15,9 @@ SHEET_NAME_DEFAULT = "word"
 
 COL_TEXT = "匹配内容"
 COL_LEMMA = "Lemma"
+COL_LEMMA_ALT = "lemma"
 COL_LINKED_SUBTITLE = "linked subtitle"
+COL_LINKED_SUBTITLE_ALT = "linked sub"
 COL_TRANSLATION = "翻译"
 COL_ARTICLE = "词性"
 COL_CATEGORY = "类别"
@@ -119,31 +121,43 @@ class Command(BaseCommand):
 
         required = {
             COL_TEXT,
-            COL_LEMMA,
-            COL_LINKED_SUBTITLE,
             COL_TRANSLATION,
             COL_ARTICLE,
             COL_CATEGORY,
             COL_SUBTITLE_ID,
         }
         missing = required - set(df.columns)
-        if missing:
+        has_linked_sub = any(col in df.columns for col in (COL_LINKED_SUBTITLE, COL_LINKED_SUBTITLE_ALT))
+        has_lemma = any(col in df.columns for col in (COL_LEMMA, COL_LEMMA_ALT))
+        if missing or not has_lemma or not has_linked_sub:
+            if not has_lemma:
+                missing = set(missing)
+                missing.add("Lemma/lemma")
+            if not has_linked_sub:
+                missing = set(missing)
+                missing.add("linked subtitle/linked sub")
             raise ValueError(f"Missing columns in sheet {sheet!r}: {sorted(missing)}")
 
         # Normalize columns to strings
         for col in required:
             df[col] = df[col].map(_to_str)
+        # Normalize lemma column (support both "Lemma" and "lemma")
+        if COL_LEMMA in df.columns:
+            df[COL_LEMMA] = df[COL_LEMMA].map(_to_str)
+        if COL_LEMMA_ALT in df.columns:
+            df[COL_LEMMA_ALT] = df[COL_LEMMA_ALT].map(_to_str)
 
         # Sort by subtitle id then by text for stable runs
         df = df.sort_values(by=[COL_SUBTITLE_ID, COL_TEXT])
 
-        # Preload subtitles for this video: both by pk and by content
-        subtitles_by_id: dict[int, Subtitle] = {
-            s.pk: s
-            for s in Subtitle.objects.filter(video=video).only("id", "start", "end", "content")
+        # Preload subtitles for this video by external_id (sheet "ID")
+        subtitles_by_external_id: dict[int, Subtitle] = {
+            int(s.external_id): s
+            for s in Subtitle.objects.filter(video=video, external_id__isnull=False)
+            .only("id", "external_id", "start", "end", "content")
         }
         subtitles_by_content: dict[str, Subtitle] = {}
-        for s in subtitles_by_id.values():
+        for s in subtitles_by_external_id.values():
             # content is assumed unique enough per video for fallback; if duplicates exist, ID is the source of truth
             subtitles_by_content[s.content.strip()] = s
 
@@ -155,8 +169,8 @@ class Command(BaseCommand):
 
         for idx, row in df.iterrows():
             text = row[COL_TEXT]
-            lemma = row[COL_LEMMA]
-            linked_subtitle_text = row[COL_LINKED_SUBTITLE]
+            lemma = row.get(COL_LEMMA, "") or row.get(COL_LEMMA_ALT, "")
+            linked_subtitle_text = row.get(COL_LINKED_SUBTITLE, "") or row.get(COL_LINKED_SUBTITLE_ALT, "")
             translation = row[COL_TRANSLATION]
             article_raw = row[COL_ARTICLE]
             category_raw = row[COL_CATEGORY]
@@ -166,9 +180,9 @@ class Command(BaseCommand):
                 skipped += 1
                 continue
 
-            subtitle_id = _parse_int_like(subtitle_id_raw)
+            subtitle_external_id = _parse_int_like(subtitle_id_raw)
 
-            subtitle = subtitles_by_id.get(subtitle_id)
+            subtitle = subtitles_by_external_id.get(subtitle_external_id)
             if subtitle is None:
                 # fallback: try matching by content string
                 subtitle = subtitles_by_content.get(linked_subtitle_text.strip())
@@ -176,7 +190,7 @@ class Command(BaseCommand):
             if subtitle is None:
                 raise ValueError(
                     f"Row {idx}: subtitle not found. "
-                    f"subtitle_id={subtitle_id!r}, linked subtitle={linked_subtitle_text!r}. "
+                    f"external_id={subtitle_external_id!r}, linked subtitle={linked_subtitle_text!r}. "
                     f"Import subtitles first and ensure IDs match."
                 )
 

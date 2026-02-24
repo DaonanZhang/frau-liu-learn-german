@@ -68,15 +68,19 @@ class Command(BaseCommand):
                 continue
 
             try:
-                subtitle_id = int(float(subtitle_id_raw))  # handles "22" or "22.0"
+                subtitle_external_id = int(float(subtitle_id_raw))  # handles "22" or "22.0"
             except ValueError as e:
                 raise ValueError(f"Row {idx}: invalid subtitle ID: {subtitle_id_raw!r}") from e
 
             # Safety: ensure subtitle belongs to the given video
-            subtitle = Subtitle.objects.filter(external_id=subtitle_id, video=video).only("id", "start", "end").first()
+            subtitle = (
+                Subtitle.objects.filter(external_id=subtitle_external_id, video=video)
+                .only("id", "start", "end")
+                .first()
+            )
             if subtitle is None:
                 raise ValueError(
-                    f"Row {idx}: Subtitle id={subtitle_id} not found for video_id={video_id}. "
+                    f"Row {idx}: Subtitle external_id={subtitle_external_id} not found for video_id={video_id}. "
                     f"Import subtitles first or check IDs."
                 )
 

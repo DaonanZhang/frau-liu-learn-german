@@ -414,29 +414,11 @@ export default function SubtitlePanel({
     const activeRect = activeElement.getBoundingClientRect();
 
     const topPadding = 8;
-    const bottomPadding = 8;
-
-    const visibleTop = containerRect.top + topPadding;
-    const visibleBottom = containerRect.bottom - bottomPadding;
-
-    const isAboveVisibleArea = activeRect.top < visibleTop;
-    const isBelowVisibleArea = activeRect.bottom > visibleBottom;
-
-    if (!isAboveVisibleArea && !isBelowVisibleArea) {
-      return;
-    }
-
     const currentScrollTop = containerElement.scrollTop;
-
-    let nextScrollTop = currentScrollTop;
-
-    if (isAboveVisibleArea) {
-      const deltaTop = activeRect.top - containerRect.top;
-      nextScrollTop = currentScrollTop + deltaTop - topPadding;
-    } else if (isBelowVisibleArea) {
-      const deltaBottom = activeRect.bottom - containerRect.bottom;
-      nextScrollTop = currentScrollTop + deltaBottom + bottomPadding;
-    }
+    const deltaTop = activeRect.top - containerRect.top;
+    const targetScrollTop = currentScrollTop + deltaTop - topPadding;
+    const maxScrollTop = Math.max(0, containerElement.scrollHeight - containerElement.clientHeight);
+    const nextScrollTop = Math.min(Math.max(targetScrollTop, 0), maxScrollTop);
 
     containerElement.scrollTo({
       top: nextScrollTop,

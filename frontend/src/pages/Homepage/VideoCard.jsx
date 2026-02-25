@@ -2,16 +2,41 @@ import { useEffect, useMemo, useState } from "react";
 import "./VideoCard.css";
 
 function getCoverCandidates(base) {
-  if (!base) {
+  const normalized = typeof base === "string" ? base.trim() : "";
+  if (!normalized) {
     return [];
   }
-  if (/\.png$/i.test(base)) {
-    return [base, base.replace(/\.png$/i, ".jpg")];
+  if (/\.png$/i.test(normalized)) {
+    return [normalized, normalized.replace(/\.png$/i, ".jpg")];
   }
-  if (/\.jpe?g$/i.test(base)) {
-    return [base, base.replace(/\.jpe?g$/i, ".png")];
+  if (/\.jpe?g$/i.test(normalized)) {
+    return [normalized, normalized.replace(/\.jpe?g$/i, ".png")];
   }
-  return [`${base}.png`, `${base}.jpg`];
+  return [`${normalized}.png`, `${normalized}.jpg`];
+}
+
+function getCoverCandidatesFromVideo(video) {
+  const rawList = video?.cover_letter_urls;
+  const candidates = [];
+
+  if (Array.isArray(rawList)) {
+    rawList.forEach((item) => {
+      candidates.push(...getCoverCandidates(item));
+    });
+  } else if (typeof rawList === "string" && rawList.trim()) {
+    candidates.push(...getCoverCandidates(rawList));
+  }
+
+  candidates.push(...getCoverCandidates(video?.cover_letter_url));
+
+  const seen = new Set();
+  return candidates.filter((item) => {
+    if (!item || seen.has(item)) {
+      return false;
+    }
+    seen.add(item);
+    return true;
+  });
 }
 
 function formatDuration(seconds) {
@@ -124,11 +149,11 @@ export default function VideoCard({
     onInitLoadMark(videoId);
   }, [videoId, onInitLoadMark]);
 
-  const coverSrcBase = video?.cover_letter_url || "";
   const coverCandidates = useMemo(
-    () => getCoverCandidates(coverSrcBase),
-    [coverSrcBase]
+    () => getCoverCandidatesFromVideo(video),
+    [video?.cover_letter_url, video?.cover_letter_urls]
   );
+  const coverKey = coverCandidates.join("|");
   const [coverIndex, setCoverIndex] = useState(0);
   const coverSrc = coverCandidates[coverIndex] || "";
   const durationLabel = formatDuration(video?.duration_seconds);
@@ -136,7 +161,7 @@ export default function VideoCard({
 
   useEffect(() => {
     setCoverIndex(0);
-  }, [coverSrcBase]);
+  }, [coverKey]);
 
   const shouldKeepActionsVisible = Boolean(isFavorite || isCompleted);
 

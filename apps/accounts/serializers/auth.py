@@ -24,7 +24,7 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
         password = attrs.get("password")
 
         cleaned = "".join(ch for ch in str(telephone or "").strip() if ch.isdigit())
-        if len(cleaned) != 11:
+        if not cleaned:
             raise AuthenticationFailed(
                 self.error_messages["no_active_account"],
                 "no_active_account",

@@ -33,7 +33,7 @@ export default function LoginPage() {
     }
   }, [loading, isAuthenticated, navigate]);
 
-  const canSubmit = phone.trim().length === 11 && password.trim().length > 0;
+  const canSubmit = phone.trim().length > 0 && password.trim().length > 0;
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -82,11 +82,10 @@ export default function LoginPage() {
               className="auth-input"
               value={phone}
               onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-              placeholder="请输入11位手机号"
+              placeholder="请输入手机号"
               inputMode="numeric"
               autoComplete="tel"
-              maxLength={11}
-              pattern="[0-9]{11}"
+              maxLength={15}
             />
           </div>
         </label>

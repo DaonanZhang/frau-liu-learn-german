@@ -133,6 +133,33 @@ body {
   transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
+.auth-input-row {
+  display: flex;
+  gap: 10px;
+}
+
+.auth-input-row .auth-input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.auth-select {
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 34px;
+  flex: 0 0 92px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--auth-muted) 50%),
+    linear-gradient(135deg, var(--auth-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 22px) 50%,
+    calc(100% - 16px) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
 .auth-passwordField {
   position: relative;
   display: flex;

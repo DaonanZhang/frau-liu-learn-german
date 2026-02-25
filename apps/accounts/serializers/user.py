@@ -21,6 +21,7 @@ class UserMeReadSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "telephone",
+            "country_code",
             "username",
             "email",
             "is_staff",

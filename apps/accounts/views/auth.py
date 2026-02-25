@@ -14,6 +14,7 @@ class LoginAPIView(TokenObtainPairView):
 
     Body:
     {
+      "country_code": "+86",
       "telephone": "...",
       "password": "..."
     }

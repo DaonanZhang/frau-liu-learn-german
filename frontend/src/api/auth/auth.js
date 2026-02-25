@@ -7,12 +7,13 @@ import { apiFetch } from "../client";
  * - client.js will handle JWT usage
  * - tokens are stored here
  */
-export async function login(telephone, password) {
+export async function login(telephone, password, countryCode) {
   try {
     const data = await apiFetch("/accounts/auth/login/", {
       method: "POST",
       body: {
         telephone,
+        country_code: countryCode,
         password,
       },
     });
@@ -80,6 +81,7 @@ export async function verifyActivationCode(code) {
 export async function registerWithActivationCode({
   code,
   telephone,
+  countryCode,
   password,
 }) {
   try {
@@ -88,6 +90,7 @@ export async function registerWithActivationCode({
       body: {
         code,
         telephone,
+        country_code: countryCode,
         password,
       },
     });
@@ -113,4 +116,3 @@ export async function registerWithActivationCode({
     return { ok: false };
   }
 }
-

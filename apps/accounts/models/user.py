@@ -54,6 +54,11 @@ class User(AbstractUser):
         db_index=True,
     )
 
+    country_code = models.CharField(
+        max_length=8,
+        default="+86",
+    )
+
     objects = CustomUserManager()
 
     USERNAME_FIELD = "telephone"

@@ -3,7 +3,23 @@ import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
 import { login, useAuth } from "../api/auth";
 
+const COUNTRY_CODE_OPTIONS = [
+  { value: "+86", label: "🇨🇳 中国 +86" },
+  { value: "+49", label: "🇩🇪 德国 +49" },
+  { value: "+852", label: "🇭🇰 中国香港 +852" },
+  { value: "+853", label: "🇲🇴 中国澳门 +853" },
+  { value: "+886", label: "中国台湾 +886" },
+  { value: "+65", label: "🇸🇬 新加坡 +65" },
+  { value: "+81", label: "🇯🇵 日本 +81" },
+  { value: "+82", label: "🇰🇷 韩国 +82" },
+  { value: "+44", label: "🇬🇧 英国 +44" },
+  { value: "+33", label: "🇫🇷 法国 +33" },
+  { value: "+1", label: "🇺🇸 美国 +1" },
+  { value: "+61", label: "🇦🇺 澳大利亚 +61" },
+];
+
 export default function LoginPage() {
+  const [countryCode, setCountryCode] = useState(COUNTRY_CODE_OPTIONS[0]?.value || "+86");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -17,13 +33,13 @@ export default function LoginPage() {
     }
   }, [loading, isAuthenticated, navigate]);
 
-  const canSubmit = phone.trim().length > 0 && password.trim().length > 0;
+  const canSubmit = phone.trim().length === 11 && password.trim().length > 0;
 
   const onSubmit = async (e) => {
     e.preventDefault();
     if (!canSubmit) return;
 
-    const result = await login(phone, password);
+    const result = await login(phone, password, countryCode);
     if (result.ok) {
       notifyLogin();
     }
@@ -49,14 +65,30 @@ export default function LoginPage() {
       <form className="auth-form" onSubmit={onSubmit}>
         <label className="auth-label">
           手机号
-          <input
-            className="auth-input"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="请输入11位手机号"
-            inputMode="numeric"
-            autoComplete="tel"
-          />
+          <div className="auth-input-row">
+            <select
+              className="auth-input auth-select"
+              value={countryCode}
+              onChange={(e) => setCountryCode(e.target.value)}
+              autoComplete="tel-country-code"
+            >
+              {COUNTRY_CODE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <input
+              className="auth-input"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+              placeholder="请输入11位手机号"
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength={11}
+              pattern="[0-9]{11}"
+            />
+          </div>
         </label>
 
         <label className="auth-label">

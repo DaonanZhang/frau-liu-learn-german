@@ -57,6 +57,7 @@ class RegisterAPIView(APIView):
             user = register_user_with_activation_code(
                 code=data["code"],
                 telephone=data["telephone"],
+                country_code=data["country_code"],
                 password=data["password"],
             )
         except ValueError as exc:
@@ -69,6 +70,7 @@ class RegisterAPIView(APIView):
             {
                 "id": user.id,
                 "telephone": user.telephone,
+                "country_code": user.country_code,
             },
             status=status.HTTP_201_CREATED,
         )

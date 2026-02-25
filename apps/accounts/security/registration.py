@@ -28,6 +28,7 @@ def register_user_with_activation_code(
     *,
     code: str,
     telephone: str,
+    country_code: str,
     password: str,
 ):
     """
@@ -48,6 +49,7 @@ def register_user_with_activation_code(
     # 1. create user
     user = User.objects.create_user(
         telephone=telephone,
+        country_code=country_code,
         password=password,
     )
 

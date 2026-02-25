@@ -6,7 +6,6 @@ from typing import Any
 import re
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -28,8 +27,7 @@ class ProgressPolicy:
 
 class VideoViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Video.objects.all().order_by("-created_at")
-    filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
-    filterset_fields = ["difficulty", "creator", "duration_seconds"]
+    filter_backends = [OrderingFilter, SearchFilter]
     ordering_fields = ["created_at", "difficulty", "duration_seconds"]
     search_fields = ["title"]
     permission_classes = [AllowAny]

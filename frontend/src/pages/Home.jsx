@@ -572,11 +572,6 @@ export default function Home() {
         </main>
       </div>
 
-      <footer className="home-footer">
-        <a href=" " rel="noreferrer" target="_blank">
-          皖公网安备34182202342323号
-        </a>
-      </footer>
     </div>
   );
 }

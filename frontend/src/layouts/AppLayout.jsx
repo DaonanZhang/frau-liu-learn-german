@@ -1,6 +1,7 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import Navigator from "../components/Navigator";
+import SiteFooter from "../components/SiteFooter";
 import { useAuth } from "../api/auth";
 import "./AppLayout.css";
 
@@ -49,6 +50,8 @@ export default function AppLayout() {
           </main>
         </div>
       </div>
+
+      <SiteFooter />
     </div>
   );
 }

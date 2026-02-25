@@ -29,14 +29,20 @@ body {
 .auth-bg {
   min-height: 100vh;
   display: flex;
-  justify-content: center;
-  align-items: center; /* ⭐ 页面层级居中 */
-  padding: 48px 24px;
+  flex-direction: column;
 
   background:
     radial-gradient(900px 600px at 25% 35%, rgba(186, 236, 231, 0.75), transparent 60%),
     radial-gradient(900px 600px at 80% 70%, rgba(255, 206, 218, 0.55), transparent 60%),
     linear-gradient(120deg, rgba(176, 239, 239, 0.6), rgba(245, 245, 245, 0.9));
+}
+
+.auth-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center; /* ⭐ 页面层级居中 */
+  padding: 48px 24px;
 }
 
 /* =========================

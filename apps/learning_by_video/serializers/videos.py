@@ -22,6 +22,7 @@ class VideoListSerializer(serializers.ModelSerializer):
             "video_url",
             "cover_letter_url",
             "duration_seconds",
+            "tags",
             "created_at",
         ]
         read_only_fields = fields
@@ -48,6 +49,7 @@ class VideoDetailSerializer(serializers.ModelSerializer):
             "video_url",
             "cover_letter_url",
             "duration_seconds",
+            "tags",
             "created_at",
             "subtitles",
             "progress",

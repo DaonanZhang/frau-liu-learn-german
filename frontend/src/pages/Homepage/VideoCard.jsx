@@ -62,6 +62,28 @@ function formatDate(dateStr) {
   return `${year}/${month}/${day}`;
 }
 
+function normalizeTagValue(raw) {
+  if (!raw) {
+    return [];
+  }
+  const quoteTrim = /^[\"'“”‘’]+|[\"'“”‘’]+$/g;
+  return String(raw)
+    .split(/[,\uFF0C\u3001]/)
+    .map((part) => part.trim().replace(quoteTrim, ""))
+    .filter(Boolean);
+}
+
+function getTopicTags(video) {
+  const raw = video?.tags;
+  const collected = [];
+  if (Array.isArray(raw)) {
+    raw.forEach((item) => collected.push(...normalizeTagValue(item)));
+  } else {
+    collected.push(...normalizeTagValue(raw));
+  }
+  return [...new Set(collected)];
+}
+
 function HeartIcon({ filled }) {
   return (
     <svg
@@ -158,6 +180,7 @@ export default function VideoCard({
   const coverSrc = coverCandidates[coverIndex] || "";
   const durationLabel = formatDuration(video?.duration_seconds);
   const dateLabel = formatDate(video?.created_at);
+  const topicTags = useMemo(() => getTopicTags(video), [video?.tags]);
 
   useEffect(() => {
     setCoverIndex(0);
@@ -269,6 +292,11 @@ export default function VideoCard({
             {video?.difficulty ? (
               <span className="chip chip--gold">⭐ {video.difficulty}</span>
             ) : null}
+            {topicTags.map((tag) => (
+              <span className="chip chip--mint" key={`tag-${tag}`}>
+                {tag}
+              </span>
+            ))}
           </div>
 
           {dateLabel ? <div className="video-card__date">{dateLabel}</div> : null}

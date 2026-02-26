@@ -161,9 +161,9 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
       return "";
     }
     if (option.is_correct) {
-      return "Richtig ✓";
+      return "✓";
     }
-    return "Falsch ✗";
+    return "✗";
   }
 
   if (!isOpen) {

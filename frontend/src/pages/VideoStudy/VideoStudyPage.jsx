@@ -610,6 +610,8 @@ export default function VideoStudyPage() {
                   className="vs-playerPlaceholder"
                   controls
                   playsInline
+                  controlsList="nodownload"
+                  onContextMenu={(event) => event.preventDefault()}
                   preload="metadata"
                   src={leftVideoUrl}
                 />

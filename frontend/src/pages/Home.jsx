@@ -453,6 +453,13 @@ export default function Home() {
     return buildStats(totalVideoCount, completedVideos, activeDays);
   }, [totalVideoCount, completedVideos, activeDays]);
 
+  const seasonBanner = (
+    <div className="home-season-banner" aria-label="文化科普季（50期持续更新中）">
+      <span className="home-season-title">文化科普季</span>
+      <span className="home-season-sub">（50期持续更新中）</span>
+    </div>
+  );
+
   return (
     <div className="home-page">
       <div className={`home-layout ${isMobileView ? "home-layout--mobile" : ""}`}>
@@ -543,21 +550,25 @@ export default function Home() {
           )}
 
           {!isMobileView && (
-            <VideoFilter
-              difficultyOptions={videoMeta.difficulties}
-              durationOptions={durationBuckets.options}
-              creatorOptions={videoMeta.creators}
-              topicOptions={videoMeta.topics}
-              selectedDifficulties={selectedDifficulties}
-              selectedDurations={selectedDurations}
-              selectedCreators={selectedCreators}
-              selectedTopics={selectedTopics}
-              onDifficultyChange={setSelectedDifficulties}
-              onDurationChange={setSelectedDurations}
-              onCreatorChange={setSelectedCreators}
-              onTopicChange={setSelectedTopics}
-            />
+            <>
+              {seasonBanner}
+              <VideoFilter
+                difficultyOptions={videoMeta.difficulties}
+                durationOptions={durationBuckets.options}
+                creatorOptions={videoMeta.creators}
+                topicOptions={videoMeta.topics}
+                selectedDifficulties={selectedDifficulties}
+                selectedDurations={selectedDurations}
+                selectedCreators={selectedCreators}
+                selectedTopics={selectedTopics}
+                onDifficultyChange={setSelectedDifficulties}
+                onDurationChange={setSelectedDurations}
+                onCreatorChange={setSelectedCreators}
+                onTopicChange={setSelectedTopics}
+              />
+            </>
           )}
+          {isMobileView ? seasonBanner : null}
 
           <VideoGrid
             videos={videos}

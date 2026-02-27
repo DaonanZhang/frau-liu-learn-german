@@ -454,8 +454,8 @@ export default function Home() {
   }, [totalVideoCount, completedVideos, activeDays]);
 
   const seasonBanner = (
-    <div className="home-season-banner" aria-label="文化科普季（50期持续更新中）">
-      <span className="home-season-title">文化科普季</span>
+    <div className="home-season-banner" aria-label="科普季（50期持续更新中）">
+      <span className="home-season-title">科普季</span>
       <span className="home-season-sub">（50期持续更新中）</span>
     </div>
   );

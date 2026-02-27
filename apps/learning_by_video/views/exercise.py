@@ -5,6 +5,8 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.learning_by_video.models.exercise import VideoExerciseQuestion
 from apps.learning_by_video.serializers.exercise import VideoExerciseQuestionSerializer
+from apps.learning_by_video.access import filter_occurrences_by_entitlement
+from apps.accounts.permissions.entitlement import HasValidEntitlement
 
 
 class VideoExerciseQuestionViewSet(viewsets.ReadOnlyModelViewSet):
@@ -17,6 +19,13 @@ class VideoExerciseQuestionViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = VideoExerciseQuestionSerializer
     permission_classes = [IsAuthenticated]
+    required_module_key = "learning_by_video"
+
+    def get_permissions(self):
+        return [
+            IsAuthenticated(),
+            HasValidEntitlement(module_key=self.required_module_key),
+        ]
 
     def get_queryset(self):
         qs = (
@@ -24,6 +33,11 @@ class VideoExerciseQuestionViewSet(viewsets.ReadOnlyModelViewSet):
             .select_related("video")
             .prefetch_related("options")
             .order_by("video_id", "order", "id")
+        )
+        qs = filter_occurrences_by_entitlement(
+            qs,
+            user=self.request.user,
+            module_key=self.required_module_key,
         )
 
         video_id = self.request.query_params.get("video")

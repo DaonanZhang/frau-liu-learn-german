@@ -8,6 +8,7 @@ from apps.accounts.views.registration import (
     RegisterVerifyCodeAPIView,
     RegisterAPIView,
 )
+from apps.accounts.views.activation import ActivationCodeApplyAPIView
 
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -36,6 +37,11 @@ urlpatterns += [
         "auth/register/",
         RegisterAPIView.as_view(),
         name="register",
+    ),
+    path(
+        "auth/activate-code/",
+        ActivationCodeApplyAPIView.as_view(),
+        name="activate-code",
     ),
 ]
 

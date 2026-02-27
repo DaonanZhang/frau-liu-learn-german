@@ -24,6 +24,16 @@ class Video(models.Model):
         help_text="List of tag strings associated with the video",
     )
 
+    season = models.ForeignKey(
+        "accounts.ModuleSeason",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="videos",
+        db_index=True,
+        help_text="Content season for access control.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     is_published = models.BooleanField(default=False, db_index=True)
     published_at = models.DateTimeField(null=True, blank=True, db_index=True)

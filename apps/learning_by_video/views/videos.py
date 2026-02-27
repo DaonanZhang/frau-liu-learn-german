@@ -9,13 +9,15 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.learning_by_video.models import LearningVideoUserData, Video, VideoProgress
 from apps.learning_by_video.serializers import VideoDetailSerializer, VideoListSerializer, VideoProgressSerializer
 from apps.learning_by_video.throttles import VideoProgressWriteThrottle
+from apps.learning_by_video.access import filter_videos_by_entitlement
+from apps.accounts.permissions.entitlement import HasValidEntitlement
 
 
 @dataclass(frozen=True)
@@ -30,12 +32,20 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends = [OrderingFilter, SearchFilter]
     ordering_fields = ["created_at", "difficulty", "duration_seconds"]
     search_fields = ["title"]
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
+
+    required_module_key = "learning_by_video"
 
     progress_policy = ProgressPolicy()
 
     def get_serializer_class(self):
         return VideoListSerializer if self.action == "list" else VideoDetailSerializer
+
+    def get_permissions(self):
+        return [
+            IsAuthenticated(),
+            HasValidEntitlement(module_key=self.required_module_key),
+        ]
 
     def _parse_list_param(self, name: str) -> list[str]:
         params = self.request.query_params
@@ -61,6 +71,11 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        qs = filter_videos_by_entitlement(
+            qs,
+            user=self.request.user,
+            module_key=self.required_module_key,
+        )
 
         difficulties = self._parse_list_param("difficulty")
         if difficulties:
@@ -138,7 +153,11 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
         url_path="meta",
     )
     def meta(self, request: Request) -> Response:
-        qs = Video.objects.all()
+        qs = filter_videos_by_entitlement(
+            Video.objects.all(),
+            user=request.user,
+            module_key=self.required_module_key,
+        )
 
         difficulties = sorted({item for item in qs.values_list("difficulty", flat=True) if item})
         creators = sorted({item for item in qs.values_list("creator", flat=True) if item})

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.db.models import QuerySet
 from rest_framework.filters import OrderingFilter
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from apps.learning_by_video.models import (
@@ -14,6 +15,8 @@ from apps.learning_by_video.serializers import (
     VideoSentenceOccurrenceSerializer,
     VideoWordOccurrenceSerializer,
 )
+from apps.learning_by_video.access import filter_occurrences_by_entitlement
+from apps.accounts.permissions.entitlement import HasValidEntitlement
 from django.db import models
 from django.db.models import OuterRef, Subquery, Value, Exists, Case, When
 from django.db.models.functions import Coalesce
@@ -150,9 +153,21 @@ class VideoWordOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewSet):
     filter_backends = [OrderingFilter]
     ordering_fields = ["time_start"]
     ordering = ["time_start"]
+    required_module_key = "learning_by_video"
+
+    def get_permissions(self):
+        return [
+            IsAuthenticated(),
+            HasValidEntitlement(module_key=self.required_module_key),
+        ]
 
     def get_queryset(self):
         qs = VideoWordOccurrence.objects.select_related("video", "subtitle", "word").all()
+        qs = filter_occurrences_by_entitlement(
+            qs,
+            user=self.request.user,
+            module_key=self.required_module_key,
+        )
         qs = self.filter_queryset_by_params(qs)
         qs = self.annotate_user_mark_info(
             qs,
@@ -168,9 +183,21 @@ class VideoSentenceOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewSet
     filter_backends = [OrderingFilter]
     ordering_fields = ["time_start"]
     ordering = ["time_start"]
+    required_module_key = "learning_by_video"
+
+    def get_permissions(self):
+        return [
+            IsAuthenticated(),
+            HasValidEntitlement(module_key=self.required_module_key),
+        ]
 
     def get_queryset(self):
         qs = VideoSentenceOccurrence.objects.select_related("video", "subtitle", "sentence").all()
+        qs = filter_occurrences_by_entitlement(
+            qs,
+            user=self.request.user,
+            module_key=self.required_module_key,
+        )
         qs = self.filter_queryset_by_params(qs)
         qs = self.annotate_user_mark_info(
             qs,
@@ -187,9 +214,21 @@ class VideoExpressionOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewS
     filter_backends = [OrderingFilter]
     ordering_fields = ["time_start"]
     ordering = ["time_start"]
+    required_module_key = "learning_by_video"
+
+    def get_permissions(self):
+        return [
+            IsAuthenticated(),
+            HasValidEntitlement(module_key=self.required_module_key),
+        ]
 
     def get_queryset(self):
         qs = VideoExpressionOccurrence.objects.select_related("video", "subtitle", "expression").all()
+        qs = filter_occurrences_by_entitlement(
+            qs,
+            user=self.request.user,
+            module_key=self.required_module_key,
+        )
         qs = self.filter_queryset_by_params(qs)
         qs = self.annotate_user_mark_info(
             qs,

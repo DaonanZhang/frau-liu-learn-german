@@ -75,7 +75,7 @@ class HasValidEntitlement(BasePermission):
         if base_qs.filter(module=module, season__isnull=True).exists():
             return True
 
-        # 3️⃣ season-level entitlement (only if season is required)
+        # 3️⃣ season-level entitlement
         if season_number is not None:
             season = ModuleSeason.objects.filter(
                 module=module,
@@ -87,4 +87,5 @@ class HasValidEntitlement(BasePermission):
 
             return base_qs.filter(module=module, season=season).exists()
 
-        return False
+        # If no season required, any season-level entitlement counts.
+        return base_qs.filter(module=module, season__isnull=False).exists()

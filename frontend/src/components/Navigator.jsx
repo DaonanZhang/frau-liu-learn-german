@@ -57,10 +57,12 @@ export default function Navigator() {
 
   const pathname = location.pathname;
 
+  const isManualActive = pathname.startsWith("/manual");
   const isLearningRecordsActive = pathname.startsWith("/learning-records");
   const isLexiconActive = pathname.startsWith("/lexicon");
 
   const titleText = "符号刘的德语素材库";
+  const manualText = isMobileView ? "手册" : "操作手册";
   const learningRecordsText = isMobileView ? "记录" : "学习记录";
   const lexiconText = isMobileView ? "卡片" : "德语卡片";
 
@@ -85,6 +87,21 @@ export default function Navigator() {
         </div>
 
         <nav className="nav-right">
+          <button
+            className={[
+              "nav-btn",
+              isManualActive ? "nav-btn--active" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            type="button"
+            onClick={() => {
+              navigate("/manual");
+            }}
+          >
+            {manualText}
+          </button>
+
           <button
             className={[
               "nav-btn",

@@ -9,6 +9,7 @@ export default function AppLayout() {
   const { isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const isManualPage = location.pathname.startsWith("/manual");
 
   useEffect(() => {
     if (loading) return;
@@ -33,7 +34,7 @@ export default function AppLayout() {
     <div className="app-layout">
       <Navigator />
 
-      <div className="app-body">
+      <div className={["app-body", isManualPage ? "app-body--manual" : ""].filter(Boolean).join(" ")}>
         <div className="app-container">
           {/*TODO: Sidebar for later*/}
           {/*<aside className="app-sidebar">*/}

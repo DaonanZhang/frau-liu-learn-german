@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage.jsx";
 import ActivatePage from "./pages/ActivatePage.jsx";
 import LexiconPage from "./pages/LexiconPage/LexiconPage.jsx";
 import LearningRecordPage from "./pages/RecordPage/LearningRecordPage.jsx";
+import ManualPage from "./pages/ManualPage.jsx";
 
 import { AuthProvider } from "./api/auth";
 
@@ -16,6 +17,7 @@ const router = createBrowserRouter([
     element: <AppLayout />,
     children: [
       { path: "/", element: <Home /> },
+      { path: "/manual", element: <ManualPage /> },
       { path: "/videos/:videoId", element: <VideoStudyPage /> },
       { path: "/lexicon", element: <LexiconPage /> },
       { path: "/learning-records", element: <LearningRecordPage /> },

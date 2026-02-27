@@ -18,6 +18,10 @@
   padding-bottom: 2.25rem;
 }
 
+.app-body--manual {
+  background: #ffffff;
+}
+
 .app-sidebar {
   width: 15rem;
   flex: 0 0 15rem;

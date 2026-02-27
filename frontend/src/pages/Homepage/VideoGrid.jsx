@@ -36,14 +36,18 @@ export default function VideoGrid({
       {videos.map((video) => {
         const videoId = Number(video?.id);
         const mark = Number.isFinite(videoId) ? videoMarkById?.[videoId] : null;
+        const isLocked = Boolean(video?.is_locked);
 
         return (
           <VideoCard
             key={video.id}
             video={video}
             onClick={() => {
-              onVideoClick?.(video);
+              if (!isLocked) {
+                onVideoClick?.(video);
+              }
             }}
+            isLocked={isLocked}
             isFavorite={Boolean(mark?.is_favorite)}
             isCompleted={Boolean(mark?.is_completed)}
             onToggleFavorite={onToggleFavorite}

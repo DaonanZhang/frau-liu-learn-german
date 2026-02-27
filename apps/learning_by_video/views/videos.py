@@ -9,15 +9,14 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from apps.learning_by_video.models import LearningVideoUserData, Video, VideoProgress
 from apps.learning_by_video.serializers import VideoDetailSerializer, VideoListSerializer, VideoProgressSerializer
 from apps.learning_by_video.throttles import VideoProgressWriteThrottle
-from apps.learning_by_video.access import filter_videos_by_entitlement
-from apps.accounts.permissions.entitlement import HasValidEntitlement
+from apps.learning_by_video.access import ensure_video_access, get_accessible_season_ids
 
 
 @dataclass(frozen=True)
@@ -42,10 +41,7 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
         return VideoListSerializer if self.action == "list" else VideoDetailSerializer
 
     def get_permissions(self):
-        return [
-            IsAuthenticated(),
-            HasValidEntitlement(module_key=self.required_module_key),
-        ]
+        return [IsAuthenticated()]
 
     def _parse_list_param(self, name: str) -> list[str]:
         params = self.request.query_params
@@ -71,11 +67,6 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        qs = filter_videos_by_entitlement(
-            qs,
-            user=self.request.user,
-            module_key=self.required_module_key,
-        )
 
         difficulties = self._parse_list_param("difficulty")
         if difficulties:
@@ -120,6 +111,11 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
 
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         instance: Video = self.get_object()
+        ensure_video_access(
+            user=request.user,
+            video=instance,
+            module_key=self.required_module_key,
+        )
 
         include_subtitles = request.query_params.get("include_subtitles") in {"1", "true", "True"}
         qs = Video.objects.all()
@@ -153,11 +149,7 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
         url_path="meta",
     )
     def meta(self, request: Request) -> Response:
-        qs = filter_videos_by_entitlement(
-            Video.objects.all(),
-            user=request.user,
-            module_key=self.required_module_key,
-        )
+        qs = Video.objects.all()
 
         difficulties = sorted({item for item in qs.values_list("difficulty", flat=True) if item})
         creators = sorted({item for item in qs.values_list("creator", flat=True) if item})
@@ -232,6 +224,11 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
     )
     def progress(self, request: Request, pk: str | None = None) -> Response:
         video = self.get_object()
+        ensure_video_access(
+            user=request.user,
+            video=video,
+            module_key=self.required_module_key,
+        )
         obj, _created = VideoProgress.objects.get_or_create(user=request.user, video=video)
 
         if request.method == "GET":
@@ -261,3 +258,11 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
             self._sync_learning_user_data(request, video=video, current_time=obj.current_time)
 
         return Response(VideoProgressSerializer(obj).data, status=status.HTTP_200_OK)
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["accessible_season_ids"] = get_accessible_season_ids(
+            user=self.request.user,
+            module_key=self.required_module_key,
+        )
+        return ctx

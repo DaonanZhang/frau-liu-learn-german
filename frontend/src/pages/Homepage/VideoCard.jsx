@@ -147,6 +147,7 @@ function CheckIcon({ filled }) {
 export default function VideoCard({
   video,
   onClick,
+  isLocked = false,
   isFavorite = false,
   isCompleted = false,
   onToggleFavorite,
@@ -189,16 +190,17 @@ export default function VideoCard({
   const shouldKeepActionsVisible = Boolean(isFavorite || isCompleted);
 
   return (
-    <article className="video-card">
+    <article className={["video-card", isLocked ? "video-card--locked" : ""].join(" ")}>
       <div
         className="video-card__media"
-        onClick={onClick}
+        onClick={isLocked ? undefined : onClick}
         role="button"
-        tabIndex={0}
+        tabIndex={isLocked ? -1 : 0}
+        aria-disabled={isLocked ? "true" : "false"}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            if (onClick) {
+            if (!isLocked && onClick) {
               onClick();
             }
           }
@@ -220,6 +222,27 @@ export default function VideoCard({
         )}
 
         <div className="video-card__overlay" aria-hidden="true" />
+
+        {isLocked ? (
+          <div className="video-card__lock" aria-label="locked">
+            <svg
+              className="video-card__lock-icon"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M7 10V7.5C7 4.46 9.46 2 12.5 2S18 4.46 18 7.5V10"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+              <rect x="5" y="10" width="14" height="12" rx="2.2" />
+            </svg>
+            <span className="video-card__lock-text">暂未解锁</span>
+          </div>
+        ) : null}
 
         {durationLabel ? (
           <div className="video-card__duration">{durationLabel}</div>
@@ -244,10 +267,11 @@ export default function VideoCard({
             aria-label={isFavorite ? "Unfavorite video" : "Favorite video"}
             onClick={(event) => {
               event.stopPropagation();
-              if (onToggleFavorite) {
+              if (!isLocked && onToggleFavorite) {
                 onToggleFavorite(video);
               }
             }}
+            disabled={isLocked}
           >
             <HeartIcon filled={Boolean(isFavorite)} />
             <span className="video-card__quick-label">收藏</span>
@@ -266,10 +290,11 @@ export default function VideoCard({
             aria-label={isCompleted ? "Unmark completed" : "Mark as completed"}
             onClick={(event) => {
               event.stopPropagation();
-              if (onToggleCompleted) {
+              if (!isLocked && onToggleCompleted) {
                 onToggleCompleted(video);
               }
             }}
+            disabled={isLocked}
           >
             <CheckIcon filled={Boolean(isCompleted)} />
             <span className="video-card__quick-label">完成</span>

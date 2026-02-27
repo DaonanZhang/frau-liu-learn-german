@@ -212,6 +212,16 @@ def _build_video_file_map() -> dict[str, str]:
     return file_map
 
 
+def _get_default_season():
+    Module = apps.get_model("accounts", "Module")
+    ModuleSeason = apps.get_model("accounts", "ModuleSeason")
+
+    module = Module.objects.filter(key="learning_by_video", is_active=True).first()
+    if not module:
+        return None
+    return ModuleSeason.objects.filter(module=module, season_number=1).first()
+
+
 def _find_media_filename(title: str, file_map: dict[str, str]) -> str:
     """
     Find best matching filename by normalized title.
@@ -264,6 +274,13 @@ class Command(BaseCommand):
         processed_dir.mkdir(parents=True, exist_ok=True)
         cover_file_map = _build_cover_file_map()
         video_file_map = _build_video_file_map()
+        default_season = _get_default_season()
+        if default_season is None:
+            self.stdout.write(
+                self.style.WARNING(
+                    "⚠️ Default season not found. Imported videos will have no season."
+                )
+            )
 
         no_move: bool = bool(options.get("no_move"))
         file_arg = (options.get("file") or "").strip()
@@ -358,6 +375,10 @@ class Command(BaseCommand):
                             "cover_letter_url": cover_letter_url,
                         },
                     )
+
+                    if default_season and obj.season_id is None:
+                        obj.season = default_season
+                        obj.save(update_fields=["season"])
 
                     if was_created:
                         created += 1

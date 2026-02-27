@@ -5,6 +5,7 @@ from typing import Optional
 from django.apps import apps
 from django.db import models
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
 
 
 def get_accessible_season_ids(*, user, module_key: str) -> Optional[list[int]]:
@@ -66,3 +67,27 @@ def filter_occurrences_by_entitlement(qs, *, user, module_key: str):
     if not season_ids:
         return qs.none()
     return qs.filter(video__season_id__in=season_ids)
+
+
+def user_has_video_access(*, user, video, module_key: str) -> bool:
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+
+    if getattr(user, "is_staff", False):
+        return True
+
+    # No season assigned => always locked
+    if not getattr(video, "season_id", None):
+        return False
+
+    season_ids = get_accessible_season_ids(user=user, module_key=module_key)
+    if season_ids is None:
+        return True
+    if not season_ids:
+        return False
+    return video.season_id in season_ids
+
+
+def ensure_video_access(*, user, video, module_key: str) -> None:
+    if not user_has_video_access(user=user, video=video, module_key=module_key):
+        raise PermissionDenied("You do not have access to this video.")

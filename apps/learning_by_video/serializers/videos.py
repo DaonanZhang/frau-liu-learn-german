@@ -10,6 +10,8 @@ from .progress import VideoProgressSerializer
 
 class VideoListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for video list pages."""
+    season_number = serializers.SerializerMethodField()
+    is_locked = serializers.SerializerMethodField()
 
     class Meta:
         model = Video
@@ -24,8 +26,30 @@ class VideoListSerializer(serializers.ModelSerializer):
             "duration_seconds",
             "tags",
             "created_at",
+            "season_number",
+            "is_locked",
         ]
         read_only_fields = fields
+
+    def get_season_number(self, obj: Video) -> int | None:
+        return obj.season.season_number if obj.season_id else None
+
+    def get_is_locked(self, obj: Video) -> bool:
+        # No season assigned => locked
+        if not obj.season_id:
+            return True
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_staff", False):
+            return False
+
+        season_ids = self.context.get("accessible_season_ids")
+        if season_ids is None:
+            return False
+        if not season_ids:
+            return True
+        return obj.season_id not in season_ids
 
 
 class VideoDetailSerializer(serializers.ModelSerializer):
@@ -37,6 +61,8 @@ class VideoDetailSerializer(serializers.ModelSerializer):
 
     subtitles = SubtitleSerializer(many=True, read_only=True)
     progress = VideoProgressSerializer(read_only=True)
+    season_number = serializers.SerializerMethodField()
+    is_locked = serializers.SerializerMethodField()
 
     class Meta:
         model = Video
@@ -51,10 +77,31 @@ class VideoDetailSerializer(serializers.ModelSerializer):
             "duration_seconds",
             "tags",
             "created_at",
+            "season_number",
+            "is_locked",
             "subtitles",
             "progress",
         ]
         read_only_fields = fields
+
+    def get_season_number(self, obj: Video) -> int | None:
+        return obj.season.season_number if obj.season_id else None
+
+    def get_is_locked(self, obj: Video) -> bool:
+        if not obj.season_id:
+            return True
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user and getattr(user, "is_staff", False):
+            return False
+
+        season_ids = self.context.get("accessible_season_ids")
+        if season_ids is None:
+            return False
+        if not season_ids:
+            return True
+        return obj.season_id not in season_ids
 
     def to_representation(self, instance: Video) -> dict[str, Any]:
         data = super().to_representation(instance)

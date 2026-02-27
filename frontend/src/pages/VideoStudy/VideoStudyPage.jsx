@@ -430,6 +430,8 @@ export default function VideoStudyPage() {
     }
 
     const tolerance = 0.03;
+    let bestIndex = -1;
+    let bestStart = -Infinity;
 
     for (let index = 0; index < subtitleItems.length; index += 1) {
       const start = Number(subtitleItems[index]?.start ?? 0);
@@ -440,8 +442,15 @@ export default function VideoStudyPage() {
       }
 
       if (t >= start - tolerance && t < end + tolerance) {
-        return index;
+        if (start > bestStart) {
+          bestStart = start;
+          bestIndex = index;
+        }
       }
+    }
+
+    if (bestIndex !== -1) {
+      return bestIndex;
     }
 
     for (let index = subtitleItems.length - 1; index >= 0; index -= 1) {

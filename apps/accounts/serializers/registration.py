@@ -5,6 +5,8 @@ from rest_framework import serializers
 COUNTRY_CODE_CHOICES = (
     ("+86", "CN"),
     ("+49", "DE"),
+    ("+43", "AT"),
+    ("+41", "CH"),
     ("+852", "CN-HK"),
     ("+853", "CN-MO"),
     ("+886", "CN-TW"),

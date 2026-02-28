@@ -11,6 +11,8 @@ import {
 const COUNTRY_CODE_OPTIONS = [
   { value: "+86", label: "🇨🇳 中国 +86" },
   { value: "+49", label: "🇩🇪 德国 +49" },
+  { value: "+43", label: "🇦🇹 奥地利 +43" },
+  { value: "+41", label: "🇨🇭 瑞士 +41" },
   { value: "+852", label: "🇭🇰 中国香港 +852" },
   { value: "+853", label: "🇲🇴 中国澳门 +853" },
   { value: "+886", label: "中国台湾 +886" },

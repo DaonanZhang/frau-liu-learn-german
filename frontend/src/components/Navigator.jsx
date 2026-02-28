@@ -65,6 +65,7 @@ export default function Navigator() {
   const manualText = isMobileView ? "手册" : "操作手册";
   const learningRecordsText = isMobileView ? "记录" : "学习记录";
   const lexiconText = isMobileView ? "卡片" : "德语卡片";
+  const redeemText = isMobileView ? "兑换" : "兑换码";
 
   return (
     <header className="navigator">
@@ -141,7 +142,7 @@ export default function Navigator() {
                 navigate("/activate-entitlement");
               }}
             >
-              兑换码
+              {redeemText}
             </button>
           </div>
         </nav>

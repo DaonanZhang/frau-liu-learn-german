@@ -177,3 +177,28 @@
   color: #ffffff;
   border-color: #16a34a;
 }
+
+/* WeChat QR */
+.qr-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.25rem 0 0.6rem;
+}
+
+.qr-card__image {
+  width: 180px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.qr-card__text {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #4b5563;
+  text-align: center;
+}

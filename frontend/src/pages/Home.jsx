@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import StatsCard from "../pages/Homepage/components/StatsCard.jsx";
 import CalendarCard from "../pages/Homepage/components/CalendarCard";
 import Announcement from "../pages/Homepage/components/Announcement";
+import WeChatQrCard from "../pages/Homepage/components/WeChatQrCard";
 
 import VideoFilter from "../pages/Homepage/VideoFilter";
 import VideoGrid from "../pages/Homepage/VideoGrid";
@@ -505,6 +506,7 @@ export default function Home() {
             <StatsCard stats={stats} />
             <CalendarCard activeDates={userData?.active_dates || []} maxPastMonths={3} />
             <Announcement />
+            <WeChatQrCard />
 
             {isMobileView && (
               <div className="home-mobile-filter">

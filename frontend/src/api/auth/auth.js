@@ -116,3 +116,33 @@ export async function registerWithActivationCode({
     return { ok: false };
   }
 }
+
+/**
+ * Apply activation code for an existing user (grant entitlements).
+ */
+export async function applyActivationCode(code) {
+  try {
+    const data = await apiFetch("/accounts/auth/activate-code/", {
+      method: "POST",
+      body: { code },
+    });
+
+    await Swal.fire({
+      icon: "success",
+      title: "激活成功",
+      text: "权限已添加到当前账户",
+      timer: 1400,
+      showConfirmButton: false,
+    });
+
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[activate-code] failed:", err);
+    await Swal.fire({
+      icon: "error",
+      title: "激活失败",
+      text: err?.data?.detail || "激活码无效或已过期",
+    });
+    return { ok: false };
+  }
+}

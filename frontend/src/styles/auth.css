@@ -244,6 +244,11 @@ body {
   );
 }
 
+.auth-btn.ghost {
+  background: #eef2f7;
+  color: #374151;
+}
+
 .auth-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -284,6 +289,13 @@ body {
   text-align: center;
   font-size: 13px;
   color: var(--auth-muted);
+}
+
+.auth-entitlement-list {
+  margin: 8px 0 0;
+  padding-left: 1.1rem;
+  text-align: left;
+  color: #475467;
 }
 
 /* =========================

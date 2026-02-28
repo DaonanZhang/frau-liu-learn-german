@@ -67,9 +67,28 @@
   color: #fff;
 }
 
+.nav-btn.nav-btn--gradient {
+  background: linear-gradient(
+    90deg,
+    rgba(173, 235, 230, 1),
+    rgba(247, 213, 234, 1)
+  );
+  color: #111827;
+  border: none;
+}
+
 .nav-btn:not(.ghost):hover {
   background: #1677ff;
   color: #fff;
+}
+
+.nav-btn.nav-btn--gradient:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(173, 235, 230, 0.92),
+    rgba(247, 213, 234, 0.92)
+  );
+  color: #111827;
 }
 
 .nav-user {

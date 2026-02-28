@@ -134,6 +134,15 @@ export default function Navigator() {
             <button className="nav-btn" type="button" onClick={handleLogout}>
               登出
             </button>
+            <button
+              className="nav-btn nav-btn--gradient"
+              type="button"
+              onClick={() => {
+                navigate("/activate-entitlement");
+              }}
+            >
+              兑换码
+            </button>
           </div>
         </nav>
       </div>

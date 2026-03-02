@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -177,3 +178,20 @@ if use_https:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+# =========================
+# Session / JWT expiry
+# =========================
+
+# Django session cookie expiry (seconds)
+SESSION_COOKIE_AGE = env.int("DJANGO_SESSION_COOKIE_AGE", default=60 * 60 * 8)  # 8 hours
+
+# JWT expiry (SimpleJWT)
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(
+        minutes=env.int("JWT_ACCESS_MINUTES", default=30)
+    ),
+    "REFRESH_TOKEN_LIFETIME": timedelta(
+        days=env.int("JWT_REFRESH_DAYS", default=14)
+    ),
+}

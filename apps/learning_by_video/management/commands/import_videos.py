@@ -201,13 +201,31 @@ def _build_video_file_map() -> dict[str, str]:
     if not video_dir.exists():
         return {}
 
+    # Prefer modern web-friendly formats when multiple files share a stem.
+    ext_preference = {
+        ".mp4": 0,
+        ".m3u8": 1,
+        ".m4v": 2,
+        ".mov": 3,
+        ".webm": 4,
+    }
+
     file_map: dict[str, str] = {}
     for path in video_dir.iterdir():
         if not path.is_file():
             continue
+        ext = path.suffix.lower()
+        if ext not in ext_preference:
+            continue
         stem = path.stem
         key = _normalize_media_key(stem)
-        if key and key not in file_map:
+        if not key:
+            continue
+        if key not in file_map:
+            file_map[key] = path.name
+            continue
+        existing_ext = Path(file_map[key]).suffix.lower()
+        if ext_preference.get(ext, 99) < ext_preference.get(existing_ext, 99):
             file_map[key] = path.name
     return file_map
 

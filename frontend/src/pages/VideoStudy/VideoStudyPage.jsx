@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import Hls from "hls.js";
 import { useParams, Link } from "react-router-dom";
 import "./VideoStudyPage.css";
 import { fetchVideoDetail } from "../../api/learning_by_video/videos.js";
@@ -25,14 +26,20 @@ function formatDurationLabel(seconds) {
   return `${minutes}:${String(secs).padStart(2, "0")}`;
 }
 
+function isProbablyHlsUrl(url) {
+  if (!url) return false;
+  return /\.m3u8($|[?#])/i.test(url);
+}
 
 export default function VideoStudyPage() {
   const { videoId } = useParams();
   const videoRef = useRef(null);
+  const hlsRef = useRef(null);
 
   const [video, setVideo] = useState(null);
   const [loadingVideo, setLoadingVideo] = useState(true);
   const [videoErrorText, setVideoErrorText] = useState("");
+  const [playbackErrorText, setPlaybackErrorText] = useState("");
 
   const [playbackSettings, setPlaybackSettings] = useState({
     videoMode: "single_play",      // "single_play" | "single_loop"
@@ -100,6 +107,8 @@ export default function VideoStudyPage() {
   const leftDifficulty = video?.difficulty ?? "";
   const leftDescription = video?.description ?? "";
   const leftVideoUrl = video?.video_url ?? "";
+  const isHlsUrl = useMemo(() => isProbablyHlsUrl(leftVideoUrl), [leftVideoUrl]);
+  const playerErrorText = videoErrorText || playbackErrorText;
 
   useEffect(() => {
     const videoElement = videoRef.current;
@@ -110,6 +119,73 @@ export default function VideoStudyPage() {
     videoElement.setAttribute("webkit-playsinline", "");
   }, [leftVideoUrl]);
 
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      return () => {};
+    }
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    setPlaybackErrorText("");
+
+    if (!leftVideoUrl) {
+      videoElement.removeAttribute("src");
+      try {
+        videoElement.load();
+      } catch (_err) {
+        // ignore
+      }
+      return () => {};
+    }
+
+    if (!isHlsUrl) {
+      videoElement.src = leftVideoUrl;
+      try {
+        videoElement.load();
+      } catch (_err) {
+        // ignore
+      }
+      return () => {};
+    }
+
+    const canPlayNativeHls = Boolean(videoElement.canPlayType("application/vnd.apple.mpegurl"));
+    if (canPlayNativeHls) {
+      videoElement.src = leftVideoUrl;
+      try {
+        videoElement.load();
+      } catch (_err) {
+        // ignore
+      }
+      return () => {};
+    }
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: true });
+      hlsRef.current = hls;
+      hls.loadSource(leftVideoUrl);
+      hls.attachMedia(videoElement);
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data?.fatal) {
+          setPlaybackErrorText("HLS playback error.");
+          hls.destroy();
+          hlsRef.current = null;
+        }
+      });
+      return () => {
+        if (hlsRef.current) {
+          hlsRef.current.destroy();
+          hlsRef.current = null;
+        }
+      };
+    }
+
+    setPlaybackErrorText("This browser does not support HLS playback.");
+    return () => {};
+  }, [leftVideoUrl, isHlsUrl]);
 
   const loopRef = useRef({
     enabled: false,
@@ -609,9 +685,9 @@ export default function VideoStudyPage() {
             </div>
 
             <div className="vs-player">
-              {videoErrorText ? (
+              {playerErrorText ? (
                 <div className="vs-playerPlaceholder">
-                  <div className="vs-playerPlaceholderText">Failed to load video: {videoErrorText}</div>
+                  <div className="vs-playerPlaceholderText">Failed to load video: {playerErrorText}</div>
                 </div>
               ) : leftVideoUrl ? (
                 <video
@@ -622,7 +698,6 @@ export default function VideoStudyPage() {
                   controlsList="nodownload"
                   onContextMenu={(event) => event.preventDefault()}
                   preload="metadata"
-                  src={leftVideoUrl}
                 />
               ) : (
                 <div className="vs-playerPlaceholder">

@@ -8,48 +8,56 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const hasToken = () => Boolean(localStorage.getItem("accessToken"));
+  const [tokenPresent, setTokenPresent] = useState(
+    () => Boolean(localStorage.getItem("accessToken"))
+  );
+
+  const hasToken = useCallback(() => Boolean(localStorage.getItem("accessToken")), []);
 
   const reloadMe = useCallback(async () => {
     if (!hasToken()) {
       setUser(null);
-      setLoading(false);
+      setTokenPresent(false);
       return;
     }
 
     try {
       const me = await apiFetch("/accounts/users/me/");
       setUser(me);
+      setTokenPresent(true);
     } catch {
       clearAuthTokens();
       setUser(null);
+      setTokenPresent(false);
     } finally {
-      setLoading(false);
+      // keep loading as a bootstrap-only flag
     }
-  }, []);
+  }, [hasToken]);
 
   useEffect(() => {
-    if (!user && hasToken()) {
+    const token = hasToken();
+    setTokenPresent(token);
+    setLoading(false);
+    if (!user && token) {
       reloadMe();
-    } else {
-      setLoading(false);
     }
-  }, [user, reloadMe]);
+  }, [user, hasToken, reloadMe]);
 
   const notifyLogin = useCallback(() => {
-    setLoading(true);
+    setTokenPresent(true);
     reloadMe();
   }, [reloadMe]);
 
   const value = {
     user,
     loading,
-    isAuthenticated: Boolean(user),
+    isAuthenticated: Boolean(user) || tokenPresent,
     reloadMe,
     notifyLogin,
     logout: () => {
       clearAuthTokens();
       setUser(null);
+      setTokenPresent(false);
       setLoading(false);
     },
   };

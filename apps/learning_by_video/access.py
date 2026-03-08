@@ -48,6 +48,21 @@ def get_accessible_season_ids(*, user, module_key: str) -> Optional[list[int]]:
         .values_list("season_id", flat=True)
         .distinct()
     )
+    if season_ids:
+        # Special case: Season 1 entitlement should also unlock the preview "使用季".
+        # This keeps "使用季" as a preview bucket while granting access to full Season 1.
+        ModuleSeason = apps.get_model("accounts", "ModuleSeason")
+        season_numbers = set(
+            ModuleSeason.objects.filter(id__in=season_ids)
+            .values_list("season_number", flat=True)
+        )
+        if 1 in season_numbers:
+            preview_ids = list(
+                ModuleSeason.objects.filter(module=module, title="使用季")
+                .values_list("id", flat=True)
+            )
+            if preview_ids:
+                season_ids = list(set(season_ids) | set(preview_ids))
     return season_ids
 
 

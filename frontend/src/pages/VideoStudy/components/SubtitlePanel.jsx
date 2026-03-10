@@ -412,11 +412,16 @@ export default function SubtitlePanel({
 
     const containerRect = containerElement.getBoundingClientRect();
     const activeRect = activeElement.getBoundingClientRect();
-
-    const topPadding = 8;
+    const containerStyles = window.getComputedStyle(containerElement);
+    const paddingTop = Number.parseFloat(containerStyles.paddingTop) || 0;
+    const previousElement = activeElement.previousElementSibling;
+    const previousStyles = previousElement ? window.getComputedStyle(previousElement) : null;
+    const previousMarginBottom = previousStyles ? Number.parseFloat(previousStyles.marginBottom) || 0 : 0;
+    const previousHeight = previousElement ? previousElement.offsetHeight : 0;
+    const contextOffset = paddingTop + previousHeight + previousMarginBottom;
     const currentScrollTop = containerElement.scrollTop;
     const deltaTop = activeRect.top - containerRect.top;
-    const targetScrollTop = currentScrollTop + deltaTop - topPadding;
+    const targetScrollTop = currentScrollTop + deltaTop - contextOffset;
     const maxScrollTop = Math.max(0, containerElement.scrollHeight - containerElement.clientHeight);
     const nextScrollTop = Math.min(Math.max(targetScrollTop, 0), maxScrollTop);
 

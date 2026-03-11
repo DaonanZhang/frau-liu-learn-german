@@ -33,6 +33,12 @@ class Video(models.Model):
         db_index=True,
         help_text="Content season for access control.",
     )
+    access_seasons = models.ManyToManyField(
+        "accounts.ModuleSeason",
+        blank=True,
+        related_name="access_videos",
+        help_text="Additional seasons that grant access to this video.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     is_published = models.BooleanField(default=False, db_index=True)

@@ -20,6 +20,7 @@ class VideoAdmin(admin.ModelAdmin):
     list_filter = ("difficulty", "season", "is_published")
     search_fields = ("title", "creator")
     ordering = ("-created_at",)
+    filter_horizontal = ("access_seasons",)
 
 
 @admin.register(Subtitle)

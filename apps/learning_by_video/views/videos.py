@@ -66,7 +66,7 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
         return cleaned
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        qs = super().get_queryset().prefetch_related("access_seasons")
 
         difficulties = self._parse_list_param("difficulty")
         if difficulties:

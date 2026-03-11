@@ -69,19 +69,37 @@ def get_accessible_season_ids(*, user, module_key: str) -> Optional[list[int]]:
 def filter_videos_by_entitlement(qs, *, user, module_key: str):
     season_ids = get_accessible_season_ids(user=user, module_key=module_key)
     if season_ids is None:
-        return qs.filter(season__isnull=False)
+        return qs.filter(
+            models.Q(season__isnull=False) | models.Q(access_seasons__isnull=False)
+        ).distinct()
     if not season_ids:
         return qs.none()
-    return qs.filter(season_id__in=season_ids)
+    return qs.filter(
+        models.Q(season_id__in=season_ids) | models.Q(access_seasons__id__in=season_ids)
+    ).distinct()
 
 
 def filter_occurrences_by_entitlement(qs, *, user, module_key: str):
     season_ids = get_accessible_season_ids(user=user, module_key=module_key)
     if season_ids is None:
-        return qs.filter(video__season__isnull=False)
+        return qs.filter(
+            models.Q(video__season__isnull=False) | models.Q(video__access_seasons__isnull=False)
+        ).distinct()
     if not season_ids:
         return qs.none()
-    return qs.filter(video__season_id__in=season_ids)
+    return qs.filter(
+        models.Q(video__season_id__in=season_ids) | models.Q(video__access_seasons__id__in=season_ids)
+    ).distinct()
+
+
+def _get_video_season_ids(video) -> set[int]:
+    season_ids: set[int] = set()
+    if getattr(video, "season_id", None):
+        season_ids.add(video.season_id)
+    access_rel = getattr(video, "access_seasons", None)
+    if access_rel is not None:
+        season_ids.update(access_rel.values_list("id", flat=True))
+    return season_ids
 
 
 def user_has_video_access(*, user, video, module_key: str) -> bool:
@@ -92,7 +110,8 @@ def user_has_video_access(*, user, video, module_key: str) -> bool:
         return True
 
     # No season assigned => always locked
-    if not getattr(video, "season_id", None):
+    video_season_ids = _get_video_season_ids(video)
+    if not video_season_ids:
         return False
 
     season_ids = get_accessible_season_ids(user=user, module_key=module_key)
@@ -100,7 +119,7 @@ def user_has_video_access(*, user, video, module_key: str) -> bool:
         return True
     if not season_ids:
         return False
-    return video.season_id in season_ids
+    return bool(video_season_ids.intersection(season_ids))
 
 
 def ensure_video_access(*, user, video, module_key: str) -> None:

@@ -31,12 +31,23 @@ class VideoListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @staticmethod
+    def _get_video_season_ids(obj: Video) -> set[int]:
+        season_ids: set[int] = set()
+        if obj.season_id:
+            season_ids.add(obj.season_id)
+        access_rel = getattr(obj, "access_seasons", None)
+        if access_rel is not None:
+            season_ids.update(access_rel.values_list("id", flat=True))
+        return season_ids
+
     def get_season_number(self, obj: Video) -> int | None:
         return obj.season.season_number if obj.season_id else None
 
     def get_is_locked(self, obj: Video) -> bool:
         # No season assigned => locked
-        if not obj.season_id:
+        video_season_ids = self._get_video_season_ids(obj)
+        if not video_season_ids:
             return True
 
         request = self.context.get("request")
@@ -49,7 +60,7 @@ class VideoListSerializer(serializers.ModelSerializer):
             return False
         if not season_ids:
             return True
-        return obj.season_id not in season_ids
+        return not video_season_ids.intersection(season_ids)
 
 
 class VideoDetailSerializer(serializers.ModelSerializer):
@@ -84,11 +95,22 @@ class VideoDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @staticmethod
+    def _get_video_season_ids(obj: Video) -> set[int]:
+        season_ids: set[int] = set()
+        if obj.season_id:
+            season_ids.add(obj.season_id)
+        access_rel = getattr(obj, "access_seasons", None)
+        if access_rel is not None:
+            season_ids.update(access_rel.values_list("id", flat=True))
+        return season_ids
+
     def get_season_number(self, obj: Video) -> int | None:
         return obj.season.season_number if obj.season_id else None
 
     def get_is_locked(self, obj: Video) -> bool:
-        if not obj.season_id:
+        video_season_ids = self._get_video_season_ids(obj)
+        if not video_season_ids:
             return True
 
         request = self.context.get("request")
@@ -101,7 +123,7 @@ class VideoDetailSerializer(serializers.ModelSerializer):
             return False
         if not season_ids:
             return True
-        return obj.season_id not in season_ids
+        return not video_season_ids.intersection(season_ids)
 
     def to_representation(self, instance: Video) -> dict[str, Any]:
         data = super().to_representation(instance)

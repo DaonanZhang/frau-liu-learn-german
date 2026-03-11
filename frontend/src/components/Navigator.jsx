@@ -61,7 +61,7 @@ export default function Navigator() {
   const isLearningRecordsActive = pathname.startsWith("/learning-records");
   const isLexiconActive = pathname.startsWith("/lexicon");
 
-  const titleText = "符号刘的德语素材库";
+  const titleText = isMobileView ? "符号刘" : "符号刘的德语素材库";
   const manualText = isMobileView ? "手册" : "操作手册";
   const learningRecordsText = isMobileView ? "记录" : "学习记录";
   const lexiconText = isMobileView ? "卡片" : "德语卡片";

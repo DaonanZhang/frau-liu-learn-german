@@ -41,6 +41,7 @@ class VideoWordOccurrenceSerializer(BaseOccurrenceReadSerializer):
         model = VideoWordOccurrence
         fields = BaseOccurrenceReadSerializer.Meta.fields + [
             "word",
+            "selected_text",
             "word_text",
             "word_lemma",
             "word_article",
@@ -86,6 +87,7 @@ class VideoExpressionOccurrenceSerializer(BaseOccurrenceReadSerializer):
         model = VideoExpressionOccurrence
         fields = BaseOccurrenceReadSerializer.Meta.fields + [
             "expression",
+            "selected_text",
             "expression_text",
             "expression_prototype",
             "my_knowledge",

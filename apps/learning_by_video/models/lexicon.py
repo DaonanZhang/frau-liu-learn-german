@@ -13,6 +13,7 @@ class VideoWordOccurrence(BaseVideoOccurrence):
         related_name="video_occurrences",
         db_index=True,
     )
+    selected_text = models.TextField(blank=True, default="")
 
     class Meta(BaseVideoOccurrence.Meta):
         indexes = [
@@ -51,6 +52,7 @@ class VideoExpressionOccurrence(BaseVideoOccurrence):
         related_name="video_occurrences",
         db_index=True,
     )
+    selected_text = models.TextField(blank=True, default="")
 
     # Explaining
     meaning = models.TextField(blank=True, default="")

@@ -3,7 +3,9 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Any
+import unicodedata
 
 import pandas as pd
 from django.core.management.base import BaseCommand, CommandParser
@@ -30,6 +32,13 @@ from apps.lexicon.models import WordText
 
 
 DEFAULT_XLSX_DIR = Path("apps/learning_by_video/data/raw")
+
+# title alias fallback for server-side title variants
+TITLE_ALIAS_BY_SOFT: dict[str, list[str]] = {
+    "成瘾机制2": ["酒精成瘾机制（2）"],
+    "etf是什么": ["交易所交易基金是什么？", "交易所交易基金是什么"],
+    "etfeinfacherklart": ["交易所交易基金是什么？", "交易所交易基金是什么"],
+}
 
 # Fallback mappings for known content shifts between DB baseline and latest XLSX.
 # These rules are applied only when normal ID+匹配内容 matching fails.
@@ -106,6 +115,51 @@ def _word_note(article_raw: str, category_raw: str, lemma: str) -> str:
     return f"article={article_raw}; category={category_raw}; lemma={lemma}".strip()
 
 
+def _title_soft_norm(s: str) -> str:
+    raw = _s(s)
+    if not raw:
+        return ""
+    raw = unicodedata.normalize("NFKD", raw)
+    raw = "".join(ch for ch in raw if not unicodedata.combining(ch))
+    raw = raw.casefold()
+    raw = raw.replace("（", "(").replace("）", ")")
+    return re.sub(r"[\s\W_]+", "", raw)
+
+
+def _title_from_filename(path: Path) -> str:
+    name = path.stem
+    # e.g. "【011】ETF是什么？" -> "ETF是什么？"
+    name = re.sub(r"^【\d+】", "", name).strip()
+    return name
+
+
+def _expand_title_candidates(candidates: list[str], path: Path) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+
+    base = list(candidates)
+    title_from_file = _title_from_filename(path)
+    if title_from_file:
+        base.append(title_from_file)
+
+    for title in base:
+        t = _s(title)
+        if not t:
+            continue
+        if t not in seen:
+            out.append(t)
+            seen.add(t)
+
+        soft = _title_soft_norm(t)
+        for alias in TITLE_ALIAS_BY_SOFT.get(soft, []):
+            a = _s(alias)
+            if a and a not in seen:
+                out.append(a)
+                seen.add(a)
+
+    return out
+
+
 def _sheet(path: Path, name: str) -> pd.DataFrame:
     df = pd.read_excel(path, sheet_name=name, engine="openpyxl").fillna("")
     df.columns = [_s(c) for c in df.columns]
@@ -126,19 +180,32 @@ def _resolve_video(new_xlsx: Path) -> Video | None:
         t = _s(row.get(col, ""))
         if t and t not in candidates:
             candidates.append(t)
+    candidates = _expand_title_candidates(candidates, new_xlsx)
     if not creator or not candidates:
         return None
 
+    # 1) exact
     for title in candidates:
         v = Video.objects.filter(creator=creator, title=title).first()
         if v:
             return v
 
+    # 2) normalized key
     creator_videos = list(Video.objects.filter(creator=creator).only("id", "title"))
     candidate_keys = {_normalize_media_key(t) for t in candidates}
     for v in creator_videos:
         if _normalize_media_key(v.title) in candidate_keys:
             return v
+
+    # 3) soft inclusion (handles minor title extensions/abbreviations)
+    candidate_softs = {_title_soft_norm(t) for t in candidates if _title_soft_norm(t)}
+    for v in creator_videos:
+        v_soft = _title_soft_norm(v.title)
+        if not v_soft:
+            continue
+        for c_soft in candidate_softs:
+            if c_soft == v_soft or c_soft in v_soft or v_soft in c_soft:
+                return v
     return None
 
 

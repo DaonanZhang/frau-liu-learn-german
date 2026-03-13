@@ -23,6 +23,7 @@ const BASE = "/learning_by_video/occurrences";
 /**
  * @typedef {BaseOccurrence & {
  *   word: number
+ *   selected_text: string
  *   word_text: string
  *   word_lemma: string
  *   word_article: string
@@ -41,6 +42,7 @@ const BASE = "/learning_by_video/occurrences";
 /**
  * @typedef {BaseOccurrence & {
  *   expression: number
+ *   selected_text: string
  *   expression_text: string
  *   expression_prototype: string
  * }} ExpressionOccurrence

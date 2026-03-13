@@ -243,6 +243,16 @@ export default function SubtitlePanel({
           return String(value ?? "").trim();
         }
 
+        function pickMatchText(...candidates) {
+          for (const candidate of candidates) {
+            const text = normalizeMatchText(candidate);
+            if (text) {
+              return text;
+            }
+          }
+          return "";
+        }
+
         function addOccurrence(subtitleId, occurrence) {
           if (subtitleId === undefined || subtitleId === null) {
             return;
@@ -272,7 +282,7 @@ export default function SubtitlePanel({
         }
 
         words.forEach((o) => {
-          const matchText = normalizeMatchText(o?.word_text);
+          const matchText = pickMatchText(o?.selected_text, o?.word_text);
           const lemmaText = normalizeMatchText(o?.word_lemma);
           if (!matchText) {
             return;
@@ -300,7 +310,7 @@ export default function SubtitlePanel({
           const surfaceText = normalizeMatchText(o?.expression_text);
           const prototypeText = normalizeMatchText(o?.expression_prototype);
           const titleText = prototypeText || surfaceText;
-          const matchText = surfaceText || titleText;
+          const matchText = pickMatchText(o?.selected_text, surfaceText, titleText);
           if (!matchText) {
             return;
           }

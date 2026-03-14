@@ -267,7 +267,7 @@ def _find_media_filename(title: str, file_map: dict[str, str]) -> str:
 class Command(BaseCommand):
     help = (
         "Import videos from XLSX sheet 'video description'. "
-        "The cover_letter_url and video_url are derived ONLY from a slugified title."
+        "Media URLs (video_url / cover_letter_url) are intentionally ignored here."
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -290,8 +290,6 @@ class Command(BaseCommand):
         raw_dir = data_dir / "raw"
         processed_dir = data_dir / "processed"
         processed_dir.mkdir(parents=True, exist_ok=True)
-        cover_file_map = _build_cover_file_map()
-        video_file_map = _build_video_file_map()
         default_season = _get_default_season()
         if default_season is None:
             self.stdout.write(
@@ -337,60 +335,20 @@ class Command(BaseCommand):
                     if not title:
                         continue
 
-                    original_title = str(row.get(COL_TITLE_ORIG, "")).strip()
                     creator = str(row[COL_CREATOR]).strip()
                     difficulty = str(row[COL_DIFFICULTY]).strip()
                     description = str(row[COL_DESC]).strip()
                     duration_seconds = _parse_duration_to_seconds(str(row[COL_DURATION]).strip())
                     tags = _parse_tags(str(row[COL_TAGS]).strip())
 
-                    title_slug = _slugify_filename(title)
-
-                    # Prefer explicit link/cover if provided, otherwise derive from slug.
-                    cover_raw = str(row.get(COL_COVER, "")).strip()
-                    link_raw = str(row.get(COL_LINK, "")).strip()
-
-                    # NOTE: no extension here, as requested (only slugified title)
-                    if cover_raw:
-                        if cover_raw.startswith(("http://", "https://", "/")):
-                            cover_letter_url = cover_raw
-                        else:
-                            cover_letter_url = f"/resources/learning_by_video_cover_letters/{cover_raw}"
-                    else:
-                        cover_filename = ""
-                        if original_title and cover_file_map:
-                            key = _normalize_media_key(original_title)
-                            cover_filename = cover_file_map.get(key, "")
-                        if cover_filename:
-                            cover_letter_url = f"/resources/learning_by_video_cover_letters/{cover_filename}"
-                        else:
-                            cover_letter_url = f"/resources/learning_by_video_cover_letters/{title_slug}"
-
-                    video_filename = ""
-                    if original_title and video_file_map:
-                        video_filename = _find_media_filename(original_title, video_file_map)
-
-                    # Prefer local file (assumed to exist with English original title)
-                    if video_filename:
-                        video_url = f"/resources/learning_by_video_video/{video_filename}"
-                    elif link_raw:
-                        if link_raw.startswith(("http://", "https://", "/")):
-                            video_url = link_raw
-                        else:
-                            video_url = f"/resources/learning_by_video_video/{link_raw}"
-                    else:
-                        video_url = f"/resources/learning_by_video_video/{title_slug}"
-
                     obj, was_created = Video.objects.update_or_create(
                         title=title,
                         creator=creator,
                         defaults={
                             "difficulty": difficulty,
-                            "video_url": video_url,
                             "description": description,
                             "duration_seconds": duration_seconds,
                             "tags": tags,
-                            "cover_letter_url": cover_letter_url,
                         },
                     )
 

@@ -22,6 +22,8 @@ COL_TRANSLATION = "翻译"
 COL_ARTICLE = "词性"
 COL_CATEGORY = "类别"
 COL_SUBTITLE_ID = "ID"
+COL_SELECTED_TEXT = "原文选中"
+COL_SELECTED_TEXT_ALT = "内容选中"
 
 
 def _to_str(v: object) -> str:
@@ -141,6 +143,10 @@ class Command(BaseCommand):
         # Normalize columns to strings
         for col in required:
             df[col] = df[col].map(_to_str)
+        if COL_SELECTED_TEXT in df.columns:
+            df[COL_SELECTED_TEXT] = df[COL_SELECTED_TEXT].map(_to_str)
+        if COL_SELECTED_TEXT_ALT in df.columns:
+            df[COL_SELECTED_TEXT_ALT] = df[COL_SELECTED_TEXT_ALT].map(_to_str)
         # Normalize lemma column (support both "Lemma" and "lemma")
         if COL_LEMMA in df.columns:
             df[COL_LEMMA] = df[COL_LEMMA].map(_to_str)
@@ -175,6 +181,7 @@ class Command(BaseCommand):
             article_raw = row[COL_ARTICLE]
             category_raw = row[COL_CATEGORY]
             subtitle_id_raw = row[COL_SUBTITLE_ID]
+            selected_text = row.get(COL_SELECTED_TEXT, "") or row.get(COL_SELECTED_TEXT_ALT, "")
 
             if not text or not subtitle_id_raw:
                 skipped += 1
@@ -237,6 +244,7 @@ class Command(BaseCommand):
                     "time_end": time_end,
                     "translation": translation,
                     "note": note,
+                    "selected_text": selected_text,
                 },
             )
 

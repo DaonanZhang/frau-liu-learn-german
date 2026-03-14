@@ -17,6 +17,8 @@ COL_PROTOTYPE = "原型"
 COL_LINKED_SUBTITLE = "linked subtitle"
 COL_TRANSLATION = "翻译"
 COL_SUBTITLE_ID = "ID"
+COL_SELECTED_TEXT = "原文选中"
+COL_SELECTED_TEXT_ALT = "内容选中"
 
 
 class Command(BaseCommand):
@@ -50,6 +52,11 @@ class Command(BaseCommand):
         if missing:
             raise ValueError(f"Missing columns in sheet {sheet!r}: {sorted(missing)}")
 
+        if COL_SELECTED_TEXT in df.columns:
+            df[COL_SELECTED_TEXT] = df[COL_SELECTED_TEXT].map(lambda x: str(x).strip())
+        if COL_SELECTED_TEXT_ALT in df.columns:
+            df[COL_SELECTED_TEXT_ALT] = df[COL_SELECTED_TEXT_ALT].map(lambda x: str(x).strip())
+
         created_text = 0
         updated_text = 0
         created_occ = 0
@@ -62,6 +69,10 @@ class Command(BaseCommand):
             linked_sub = str(row[COL_LINKED_SUBTITLE]).strip()
             translation = str(row[COL_TRANSLATION]).strip()
             subtitle_id_raw = str(row[COL_SUBTITLE_ID]).strip()
+            selected_text = (
+                str(row.get(COL_SELECTED_TEXT, "")).strip()
+                or str(row.get(COL_SELECTED_TEXT_ALT, "")).strip()
+            )
 
             if not text or not subtitle_id_raw:
                 skipped += 1
@@ -108,6 +119,7 @@ class Command(BaseCommand):
                 "example": linked_sub,  # "When could this expression be used"
                 "meaning": "",          # not provided in this sheet
                 "note": "",
+                "selected_text": selected_text,
             }
 
             occ, occ_created = VideoExpressionOccurrence.objects.update_or_create(

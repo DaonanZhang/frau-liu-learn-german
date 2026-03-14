@@ -454,6 +454,35 @@ export default function Home() {
     return buildStats(totalVideoCount, completedVideos, activeDays);
   }, [totalVideoCount, completedVideos, activeDays]);
 
+  const sortedVideos = useMemo(() => {
+    if (!Array.isArray(videos) || videos.length === 0) {
+      return [];
+    }
+
+    return videos
+      .map((video, index) => ({ video, index }))
+      .sort((left, right) => {
+        const leftLocked = Boolean(left.video?.is_locked);
+        const rightLocked = Boolean(right.video?.is_locked);
+        if (leftLocked !== rightLocked) {
+          return leftLocked ? 1 : -1; // unlocked first
+        }
+
+        const leftId = Number(left.video?.id);
+        const rightId = Number(right.video?.id);
+        const leftMark = Number.isFinite(leftId) ? videoMarkById?.[leftId] : null;
+        const rightMark = Number.isFinite(rightId) ? videoMarkById?.[rightId] : null;
+        const leftCompleted = Boolean(leftMark?.is_completed);
+        const rightCompleted = Boolean(rightMark?.is_completed);
+        if (leftCompleted !== rightCompleted) {
+          return leftCompleted ? 1 : -1; // uncompleted first
+        }
+
+        return left.index - right.index; // keep backend order within same group
+      })
+      .map((item) => item.video);
+  }, [videos, videoMarkById]);
+
   const seasonBanner = (
     <div className="home-season-banner" aria-label="科普季（50期持续更新中）">
       <span className="home-season-title">科普季</span>
@@ -573,7 +602,7 @@ export default function Home() {
           {isMobileView ? seasonBanner : null}
 
           <VideoGrid
-            videos={videos}
+            videos={sortedVideos}
             loading={loadingVideos}
             errorText={videosErrorText}
             onVideoClick={handleOpenVideo}

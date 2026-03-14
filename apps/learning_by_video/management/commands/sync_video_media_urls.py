@@ -238,6 +238,13 @@ class Command(BaseCommand):
             default=[],
             help="Optional specific video IDs (can be repeated).",
         )
+        parser.add_argument(
+            "--exclude-video-id",
+            type=int,
+            action="append",
+            default=[],
+            help="Optional video IDs to skip (can be repeated).",
+        )
         parser.add_argument("--module-key", default="learning_by_video")
         parser.add_argument("--season-number", type=int, default=1)
         parser.add_argument(
@@ -263,6 +270,7 @@ class Command(BaseCommand):
             ensure_season = False
 
         video_ids: list[int] = list(options.get("video_id") or [])
+        exclude_video_ids: set[int] = set(options.get("exclude_video_id") or [])
         module_key = str(options.get("module_key") or "learning_by_video")
         season_number = int(options.get("season_number") or 1)
 
@@ -286,6 +294,8 @@ class Command(BaseCommand):
         qs = Video.objects.all().order_by("id")
         if video_ids:
             qs = qs.filter(id__in=video_ids)
+        if exclude_video_ids:
+            qs = qs.exclude(id__in=exclude_video_ids)
         videos = list(qs)
         title_hints = _collect_title_hints_from_xlsx(root)
 

@@ -153,21 +153,8 @@ class VideoWordOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewSet):
     filter_backends = [OrderingFilter]
     ordering_fields = ["time_start"]
     ordering = ["time_start"]
-    required_module_key = "learning_by_video"
-
-    def get_permissions(self):
-        return [
-            IsAuthenticated(),
-            HasValidEntitlement(module_key=self.required_module_key),
-        ]
-
     def get_queryset(self):
         qs = VideoWordOccurrence.objects.select_related("video", "subtitle", "word").all()
-        qs = filter_occurrences_by_entitlement(
-            qs,
-            user=self.request.user,
-            module_key=self.required_module_key,
-        )
         qs = self.filter_queryset_by_params(qs)
         qs = self.annotate_user_mark_info(
             qs,
@@ -214,21 +201,8 @@ class VideoExpressionOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewS
     filter_backends = [OrderingFilter]
     ordering_fields = ["time_start"]
     ordering = ["time_start"]
-    required_module_key = "learning_by_video"
-
-    def get_permissions(self):
-        return [
-            IsAuthenticated(),
-            HasValidEntitlement(module_key=self.required_module_key),
-        ]
-
     def get_queryset(self):
         qs = VideoExpressionOccurrence.objects.select_related("video", "subtitle", "expression").all()
-        qs = filter_occurrences_by_entitlement(
-            qs,
-            user=self.request.user,
-            module_key=self.required_module_key,
-        )
         qs = self.filter_queryset_by_params(qs)
         qs = self.annotate_user_mark_info(
             qs,

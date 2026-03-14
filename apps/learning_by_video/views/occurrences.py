@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from django.db.models import QuerySet
+from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
 from apps.learning_by_video.models import (
+    Video,
     VideoExpressionOccurrence,
     VideoSentenceOccurrence,
     VideoWordOccurrence,
@@ -15,7 +17,7 @@ from apps.learning_by_video.serializers import (
     VideoSentenceOccurrenceSerializer,
     VideoWordOccurrenceSerializer,
 )
-from apps.learning_by_video.access import filter_occurrences_by_entitlement
+from apps.learning_by_video.access import filter_occurrences_by_entitlement, ensure_video_access
 from apps.accounts.permissions.entitlement import HasValidEntitlement
 from django.db import models
 from django.db.models import OuterRef, Subquery, Value, Exists, Case, When
@@ -153,8 +155,29 @@ class VideoWordOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewSet):
     filter_backends = [OrderingFilter]
     ordering_fields = ["time_start"]
     ordering = ["time_start"]
+    permission_classes = [IsAuthenticated]
+    required_module_key = "learning_by_video"
+
     def get_queryset(self):
         qs = VideoWordOccurrence.objects.select_related("video", "subtitle", "word").all()
+        video_id = self.request.query_params.get("video")
+        if video_id:
+            video = get_object_or_404(
+                Video.objects.prefetch_related("access_seasons"),
+                pk=video_id,
+            )
+            ensure_video_access(
+                user=self.request.user,
+                video=video,
+                module_key=self.required_module_key,
+            )
+            qs = qs.filter(video_id=video.pk)
+        else:
+            qs = filter_occurrences_by_entitlement(
+                qs,
+                user=self.request.user,
+                module_key=self.required_module_key,
+            )
         qs = self.filter_queryset_by_params(qs)
         qs = self.annotate_user_mark_info(
             qs,
@@ -201,8 +224,29 @@ class VideoExpressionOccurrenceViewSet(OccurrenceFilterMixin, ReadOnlyModelViewS
     filter_backends = [OrderingFilter]
     ordering_fields = ["time_start"]
     ordering = ["time_start"]
+    permission_classes = [IsAuthenticated]
+    required_module_key = "learning_by_video"
+
     def get_queryset(self):
         qs = VideoExpressionOccurrence.objects.select_related("video", "subtitle", "expression").all()
+        video_id = self.request.query_params.get("video")
+        if video_id:
+            video = get_object_or_404(
+                Video.objects.prefetch_related("access_seasons"),
+                pk=video_id,
+            )
+            ensure_video_access(
+                user=self.request.user,
+                video=video,
+                module_key=self.required_module_key,
+            )
+            qs = qs.filter(video_id=video.pk)
+        else:
+            qs = filter_occurrences_by_entitlement(
+                qs,
+                user=self.request.user,
+                module_key=self.required_module_key,
+            )
         qs = self.filter_queryset_by_params(qs)
         qs = self.annotate_user_mark_info(
             qs,

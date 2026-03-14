@@ -138,6 +138,32 @@ class Command(BaseCommand):
             default=SHEET_WORD_DEFAULT,
             help=f"Sheet name for words (default: {SHEET_WORD_DEFAULT}).",
         )
+        parser.add_argument(
+            "--module-key",
+            default="learning_by_video",
+            help="Module key used to resolve target season (default: learning_by_video).",
+        )
+        parser.add_argument(
+            "--season-number",
+            type=int,
+            default=1,
+            help="Target season number for imported videos (default: 1).",
+        )
+        parser.add_argument(
+            "--no-ensure-season",
+            action="store_true",
+            help="Do not set Video.season during import_videos.",
+        )
+        parser.add_argument(
+            "--force-season",
+            action="store_true",
+            help="Overwrite existing Video.season with target season during import_videos.",
+        )
+        parser.add_argument(
+            "--no-bind-access-season",
+            action="store_true",
+            help="Do not add target season to Video.access_seasons during import_videos.",
+        )
 
     def handle(self, *args: Any, **options: Any) -> None:
         data_dir = _get_learning_by_video_data_dir()
@@ -156,6 +182,11 @@ class Command(BaseCommand):
         exercise_sheet = str(options["exercise_sheet"])
         expression_sheet = str(options["expression_sheet"])
         word_sheet = str(options["word_sheet"])
+        module_key = str(options.get("module_key") or "learning_by_video")
+        season_number = int(options.get("season_number") or 1)
+        no_ensure_season = bool(options.get("no_ensure_season"))
+        force_season = bool(options.get("force_season"))
+        no_bind_access_season = bool(options.get("no_bind_access_season"))
 
         for xlsx_path in xlsx_files:
             if not xlsx_path.exists():
@@ -166,7 +197,16 @@ class Command(BaseCommand):
             # One file = one atomic transaction
             with transaction.atomic():
                 # 1) Import video description (do NOT move file inside sub-command)
-                call_command("import_videos", file=str(xlsx_path), no_move=True)
+                call_command(
+                    "import_videos",
+                    file=str(xlsx_path),
+                    no_move=True,
+                    module_key=module_key,
+                    season_number=season_number,
+                    no_ensure_season=no_ensure_season,
+                    force_season=force_season,
+                    no_bind_access_season=no_bind_access_season,
+                )
 
                 # 2) Resolve video id based on the imported video row
                 video_id = _resolve_video_id_from_xlsx(xlsx_path)

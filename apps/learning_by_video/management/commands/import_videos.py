@@ -230,14 +230,14 @@ def _build_video_file_map() -> dict[str, str]:
     return file_map
 
 
-def _get_default_season():
+def _get_target_season(*, module_key: str, season_number: int):
     Module = apps.get_model("accounts", "Module")
     ModuleSeason = apps.get_model("accounts", "ModuleSeason")
 
-    module = Module.objects.filter(key="learning_by_video", is_active=True).first()
+    module = Module.objects.filter(key=module_key, is_active=True).first()
     if not module:
         return None
-    return ModuleSeason.objects.filter(module=module, season_number=1).first()
+    return ModuleSeason.objects.filter(module=module, season_number=season_number).first()
 
 
 def _find_media_filename(title: str, file_map: dict[str, str]) -> str:
@@ -284,17 +284,55 @@ class Command(BaseCommand):
             action="store_true",
             help="Do not move the xlsx file (used by import_xlsx_all).",
         )
+        parser.add_argument(
+            "--module-key",
+            default="learning_by_video",
+            help="Module key used to resolve target season (default: learning_by_video).",
+        )
+        parser.add_argument(
+            "--season-number",
+            type=int,
+            default=1,
+            help="Target season number for imported videos (default: 1).",
+        )
+        parser.add_argument(
+            "--no-ensure-season",
+            action="store_true",
+            help="Do not set Video.season.",
+        )
+        parser.add_argument(
+            "--force-season",
+            action="store_true",
+            help="Overwrite existing Video.season with target season.",
+        )
+        parser.add_argument(
+            "--no-bind-access-season",
+            action="store_true",
+            help="Do not add target season to Video.access_seasons.",
+        )
 
     def handle(self, *args, **options) -> None:
         data_dir = _get_learning_by_video_data_dir()
         raw_dir = data_dir / "raw"
         processed_dir = data_dir / "processed"
         processed_dir.mkdir(parents=True, exist_ok=True)
-        default_season = _get_default_season()
-        if default_season is None:
+        module_key = str(options.get("module_key") or "learning_by_video")
+        season_number = int(options.get("season_number") or 1)
+        ensure_season = not bool(options.get("no_ensure_season"))
+        force_season = bool(options.get("force_season"))
+        bind_access_season = not bool(options.get("no_bind_access_season"))
+
+        target_season = None
+        if ensure_season or bind_access_season:
+            target_season = _get_target_season(
+                module_key=module_key,
+                season_number=season_number,
+            )
+        if (ensure_season or bind_access_season) and target_season is None:
             self.stdout.write(
                 self.style.WARNING(
-                    "⚠️ Default season not found. Imported videos will have no season."
+                    f"⚠️ Target season not found (module={module_key}, season_number={season_number}). "
+                    "Imported videos will keep existing season/access_seasons."
                 )
             )
 
@@ -329,6 +367,9 @@ class Command(BaseCommand):
 
                 created = 0
                 updated = 0
+                season_assigned = 0
+                season_overwritten = 0
+                access_season_bound = 0
 
                 for _, row in df.iterrows():
                     title = _pick_title(row)
@@ -352,14 +393,25 @@ class Command(BaseCommand):
                         },
                     )
 
-                    if default_season and obj.season_id is None:
-                        obj.season = default_season
-                        obj.save(update_fields=["season"])
-
                     if was_created:
                         created += 1
                     else:
                         updated += 1
+
+                    if target_season and ensure_season and (force_season or obj.season_id is None):
+                        if obj.season_id != target_season.id:
+                            had_season = bool(obj.season_id)
+                            obj.season = target_season
+                            obj.save(update_fields=["season"])
+                            if had_season:
+                                season_overwritten += 1
+                            else:
+                                season_assigned += 1
+
+                    if target_season and bind_access_season:
+                        if not obj.access_seasons.filter(id=target_season.id).exists():
+                            obj.access_seasons.add(target_season)
+                            access_season_bound += 1
 
                 def _move_after_commit() -> None:
                     target = processed_dir / xlsx_path.name
@@ -370,6 +422,8 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"OK: {xlsx_path.name} | videos created={created}, updated={updated} -> moved to processed/"
+                    f"OK: {xlsx_path.name} | videos created={created}, updated={updated}; "
+                    f"season assigned={season_assigned}, overwritten={season_overwritten}, "
+                    f"access_season bound={access_season_bound} -> moved to processed/"
                 )
             )

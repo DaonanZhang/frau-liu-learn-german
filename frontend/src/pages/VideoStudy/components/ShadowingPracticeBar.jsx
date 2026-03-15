@@ -6,6 +6,50 @@ import {
 } from "../../../api/learning_by_video/shadowingStorage.js";
 import "./ShadowingPractice.css";
 
+const RECORDER_MIME_CANDIDATES = [
+	"audio/mp4;codecs=mp4a.40.2",
+	"audio/mp4",
+	"audio/webm;codecs=opus",
+	"audio/webm",
+];
+
+const PLAYBACK_MIME_FALLBACKS = ["audio/mp4", "audio/aac", "audio/mpeg"];
+
+/**
+ * Pick a supported mimeType for MediaRecorder.
+ *
+ * @returns {string} Supported mime type or empty string.
+ */
+function pickRecorderMimeType() {
+	if (typeof MediaRecorder === "undefined") {
+		return "";
+	}
+	if (typeof MediaRecorder.isTypeSupported !== "function") {
+		return "";
+	}
+	for (const mimeType of RECORDER_MIME_CANDIDATES) {
+		if (MediaRecorder.isTypeSupported(mimeType)) {
+			return mimeType;
+		}
+	}
+	return "";
+}
+
+/**
+ * Build a recording blob using actual recorder/chunk mime type.
+ *
+ * @param {Blob[]} chunks - Recorded chunks.
+ * @param {MediaRecorder|null} mediaRecorder - MediaRecorder instance.
+ * @returns {Blob} Recorded blob.
+ */
+function buildRecordingBlob(chunks, mediaRecorder) {
+	const firstChunk = chunks.find((chunk) => chunk && chunk.size > 0) || null;
+	const chunkType = firstChunk?.type ? String(firstChunk.type).trim() : "";
+	const recorderType = mediaRecorder?.mimeType ? String(mediaRecorder.mimeType).trim() : "";
+	const mimeType = chunkType || recorderType || "audio/mp4";
+	return new Blob(chunks, { type: mimeType });
+}
+
 /**
  * @typedef {Object} SubtitleTimeRange
  * @property {number} start - Start time in seconds.
@@ -50,7 +94,7 @@ export function ShadowingPracticeBar({ videoRef, videoId, subtitleId, timeRange 
 				if (isMounted) {
 					setHasRecording(Boolean(existingBlob));
 				}
-			} catch (_error) {
+			} catch {
 				if (isMounted) {
 					setHasRecording(false);
 				}
@@ -172,7 +216,7 @@ export function ShadowingPracticeBar({ videoRef, videoId, subtitleId, timeRange 
 			try {
 				videoElement.removeEventListener("timeupdate", onTimeUpdate);
 				videoElement.removeEventListener("seeked", onSeeked);
-			} catch (_error) {
+			} catch {
 				// ignore
 			}
 
@@ -228,6 +272,55 @@ export function ShadowingPracticeBar({ videoRef, videoId, subtitleId, timeRange 
 	}
 
 	/**
+	 * Try to play a blob through an object URL.
+	 *
+	 * @param {Blob} blob - Audio blob.
+	 * @returns {Promise<void>}
+	 */
+	async function playBlobViaObjectUrl(blob) {
+		if (objectUrlRef.current) {
+			URL.revokeObjectURL(objectUrlRef.current);
+			objectUrlRef.current = null;
+		}
+
+		const objectUrl = URL.createObjectURL(blob);
+		objectUrlRef.current = objectUrl;
+
+		const audio = new Audio();
+		audio.preload = "auto";
+		audio.src = objectUrl;
+		await audio.play();
+	}
+
+	/**
+	 * Try play with type fallbacks (important for iOS when old recordings were saved as webm type).
+	 *
+	 * @param {Blob} audioBlob - Stored audio blob.
+	 * @returns {Promise<void>}
+	 */
+	async function playRecordingWithFallback(audioBlob) {
+		try {
+			await playBlobViaObjectUrl(audioBlob);
+			return;
+		} catch {
+			// continue to fallback attempts below
+		}
+
+		const buffer = await audioBlob.arrayBuffer();
+		for (const fallbackType of PLAYBACK_MIME_FALLBACKS) {
+			try {
+				const fallbackBlob = new Blob([buffer], { type: fallbackType });
+				await playBlobViaObjectUrl(fallbackBlob);
+				return;
+			} catch {
+				// keep trying next fallback type
+			}
+		}
+
+		throw new Error("Playback failed for all mime fallbacks.");
+	}
+
+	/**
 	 * Start audio recording via MediaRecorder.
 	 *
 	 * @returns {Promise<void>} Resolves when recording starts.
@@ -243,11 +336,17 @@ export function ShadowingPracticeBar({ videoRef, videoId, subtitleId, timeRange 
 			setErrorMessage("Microphone API not supported in this browser.");
 			return;
 		}
+		if (typeof MediaRecorder === "undefined") {
+			setErrorMessage("MediaRecorder is not supported in this browser.");
+			return;
+		}
 
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-			const mediaRecorder = new MediaRecorder(stream);
+			const pickedMimeType = pickRecorderMimeType();
+			const mediaRecorder = pickedMimeType
+				? new MediaRecorder(stream, { mimeType: pickedMimeType })
+				: new MediaRecorder(stream);
 			mediaRecorderRef.current = mediaRecorder;
 			audioChunksRef.current = [];
 
@@ -259,10 +358,10 @@ export function ShadowingPracticeBar({ videoRef, videoId, subtitleId, timeRange 
 
 			mediaRecorder.onstop = async () => {
 				try {
-					const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+					const audioBlob = buildRecordingBlob(audioChunksRef.current, mediaRecorder);
 					await saveRecordingBlob(recordingKey, audioBlob);
 					setHasRecording(true);
-				} catch (_error) {
+				} catch {
 					setErrorMessage("Failed to save recording.");
 				} finally {
 					setIsRecording(false);
@@ -274,7 +373,7 @@ export function ShadowingPracticeBar({ videoRef, videoId, subtitleId, timeRange 
 
 			mediaRecorder.start();
 			setIsRecording(true);
-		} catch (_error) {
+		} catch {
 			setErrorMessage("Microphone permission denied or unavailable.");
 		}
 	}
@@ -317,12 +416,8 @@ export function ShadowingPracticeBar({ videoRef, videoId, subtitleId, timeRange 
 				objectUrlRef.current = null;
 			}
 
-			const objectUrl = URL.createObjectURL(audioBlob);
-			objectUrlRef.current = objectUrl;
-
-			const audio = new Audio(objectUrl);
-			await audio.play();
-		} catch (_error) {
+			await playRecordingWithFallback(audioBlob);
+		} catch {
 			setErrorMessage("Failed to play recording.");
 		}
 	}

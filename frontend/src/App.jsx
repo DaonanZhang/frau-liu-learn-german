@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { Navigate, createBrowserRouter, RouterProvider } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout.jsx";
 import Home from "./pages/Home.jsx";
 import VideoStudyPage from "./pages/VideoStudy/VideoStudyPage.jsx";
@@ -10,6 +10,17 @@ import LearningRecordPage from "./pages/RecordPage/LearningRecordPage.jsx";
 import ManualPage from "./pages/ManualPage.jsx";
 
 import { AuthProvider } from "./api/auth";
+import { useAuth } from "./api/auth/useAuth.js";
+
+function FallbackRedirect() {
+  const { loading, isAuthenticated } = useAuth();
+
+  if (loading) {
+    return null;
+  }
+
+  return <Navigate to={isAuthenticated ? "/" : "/login"} replace />;
+}
 
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -25,6 +36,7 @@ const router = createBrowserRouter([
       { path: "/learning-records", element: <LearningRecordPage /> },
     ],
   },
+  { path: "*", element: <FallbackRedirect /> },
 ]);
 
 export default function App() {

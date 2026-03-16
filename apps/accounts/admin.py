@@ -2,6 +2,7 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.db.models import Q
 
 from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.module import Module
@@ -32,8 +33,35 @@ class UserAdmin(DjangoUserAdmin):
         "is_active",
         "date_joined",
     )
-    search_fields = ("telephone", "username", "email")
+    # Restrict admin search to phone numbers only.
+    search_fields = ("telephone",)
+    search_help_text = "按手机号搜索（telephone）"
     ordering = ("-date_joined",)
+
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Force user search to telephone-field matching only.
+        """
+        term = str(search_term or "").strip()
+        if not term:
+            return queryset, False
+
+        compact = term.replace(" ", "").replace("-", "")
+        digits = "".join(ch for ch in compact if ch.isdigit())
+
+        candidates = {compact}
+        if digits:
+            candidates.add(digits)
+            # If input includes country code (e.g. +86...), still match by local phone.
+            if len(digits) > 11:
+                candidates.add(digits[-11:])
+
+        conditions = Q()
+        for candidate in candidates:
+            if candidate:
+                conditions |= Q(telephone__icontains=candidate)
+
+        return queryset.filter(conditions), False
 
     fieldsets = (
         (None, {"fields": _all_user_fields()}),

@@ -8,7 +8,7 @@ Usage:
 
 Input:
   - a single .mp4 file, or
-  - a directory containing .mp4 files
+  - a directory containqing .mp4 files
   - if omitted, defaults to the server path:
     /srv/projects/frau-liu-learn-german/frontend/public/resources/ScienceSeason1/learning_by_video_video
 

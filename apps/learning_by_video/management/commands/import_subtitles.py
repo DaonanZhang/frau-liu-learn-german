@@ -130,16 +130,30 @@ class Command(BaseCommand):
             if end < start:
                 raise ValueError(f"Row {idx}: end < start ({end_raw} < {start_raw})")
 
-            obj, was_created = Subtitle.objects.update_or_create(
-                video=video,
-                start=start,
-                end=end,
-                defaults={
-                    "external_id": external_id,
-                    "content": de,
-                    "translation": zh,
-                },
-            )
+            defaults = {
+                "start": start,
+                "end": end,
+                "content": de,
+                "translation": zh,
+            }
+            if external_id is not None:
+                # Use sheet ID as stable identity, so time/content edits update in place.
+                obj, was_created = Subtitle.objects.update_or_create(
+                    video=video,
+                    external_id=external_id,
+                    defaults=defaults,
+                )
+            else:
+                obj, was_created = Subtitle.objects.update_or_create(
+                    video=video,
+                    start=start,
+                    end=end,
+                    defaults={
+                        "external_id": external_id,
+                        "content": de,
+                        "translation": zh,
+                    },
+                )
 
             if was_created:
                 created += 1

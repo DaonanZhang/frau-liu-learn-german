@@ -10,6 +10,7 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
 from apps.learning_by_video.models import Video
+from apps.learning_by_video.management.commands.import_videos import _pick_title
 
 # =========================
 # Constants (sheet names)
@@ -61,13 +62,7 @@ def _resolve_video_id_from_xlsx(xlsx_path: Path) -> int:
         raise ValueError(f"{xlsx_path.name}: sheet {SHEET_VIDEO_DESCRIPTION!r} has no rows")
 
     row0 = df.iloc[0]
-    title = ""
-    for col in ("中文标题", "原标题", "标题"):
-        if col in df.columns:
-            value = str(row0[col]).strip()
-            if value:
-                title = value
-                break
+    title = _pick_title(row0)
     creator = str(df.iloc[0]["创作者"]).strip()
 
     if not title:

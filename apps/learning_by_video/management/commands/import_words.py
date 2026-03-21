@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pandas as pd
 from django.core.management.base import BaseCommand, CommandParser
+from django.db import IntegrityError
 from django.db import transaction
 
 from apps.learning_by_video.models import Subtitle, Video, VideoWordOccurrence
 from apps.lexicon.models import WordText
+from apps.lexicon.models.utils import normalize_de_text
 
 
 SHEET_NAME_DEFAULT = "word"
@@ -93,6 +95,48 @@ def _parse_int_like(value: object) -> int:
         return int(float(s))
     except ValueError as e:
         raise ValueError(f"invalid integer-like value: {value!r}") from e
+
+
+def _get_or_create_wordtext(
+    *,
+    text: str,
+    lemma: str,
+    pos: str,
+    article: str,
+    splittable: bool,
+) -> tuple[WordText, bool]:
+    """
+    Resolve/create WordText by the same identity as DB unique constraint:
+    (language, normalized_text, lemma, pos, article).
+    """
+    normalized_text = normalize_de_text(text)
+    qs = WordText.objects.filter(
+        language="de",
+        normalized_text=normalized_text,
+        lemma=lemma,
+        pos=pos,
+        article=article,
+    )
+    existing = qs.first()
+    if existing is not None:
+        return existing, False
+
+    try:
+        created = WordText.objects.create(
+            language="de",
+            text=text,
+            lemma=lemma,
+            pos=pos,
+            article=article,
+            splittable=splittable,
+        )
+        return created, True
+    except IntegrityError:
+        # Concurrent/competing create in same normalized key.
+        existing = qs.first()
+        if existing is None:
+            raise
+        return existing, False
 
 
 class Command(BaseCommand):
@@ -206,15 +250,12 @@ class Command(BaseCommand):
 
             # WordText: aggregation anchor
             # We use get_or_create by its unique fields.
-            word_obj, was_created = WordText.objects.get_or_create(
-                language="de",
+            word_obj, was_created = _get_or_create_wordtext(
                 text=text,
                 lemma=lemma,
                 pos=pos,
                 article=article,
-                defaults={
-                    "splittable": splittable,
-                },
+                splittable=splittable,
             )
             if was_created:
                 created_words += 1

@@ -27,6 +27,8 @@ COL_DURATION = "时长"
 COL_COVER = "封面"
 COL_LINK = "链接"
 
+_EPISODE_SUFFIX_RE = re.compile(r"[（(]\s*(\d+)\s*[)）]\s*$")
+
 
 def _get_learning_by_video_data_dir() -> Path:
     app_config = apps.get_app_config("learning_by_video")
@@ -153,12 +155,23 @@ def _slugify_filename(text: str) -> str:
 def _pick_title(row: pd.Series) -> str:
     """
     Prefer Chinese title if present, then original title, then legacy '标题'.
+    If Chinese title misses episode suffix but original/legacy title has (N),
+    append Chinese-style suffix '（N）' to avoid collisions across episodes.
     """
-    for col in (COL_TITLE_ZH, COL_TITLE_ORIG, COL_TITLE):
-        if col in row:
-            value = str(row[col]).strip()
-            if value:
-                return value
+    zh = str(row.get(COL_TITLE_ZH, "")).strip()
+    orig = str(row.get(COL_TITLE_ORIG, "")).strip()
+    legacy = str(row.get(COL_TITLE, "")).strip()
+
+    if zh:
+        zh_has_suffix = bool(_EPISODE_SUFFIX_RE.search(zh))
+        m = _EPISODE_SUFFIX_RE.search(orig) or _EPISODE_SUFFIX_RE.search(legacy)
+        if (not zh_has_suffix) and m:
+            return f"{zh}（{m.group(1)}）"
+        return zh
+    if orig:
+        return orig
+    if legacy:
+        return legacy
     return ""
 
 

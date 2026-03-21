@@ -4,10 +4,12 @@ from pathlib import Path
 
 import pandas as pd
 from django.core.management.base import BaseCommand, CommandParser
+from django.db import IntegrityError
 from django.db import transaction
 
 from apps.learning_by_video.models import Subtitle, Video, VideoExpressionOccurrence
 from apps.lexicon.models import ExpressionText
+from apps.lexicon.models.utils import normalize_de_text
 
 
 SHEET_NAME_DEFAULT = "expression"
@@ -96,10 +98,26 @@ class Command(BaseCommand):
                 )
 
             # 1) ExpressionText (anchor)
-            expr_obj, was_created = ExpressionText.objects.get_or_create(
-                text=text,
-                defaults={"prototype": prototype},
-            )
+            normalized_text = normalize_de_text(text)
+            expr_obj = ExpressionText.objects.filter(
+                language="de",
+                normalized_text=normalized_text,
+            ).first()
+            was_created = False
+            if expr_obj is None:
+                try:
+                    expr_obj = ExpressionText.objects.create(
+                        text=text,
+                        prototype=prototype,
+                    )
+                    was_created = True
+                except IntegrityError:
+                    expr_obj = ExpressionText.objects.filter(
+                        language="de",
+                        normalized_text=normalized_text,
+                    ).first()
+                    if expr_obj is None:
+                        raise
             if was_created:
                 created_text += 1
             else:

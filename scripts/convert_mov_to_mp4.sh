@@ -4,44 +4,37 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/transcode_learning_videos.sh <input> [output_dir] [--hls] [--segments N] [--hls-time SECONDS] [--overwrite]
+  scripts/convert_mov_to_mp4.sh <input> [output_dir] [--overwrite] [--delete-source]
 
-Examples:
-  # Single file -> MP4
-  scripts/transcode_learning_videos.sh "path/to/video.mov"
+Input:
+  - a single .mov file, or
+  - a directory containing .mov/.MOV files
 
-  # Single file -> MP4 + HLS (4 segments)
-  scripts/transcode_learning_videos.sh "path/to/video.mov" --hls --segments 4
+Behavior:
+  - Converts MOV to MP4 (H.264/AAC)
+  - Output filename is normalized to ASCII-safe format
+    (example: "München (1).mov" -> "Munchen_1.mp4")
 
-  # Batch convert all .mov in a folder -> MP4 + HLS
-  scripts/transcode_learning_videos.sh "frontend/public/resources/learning_by_video_video" --hls
+Options:
+  --overwrite      Overwrite existing outputs
+  --delete-source  Delete source .mov after successful conversion
 EOF
 }
 
 input=""
 output_dir=""
-hls_enabled=0
-segments=""
-hls_time=""
 overwrite=0
+delete_source=0
 PY_BIN="${PYTHON_BIN:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --hls)
-      hls_enabled=1
-      shift
-      ;;
-    --segments)
-      segments="${2:-}"
-      shift 2
-      ;;
-    --hls-time)
-      hls_time="${2:-}"
-      shift 2
-      ;;
     --overwrite)
       overwrite=1
+      shift
+      ;;
+    --delete-source)
+      delete_source=1
       shift
       ;;
     -h|--help)
@@ -95,13 +88,11 @@ if [[ "$overwrite" -eq 1 ]]; then
   ffmpeg_overwrite="-y"
 fi
 
-transcode_one() {
-  local in="$1"
-  local base
-  base="$(basename "$in")"
-  base="${base%.*}"
-  local out_base
-  out_base="$("$PY_BIN" - "$base" <<'PY'
+declare -A out_stems_seen=()
+
+normalize_stem() {
+  local raw="$1"
+  "$PY_BIN" - "$raw" <<'PY'
 import re
 import sys
 import unicodedata
@@ -116,41 +107,39 @@ s = re.sub(r"[^A-Za-z0-9._-]+", "_", s)
 s = re.sub(r"_+", "_", s).strip("._")
 print(s or "media")
 PY
-)"
+}
+
+convert_one() {
+  local in="$1"
+  local base out_base out_mp4
+  base="$(basename "$in")"
+  base="${base%.*}"
+  out_base="$(normalize_stem "$base")"
+  out_mp4="$output_dir/${out_base}.mp4"
+
+  if [[ -n "${out_stems_seen[$out_base]+x}" && "${out_stems_seen[$out_base]}" != "$in" ]]; then
+    echo "Name collision after normalization:" >&2
+    echo "  - ${out_stems_seen[$out_base]}" >&2
+    echo "  - $in" >&2
+    echo "Both map to: ${out_base}.mp4" >&2
+    exit 1
+  fi
+  out_stems_seen["$out_base"]="$in"
 
   if [[ "$base" != "$out_base" ]]; then
     echo "Normalized filename: '$base' -> '$out_base'"
   fi
 
-  echo "Transcoding to MP4: $in -> $output_dir/${out_base}.mp4"
+  echo "Transcoding to MP4: $in -> $out_mp4"
   ffmpeg "$ffmpeg_overwrite" -i "$in" \
     -c:v libx264 -preset medium -crf 23 -profile:v high -level 4.0 -pix_fmt yuv420p \
     -c:a aac -b:a 128k \
     -movflags +faststart \
-    "$output_dir/${out_base}.mp4"
+    "$out_mp4"
 
-  if [[ "$hls_enabled" -eq 1 ]]; then
-    local seg_time="6"
-    if [[ -n "$hls_time" ]]; then
-      seg_time="$hls_time"
-    elif [[ -n "$segments" ]]; then
-      local duration
-      duration="$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$in" || true)"
-      if [[ -n "$duration" ]]; then
-        seg_time="$(awk -v d="$duration" -v n="$segments" 'BEGIN { if (n < 1) n = 4; t = int(d / n + 0.5); if (t < 2) t = 2; print t }')"
-      fi
-    fi
-
-    echo "Transcoding to HLS: $in -> $output_dir/${out_base}.m3u8 (segment time: ${seg_time}s)"
-    ffmpeg "$ffmpeg_overwrite" -i "$in" \
-      -c:v libx264 -preset medium -crf 23 -profile:v high -level 4.0 -pix_fmt yuv420p \
-      -c:a aac -b:a 128k \
-      -hls_time "$seg_time" \
-      -hls_playlist_type vod \
-      -hls_segment_type fmp4 \
-      -hls_fmp4_init_filename "${out_base}-init.mp4" \
-      -hls_segment_filename "$output_dir/${out_base}-%03d.m4s" \
-      "$output_dir/${out_base}.m3u8"
+  if [[ "$delete_source" -eq 1 ]]; then
+    rm -f "$in"
+    echo "Deleted source MOV: $in"
   fi
 }
 
@@ -162,8 +151,8 @@ if [[ -d "$input" ]]; then
     exit 1
   fi
   for f in "${files[@]}"; do
-    transcode_one "$f"
+    convert_one "$f"
   done
 else
-  transcode_one "$input"
+  convert_one "$input"
 fi

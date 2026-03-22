@@ -731,7 +731,7 @@ export default function LexiconPanel({
     }
 
     if (onSeek) {
-      onSeek(startSeconds);
+      onSeek(startSeconds, { resumeIfPaused: true });
     }
   }
 

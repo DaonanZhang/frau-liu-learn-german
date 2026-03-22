@@ -1129,14 +1129,14 @@ export default function SubtitlePanel({
               tabIndex={0}
               onClick={() => {
                 if (onSeek) {
-                  onSeek(subtitleItem.start);
+                  onSeek(subtitleItem.start, { resumeIfPaused: true });
                 }
               }}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
                   event.preventDefault();
                   if (onSeek) {
-                    onSeek(subtitleItem.start);
+                    onSeek(subtitleItem.start, { resumeIfPaused: true });
                   }
                 }
               }}

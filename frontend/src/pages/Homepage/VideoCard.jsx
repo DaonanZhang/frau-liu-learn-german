@@ -48,20 +48,6 @@ function formatDuration(seconds) {
   return `${minutes}分钟`;
 }
 
-function formatDate(dateStr) {
-  if (!dateStr) {
-    return "";
-  }
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}/${month}/${day}`;
-}
-
 function normalizeTagValue(raw) {
   if (!raw) {
     return [];
@@ -180,7 +166,6 @@ export default function VideoCard({
   const [coverIndex, setCoverIndex] = useState(0);
   const coverSrc = coverCandidates[coverIndex] || "";
   const durationLabel = formatDuration(video?.duration_seconds);
-  const dateLabel = formatDate(video?.created_at);
   const topicTags = useMemo(() => getTopicTags(video), [video?.tags]);
 
   useEffect(() => {
@@ -323,8 +308,6 @@ export default function VideoCard({
               </span>
             ))}
           </div>
-
-          {dateLabel ? <div className="video-card__date">{dateLabel}</div> : null}
         </div>
       </div>
     </article>

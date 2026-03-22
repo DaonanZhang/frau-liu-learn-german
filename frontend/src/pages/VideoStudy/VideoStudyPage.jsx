@@ -542,12 +542,14 @@ export default function VideoStudyPage() {
 
     return -1;
   }
-  function handleSeek(seconds) {
+  function handleSeek(seconds, options = {}) {
     const videoElement = videoRef.current;
     if (!videoElement) {
       return;
     }
 
+    const resumeIfPaused = options?.resumeIfPaused === true;
+    const wasPausedBeforeSeek = videoElement.paused;
     const targetTime = Number(seconds || 0);
     videoElement.currentTime = targetTime >= 0 ? targetTime : 0;
 
@@ -558,11 +560,21 @@ export default function VideoStudyPage() {
 
     if (playbackSettings.sentenceMode === "loop" && index !== -1) {
       startSentenceLoopIfEnabled(index);
-      videoElement.play();
+      const playResult = videoElement.play();
+      if (playResult && typeof playResult.catch === "function") {
+        playResult.catch(() => {});
+      }
       return;
     }
 
     loopRef.current.enabled = false;
+
+    if (resumeIfPaused && wasPausedBeforeSeek) {
+      const playResult = videoElement.play();
+      if (playResult && typeof playResult.catch === "function") {
+        playResult.catch(() => {});
+      }
+    }
 
   }
 

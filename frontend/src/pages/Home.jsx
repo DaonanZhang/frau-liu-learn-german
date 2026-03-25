@@ -81,6 +81,33 @@ function buildStats(totalVideoCount, completedVideos, activeDays) {
 }
 
 /**
+ * Parse trailing sequence from titles like:
+ * - 标题（1）
+ * - 标题 (2)
+ *
+ * @param {unknown} titleValue
+ * @returns {{baseTitle: string, sequence: number|null}}
+ */
+function parseTitleSequence(titleValue) {
+  const rawTitle = String(titleValue || "").trim();
+  if (!rawTitle) {
+    return { baseTitle: "", sequence: null };
+  }
+
+  const normalizedTitle = rawTitle.replace(/（/g, "(").replace(/）/g, ")");
+  const matched = normalizedTitle.match(/^(.*?)(?:\s*\((\d+)\))\s*$/);
+  if (!matched) {
+    return { baseTitle: rawTitle, sequence: null };
+  }
+
+  const sequence = Number(matched[2]);
+  return {
+    baseTitle: (matched[1] || "").trim(),
+    sequence: Number.isFinite(sequence) ? sequence : null,
+  };
+}
+
+/**
  * Hook: track whether viewport is <= maxWidth.
  *
  * @param {number} maxWidth - Max viewport width in px.
@@ -460,7 +487,11 @@ export default function Home() {
     }
 
     return videos
-      .map((video, index) => ({ video, index }))
+      .map((video, index) => ({
+        video,
+        index,
+        titleInfo: parseTitleSequence(video?.title),
+      }))
       .sort((left, right) => {
         const leftLocked = Boolean(left.video?.is_locked);
         const rightLocked = Boolean(right.video?.is_locked);
@@ -476,6 +507,19 @@ export default function Home() {
         const rightCompleted = Boolean(rightMark?.is_completed);
         if (leftCompleted !== rightCompleted) {
           return leftCompleted ? 1 : -1; // uncompleted first
+        }
+
+        const sameBaseTitle =
+          Boolean(left.titleInfo.baseTitle) &&
+          left.titleInfo.baseTitle === right.titleInfo.baseTitle;
+
+        if (sameBaseTitle) {
+          const leftHasSequence = Number.isFinite(left.titleInfo.sequence);
+          const rightHasSequence = Number.isFinite(right.titleInfo.sequence);
+
+          if (leftHasSequence && rightHasSequence && left.titleInfo.sequence !== right.titleInfo.sequence) {
+            return left.titleInfo.sequence - right.titleInfo.sequence;
+          }
         }
 
         return left.index - right.index; // keep backend order within same group

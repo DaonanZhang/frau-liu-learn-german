@@ -468,6 +468,14 @@
   gap: 0.5rem;
   flex: 0 0 auto;
   margin-left: auto;
+  opacity: 0;
+  pointer-events: none;
+  transform: none;
+}
+
+.vs-lexCard--mobile .vs-lexHoverActions.is-mobile-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .vs-lexCard--mobile .vs-lexMarkBtn {
@@ -929,11 +937,18 @@
   transition: opacity 140ms ease, transform 140ms ease;
 }
 
-.vs-lexCard:hover .vs-lexHoverActions,
 .vs-lexCard:focus-within .vs-lexHoverActions {
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .vs-lexCard:hover .vs-lexHoverActions {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
 }
 
 .vs-lexMarkBtn {
@@ -1035,10 +1050,16 @@
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
 }
 
-.vs-lexCard:hover,
 .vs-lexCard:focus-within {
   transform: translateY(-2px);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .vs-lexCard:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
+  }
 }
 
 .vs-lexCard.is-focused {

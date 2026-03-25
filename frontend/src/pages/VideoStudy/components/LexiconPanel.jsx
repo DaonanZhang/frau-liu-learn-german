@@ -1060,7 +1060,13 @@ export default function LexiconPanel({
                       )}
                     </div>
 
-                    <div className="vs-lexHoverActions" aria-label="Knowledge actions">
+                    <div
+                      className={[
+                        "vs-lexHoverActions",
+                        isMobile && isExpanded ? "is-mobile-visible" : "",
+                      ].filter(Boolean).join(" ")}
+                      aria-label="Knowledge actions"
+                    >
                       <button
                         className="vs-lexMarkBtn vs-lexMarkBtn--known"
                         type="button"

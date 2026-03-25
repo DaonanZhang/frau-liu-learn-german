@@ -72,6 +72,19 @@ export default function VideoStudyPage() {
     originY: 0,
     pointerId: null,
   });
+  const mobileFabRef = useRef(null);
+  const [mobileFabOffset, setMobileFabOffset] = useState({ x: 0, y: 0 });
+  const fabDragRef = useRef({
+    dragging: false,
+    moved: false,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+    pointerId: null,
+    rafId: null,
+    pendingOffset: null,
+  });
 
   useEffect(() => {
     const mediaQueryList = window.matchMedia("(max-width: 1023px)");
@@ -101,6 +114,70 @@ export default function VideoStudyPage() {
       setIsLexiconOpen(false);
     }
   }, [isMobile]);
+
+  function clampMobileFabOffset(nextX, nextY) {
+    if (typeof window === "undefined") {
+      return { x: nextX, y: nextY };
+    }
+
+    const fabElement = mobileFabRef.current;
+    const fabWidth = fabElement?.offsetWidth || 68;
+    const fabHeight = fabElement?.offsetHeight || 56;
+    const viewportWidth = window.innerWidth || 0;
+    const viewportHeight = window.innerHeight || 0;
+
+    const baseRight = 16; // matches `.vs-mobileFab { right: 1rem; }`
+    const baseBottom = 88; // close to `5.5rem`, ignoring safe-area extra
+    const edgePadding = 8;
+
+    const rawMinX = -(viewportWidth - fabWidth - edgePadding - baseRight);
+    const rawMaxX = baseRight - edgePadding;
+    const rawMinY = -(viewportHeight - fabHeight - edgePadding - baseBottom);
+    const rawMaxY = baseBottom - edgePadding;
+
+    const minX = Math.min(rawMinX, rawMaxX);
+    const maxX = Math.max(rawMinX, rawMaxX);
+    const minY = Math.min(rawMinY, rawMaxY);
+    const maxY = Math.max(rawMinY, rawMaxY);
+
+    return {
+      x: Math.min(maxX, Math.max(minX, nextX)),
+      y: Math.min(maxY, Math.max(minY, nextY)),
+    };
+  }
+
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileFabOffset({ x: 0, y: 0 });
+      return () => {};
+    }
+
+    function clampFabWithinViewport() {
+      setMobileFabOffset((prevOffset) => {
+        const clamped = clampMobileFabOffset(prevOffset.x, prevOffset.y);
+        if (clamped.x === prevOffset.x && clamped.y === prevOffset.y) {
+          return prevOffset;
+        }
+        return clamped;
+      });
+    }
+
+    clampFabWithinViewport();
+    window.addEventListener("resize", clampFabWithinViewport);
+    return () => {
+      window.removeEventListener("resize", clampFabWithinViewport);
+    };
+  }, [isMobile]);
+
+  useEffect(() => {
+    const dragState = fabDragRef.current;
+    return () => {
+      if (dragState.rafId !== null && typeof window !== "undefined") {
+        window.cancelAnimationFrame(dragState.rafId);
+        dragState.rafId = null;
+      }
+    };
+  }, []);
 
   const leftTitle = video?.title ?? "";
   const leftDuration = video?.duration_seconds ? formatDurationLabel(video.duration_seconds) : "";
@@ -617,7 +694,7 @@ export default function VideoStudyPage() {
 
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
-    } catch (_err) {
+    } catch {
       // ignore
     }
   }
@@ -647,9 +724,99 @@ export default function VideoStudyPage() {
       if (state.pointerId !== null) {
         event.currentTarget.releasePointerCapture(state.pointerId);
       }
-    } catch (_err) {
+    } catch {
       // ignore
     }
+  }
+
+  function handleMobileFabPointerDown(event) {
+    if (!isMobile) {
+      return;
+    }
+    if (event.button !== 0 && event.pointerType !== "touch") {
+      return;
+    }
+
+    const state = fabDragRef.current;
+    state.dragging = true;
+    state.moved = false;
+    state.startX = event.clientX;
+    state.startY = event.clientY;
+    state.originX = mobileFabOffset.x;
+    state.originY = mobileFabOffset.y;
+    state.pointerId = event.pointerId;
+
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // ignore
+    }
+  }
+
+  function handleMobileFabPointerMove(event) {
+    const state = fabDragRef.current;
+    if (!state.dragging) {
+      return;
+    }
+
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    if (!state.moved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+      state.moved = true;
+    }
+
+    state.pendingOffset = clampMobileFabOffset(state.originX + dx, state.originY + dy);
+    if (state.rafId !== null) {
+      return;
+    }
+
+    state.rafId = window.requestAnimationFrame(() => {
+      state.rafId = null;
+      if (state.pendingOffset) {
+        setMobileFabOffset(state.pendingOffset);
+      }
+    });
+  }
+
+  function handleMobileFabPointerUp(event) {
+    const state = fabDragRef.current;
+    if (!state.dragging) {
+      return;
+    }
+    state.dragging = false;
+
+    try {
+      if (state.pointerId !== null) {
+        event.currentTarget.releasePointerCapture(state.pointerId);
+      }
+    } catch {
+      // ignore
+    }
+
+    if (state.rafId !== null) {
+      window.cancelAnimationFrame(state.rafId);
+      state.rafId = null;
+    }
+    if (state.pendingOffset) {
+      setMobileFabOffset(state.pendingOffset);
+      state.pendingOffset = null;
+    }
+  }
+
+  function handleMobileFabToggle() {
+    const state = fabDragRef.current;
+    if (state.moved) {
+      state.moved = false;
+      return;
+    }
+
+    setIsExerciseOpen((prevValue) => {
+      const nextValue = !prevValue;
+      if (nextValue) {
+        setIsLexiconOpen(false);
+      }
+      return nextValue;
+    });
   }
 
   return (
@@ -810,17 +977,15 @@ export default function VideoStudyPage() {
 
       {isMobile ? (
         <button
+          ref={mobileFabRef}
           type="button"
           className="vs-mobileFab"
-          onClick={() => {
-            setIsExerciseOpen((prevValue) => {
-              return !prevValue;
-            });
-
-            if (!isExerciseOpen) {
-              setIsLexiconOpen(false);
-            }
-          }}
+          style={{ transform: `translate(${mobileFabOffset.x}px, ${mobileFabOffset.y}px)` }}
+          onPointerDown={handleMobileFabPointerDown}
+          onPointerMove={handleMobileFabPointerMove}
+          onPointerUp={handleMobileFabPointerUp}
+          onPointerCancel={handleMobileFabPointerUp}
+          onClick={handleMobileFabToggle}
           aria-label="Toggle exercise mode"
         >
           <span className="vs-mobileFabIcon" aria-hidden="true">

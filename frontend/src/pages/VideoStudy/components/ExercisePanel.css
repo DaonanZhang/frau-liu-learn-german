@@ -349,6 +349,10 @@
 
 /* Responsive: outline becomes overlay-like drawer width, but still in-flow (no fixed) */
 @media (max-width: 1023px) {
+  .exPanelHeader {
+    padding: 10px 12px;
+  }
+
   .exPanelBody {
     flex-direction: column;
   }
@@ -359,6 +363,15 @@
     border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   }
 
+  .exPanelOutlineHeader {
+    padding: 10px 10px 8px 10px;
+  }
+
+  .exPanelOutlineList {
+    padding: 6px;
+    gap: 6px;
+  }
+
   .exPanelOutline.isClosed {
     width: 100%;
     opacity: 1;
@@ -366,6 +379,14 @@
   }
 
   .exPanelMain {
+    padding: 10px;
+  }
+
+  .exPanelCard {
     padding: 12px;
+  }
+
+  .exPanelPrompt {
+    margin-bottom: 10px;
   }
 }

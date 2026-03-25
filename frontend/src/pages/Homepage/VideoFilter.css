@@ -123,3 +123,23 @@
   flex-shrink: 0;
   color: #999;
 }
+
+@media (max-width: 990px) {
+  .vf-card {
+    padding: 0.95rem;
+    margin-bottom: 0.8rem;
+    border-radius: 0.65rem;
+  }
+
+  .vf-grid {
+    gap: 0.75rem;
+  }
+
+  .vf-label {
+    margin-bottom: 0.35rem;
+  }
+
+  .vf-select {
+    padding: 0.52rem 0.65rem;
+  }
+}

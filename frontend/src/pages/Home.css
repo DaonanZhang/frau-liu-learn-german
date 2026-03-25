@@ -45,9 +45,22 @@
   gap: 1rem;
 }
 
+@media (min-width: 991px) {
+  .home-left {
+    margin-top: -0.3rem;
+  }
+}
+
 .home-right {
   flex: 1;
   min-width: 0;
+}
+
+@media (min-width: 991px) {
+  .home-right > .vf-card {
+    margin-top: 0.6rem;
+    margin-bottom: 1rem;
+  }
 }
 
 /* ------------------------- */
@@ -63,8 +76,38 @@
     display: block;
   }
 
+  .home-page {
+    gap: 1rem;
+  }
+
   .home-right {
     width: 100%;
+  }
+
+  .home-season-banner {
+    gap: 0.25rem;
+    margin: 0 0 0.6rem;
+  }
+
+  .home-left-content {
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .home-drawer-header {
+    gap: 0.5rem;
+  }
+
+  .home-mobile-filter {
+    gap: 0.5rem;
+  }
+
+  .home-page .ui-card__header {
+    padding: 0.62rem 0.72rem;
+  }
+
+  .home-page .ui-card__body {
+    padding: 0.72rem;
   }
 
   /* Mobile font sizing (scoped to Home only) */
@@ -166,11 +209,11 @@
     top: 0;
     z-index: 6;
 
-    margin: 0.5rem 0rem 0.75rem;
-    padding: 0.7rem 0.9rem;
+    margin: -1rem 0 0.55rem;
+    padding: 0.58rem 0.75rem;
 
     background: #ffffff;
-    border-radius: 12px;
+    border-radius: 10px;
 
     box-shadow:
       0 1px 2px rgba(0, 0, 0, 0.06),

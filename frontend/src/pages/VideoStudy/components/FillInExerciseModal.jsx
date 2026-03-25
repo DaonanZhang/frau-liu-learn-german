@@ -123,7 +123,6 @@ export default function FillInExerciseModal({
   titleText,
 }) {
   const inputRefs = useRef([]);
-  const [attemptCount, setAttemptCount] = useState(0);
   const [resultState, setResultState] = useState("idle"); // idle | correct | wrong1 | wrong2
   const [shouldShake, setShouldShake] = useState(false);
 
@@ -131,7 +130,7 @@ export default function FillInExerciseModal({
     return Array.isArray(blanks) ? blanks : [];
   }, [blanks]);
 
-  const [userValues, setUserValues] = useState([]);
+  const [userValues, setUserValues] = useState(() => blankList.map(() => ""));
 
   const normalizedAnswers = useMemo(() => {
     return blankList.map((b) => normalizeInputValue(b?.answerText));
@@ -154,19 +153,16 @@ export default function FillInExerciseModal({
       return;
     }
 
-    setAttemptCount(0);
-    setResultState("idle");
-    setShouldShake(false);
-    setUserValues(blankList.map(() => ""));
-
-    inputRefs.current = [];
-
-    window.setTimeout(() => {
+    const timerId = window.setTimeout(() => {
       if (inputRefs.current[0]) {
         inputRefs.current[0].focus();
       }
     }, 0);
-  }, [isOpen, exerciseKey, blankList]);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [isOpen, exerciseKey]);
 
   useEffect(() => {
     if (!shouldShake) {
@@ -200,7 +196,6 @@ export default function FillInExerciseModal({
    * @returns {void}
    */
   function resetExerciseState() {
-    setAttemptCount(0);
     setResultState("idle");
     setShouldShake(false);
     setUserValues(blankList.map(() => ""));
@@ -238,19 +233,14 @@ export default function FillInExerciseModal({
       return;
     }
 
-    setAttemptCount((prev) => {
-      const nextAttemptCount = prev + 1;
-
-      if (nextAttemptCount >= 2) {
-        setResultState("wrong2");
-        triggerShake();
-        return nextAttemptCount;
-      }
-
-      setResultState("wrong1");
+    if (resultState === "wrong1") {
+      setResultState("wrong2");
       triggerShake();
-      return nextAttemptCount;
-    });
+      return;
+    }
+
+    setResultState("wrong1");
+    triggerShake();
   }
 
   /**

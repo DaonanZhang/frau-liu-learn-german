@@ -165,7 +165,7 @@ export default function LearningRecordPage() {
     }
 
     const current = videoMarkById?.[parsedVideoId];
-    const nextValue = !Boolean(current?.is_favorite);
+    const nextValue = !current?.is_favorite;
 
     try {
       const updated = await setVideoFavorite(parsedVideoId, nextValue);
@@ -199,7 +199,7 @@ export default function LearningRecordPage() {
     }
 
     const current = videoMarkById?.[parsedVideoId];
-    const nextValue = !Boolean(current?.is_completed);
+    const nextValue = !current?.is_completed;
 
     try {
       const updated = await setVideoCompleted(parsedVideoId, nextValue);

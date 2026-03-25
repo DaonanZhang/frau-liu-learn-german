@@ -52,7 +52,7 @@ function normalizeTagValue(raw) {
   if (!raw) {
     return [];
   }
-  const quoteTrim = /^[\"'“”‘’]+|[\"'“”‘’]+$/g;
+  const quoteTrim = /^["'“”‘’]+|["'“”‘’]+$/g;
   return String(raw)
     .split(/[,\uFF0C\u3001]/)
     .map((part) => part.trim().replace(quoteTrim, ""))
@@ -160,19 +160,21 @@ export default function VideoCard({
 
   const coverCandidates = useMemo(
     () => getCoverCandidatesFromVideo(video),
-    [video?.cover_letter_url, video?.cover_letter_urls]
+    [video]
   );
-  const coverKey = coverCandidates.join("|");
-  const [coverIndex, setCoverIndex] = useState(0);
-  const coverSrc = coverCandidates[coverIndex] || "";
+  const coverCandidateSignature = useMemo(() => coverCandidates.join("|"), [coverCandidates]);
+  const [failedCoverBySrc, setFailedCoverBySrc] = useState({});
+  const coverSrc = useMemo(() => {
+    return (
+      coverCandidates.find(
+        (candidate) => !failedCoverBySrc[`${coverCandidateSignature}::${candidate}`]
+      ) || ""
+    );
+  }, [coverCandidates, coverCandidateSignature, failedCoverBySrc]);
   const durationLabel = formatDuration(video?.duration_seconds);
-  const topicTags = useMemo(() => getTopicTags(video), [video?.tags]);
+  const topicTags = useMemo(() => getTopicTags(video), [video]);
 
-  useEffect(() => {
-    setCoverIndex(0);
-  }, [coverKey]);
-
-  const shouldKeepActionsVisible = Boolean(isFavorite || isCompleted);
+  const shouldKeepActionsVisible = isFavorite || isCompleted;
 
   return (
     <article className={["video-card", isLocked ? "video-card--locked" : ""].join(" ")}>
@@ -197,8 +199,11 @@ export default function VideoCard({
             src={coverSrc}
             alt={video?.title || "video"}
             onError={() => {
-              if (coverIndex + 1 < coverCandidates.length) {
-                setCoverIndex(coverIndex + 1);
+              if (coverSrc) {
+                setFailedCoverBySrc((previous) => ({
+                  ...previous,
+                  [`${coverCandidateSignature}::${coverSrc}`]: true,
+                }));
               }
             }}
           />
@@ -258,7 +263,7 @@ export default function VideoCard({
             }}
             disabled={isLocked}
           >
-            <HeartIcon filled={Boolean(isFavorite)} />
+            <HeartIcon filled={isFavorite} />
             <span className="video-card__quick-label">收藏</span>
           </button>
 
@@ -281,7 +286,7 @@ export default function VideoCard({
             }}
             disabled={isLocked}
           >
-            <CheckIcon filled={Boolean(isCompleted)} />
+            <CheckIcon filled={isCompleted} />
             <span className="video-card__quick-label">完成</span>
           </button>
         </div>

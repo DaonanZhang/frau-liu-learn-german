@@ -158,7 +158,6 @@ export default function SubtitlePanel({
   onSubtitlesLoaded,
   playbackSettings,
   onPlaybackSettingsChange,
-  onRequestNextSubtitle,
   isLexiconOpen,
   onToggleLexicon,
   onRequestLexiconFocus,
@@ -172,7 +171,7 @@ export default function SubtitlePanel({
   const [errorText, setErrorText] = useState("");
 
   // state control highlight
-  const [highlightEnabled, setHighlightEnabled] = useState(true);
+  const highlightEnabled = true;
   const [occMap, setOccMap] = useState({});
 
   // "bilingual" | "de" | "zh"
@@ -388,7 +387,7 @@ export default function SubtitlePanel({
         });
 
         setOccMap(nextMap);
-      } catch (_err) {
+      } catch {
         if (!aborted) {
           setOccMap({});
         }
@@ -534,72 +533,6 @@ export default function SubtitlePanel({
     setMenuOpen(false);
     setPlayMenuOpen(false);
     setMobileSheet("");
-  }
-
-  /**
-   * Format seconds to SRT time format: HH:MM:SS,mmm
-   *
-   * @param {number} seconds - Time in seconds.
-   * @returns {string} SRT timestamp.
-   */
-  function formatSrtTimestamp(seconds) {
-    const totalMs = Math.max(0, Math.floor(Number(seconds || 0) * 1000));
-    const hours = Math.floor(totalMs / 3600000);
-    const minutes = Math.floor((totalMs % 3600000) / 60000);
-    const secs = Math.floor((totalMs % 60000) / 1000);
-    const ms = totalMs % 1000;
-
-    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(
-      2,
-      "0"
-    )},${String(ms).padStart(3, "0")}`;
-  }
-
-  /**
-   * Export subtitles as a .srt file (bilingual: German + Chinese).
-   *
-   * @returns {void}
-   */
-  function handleExportSubtitles() {
-    const exportItems = items || [];
-    if (!exportItems.length) {
-      return;
-    }
-
-    const lines = [];
-
-    exportItems.forEach((subtitleItem, index) => {
-      const start = formatSrtTimestamp(subtitleItem.start);
-      const end = formatSrtTimestamp(subtitleItem.end);
-
-      lines.push(String(index + 1));
-      lines.push(`${start} --> ${end}`);
-
-      const german = String(subtitleItem.de || "").trim();
-      const chinese = String(subtitleItem.zh || "").trim();
-
-      if (german) {
-        lines.push(german);
-      }
-      if (chinese) {
-        lines.push(chinese);
-      }
-
-      lines.push("");
-    });
-
-    const content = lines.join("\n");
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const objectUrl = URL.createObjectURL(blob);
-
-    const linkElement = document.createElement("a");
-    linkElement.href = objectUrl;
-    linkElement.download = `subtitles-${String(videoId || "video")}.srt`;
-    document.body.appendChild(linkElement);
-    linkElement.click();
-    linkElement.remove();
-
-    URL.revokeObjectURL(objectUrl);
   }
 
   /**
@@ -1670,29 +1603,32 @@ export default function SubtitlePanel({
         }}
       />
 
-      <FillInExerciseModal
-        isOpen={isFillInModalOpen}
-        exerciseKey={activeExercise?.exerciseKey || ""}
-        titleText={"填写练习"}
-        promptText={activeExercise?.promptText || ""}
-        blanks={activeExercise?.blanks || []}
-        hasPrev={hasPrevExercise}
-        hasNext={hasNextExercise}
-        onPlay={() => {
-          if (activeExercise) {
-            playSegmentOnce(activeExercise.startSeconds, activeExercise.endSeconds);
-          }
-        }}
-        onPrev={() => {
-          goToPrevExercise();
-        }}
-        onNext={() => {
-          goToNextExercise();
-        }}
-        onClose={() => {
-          setIsFillInModalOpen(false);
-        }}
-      />
+      {isFillInModalOpen ? (
+        <FillInExerciseModal
+          key={activeExercise?.exerciseKey || "empty-exercise"}
+          isOpen={isFillInModalOpen}
+          exerciseKey={activeExercise?.exerciseKey || ""}
+          titleText={"填写练习"}
+          promptText={activeExercise?.promptText || ""}
+          blanks={activeExercise?.blanks || []}
+          hasPrev={hasPrevExercise}
+          hasNext={hasNextExercise}
+          onPlay={() => {
+            if (activeExercise) {
+              playSegmentOnce(activeExercise.startSeconds, activeExercise.endSeconds);
+            }
+          }}
+          onPrev={() => {
+            goToPrevExercise();
+          }}
+          onNext={() => {
+            goToNextExercise();
+          }}
+          onClose={() => {
+            setIsFillInModalOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 

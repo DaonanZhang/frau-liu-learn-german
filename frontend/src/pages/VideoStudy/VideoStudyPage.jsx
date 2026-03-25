@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
 import { useParams, Link } from "react-router-dom";
 import "./VideoStudyPage.css";
@@ -213,7 +213,7 @@ export default function VideoStudyPage() {
       videoElement.removeAttribute("src");
       try {
         videoElement.load();
-      } catch (_err) {
+      } catch {
         // ignore
       }
       return () => {};
@@ -223,7 +223,7 @@ export default function VideoStudyPage() {
       videoElement.src = leftVideoUrl;
       try {
         videoElement.load();
-      } catch (_err) {
+      } catch {
         // ignore
       }
       return () => {};
@@ -234,7 +234,7 @@ export default function VideoStudyPage() {
       videoElement.src = leftVideoUrl;
       try {
         videoElement.load();
-      } catch (_err) {
+      } catch {
         // ignore
       }
       return () => {};
@@ -303,13 +303,69 @@ export default function VideoStudyPage() {
     }
   }, [playbackSettings.sentenceMode]);
 
+  const [subtitleItems, setSubtitleItems] = useState([]);
+  const [activeSubtitleIndex, setActiveSubtitleIndex] = useState(-1);
+
+  const activeSubtitleIndexRef = useRef(-1);
+
+  /**
+   * Find subtitle index by current playback time.
+   * Uses [start, end) interval matching with a small tolerance.
+   *
+   * @param {number} currentTimeSeconds
+   * @returns {number}
+   */
+  const findSubtitleIndexByTime = useCallback((currentTimeSeconds) => {
+    const t = Number(currentTimeSeconds ?? 0);
+    if (!Number.isFinite(t)) {
+      return -1;
+    }
+
+    const tolerance = 0.03;
+    let bestIndex = -1;
+    let bestStart = -Infinity;
+
+    for (let index = 0; index < subtitleItems.length; index += 1) {
+      const start = Number(subtitleItems[index]?.start ?? 0);
+      const end = Number(subtitleItems[index]?.end ?? 0);
+
+      if (!Number.isFinite(start) || !Number.isFinite(end)) {
+        continue;
+      }
+
+      if (t >= start - tolerance && t < end + tolerance) {
+        if (start > bestStart) {
+          bestStart = start;
+          bestIndex = index;
+        }
+      }
+    }
+
+    if (bestIndex !== -1) {
+      return bestIndex;
+    }
+
+    for (let index = subtitleItems.length - 1; index >= 0; index -= 1) {
+      const start = Number(subtitleItems[index]?.start ?? 0);
+      if (!Number.isFinite(start)) {
+        continue;
+      }
+
+      if (t >= start - tolerance) {
+        return index;
+      }
+    }
+
+    return -1;
+  }, [subtitleItems]);
+
   /**
    * Start looping the selected subtitle segment if sentence loop mode is enabled.
    *
    * @param {number} index - Index of the subtitle in subtitleItems array.
    * @returns {void}
    */
-  function startSentenceLoopIfEnabled(index) {
+  const startSentenceLoopIfEnabled = useCallback((index) => {
     const el = videoRef.current;
     if (!el) {
       return;
@@ -342,7 +398,7 @@ export default function VideoStudyPage() {
     loopRef.current.lastLoopAt = 0;
 
     el.currentTime = start;
-  }
+  }, [playbackSettings.sentenceMode, playbackSettings.loopCount, subtitleItems]);
 
   /**
    * Start playing a subtitle segment by index, and apply sentence looping if enabled.
@@ -350,7 +406,7 @@ export default function VideoStudyPage() {
    * @param {number} index
    * @returns {void}
    */
-  function playSubtitleByIndex(index) {
+  const playSubtitleByIndex = useCallback((index) => {
     const videoElement = videoRef.current;
     if (!videoElement) {
       return;
@@ -376,13 +432,7 @@ export default function VideoStudyPage() {
     }
 
     videoElement.play();
-  }
-
-
-  const [subtitleItems, setSubtitleItems] = useState([]);
-  const [activeSubtitleIndex, setActiveSubtitleIndex] = useState(-1);
-
-  const activeSubtitleIndexRef = useRef(-1);
+  }, [playbackSettings.sentenceMode, startSentenceLoopIfEnabled, subtitleItems]);
 
   useEffect(() => {
     activeSubtitleIndexRef.current = activeSubtitleIndex;
@@ -469,6 +519,8 @@ export default function VideoStudyPage() {
     playbackSettings.loopCount,
     playbackSettings.autoNext,
     subtitleItems,
+    findSubtitleIndexByTime,
+    playSubtitleByIndex,
   ]);
 
   useEffect(() => {
@@ -535,7 +587,7 @@ export default function VideoStudyPage() {
     return () => {
       videoElement.removeEventListener("play", onPlay);
     };
-  }, [leftVideoUrl, subtitleItems, playbackSettings.sentenceMode]);
+  }, [leftVideoUrl, subtitleItems, playbackSettings.sentenceMode, findSubtitleIndexByTime, startSentenceLoopIfEnabled]);
 
 
   useEffect(() => {
@@ -566,59 +618,9 @@ export default function VideoStudyPage() {
     return () => {
       videoElement.removeEventListener("seeked", onSeeked);
     };
-  }, [leftVideoUrl, playbackSettings.sentenceMode, subtitleItems]);
+  }, [leftVideoUrl, playbackSettings.sentenceMode, subtitleItems, findSubtitleIndexByTime, startSentenceLoopIfEnabled]);
 
 
-  /**
-   * Find subtitle index by current playback time.
-   * Uses [start, end) interval matching with a small tolerance.
-   *
-   * @param {number} currentTimeSeconds
-   * @returns {number}
-   */
-  function findSubtitleIndexByTime(currentTimeSeconds) {
-    const t = Number(currentTimeSeconds ?? 0);
-    if (!Number.isFinite(t)) {
-      return -1;
-    }
-
-    const tolerance = 0.03;
-    let bestIndex = -1;
-    let bestStart = -Infinity;
-
-    for (let index = 0; index < subtitleItems.length; index += 1) {
-      const start = Number(subtitleItems[index]?.start ?? 0);
-      const end = Number(subtitleItems[index]?.end ?? 0);
-
-      if (!Number.isFinite(start) || !Number.isFinite(end)) {
-        continue;
-      }
-
-      if (t >= start - tolerance && t < end + tolerance) {
-        if (start > bestStart) {
-          bestStart = start;
-          bestIndex = index;
-        }
-      }
-    }
-
-    if (bestIndex !== -1) {
-      return bestIndex;
-    }
-
-    for (let index = subtitleItems.length - 1; index >= 0; index -= 1) {
-      const start = Number(subtitleItems[index]?.start ?? 0);
-      if (!Number.isFinite(start)) {
-        continue;
-      }
-
-      if (t >= start - tolerance) {
-        return index;
-      }
-    }
-
-    return -1;
-  }
   function handleSeek(seconds, options = {}) {
     const videoElement = videoRef.current;
     if (!videoElement) {
@@ -663,9 +665,24 @@ export default function VideoStudyPage() {
   const shouldShowSubtitlePanel = !shouldShowExercisePanel;
   const shouldShowLexiconPanel = !shouldShowExercisePanel && isLexiconOpen;
 
+  function pauseVideoIfPlaying() {
+    const videoElement = videoRef.current;
+    if (!videoElement) {
+      return;
+    }
+
+    if (!videoElement.paused && !videoElement.ended) {
+      videoElement.pause();
+    }
+  }
+
   function handleLexiconFocusRequest(nextFocus) {
     if (!nextFocus || !nextFocus.key || !nextFocus.kind) {
       return;
+    }
+
+    if (isMobile) {
+      pauseVideoIfPlaying();
     }
 
     setIsLexiconOpen(true);
@@ -933,7 +950,13 @@ export default function VideoStudyPage() {
             videoUrl={leftVideoUrl}
             isLexiconOpen={isLexiconOpen}
             onToggleLexicon={() => {
-              setIsLexiconOpen((prevValue) => !prevValue);
+              setIsLexiconOpen((prevValue) => {
+                const nextValue = !prevValue;
+                if (nextValue && isMobile) {
+                  pauseVideoIfPlaying();
+                }
+                return nextValue;
+              });
             }}
             onRequestLexiconFocus={handleLexiconFocusRequest}
             activeSubtitleIndex={activeSubtitleIndex}

@@ -674,16 +674,6 @@ export default function LexiconPanel({
     postOccurrenceMark(entry, "UNKNOWN");
   }
 
-  /**
-   * Unmark current entry (force UNMARKED).
-   *
-   * @param {LexiconEntry} entry
-   * @returns {void}
-   */
-  function handleUnmark(entry) {
-    postOccurrenceMark(entry, "UNMARKED");
-  }
-
   function findStartBySubtitleId(subtitleId) {
     if (!subtitleItems || subtitleItems.length <= 0) {
       return null;

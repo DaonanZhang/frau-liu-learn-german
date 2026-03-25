@@ -133,7 +133,7 @@ export async function apiFetch(path, options = {}, retried = false) {
         },
         true
       );
-    } catch (e) {
+    } catch {
       throw new ApiError("Unauthorized", { status: 401, data });
     }
   }

@@ -120,7 +120,7 @@ function useMaxWidth(maxWidth) {
     const mediaQuery = window.matchMedia(`(max-width: ${maxWidth}px)`);
 
     const update = () => {
-      setIsMatch(Boolean(mediaQuery.matches));
+      setIsMatch(mediaQuery.matches);
     };
 
     update();
@@ -177,7 +177,7 @@ export default function Home() {
 
     const results = [];
     const separators = /[,\uFF0C\u3001]/; // , ， 、
-    const quoteTrim = /^[\"'“”‘’]+|[\"'“”‘’]+$/g;
+    const quoteTrim = /^["'“”‘’]+|["'“”‘’]+$/g;
     rawTopics.forEach((item) => {
       if (item == null) return;
       const str = String(item);
@@ -251,7 +251,7 @@ export default function Home() {
     }
 
     const current = videoMarkById?.[parsedVideoId];
-    const nextValue = !Boolean(current?.is_favorite);
+    const nextValue = !current?.is_favorite;
 
     try {
       const updated = await setVideoFavorite(parsedVideoId, nextValue);
@@ -288,7 +288,7 @@ export default function Home() {
     }
 
     const current = videoMarkById?.[parsedVideoId];
-    const nextValue = !Boolean(current?.is_completed);
+    const nextValue = !current?.is_completed;
 
     try {
       const updated = await setVideoCompleted(parsedVideoId, nextValue);

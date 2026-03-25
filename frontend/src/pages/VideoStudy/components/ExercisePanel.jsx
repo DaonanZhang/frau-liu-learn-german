@@ -33,17 +33,20 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
       return;
     }
 
-    const normalizedVideoId = String(videoId ?? "").trim();
-    if (!normalizedVideoId) {
-      setQuestions([]);
-      setLoadingState("error");
-      setErrorMessage("Missing videoId.");
-      return;
-    }
-
     let isCancelled = false;
 
     async function loadQuestions() {
+      const normalizedVideoId = String(videoId ?? "").trim();
+      if (!normalizedVideoId) {
+        if (isCancelled) {
+          return;
+        }
+        setQuestions([]);
+        setLoadingState("error");
+        setErrorMessage("Missing videoId.");
+        return;
+      }
+
       setLoadingState("loading");
       setErrorMessage("");
 

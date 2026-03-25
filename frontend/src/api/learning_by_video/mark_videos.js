@@ -66,7 +66,7 @@ export function patchUserVideoMarkByVideoId(videoId, patchBody) {
  * @returns {Promise<UserVideoMark>} Updated mark record.
  */
 export function setVideoFavorite(videoId, isFavorite) {
-  return patchUserVideoMarkByVideoId(videoId, { is_favorite: Boolean(isFavorite) });
+  return patchUserVideoMarkByVideoId(videoId, { is_favorite: isFavorite });
 }
 
 /**
@@ -77,7 +77,7 @@ export function setVideoFavorite(videoId, isFavorite) {
  * @returns {Promise<UserVideoMark>} Updated mark record.
  */
 export function setVideoCompleted(videoId, isCompleted) {
-  return patchUserVideoMarkByVideoId(videoId, { is_completed: Boolean(isCompleted) });
+  return patchUserVideoMarkByVideoId(videoId, { is_completed: isCompleted });
 }
 
 /**
@@ -88,7 +88,7 @@ export function setVideoCompleted(videoId, isCompleted) {
  */
 export async function toggleVideoFavorite(videoId) {
   const currentMark = await fetchUserVideoMarkByVideoId(videoId);
-  const nextValue = !Boolean(currentMark?.is_favorite);
+  const nextValue = !currentMark?.is_favorite;
   return setVideoFavorite(videoId, nextValue);
 }
 
@@ -100,7 +100,7 @@ export async function toggleVideoFavorite(videoId) {
  */
 export async function toggleVideoCompleted(videoId) {
   const currentMark = await fetchUserVideoMarkByVideoId(videoId);
-  const nextValue = !Boolean(currentMark?.is_completed);
+  const nextValue = !currentMark?.is_completed;
   return setVideoCompleted(videoId, nextValue);
 }
 

@@ -167,7 +167,9 @@
 }
 
 .vs-subtitleItem {
+  position: relative;
   padding: 0.75rem 0.75rem;
+  padding-right: 3rem;
   border-radius: 0.75rem;
   border: 1px solid #f1f3f5;
   margin-bottom: 0.75rem;
@@ -540,6 +542,58 @@
 .vs-subtitleItem--clickable:hover {
   background: #f8fafc;
   border-color: #e5e7eb;
+}
+
+.vs-subFavoriteBtn {
+  position: absolute;
+  top: 0.58rem;
+  right: 0.6rem;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.95);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.vs-subtitleItem:hover .vs-subFavoriteBtn,
+.vs-subtitleItem:focus-within .vs-subFavoriteBtn,
+.vs-subFavoriteBtn.is-favorited,
+.vs-subFavoriteBtn.is-pending {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.vs-subFavoriteBtn:hover {
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.vs-subFavoriteBtn.is-favorited {
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(255, 247, 220, 0.8);
+}
+
+.vs-subFavoriteBtn.is-pending {
+  cursor: wait;
+}
+
+.vs-subtitleItem.is-favorited {
+  border-color: #f3d8a6;
 }
 
 .vs-subHeader {
@@ -1264,6 +1318,11 @@
     max-height: 42vh;
     overflow: auto;
     padding-bottom: calc(6.5rem + env(safe-area-inset-bottom));
+  }
+
+  .vs-subFavoriteBtn {
+    opacity: 1;
+    transform: scale(1);
   }
 
   .vs-subtitleList.is-shadowing {

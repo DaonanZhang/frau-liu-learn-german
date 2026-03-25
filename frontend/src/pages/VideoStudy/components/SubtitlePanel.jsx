@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchSubtitlesByVideo } from "../../../api/learning_by_video/subtitles.js";
 import {
+  fetchUserSubtitleFavoritesByVideo,
+  setSubtitleFavorite,
+} from "../../../api/learning_by_video/subtitle_favorites.js";
+import {
   fetchWordOccurrences,
   fetchSentenceOccurrences,
   fetchExpressionOccurrences,
@@ -124,6 +128,24 @@ function buildMultiClozePrompt(fullText, ranges) {
   return parts.join("");
 }
 
+function StarIcon({ filled }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3.5 14.9 9l6 .87-4.35 4.24 1.03 5.99L12 17.03 6.42 20.1l1.03-5.99L3.1 9.87 9.1 9 12 3.5Z" />
+    </svg>
+  );
+}
+
 /**
  * SubtitlePanel
  */
@@ -165,6 +187,8 @@ export default function SubtitlePanel({
 
   const [isFillInModalOpen, setIsFillInModalOpen] = useState(false);
   const [activeExerciseKey, setActiveExerciseKey] = useState("");
+  const [favoriteSubtitleIds, setFavoriteSubtitleIds] = useState(() => new Set());
+  const [favoritePendingBySubtitleId, setFavoritePendingBySubtitleId] = useState({});
 
   const menuRef = useRef(null);
   const mobileSheetRef = useRef(null);
@@ -215,6 +239,48 @@ export default function SubtitlePanel({
     if (videoId) {
       loadSubtitles();
     }
+
+    return () => {
+      aborted = true;
+    };
+  }, [videoId]);
+
+  useEffect(() => {
+    let aborted = false;
+
+    async function loadSubtitleFavorites() {
+      if (!videoId) {
+        setFavoriteSubtitleIds(new Set());
+        setFavoritePendingBySubtitleId({});
+        return;
+      }
+
+      try {
+        const records = await fetchUserSubtitleFavoritesByVideo(videoId);
+        if (aborted) {
+          return;
+        }
+
+        const nextSet = new Set();
+        records.forEach((record) => {
+          const subtitleId = Number(record?.subtitle);
+          if (Number.isFinite(subtitleId) && subtitleId > 0) {
+            nextSet.add(subtitleId);
+          }
+        });
+
+        setFavoriteSubtitleIds(nextSet);
+        setFavoritePendingBySubtitleId({});
+      } catch {
+        if (aborted) {
+          return;
+        }
+        setFavoriteSubtitleIds(new Set());
+        setFavoritePendingBySubtitleId({});
+      }
+    }
+
+    loadSubtitleFavorites();
 
     return () => {
       aborted = true;
@@ -744,6 +810,55 @@ export default function SubtitlePanel({
     }
   }
 
+  async function handleToggleSubtitleFavorite(subtitleId) {
+    const parsedSubtitleId = Number(subtitleId);
+    if (!Number.isFinite(parsedSubtitleId) || parsedSubtitleId <= 0) {
+      return;
+    }
+
+    if (favoritePendingBySubtitleId[parsedSubtitleId]) {
+      return;
+    }
+
+    const currentFavorite = favoriteSubtitleIds.has(parsedSubtitleId);
+    const nextFavorite = !currentFavorite;
+
+    setFavoritePendingBySubtitleId((previous) => ({
+      ...previous,
+      [parsedSubtitleId]: true,
+    }));
+
+    setFavoriteSubtitleIds((previous) => {
+      const next = new Set(previous);
+      if (nextFavorite) {
+        next.add(parsedSubtitleId);
+      } else {
+        next.delete(parsedSubtitleId);
+      }
+      return next;
+    });
+
+    try {
+      await setSubtitleFavorite(parsedSubtitleId, nextFavorite);
+    } catch {
+      setFavoriteSubtitleIds((previous) => {
+        const rollback = new Set(previous);
+        if (currentFavorite) {
+          rollback.add(parsedSubtitleId);
+        } else {
+          rollback.delete(parsedSubtitleId);
+        }
+        return rollback;
+      });
+    } finally {
+      setFavoritePendingBySubtitleId((previous) => {
+        const next = { ...previous };
+        delete next[parsedSubtitleId];
+        return next;
+      });
+    }
+  }
+
 
   const playbackRate = Number(playbackSettings?.playbackRate || 1);
   const showLoopActive = playbackSettings?.sentenceMode === "loop";
@@ -1114,46 +1229,82 @@ export default function SubtitlePanel({
 
         {!loading &&
           !errorText &&
-          items.map((subtitleItem, index) => (
-            <article
-              ref={index === activeSubtitleIndex ? activeItemRef : null}
-              key={subtitleItem.id}
-              className={[
-                "vs-subtitleItem",
-                "vs-subtitleItem--clickable",
-                index === activeSubtitleIndex ? "is-active" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                if (onSeek) {
-                  onSeek(subtitleItem.start, { resumeIfPaused: true });
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault();
+          items.map((subtitleItem, index) => {
+            const parsedSubtitleId = Number(subtitleItem.id);
+            const isFavorited =
+              Number.isFinite(parsedSubtitleId) &&
+              parsedSubtitleId > 0 &&
+              favoriteSubtitleIds.has(parsedSubtitleId);
+            const isFavoritePending =
+              Number.isFinite(parsedSubtitleId) &&
+              parsedSubtitleId > 0 &&
+              Boolean(favoritePendingBySubtitleId[parsedSubtitleId]);
+
+            return (
+              <article
+                ref={index === activeSubtitleIndex ? activeItemRef : null}
+                key={subtitleItem.id}
+                className={[
+                  "vs-subtitleItem",
+                  "vs-subtitleItem--clickable",
+                  index === activeSubtitleIndex ? "is-active" : "",
+                  isFavorited ? "is-favorited" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
                   if (onSeek) {
                     onSeek(subtitleItem.start, { resumeIfPaused: true });
                   }
-                }
-              }}
-            >
-              <div className="vs-subTime">{subtitleItem.timeLabel}</div>
-              {renderSubtitleText(subtitleItem)}
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    if (onSeek) {
+                      onSeek(subtitleItem.start, { resumeIfPaused: true });
+                    }
+                  }
+                }}
+              >
+                <button
+                  type="button"
+                  className={[
+                    "vs-subFavoriteBtn",
+                    isFavorited ? "is-favorited" : "",
+                    isFavoritePending ? "is-pending" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                  aria-label={isFavorited ? "Unfavorite subtitle" : "Favorite subtitle"}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleToggleSubtitleFavorite(subtitleItem.id);
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                  }}
+                  disabled={isFavoritePending}
+                >
+                  <StarIcon filled={isFavorited} />
+                </button>
 
-              {activePanelShape === "shadowing" ? (
-                <ShadowingPracticeBar
-                  videoRef={videoRef}
-                  videoId={videoId}
-                  subtitleId={subtitleItem.id}
-                  timeRange={{ start: subtitleItem.start, end: subtitleItem.end }}
-                />
-              ) : null}
-            </article>
-          ))}
+                <div className="vs-subTime">{subtitleItem.timeLabel}</div>
+                {renderSubtitleText(subtitleItem)}
+
+                {activePanelShape === "shadowing" ? (
+                  <ShadowingPracticeBar
+                    videoRef={videoRef}
+                    videoId={videoId}
+                    subtitleId={subtitleItem.id}
+                    timeRange={{ start: subtitleItem.start, end: subtitleItem.end }}
+                  />
+                ) : null}
+              </article>
+            );
+          })}
       </div>
 
       {isMobile ? (
@@ -1545,63 +1696,6 @@ export default function SubtitlePanel({
     </div>
   );
 
-  function renderSubtitleText(item) {
-    const showDe = mode === "bilingual" || mode === "de";
-    const showZh = mode === "bilingual" || mode === "zh";
-    const occurrences = occMap[String(item.id)] || [];
-    const patterns = occurrences.map((o) => o.matchText);
-
-    return (
-      <>
-        {showDe && item.de ? (
-          <div className="vs-subDe">
-            {activePanelShape === "cloze" ? (
-              renderWithClozeMask({
-                text: item.de,
-                patterns,
-                subtitleId: item.id,
-                onOpenExercise: (exerciseKey) => {
-                  openExerciseModal(exerciseKey);
-                },
-              })
-            ) : (
-              renderWithHighlights({
-                text: item.de,
-                occurrences,
-                highlightEnabled,
-                onHighlightClick: (occurrence) => {
-                  if (typeof onRequestLexiconFocus === "function") {
-                    onRequestLexiconFocus({
-                      key: occurrence?.focusKey,
-                      kind: occurrence?.kind,
-                    });
-                  }
-                },
-              })
-            )}
-          </div>
-        ) : null}
-
-        {showZh && item.zh ? (
-          <div className={mode === "zh" ? "vs-subDe" : "vs-subZh"}>
-            {renderWithHighlights({
-              text: item.zh,
-              occurrences,
-              highlightEnabled,
-              onHighlightClick: (occurrence) => {
-                if (typeof onRequestLexiconFocus === "function") {
-                  onRequestLexiconFocus({
-                    key: occurrence?.focusKey,
-                    kind: occurrence?.kind,
-                  });
-                }
-              },
-            })}
-          </div>
-        ) : null}
-      </>
-    );
-  }
 }
 
 /**

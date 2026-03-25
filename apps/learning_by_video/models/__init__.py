@@ -9,6 +9,7 @@ from .user_data import LearningVideoUserData
 from .progress import VideoProgress
 from .exercise import VideoExerciseQuestion, VideoExerciseOption
 from .user_video_mark import LearningVideoUserVideoMark
+from .user_subtitle_favorite import LearningVideoUserSubtitleFavorite
 __all__ = [
     "Video",
     "Subtitle",
@@ -19,5 +20,6 @@ __all__ = [
     "VideoProgress",
     "VideoExerciseQuestion",
     "VideoExerciseOption",
-    "LearningVideoUserVideoMark"
+    "LearningVideoUserVideoMark",
+    "LearningVideoUserSubtitleFavorite",
 ]

@@ -9,6 +9,7 @@ from .occurrences import (
 from .user_data import LearningVideoUserDataSerializer
 from .exercise import VideoExerciseOptionSerializer, VideoExerciseQuestionSerializer
 from .user_video_mark import LearningVideoUserVideoMark
+from .user_subtitle_favorite import LearningVideoUserSubtitleFavoriteSerializer
 
 __all__ = [
     "SubtitleSerializer",
@@ -21,5 +22,6 @@ __all__ = [
     "LearningVideoUserDataSerializer",
     "VideoExerciseQuestionSerializer",
     "VideoExerciseOptionSerializer",
-    "LearningVideoUserVideoMark"
+    "LearningVideoUserVideoMark",
+    "LearningVideoUserSubtitleFavoriteSerializer",
 ]

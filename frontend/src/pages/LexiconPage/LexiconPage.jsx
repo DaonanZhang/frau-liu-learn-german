@@ -8,6 +8,10 @@ import {
 } from "../../api/learning_by_video/occurrences";
 import { fetchSubtitlesByVideo } from "../../api/learning_by_video/subtitles";
 import { toggleVideoOccurrenceMark } from "../../api/learning_by_video/marks_occurrences.js";
+import {
+  fetchUserSubtitleFavoritesByVideo,
+  setSubtitleFavorite,
+} from "../../api/learning_by_video/subtitle_favorites.js";
 
 import Sidebar from "./components/Sidebar.jsx";
 import LexiconCard from "./components/LexiconCard";
@@ -397,6 +401,40 @@ function clampNumber(value, min, max) {
   return value;
 }
 
+function formatTime(seconds) {
+  const s = Number(seconds || 0);
+  if (!Number.isFinite(s) || s < 0) {
+    return "0:00";
+  }
+
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const secs = Math.floor(s % 60);
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(secs).padStart(2, "0")}`;
+}
+
+function StarIcon({ filled }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="16"
+      height="16"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3.5 14.9 9l6 .87-4.35 4.24 1.03 5.99L12 17.03 6.42 20.1l1.03-5.99L3.1 9.87 9.1 9 12 3.5Z" />
+    </svg>
+  );
+}
+
 export default function LexiconPage() {
   const navigate = useNavigate();
   const isMobileView = useIsMobileView(990);
@@ -415,12 +453,16 @@ export default function LexiconPage() {
   const [entries, setEntries] = useState([]);
   const [activeKind, setActiveKind] = useState("word");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sentenceFilter, setSentenceFilter] = useState("all");
 
   const [knowledgeByKey, setKnowledgeByKey] = useState({});
   const [hiddenChineseByKey, setHiddenChineseByKey] = useState({});
   const [isChineseHiddenGlobal, setIsChineseHiddenGlobal] = useState(false);
 
   const [subtitlesById, setSubtitlesById] = useState({});
+  const [subtitleItems, setSubtitleItems] = useState([]);
+  const [favoriteSubtitleIds, setFavoriteSubtitleIds] = useState(() => new Set());
+  const [favoritePendingBySubtitleId, setFavoritePendingBySubtitleId] = useState({});
 
   const [mobileActiveIndex, setMobileActiveIndex] = useState(0);
 
@@ -441,7 +483,7 @@ export default function LexiconPage() {
     if (isMobileView) {
       setMobileActiveIndex(0);
     }
-  }, [isMobileView, activeKind, statusFilter, selectedVideoId]);
+  }, [isMobileView, activeKind, statusFilter, sentenceFilter, selectedVideoId]);
 
   const loadVideos = useCallback(async () => {
     setIsVideosLoading(true);
@@ -477,10 +519,11 @@ export default function LexiconPage() {
         setIsLoading(true);
         setErrorText("");
 
-        const [wordResponse, expressionResponse, subtitleResponse] = await Promise.all([
+        const [wordResponse, expressionResponse, subtitleResponse, favoriteResponse] = await Promise.all([
           fetchWordOccurrences({ video: videoId }),
           fetchExpressionOccurrences({ video: videoId }),
           fetchSubtitlesByVideo(videoId),
+          fetchUserSubtitleFavoritesByVideo(videoId),
         ]);
 
         if (aborted) {
@@ -490,6 +533,7 @@ export default function LexiconPage() {
         const wordOccurrences = safeArray(wordResponse);
         const expressionOccurrences = safeArray(expressionResponse);
         const subtitleItems = safeArray(subtitleResponse);
+        const favoriteItems = safeArray(favoriteResponse);
 
         const nextEntries = buildLexiconEntries(wordOccurrences, expressionOccurrences);
 
@@ -533,9 +577,21 @@ export default function LexiconPage() {
           nextSubtitlesById[subtitleId] = subtitle;
         }
 
+        const nextFavoriteSubtitleIds = new Set();
+        for (const favorite of favoriteItems) {
+          const subtitleId = toIntOrNull(favorite?.subtitle);
+          if (!subtitleId) {
+            continue;
+          }
+          nextFavoriteSubtitleIds.add(subtitleId);
+        }
+
         setEntries(nextEntries);
         setKnowledgeByKey(nextKnowledgeByKey);
         setSubtitlesById(nextSubtitlesById);
+        setSubtitleItems(subtitleItems);
+        setFavoriteSubtitleIds(nextFavoriteSubtitleIds);
+        setFavoritePendingBySubtitleId({});
         setHiddenChineseByKey({});
       } catch (error) {
         if (aborted) {
@@ -544,6 +600,9 @@ export default function LexiconPage() {
         setEntries([]);
         setKnowledgeByKey({});
         setSubtitlesById({});
+        setSubtitleItems([]);
+        setFavoriteSubtitleIds(new Set());
+        setFavoritePendingBySubtitleId({});
         setHiddenChineseByKey({});
         setErrorText(error?.message ? String(error.message) : "Failed to load lexicon");
       } finally {
@@ -559,6 +618,9 @@ export default function LexiconPage() {
       setEntries([]);
       setKnowledgeByKey({});
       setSubtitlesById({});
+      setSubtitleItems([]);
+      setFavoriteSubtitleIds(new Set());
+      setFavoritePendingBySubtitleId({});
       setHiddenChineseByKey({});
       setIsLoading(false);
       setErrorText("");
@@ -616,6 +678,10 @@ export default function LexiconPage() {
   }, []);
 
   const baseEntries = useMemo(() => {
+    if (activeKind === "sentence") {
+      return [];
+    }
+
     let list = entries;
 
     if (activeKind) {
@@ -624,6 +690,38 @@ export default function LexiconPage() {
 
     return list;
   }, [entries, activeKind]);
+
+  const sentenceCount = useMemo(() => subtitleItems.length, [subtitleItems]);
+
+  const sentenceStatusCounts = useMemo(() => {
+    let favorited = 0;
+    for (const subtitle of subtitleItems) {
+      const subtitleId = toIntOrNull(subtitle?.id);
+      if (subtitleId && favoriteSubtitleIds.has(subtitleId)) {
+        favorited += 1;
+      }
+    }
+    return {
+      all: subtitleItems.length,
+      favorited,
+      unfavorited: Math.max(0, subtitleItems.length - favorited),
+    };
+  }, [subtitleItems, favoriteSubtitleIds]);
+
+  const filteredSentenceItems = useMemo(() => {
+    if (sentenceFilter === "all") {
+      return subtitleItems;
+    }
+
+    return subtitleItems.filter((subtitle) => {
+      const subtitleId = toIntOrNull(subtitle?.id);
+      const isFavorited = Boolean(subtitleId && favoriteSubtitleIds.has(subtitleId));
+      if (sentenceFilter === "favorited") {
+        return isFavorited;
+      }
+      return !isFavorited;
+    });
+  }, [subtitleItems, sentenceFilter, favoriteSubtitleIds]);
 
   const statusCounts = useMemo(() => {
     let known = 0;
@@ -680,6 +778,58 @@ export default function LexiconPage() {
   const expressionCount = useMemo(
     () => entries.filter((x) => x.kind === "expression").length,
     [entries]
+  );
+
+  const onToggleSentenceFavorite = useCallback(
+    async (subtitleId) => {
+      const parsedSubtitleId = toIntOrNull(subtitleId);
+      if (!parsedSubtitleId) {
+        return;
+      }
+
+      if (favoritePendingBySubtitleId[parsedSubtitleId]) {
+        return;
+      }
+
+      const currentFavorite = favoriteSubtitleIds.has(parsedSubtitleId);
+      const nextFavorite = !currentFavorite;
+
+      setFavoritePendingBySubtitleId((previous) => ({
+        ...previous,
+        [parsedSubtitleId]: true,
+      }));
+
+      setFavoriteSubtitleIds((previous) => {
+        const next = new Set(previous);
+        if (nextFavorite) {
+          next.add(parsedSubtitleId);
+        } else {
+          next.delete(parsedSubtitleId);
+        }
+        return next;
+      });
+
+      try {
+        await setSubtitleFavorite(parsedSubtitleId, nextFavorite);
+      } catch {
+        setFavoriteSubtitleIds((previous) => {
+          const rollback = new Set(previous);
+          if (currentFavorite) {
+            rollback.add(parsedSubtitleId);
+          } else {
+            rollback.delete(parsedSubtitleId);
+          }
+          return rollback;
+        });
+      } finally {
+        setFavoritePendingBySubtitleId((previous) => {
+          const next = { ...previous };
+          delete next[parsedSubtitleId];
+          return next;
+        });
+      }
+    },
+    [favoritePendingBySubtitleId, favoriteSubtitleIds]
   );
 
   /**
@@ -747,28 +897,6 @@ export default function LexiconPage() {
       return null;
     }
     return filteredEntries[mobileActiveIndex] || null;
-  }, [filteredEntries, isMobileView, mobileActiveIndex]);
-
-  const prevEntry = useMemo(() => {
-    if (!isMobileView) {
-      return null;
-    }
-    if (filteredEntries.length <= 0) {
-      return null;
-    }
-    return mobileActiveIndex > 0 ? filteredEntries[mobileActiveIndex - 1] : null;
-  }, [filteredEntries, isMobileView, mobileActiveIndex]);
-
-  const nextEntry = useMemo(() => {
-    if (!isMobileView) {
-      return null;
-    }
-    if (filteredEntries.length <= 0) {
-      return null;
-    }
-    return mobileActiveIndex < filteredEntries.length - 1
-      ? filteredEntries[mobileActiveIndex + 1]
-      : null;
   }, [filteredEntries, isMobileView, mobileActiveIndex]);
 
   const handleGoPrev = useCallback(() => {
@@ -983,61 +1111,165 @@ export default function LexiconPage() {
           >
             地道表达 ({expressionCount})
           </button>
+
+          <button
+            type="button"
+            className={["lp-tab", activeKind === "sentence" ? "is-active" : ""].filter(Boolean).join(" ")}
+            onClick={() => {
+              setActiveKind("sentence");
+              setSentenceFilter("all");
+            }}
+            disabled={isLoading}
+          >
+            句子 ({sentenceCount})
+          </button>
         </div>
 
         <div className="lp-filtersRow">
-          <button
-            type="button"
-            className={["lp-pill", statusFilter === "all" ? "is-active" : ""].filter(Boolean).join(" ")}
-            onClick={() => {
-              setStatusFilter("all");
-            }}
-            disabled={isLoading}
-          >
-            全部 ({statusCounts.all})
-          </button>
+          {activeKind === "sentence" ? (
+            <>
+              <button
+                type="button"
+                className={["lp-pill", sentenceFilter === "all" ? "is-active" : ""].filter(Boolean).join(" ")}
+                onClick={() => {
+                  setSentenceFilter("all");
+                }}
+                disabled={isLoading}
+              >
+                全部 ({sentenceStatusCounts.all})
+              </button>
 
-          <button
-            type="button"
-            className={["lp-pill", statusFilter === "unmarked" ? "is-active" : ""].filter(Boolean).join(" ")}
-            onClick={() => {
-              setStatusFilter("unmarked");
-            }}
-            disabled={isLoading}
-          >
-            未标记 ({statusCounts.unmarked})
-          </button>
+              <button
+                type="button"
+                className={["lp-pill", sentenceFilter === "unfavorited" ? "is-active" : ""].filter(Boolean).join(" ")}
+                onClick={() => {
+                  setSentenceFilter("unfavorited");
+                }}
+                disabled={isLoading}
+              >
+                未收藏 ({sentenceStatusCounts.unfavorited})
+              </button>
 
-          <button
-            type="button"
-            className={["lp-pill", statusFilter === "known" ? "is-active" : ""].filter(Boolean).join(" ")}
-            onClick={() => {
-              setStatusFilter("known");
-            }}
-            disabled={isLoading}
-          >
-            认识 ({statusCounts.known})
-          </button>
+              <button
+                type="button"
+                className={["lp-pill", sentenceFilter === "favorited" ? "is-active" : ""].filter(Boolean).join(" ")}
+                onClick={() => {
+                  setSentenceFilter("favorited");
+                }}
+                disabled={isLoading}
+              >
+                已收藏 ({sentenceStatusCounts.favorited})
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className={["lp-pill", statusFilter === "all" ? "is-active" : ""].filter(Boolean).join(" ")}
+                onClick={() => {
+                  setStatusFilter("all");
+                }}
+                disabled={isLoading}
+              >
+                全部 ({statusCounts.all})
+              </button>
 
-          <button
-            type="button"
-            className={["lp-pill", statusFilter === "not_known" ? "is-active" : ""].filter(Boolean).join(" ")}
-            onClick={() => {
-              setStatusFilter("not_known");
-            }}
-            disabled={isLoading}
-          >
-            不认识 ({statusCounts.not_known})
-          </button>
+              <button
+                type="button"
+                className={["lp-pill", statusFilter === "unmarked" ? "is-active" : ""].filter(Boolean).join(" ")}
+                onClick={() => {
+                  setStatusFilter("unmarked");
+                }}
+                disabled={isLoading}
+              >
+                未标记 ({statusCounts.unmarked})
+              </button>
+
+              <button
+                type="button"
+                className={["lp-pill", statusFilter === "known" ? "is-active" : ""].filter(Boolean).join(" ")}
+                onClick={() => {
+                  setStatusFilter("known");
+                }}
+                disabled={isLoading}
+              >
+                认识 ({statusCounts.known})
+              </button>
+
+              <button
+                type="button"
+                className={["lp-pill", statusFilter === "not_known" ? "is-active" : ""].filter(Boolean).join(" ")}
+                onClick={() => {
+                  setStatusFilter("not_known");
+                }}
+                disabled={isLoading}
+              >
+                不认识 ({statusCounts.not_known})
+              </button>
+            </>
+          )}
         </div>
 
         {isLoading ? <div className="lp-stateBox">Loading…</div> : null}
         {!isLoading && errorText ? <div className="lp-stateBox">Failed to load: {errorText}</div> : null}
-        {!isLoading && !errorText && filteredEntries.length <= 0 ? <div className="lp-stateBox"></div> : null}
+        {!isLoading && !errorText && activeKind === "sentence" && filteredSentenceItems.length <= 0 ? (
+          <div className="lp-stateBox">暂无句子</div>
+        ) : null}
+        {!isLoading && !errorText && activeKind !== "sentence" && filteredEntries.length <= 0 ? (
+          <div className="lp-stateBox"></div>
+        ) : null}
 
         {!isLoading && !errorText ? (
           <>
-            {isMobileView ? (
+            {activeKind === "sentence" ? (
+              <section className="lp-sentenceList" aria-label="Sentence cards">
+                {filteredSentenceItems.map((subtitle) => {
+                  const subtitleId = toIntOrNull(subtitle?.id);
+                  const isFavorited = Boolean(subtitleId && favoriteSubtitleIds.has(subtitleId));
+                  const isPending = Boolean(subtitleId && favoritePendingBySubtitleId[subtitleId]);
+                  const sentenceDe = normalizeText(subtitle?.content);
+                  const sentenceZh = normalizeText(subtitle?.translation);
+                  const timeLabel = formatTime(subtitle?.start);
+
+                  return (
+                    <article
+                      key={String(subtitle?.id || `${subtitle?.start}-${sentenceDe}`)}
+                      className={[
+                        "lp-sentenceCard",
+                        isFavorited ? "is-favorited" : "",
+                      ].filter(Boolean).join(" ")}
+                    >
+                      <button
+                        type="button"
+                        className={[
+                          "lp-sentenceFavBtn",
+                          isFavorited ? "is-favorited" : "",
+                          isPending ? "is-pending" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                        aria-label={isFavorited ? "Unfavorite subtitle" : "Favorite subtitle"}
+                        onClick={() => {
+                          if (!subtitleId) {
+                            return;
+                          }
+                          onToggleSentenceFavorite(subtitleId);
+                        }}
+                        disabled={!subtitleId || isPending}
+                      >
+                        <StarIcon filled={isFavorited} />
+                      </button>
+
+                      <div className="lp-sentenceTime">{timeLabel}</div>
+                      {sentenceDe ? <div className="lp-sentenceDe">{sentenceDe}</div> : null}
+                      {!isChineseHiddenGlobal && sentenceZh ? (
+                        <div className="lp-sentenceZh">{sentenceZh}</div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </section>
+            ) : isMobileView ? (
               <section
                 className="lp-carousel"
                 aria-label="Lexicon cards carousel"

@@ -11,6 +11,7 @@ from apps.learning_by_video.models import (
     VideoExpressionOccurrence,
     LearningVideoUserData,
     LearningVideoUserVideoMark,
+    LearningVideoUserSubtitleFavorite,
 )
 
 
@@ -83,3 +84,10 @@ class LearningVideoUserVideoMarkAdmin(admin.ModelAdmin):
     list_display = ("id", "learning_video_user_data", "video", "is_completed", "is_favorite", "updated_at")
     list_filter = ("is_completed", "is_favorite")
     search_fields = ("learning_video_user_data__user_data__user__telephone", "video__title")
+
+
+@admin.register(LearningVideoUserSubtitleFavorite)
+class LearningVideoUserSubtitleFavoriteAdmin(admin.ModelAdmin):
+    list_display = ("id", "learning_video_user_data", "subtitle", "created_at")
+    list_filter = ("subtitle__video",)
+    search_fields = ("learning_video_user_data__user_data__user__telephone", "subtitle__content")

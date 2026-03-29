@@ -243,11 +243,17 @@ def _needs_safe_alias(filename: str) -> bool:
     return False
 
 
-def _ensure_safe_alias_filename(*, folder: Path, filename: str, mode: str) -> str:
+def _ensure_safe_alias_filename(
+    *,
+    folder: Path,
+    filename: str,
+    mode: str,
+    create_missing_alias: bool = False,
+) -> str:
     """
     Return a safe filename for URL usage.
-    Do NOT create new files.
-    If an ASCII-safe alias already exists in folder, reuse it; otherwise keep source filename.
+    If safe filename already exists, reuse it.
+    In apply mode, can optionally rename source file to safe filename.
     """
     src_name = (filename or "").strip()
     if not src_name:
@@ -264,6 +270,27 @@ def _ensure_safe_alias_filename(*, folder: Path, filename: str, mode: str) -> st
 
     if alias.exists():
         return alias_name
+
+    if not create_missing_alias:
+        return src_name
+    if mode != "apply":
+        return src_name
+
+    src = folder / src_name
+    if not src.exists() or not src.is_file():
+        return src_name
+
+    # Avoid creating "safe alias" for HLS playlist only, because playlist internals
+    # may still reference unsafe segment names. Those should come from normalized slicing.
+    if src.suffix.lower() == ".m3u8":
+        return src_name
+
+    try:
+        src.rename(alias)
+        return alias_name
+    except OSError:
+        # Keep source filename when rename is not possible.
+        pass
 
     return src_name
 
@@ -494,6 +521,7 @@ class Command(BaseCommand):
                             folder=video_dir,
                             filename=video_filename,
                             mode=mode,
+                            create_missing_alias=True,
                         )
                         picked_video_filename = video_filename
                         new_video_url = _build_media_url(
@@ -538,6 +566,7 @@ class Command(BaseCommand):
                             folder=cover_dir,
                             filename=cover_filename,
                             mode=mode,
+                            create_missing_alias=True,
                         )
                         new_cover_url = _build_media_url(
                             SCIENCE_SEASON1_COVER_URL_PREFIX,

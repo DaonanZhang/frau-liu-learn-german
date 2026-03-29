@@ -15,6 +15,7 @@ Input:
 Behavior:
   - Creates an HLS playlist (.m3u8)
   - Splits each video into ~5 segments (fMP4)
+  - HLS output filenames are normalized to ASCII-safe stems
 
 Options:
   --overwrite            Overwrite existing outputs
@@ -103,6 +104,18 @@ fi
 
 mkdir -p "$output_dir"
 
+PY_BIN="${PYTHON_BIN:-}"
+if [[ -z "$PY_BIN" ]]; then
+  if command -v python3 >/dev/null 2>&1; then
+    PY_BIN="python3"
+  elif command -v python >/dev/null 2>&1; then
+    PY_BIN="python"
+  else
+    echo "python3/python is required for filename normalization." >&2
+    exit 1
+  fi
+fi
+
 whitelist_enabled=0
 declare -A whitelist_keys=()
 
@@ -161,9 +174,33 @@ fi
 
 build_hls() {
   local in="$1"
-  local base
+  local base out_base
   base="$(basename "$in")"
   base="${base%.*}"
+  out_base="$("$PY_BIN" - "$base" <<'PY'
+import re
+import sys
+import unicodedata
+
+s = (sys.argv[1] if len(sys.argv) > 1 else "").strip()
+s = s.replace("ß", "ss").replace("ẞ", "SS")
+s = unicodedata.normalize("NFKD", s)
+s = "".join(ch for ch in s if not unicodedata.combining(ch))
+s = s.replace("?", "_").replace("#", "_").replace("%", "_")
+s = re.sub(r"\s+", "_", s)
+s = re.sub(r"[^A-Za-z0-9._-]+", "_", s)
+s = re.sub(r"_+", "_", s).strip("._")
+print(s or "media")
+PY
+)"
+  if [[ "$base" != "$out_base" ]]; then
+    echo "Normalized HLS stem: '$base' -> '$out_base'"
+  fi
+
+  if [[ "$overwrite" -ne 1 && -f "$output_dir/${out_base}.m3u8" ]]; then
+    echo "Skip (playlist already exists): $output_dir/${out_base}.m3u8"
+    return 2
+  fi
 
   local duration
   duration="$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$in" || true)"
@@ -176,15 +213,15 @@ build_hls() {
   local seg_time
   seg_time="$(awk -v d="$duration" 'BEGIN { t = int(d / 5 + 0.5); if (t < 2) t = 2; print t }')"
 
-  echo "HLS: $in -> $output_dir/${base}.m3u8 (segment time: ${seg_time}s)"
+  echo "HLS: $in -> $output_dir/${out_base}.m3u8 (segment time: ${seg_time}s)"
   ffmpeg "$ffmpeg_overwrite" -i "$in" \
     "${encode_args[@]}" \
     -hls_time "$seg_time" \
     -hls_playlist_type vod \
     -hls_segment_type fmp4 \
-    -hls_fmp4_init_filename "${base}-init.mp4" \
-    -hls_segment_filename "$output_dir/${base}-%03d.m4s" \
-    "$output_dir/${base}.m3u8"
+    -hls_fmp4_init_filename "${out_base}-init.mp4" \
+    -hls_segment_filename "$output_dir/${out_base}-%03d.m4s" \
+    "$output_dir/${out_base}.m3u8"
 }
 
 is_allowed_mp4() {
@@ -199,6 +236,14 @@ is_allowed_mp4() {
   [[ -n "${whitelist_keys[$key]+x}" ]]
 }
 
+is_hls_init_mp4() {
+  local in="$1"
+  local base
+  base="$(basename "$in")"
+  base="${base%.*}"
+  [[ "${base,,}" == *-init ]]
+}
+
 if [[ -d "$input" ]]; then
   shopt -s nullglob
   files=("$input"/*.mp4 "$input"/*.MP4)
@@ -209,13 +254,26 @@ if [[ -d "$input" ]]; then
   processed=0
   skipped=0
   for f in "${files[@]}"; do
+    if is_hls_init_mp4 "$f"; then
+      echo "Skip (HLS init file): $f"
+      skipped=$((skipped + 1))
+      continue
+    fi
     if ! is_allowed_mp4 "$f"; then
       echo "Skip (not in whitelist): $f"
       skipped=$((skipped + 1))
       continue
     fi
-    build_hls "$f"
-    processed=$((processed + 1))
+    if build_hls "$f"; then
+      processed=$((processed + 1))
+    else
+      rc=$?
+      if [[ "$rc" -eq 2 ]]; then
+        skipped=$((skipped + 1))
+      else
+        exit "$rc"
+      fi
+    fi
   done
   if [[ "$whitelist_enabled" -eq 1 ]]; then
     echo "Whitelist result: processed=${processed}, skipped=${skipped}"
@@ -225,11 +283,20 @@ if [[ -d "$input" ]]; then
     fi
   fi
 else
+  if is_hls_init_mp4 "$input"; then
+    echo "Input is an HLS init file, skipping: $input"
+    exit 0
+  fi
   if ! is_allowed_mp4 "$input"; then
     echo "Input file is not in whitelist: $input" >&2
     exit 1
   fi
-  build_hls "$input"
+  if ! build_hls "$input"; then
+    rc=$?
+    if [[ "$rc" -ne 2 ]]; then
+      exit "$rc"
+    fi
+  fi
 fi
 
 if [[ "$update_db" -eq 1 ]]; then

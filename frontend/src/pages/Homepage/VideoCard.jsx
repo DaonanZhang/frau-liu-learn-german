@@ -180,14 +180,14 @@ export default function VideoCard({
     <article className={["video-card", isLocked ? "video-card--locked" : ""].join(" ")}>
       <div
         className="video-card__media"
-        onClick={isLocked ? undefined : onClick}
+        onClick={onClick}
         role="button"
-        tabIndex={isLocked ? -1 : 0}
-        aria-disabled={isLocked ? "true" : "false"}
+        tabIndex={onClick ? 0 : -1}
+        aria-disabled={onClick ? "false" : "true"}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            if (!isLocked && onClick) {
+            if (onClick) {
               onClick();
             }
           }

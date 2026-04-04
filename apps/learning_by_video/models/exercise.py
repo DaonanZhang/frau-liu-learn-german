@@ -17,6 +17,10 @@ class VideoExerciseQuestion(models.Model):
         TRUE_FALSE = "TRUE_FALSE"
         CHOICE = "CHOICE"
 
+    class Category(models.TextChoices):
+        LISTENING = "listening"
+        GRAMMAR = "grammar"
+
     video = models.ForeignKey(
         "learning_by_video.Video",
         on_delete=models.CASCADE,
@@ -34,7 +38,20 @@ class VideoExerciseQuestion(models.Model):
 
     question_type = models.CharField(max_length=16, choices=QuestionType.choices, db_index=True)
 
+    category = models.CharField(
+        max_length=16,
+        choices=Category.choices,
+        default=Category.LISTENING,
+        db_index=True,
+    )
+
     prompt = models.TextField(help_text="Question stem shown to the user.")
+
+    explanation = models.TextField(
+        blank=True,
+        default="",
+        help_text="Question-level explanation, mainly used by grammar exercises.",
+    )
 
     order = models.PositiveIntegerField(default=0, db_index=True)
 
@@ -43,12 +60,13 @@ class VideoExerciseQuestion(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["video", "order"], name="vxq_v_o"),
+            models.Index(fields=["video", "category", "order"], name="vxq_v_c_o"),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["video", "external_id"],
+                fields=["video", "category", "external_id"],
                 condition=~models.Q(external_id=""),
-                name="vxq_v_ext_uq",
+                name="vxq_v_cat_ext_uq",
             )
         ]
 

@@ -10,10 +10,17 @@ from apps.learning_by_video.models import Video, VideoExerciseOption, VideoExerc
 
 
 SHEET_NAME_DEFAULT = "exercise"
+QUESTION_CATEGORY_COLUMN = "question_kat"
 
 TYPE_MAP: dict[str, str] = {
     "Richtig oder Falsch": VideoExerciseQuestion.QuestionType.TRUE_FALSE,
     "Wählen Sie aus": VideoExerciseQuestion.QuestionType.CHOICE,
+}
+
+CATEGORY_MAP: dict[str, str] = {
+    "listening": VideoExerciseQuestion.Category.LISTENING,
+    "grammar": VideoExerciseQuestion.Category.GRAMMAR,
+    "grammer": VideoExerciseQuestion.Category.GRAMMAR,
 }
 
 
@@ -24,6 +31,16 @@ def _parse_bool(value: object) -> bool:
 
 def _to_str(v: object) -> str:
     return str(v).strip()
+
+
+def _normalize_category(value: object) -> str:
+    raw = _to_str(value).lower()
+    if not raw:
+        return VideoExerciseQuestion.Category.LISTENING
+    mapped = CATEGORY_MAP.get(raw)
+    if not mapped:
+        raise ValueError(f"Unknown question_kat {value!r}")
+    return mapped
 
 
 class Command(BaseCommand):
@@ -51,17 +68,37 @@ class Command(BaseCommand):
 
         df = pd.read_excel(xlsx_path, sheet_name=sheet, engine="openpyxl").fillna("")
 
-        required = {"question_type", "question_id", "question", "answer", "is_correct", "explanation"}
+        if QUESTION_CATEGORY_COLUMN not in df.columns:
+            df[QUESTION_CATEGORY_COLUMN] = VideoExerciseQuestion.Category.LISTENING
+
+        required = {
+            "question_type",
+            "question_id",
+            "question",
+            "answer",
+            "is_correct",
+            "explanation",
+        }
         missing = required - set(df.columns)
         if missing:
             raise ValueError(f"Missing columns in sheet {sheet!r}: {sorted(missing)}")
 
         # Normalize strings
-        for col in ["question_type", "question_id", "question", "answer", "is_correct", "explanation"]:
+        for col in [
+            QUESTION_CATEGORY_COLUMN,
+            "question_type",
+            "question_id",
+            "question",
+            "answer",
+            "is_correct",
+            "explanation",
+        ]:
             df[col] = df[col].map(_to_str)
 
+        df[QUESTION_CATEGORY_COLUMN] = df[QUESTION_CATEGORY_COLUMN].map(_normalize_category)
+
         # Stable ordering
-        df = df.sort_values(by=["question_id", "answer"])
+        df = df.sort_values(by=[QUESTION_CATEGORY_COLUMN, "question_id", "answer"])
 
         # Cache to avoid repeated DB hits (this is the "aggregation" you guessed)
         question_cache: dict[str, VideoExerciseQuestion] = {}
@@ -74,6 +111,7 @@ class Command(BaseCommand):
 
         for idx, row in df.iterrows():
             raw_type = row["question_type"]
+            category = row[QUESTION_CATEGORY_COLUMN]
             external_id = row["question_id"]
             prompt = row["question"]
             answer_text = row["answer"]
@@ -88,20 +126,28 @@ class Command(BaseCommand):
             if not mapped_type:
                 raise ValueError(f"Row {idx}: unknown question_type {raw_type!r}")
 
-            # --- Question (one per (video, external_id)) ---
-            q_key = external_id
+            # --- Question (one per (video, category, external_id)) ---
+            q_key = f"{category}:{external_id}"
             question = question_cache.get(q_key)
 
             if question is None:
                 # Create/update once, then cache
                 order = int(external_id) if external_id.isdigit() else 0
 
+                question_explanation = (
+                    explanation
+                    if category == VideoExerciseQuestion.Category.GRAMMAR
+                    else ""
+                )
+
                 question, q_created = VideoExerciseQuestion.objects.update_or_create(
                     video=video,
+                    category=category,
                     external_id=external_id,
                     defaults={
                         "question_type": mapped_type,
                         "prompt": prompt,
+                        "explanation": question_explanation,
                         "order": order,
                     },
                 )
@@ -120,8 +166,21 @@ class Command(BaseCommand):
                 if question.question_type != mapped_type:
                     question.question_type = mapped_type
                     changed = True
+                if question.category != category:
+                    question.category = category
+                    changed = True
+                if (
+                    category == VideoExerciseQuestion.Category.GRAMMAR
+                    and explanation
+                    and question.explanation != explanation
+                ):
+                    question.explanation = explanation
+                    changed = True
                 if changed:
-                    question.save(update_fields=["prompt", "question_type"])
+                    update_fields = ["prompt", "question_type", "category"]
+                    if category == VideoExerciseQuestion.Category.GRAMMAR and explanation:
+                        update_fields.append("explanation")
+                    question.save(update_fields=update_fields)
                     updated_q += 1
 
             # --- Option (one per (question, text)) ---
@@ -137,7 +196,11 @@ class Command(BaseCommand):
                 text=answer_text,
                 defaults={
                     "is_correct": is_correct,
-                    "explanation": explanation,
+                    "explanation": (
+                        explanation
+                        if category == VideoExerciseQuestion.Category.LISTENING
+                        else ""
+                    ),
                     "order": option_order,
                 },
             )

@@ -17,6 +17,7 @@ class VideoExerciseQuestionViewSet(viewsets.ReadOnlyModelViewSet):
     Supported filters:
     - ?video=<video_id>
     - ?question_type=TRUE_FALSE|CHOICE
+    - ?category=listening|grammar
     """
     serializer_class = VideoExerciseQuestionSerializer
     permission_classes = [IsAuthenticated]
@@ -52,5 +53,9 @@ class VideoExerciseQuestionViewSet(viewsets.ReadOnlyModelViewSet):
         q_type = self.request.query_params.get("question_type")
         if q_type:
             qs = qs.filter(question_type=q_type)
+
+        category = self.request.query_params.get("category")
+        if category:
+            qs = qs.filter(category=category)
 
         return qs

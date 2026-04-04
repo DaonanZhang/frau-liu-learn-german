@@ -88,7 +88,8 @@ if [[ "$overwrite" -eq 1 ]]; then
   ffmpeg_overwrite="-y"
 fi
 
-declare -A out_stems_seen=()
+out_stems_seen_keys=()
+out_stems_seen_values=()
 
 normalize_stem() {
   local raw="$1"
@@ -111,20 +112,30 @@ PY
 
 convert_one() {
   local in="$1"
-  local base out_base out_mp4
+  local base out_base out_mp4 existing_in idx
   base="$(basename "$in")"
   base="${base%.*}"
   out_base="$(normalize_stem "$base")"
   out_mp4="$output_dir/${out_base}.mp4"
 
-  if [[ -n "${out_stems_seen[$out_base]+x}" && "${out_stems_seen[$out_base]}" != "$in" ]]; then
+  existing_in=""
+  for idx in "${!out_stems_seen_keys[@]}"; do
+    if [[ "${out_stems_seen_keys[$idx]}" == "$out_base" ]]; then
+      existing_in="${out_stems_seen_values[$idx]}"
+      break
+    fi
+  done
+  if [[ -n "$existing_in" && "$existing_in" != "$in" ]]; then
     echo "Name collision after normalization:" >&2
-    echo "  - ${out_stems_seen[$out_base]}" >&2
+    echo "  - $existing_in" >&2
     echo "  - $in" >&2
     echo "Both map to: ${out_base}.mp4" >&2
     exit 1
   fi
-  out_stems_seen["$out_base"]="$in"
+  if [[ -z "$existing_in" ]]; then
+    out_stems_seen_keys+=("$out_base")
+    out_stems_seen_values+=("$in")
+  fi
 
   if [[ "$base" != "$out_base" ]]; then
     echo "Normalized filename: '$base' -> '$out_base'"

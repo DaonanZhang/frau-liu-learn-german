@@ -117,11 +117,15 @@ if [[ -z "$PY_BIN" ]]; then
 fi
 
 whitelist_enabled=0
-declare -A whitelist_keys=()
+whitelist_keys=()
+
+to_lower() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
 
 add_whitelist_item() {
   local raw="$1"
-  local item key
+  local item key existing
   item="$(printf '%s' "$raw" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
   if [[ -z "$item" ]]; then
     return 0
@@ -130,18 +134,27 @@ add_whitelist_item() {
     return 0
   fi
   item="$(basename "$item")"
-  if [[ "${item,,}" == *.mp4 ]]; then
+  if [[ "$(to_lower "$item")" == *.mp4 ]]; then
     item="${item:0:${#item}-4}"
   fi
-  key="${item,,}"
+  key="$(to_lower "$item")"
   if [[ -z "$key" ]]; then
     return 0
   fi
-  whitelist_keys["$key"]=1
+  existing=0
+  for existing_key in "${whitelist_keys[@]}"; do
+    if [[ "$existing_key" == "$key" ]]; then
+      existing=1
+      break
+    fi
+  done
+  if [[ "$existing" -eq 0 ]]; then
+    whitelist_keys+=("$key")
+  fi
   whitelist_enabled=1
 }
 
-for item in "${allow_items[@]}"; do
+for item in "${allow_items[@]-}"; do
   add_whitelist_item "$item"
 done
 
@@ -226,14 +239,19 @@ PY
 
 is_allowed_mp4() {
   local in="$1"
-  local base key
+  local base key existing_key
   if [[ "$whitelist_enabled" -eq 0 ]]; then
     return 0
   fi
   base="$(basename "$in")"
   base="${base%.*}"
-  key="${base,,}"
-  [[ -n "${whitelist_keys[$key]+x}" ]]
+  key="$(to_lower "$base")"
+  for existing_key in "${whitelist_keys[@]}"; do
+    if [[ "$existing_key" == "$key" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 is_hls_init_mp4() {
@@ -241,7 +259,7 @@ is_hls_init_mp4() {
   local base
   base="$(basename "$in")"
   base="${base%.*}"
-  [[ "${base,,}" == *-init ]]
+  [[ "$(to_lower "$base")" == *-init ]]
 }
 
 if [[ -d "$input" ]]; then

@@ -33,9 +33,9 @@ class SubtitleAdmin(admin.ModelAdmin):
 
 @admin.register(VideoExerciseQuestion)
 class VideoExerciseQuestionAdmin(admin.ModelAdmin):
-    list_display = ("id", "video", "question_type", "order")
-    list_filter = ("question_type", "video")
-    search_fields = ("question", "video__title")
+    list_display = ("id", "video", "category", "question_type", "order")
+    list_filter = ("category", "question_type", "video")
+    search_fields = ("prompt", "explanation", "video__title")
 
 
 @admin.register(VideoExerciseOption)

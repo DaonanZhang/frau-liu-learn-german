@@ -201,7 +201,7 @@ export default function ProfilePage() {
                 onChange={(event) => {
                   setEmail(event.target.value);
                 }}
-                placeholder="请输入邮箱（可选）"
+                placeholder="请输入邮箱"
                 autoComplete="email"
               />
             </label>

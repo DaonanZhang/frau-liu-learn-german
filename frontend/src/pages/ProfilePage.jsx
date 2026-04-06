@@ -184,10 +184,10 @@ export default function ProfilePage() {
                 className="profile-input"
                 value={username}
                 onChange={(event) => {
-                  setUsername(event.target.value.slice(0, 10));
+                  setUsername(event.target.value);
                 }}
                 placeholder="请输入用户名"
-                maxLength={10}
+                maxLength={15}
                 autoComplete="nickname"
               />
             </label>

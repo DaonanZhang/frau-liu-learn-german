@@ -60,7 +60,7 @@ class User(AbstractUser):
         ),
         validators=[username_validator],
         error_messages={
-            "unique": _("A user with that username already exists."),
+            "unique": _("该用户名已被使用。"),
         },
     )
 

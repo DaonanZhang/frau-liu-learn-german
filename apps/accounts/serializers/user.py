@@ -6,6 +6,8 @@ from apps.accounts.models.user import User
 from apps.accounts.serializers.entitlement import EntitlementReadSerializer
 from apps.accounts.serializers.user_data import UserDataReadSerializer
 
+USERNAME_MAX_LENGTH = User._meta.get_field("telephone").max_length
+
 
 class UserMeReadSerializer(serializers.ModelSerializer):
     """
@@ -39,16 +41,24 @@ class UserMeWriteSerializer(serializers.ModelSerializer):
     """
 
     username = serializers.CharField(
-        max_length=10,
+        max_length=USERNAME_MAX_LENGTH,
         allow_blank=True,
         allow_null=True,
         required=False,
         trim_whitespace=True,
+        error_messages={
+            "max_length": f"用户名不能超过{USERNAME_MAX_LENGTH}个字符。",
+            "blank": "用户名不能为空。",
+            "null": "用户名不能为空。",
+        },
     )
     email = serializers.EmailField(
         allow_blank=True,
         allow_null=True,
         required=False,
+        error_messages={
+            "invalid": "邮箱格式错误。",
+        },
     )
 
     def validate_username(self, value: str | None) -> str | None:

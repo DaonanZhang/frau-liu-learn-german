@@ -6,7 +6,7 @@ const EXERCISE_MODES = [
   {
     id: "listening",
     title: "听力练习",
-    subtitle: "Listening",
+    subtitle: "Hörverstehen",
     detail: "判断题 / 选择题",
     helper: "保持当前答题节奏，点击答案后立即看到结果。",
   },
@@ -27,7 +27,7 @@ function splitPromptByBlank(promptText) {
   return String(promptText || "").split(/_{3,}/);
 }
 
-function renderGrammarPrompt(promptText, selectedOptionText) {
+function renderGrammarPrompt(promptText, selectedOptionText, onBlankClick, isOpen) {
   const parts = splitPromptByBlank(promptText);
   if (parts.length <= 1) {
     return <span>{String(promptText || "")}</span>;
@@ -47,9 +47,11 @@ function renderGrammarPrompt(promptText, selectedOptionText) {
                 className={[
                   "exPanelGrammarBlank",
                   selectedOptionText ? "isFilled" : "",
+                  isOpen ? "isOpen" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
+                onClick={onBlankClick}
               >
                 {selectedOptionText || ""}
               </button>
@@ -78,6 +80,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
   const [isOutlineOpen, setIsOutlineOpen] = useState(false);
   const [activeMode, setActiveMode] = useState("");
   const [isModePickerOpen, setIsModePickerOpen] = useState(true);
+  const [openGrammarPickerQuestionId, setOpenGrammarPickerQuestionId] = useState("");
 
   // Track selected option per question id: { [questionId]: optionId }
   const [selectedOptionByQuestionId, setSelectedOptionByQuestionId] = useState({});
@@ -125,6 +128,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
         setActiveIndex(0);
         setSelectedOptionByQuestionId({});
         setConfirmedQuestionIds({});
+        setOpenGrammarPickerQuestionId("");
         setLoadingState("ready");
       } catch (error) {
         if (isCancelled) {
@@ -205,6 +209,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
   }
 
   function goPrev() {
+    setOpenGrammarPickerQuestionId("");
     setActiveIndex((prev) => {
       if (prev <= 0) {
         return 0;
@@ -214,6 +219,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
   }
 
   function goNext() {
+    setOpenGrammarPickerQuestionId("");
     setActiveIndex((prev) => {
       const lastIndex = Math.max(questions.length - 1, 0);
       if (prev >= lastIndex) {
@@ -224,6 +230,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
   }
 
   function jumpToIndex(index) {
+    setOpenGrammarPickerQuestionId("");
     const safeIndex = Math.max(0, Math.min(index, questions.length - 1));
     setActiveIndex(safeIndex);
   }
@@ -249,6 +256,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
     setActiveIndex(0);
     setSelectedOptionByQuestionId({});
     setConfirmedQuestionIds({});
+    setOpenGrammarPickerQuestionId("");
   }
 
   function handleConfirmAnswer(question) {
@@ -265,6 +273,11 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
       ...prev,
       [String(question.id)]: true,
     }));
+  }
+
+  function toggleGrammarPicker(questionId) {
+    const key = String(questionId);
+    setOpenGrammarPickerQuestionId((prev) => (prev === key ? "" : key));
   }
 
   function getCorrectOption(question) {
@@ -525,40 +538,44 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
                 <section className="exPanelGrammarSection exPanelGrammarSectionSentence">
                   <div className="exPanelGrammarSectionLabel">句子</div>
                   <h2 className="exPanelPrompt exPanelPromptGrammar">
-                    {renderGrammarPrompt(activeQuestion.prompt, getSelectedOption(activeQuestion)?.text || "")}
+                    {renderGrammarPrompt(
+                      activeQuestion.prompt,
+                      getSelectedOption(activeQuestion)?.text || "",
+                      () => {
+                        toggleGrammarPicker(activeQuestion.id);
+                      },
+                      openGrammarPickerQuestionId === String(activeQuestion.id)
+                    )}
                   </h2>
-                </section>
+                  {openGrammarPickerQuestionId === String(activeQuestion.id) ? (
+                    <div className="exPanelGrammarDropdown" role="list">
+                      {Array.isArray(activeQuestion.options)
+                        ? activeQuestion.options.map((option) => {
+                            const optionId = String(option.id);
+                            const isSelected = getSelectedOptionId(activeQuestion.id) === optionId;
 
-                <section className="exPanelGrammarSection exPanelGrammarSectionOptions">
-                  <div className="exPanelGrammarSectionLabel">答案选项</div>
-                  <div className="exPanelGrammarHint">选择一个答案后，点击“确定”查看解释。</div>
-                  <div className="exPanelGrammarOptionBox" role="list">
-                    {Array.isArray(activeQuestion.options)
-                      ? activeQuestion.options.map((option) => {
-                          const optionId = String(option.id);
-                          const isSelected = getSelectedOptionId(activeQuestion.id) === optionId;
-
-                          return (
-                            <button
-                              key={optionId}
-                              type="button"
-                              className={[
-                                "exPanelGrammarChoice",
-                                isSelected ? "isSelected" : "",
-                              ]
-                                .filter(Boolean)
-                                .join(" ")}
-                              onClick={() => {
-                                handleSelectOption(activeQuestion.id, optionId);
-                              }}
-                              role="listitem"
-                            >
-                              {option.text}
-                            </button>
-                          );
-                        })
-                      : null}
-                  </div>
+                            return (
+                              <button
+                                key={optionId}
+                                type="button"
+                                className={[
+                                  "exPanelGrammarChoice",
+                                  isSelected ? "isSelected" : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                onClick={() => {
+                                  handleSelectOption(activeQuestion.id, optionId);
+                                }}
+                                role="listitem"
+                              >
+                                {option.text}
+                              </button>
+                            );
+                          })
+                        : null}
+                    </div>
+                  ) : null}
 
                   <div className="exPanelGrammarActions">
                     <button

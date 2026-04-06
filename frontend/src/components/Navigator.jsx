@@ -16,7 +16,7 @@ function useIsMobileView(maxWidth) {
     const mediaQuery = window.matchMedia(`(max-width: ${maxWidth}px)`);
 
     const update = () => {
-      setIsMobileView(Boolean(mediaQuery.matches));
+      setIsMobileView(mediaQuery.matches);
     };
 
     update();
@@ -60,6 +60,7 @@ export default function Navigator() {
   const isManualActive = pathname.startsWith("/manual");
   const isLearningRecordsActive = pathname.startsWith("/learning-records");
   const isLexiconActive = pathname.startsWith("/lexicon");
+  const isProfileActive = pathname.startsWith("/profile");
 
   const titleText = isMobileView ? "符号刘" : "符号刘的德语素材库";
   const manualText = isMobileView ? "手册" : "操作手册";
@@ -131,7 +132,21 @@ export default function Navigator() {
           </button>
 
           <div className="nav-user">
-            <span className="nav-username">欢迎，{displayName}</span>
+            <button
+              className={[
+                "nav-username",
+                "nav-profileLink",
+                isProfileActive ? "is-active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              onClick={() => {
+                navigate("/profile");
+              }}
+            >
+              {displayName}
+            </button>
             <button className="nav-btn" type="button" onClick={handleLogout}>
               登出
             </button>

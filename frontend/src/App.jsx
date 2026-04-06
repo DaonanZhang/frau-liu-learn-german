@@ -8,6 +8,7 @@ import ActivateEntitlementPage from "./pages/ActivateEntitlementPage.jsx";
 import LexiconPage from "./pages/LexiconPage/LexiconPage.jsx";
 import LearningRecordPage from "./pages/RecordPage/LearningRecordPage.jsx";
 import ManualPage from "./pages/ManualPage.jsx";
+import ProfilePage from "./pages/ProfilePage.jsx";
 
 import { AuthProvider } from "./api/auth";
 import { useAuth } from "./api/auth/useAuth.js";
@@ -34,6 +35,7 @@ const router = createBrowserRouter([
       { path: "/videos/:videoId", element: <VideoStudyPage /> },
       { path: "/lexicon", element: <LexiconPage /> },
       { path: "/learning-records", element: <LearningRecordPage /> },
+      { path: "/profile", element: <ProfilePage /> },
     ],
   },
   { path: "*", element: <FallbackRedirect /> },

@@ -44,31 +44,33 @@ class UserViewSet(viewsets.GenericViewSet):
         )
 
     def get_serializer_class(self):
-        if self.action == "update_me":
+        if (
+            self.action == "me"
+            and getattr(self.request, "method", "").upper() == "PATCH"
+        ):
             return UserMeWriteSerializer
         return UserMeReadSerializer
 
-    @action(detail=False, methods=["get"], url_path="me")
+    @action(detail=False, methods=["get", "patch"], url_path="me")
     def me(self, request: Request) -> Response:
+        if request.method.upper() == "PATCH":
+            serializer = UserMeWriteSerializer(
+                instance=request.user,
+                data=request.data,
+                partial=True,
+                context={"request": request},
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            out = UserMeReadSerializer(
+                instance=request.user,
+                context={"request": request},
+            )
+            return Response(out.data, status=status.HTTP_200_OK)
+
         serializer = UserMeReadSerializer(
             instance=request.user,
             context={"request": request},
         )
         return Response(serializer.data)
-
-    @action(detail=False, methods=["patch"], url_path="me")
-    def update_me(self, request: Request) -> Response:
-        serializer = UserMeWriteSerializer(
-            instance=request.user,
-            data=request.data,
-            partial=True,
-            context={"request": request},
-        )
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        out = UserMeReadSerializer(
-            instance=request.user,
-            context={"request": request},
-        )
-        return Response(out.data, status=status.HTTP_200_OK)

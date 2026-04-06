@@ -38,6 +38,39 @@ class UserMeWriteSerializer(serializers.ModelSerializer):
     Write serializer for /users/me.
     """
 
+    username = serializers.CharField(
+        max_length=10,
+        allow_blank=True,
+        allow_null=True,
+        required=False,
+        trim_whitespace=True,
+    )
+    email = serializers.EmailField(
+        allow_blank=True,
+        allow_null=True,
+        required=False,
+    )
+
+    def validate_username(self, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        if normalized == "":
+            return None
+
+        return normalized
+
+    def validate_email(self, value: str | None) -> str | None:
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        if normalized == "":
+            return None
+
+        return normalized
+
     class Meta:
         model = User
         fields = (

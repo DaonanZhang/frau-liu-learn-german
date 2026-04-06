@@ -102,6 +102,25 @@
   color: #666;
 }
 
+.nav-profileLink {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.nav-profileLink:hover {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.nav-profileLink.is-active {
+  color: #2563eb;
+  border-color: rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.08);
+}
+
 /* ------------------------- */
 /* Mobile tweaks (<990px)    */
 /* ------------------------- */

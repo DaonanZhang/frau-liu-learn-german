@@ -18,15 +18,20 @@ const LEARNING_BY_VIDEO_BASE_PATH = "/learning_by_video";
  * @param {number|string} videoId - Video primary key used for filtering questions.
  * @returns {Promise<Array<Object>>} List of questions including nested options.
  */
-export async function fetchExerciseQuestionsByVideo(videoId) {
+export async function fetchExerciseQuestionsByVideo(videoId, options = {}) {
   const normalizedVideoId = String(videoId ?? "").trim();
   if (!normalizedVideoId) {
     throw new Error("fetchExerciseQuestionsByVideo: videoId is required");
   }
 
-  return apiFetch(
-    `${LEARNING_BY_VIDEO_BASE_PATH}/exercise-questions/?video=${encodeURIComponent(normalizedVideoId)}`
-  );
+  const normalizedCategory = String(options?.category ?? "").trim();
+  const queryParts = [`video=${encodeURIComponent(normalizedVideoId)}`];
+
+  if (normalizedCategory) {
+    queryParts.push(`category=${encodeURIComponent(normalizedCategory)}`);
+  }
+
+  return apiFetch(`${LEARNING_BY_VIDEO_BASE_PATH}/exercise-questions/?${queryParts.join("&")}`);
 }
 
 /**
@@ -39,17 +44,22 @@ export async function fetchExerciseQuestionsByVideo(videoId) {
  * @param {"TRUE_FALSE"|"CHOICE"|""|null|undefined} questionType - Optional question type filter.
  * @returns {Promise<Array<Object>>} List of questions including nested options.
  */
-export async function fetchExerciseQuestions(videoId, questionType) {
+export async function fetchExerciseQuestions(videoId, questionType, options = {}) {
   const normalizedVideoId = String(videoId ?? "").trim();
   if (!normalizedVideoId) {
     throw new Error("fetchExerciseQuestions: videoId is required");
   }
 
   const normalizedQuestionType = String(questionType ?? "").trim();
+  const normalizedCategory = String(options?.category ?? "").trim();
   const queryParts = [`video=${encodeURIComponent(normalizedVideoId)}`];
 
   if (normalizedQuestionType) {
     queryParts.push(`question_type=${encodeURIComponent(normalizedQuestionType)}`);
+  }
+
+  if (normalizedCategory) {
+    queryParts.push(`category=${encodeURIComponent(normalizedCategory)}`);
   }
 
   const queryString = queryParts.join("&");

@@ -2,6 +2,65 @@ import React, { useEffect, useMemo, useState } from "react";
 import "./ExercisePanel.css";
 import { fetchExerciseQuestionsByVideo } from "../../../api/learning_by_video/exercise_questions.js";
 
+const EXERCISE_MODES = [
+  {
+    id: "listening",
+    title: "听力练习",
+    subtitle: "Listening",
+    detail: "判断题 / 选择题",
+    helper: "保持当前答题节奏，点击答案后立即看到结果。",
+  },
+  {
+    id: "grammar",
+    title: "语法 / 词汇练习",
+    subtitle: "Grammatik & Wortschatz",
+    detail: "空格填空",
+    helper: "先选下拉答案，再点击确定查看解释。",
+  },
+];
+
+function getModeMeta(modeId) {
+  return EXERCISE_MODES.find((item) => item.id === modeId) || null;
+}
+
+function splitPromptByBlank(promptText) {
+  return String(promptText || "").split(/_{3,}/);
+}
+
+function renderGrammarPrompt(promptText, selectedOptionText) {
+  const parts = splitPromptByBlank(promptText);
+  if (parts.length <= 1) {
+    return <span>{String(promptText || "")}</span>;
+  }
+
+  return (
+    <span className="exPanelGrammarSentence">
+      {parts.map((part, index) => {
+        const isLast = index === parts.length - 1;
+
+        return (
+          <React.Fragment key={`${index}-${part}`}>
+            {part ? <span className="exPanelGrammarText">{part}</span> : null}
+            {!isLast ? (
+              <button
+                type="button"
+                className={[
+                  "exPanelGrammarBlank",
+                  selectedOptionText ? "isFilled" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {selectedOptionText || ""}
+              </button>
+            ) : null}
+          </React.Fragment>
+        );
+      })}
+    </span>
+  );
+}
+
 /**
  * Exercise panel for a video (non-modal).
  *
@@ -17,9 +76,12 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [isOutlineOpen, setIsOutlineOpen] = useState(false);
+  const [activeMode, setActiveMode] = useState("");
+  const [isModePickerOpen, setIsModePickerOpen] = useState(true);
 
   // Track selected option per question id: { [questionId]: optionId }
   const [selectedOptionByQuestionId, setSelectedOptionByQuestionId] = useState({});
+  const [confirmedQuestionIds, setConfirmedQuestionIds] = useState({});
 
   const activeQuestion = useMemo(() => {
     if (!questions.length) {
@@ -28,8 +90,10 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
     return questions[Math.min(activeIndex, questions.length - 1)] || null;
   }, [questions, activeIndex]);
 
+  const activeModeMeta = useMemo(() => getModeMeta(activeMode), [activeMode]);
+
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen || !activeMode) {
       return;
     }
 
@@ -51,7 +115,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
       setErrorMessage("");
 
       try {
-        const data = await fetchExerciseQuestionsByVideo(normalizedVideoId);
+        const data = await fetchExerciseQuestionsByVideo(normalizedVideoId, { category: activeMode });
         if (isCancelled) {
           return;
         }
@@ -60,6 +124,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
         setQuestions(normalizedList);
         setActiveIndex(0);
         setSelectedOptionByQuestionId({});
+        setConfirmedQuestionIds({});
         setLoadingState("ready");
       } catch (error) {
         if (isCancelled) {
@@ -77,13 +142,24 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
     return () => {
       isCancelled = true;
     };
-  }, [isOpen, videoId]);
+  }, [activeMode, isOpen, videoId]);
 
   function handleSelectOption(questionId, optionId) {
+    const key = String(questionId);
     setSelectedOptionByQuestionId((prev) => {
       return {
         ...prev,
-        [String(questionId)]: String(optionId),
+        [key]: String(optionId),
+      };
+    });
+
+    setConfirmedQuestionIds((prev) => {
+      if (!prev[key]) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: false,
       };
     });
   }
@@ -93,20 +169,35 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
     return selectedOptionByQuestionId[key] || "";
   }
 
+  function getSelectedOption(question) {
+    if (!question) {
+      return null;
+    }
+
+    const selectedOptionId = getSelectedOptionId(question.id);
+    if (!selectedOptionId) {
+      return null;
+    }
+
+    const options = Array.isArray(question.options) ? question.options : [];
+    return options.find((option) => String(option.id) === String(selectedOptionId)) || null;
+  }
+
+  function isQuestionConfirmed(questionId) {
+    return Boolean(confirmedQuestionIds[String(questionId)]);
+  }
+
   function getQuestionAnswerState(question) {
     if (!question) {
       return "";
     }
 
-    const selectedOptionId = getSelectedOptionId(question.id);
-    if (!selectedOptionId) {
+    const selectedOption = getSelectedOption(question);
+    if (!selectedOption) {
       return "";
     }
 
-    const options = Array.isArray(question.options) ? question.options : [];
-    const selectedOption = options.find((option) => String(option.id) === String(selectedOptionId));
-
-    if (!selectedOption) {
+    if (activeMode === "grammar" && !isQuestionConfirmed(question.id)) {
       return "";
     }
 
@@ -141,6 +232,53 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
     setIsOutlineOpen((prev) => {
       return !prev;
     });
+  }
+
+  function openModePicker() {
+    setIsModePickerOpen(true);
+    setIsOutlineOpen(false);
+  }
+
+  function handleModeSelect(modeId) {
+    setActiveMode(modeId);
+    setIsModePickerOpen(false);
+    setIsOutlineOpen(false);
+    setQuestions([]);
+    setLoadingState("idle");
+    setErrorMessage("");
+    setActiveIndex(0);
+    setSelectedOptionByQuestionId({});
+    setConfirmedQuestionIds({});
+  }
+
+  function handleConfirmAnswer(question) {
+    if (!question) {
+      return;
+    }
+
+    const selectedOptionId = getSelectedOptionId(question.id);
+    if (!selectedOptionId) {
+      return;
+    }
+
+    setConfirmedQuestionIds((prev) => ({
+      ...prev,
+      [String(question.id)]: true,
+    }));
+  }
+
+  function getCorrectOption(question) {
+    const options = Array.isArray(question?.options) ? question.options : [];
+    return options.find((option) => option?.is_correct) || null;
+  }
+
+  function getGrammarExplanation(question) {
+    const questionExplanation = String(question?.explanation || "").trim();
+    if (questionExplanation) {
+      return questionExplanation;
+    }
+
+    return String(getCorrectOption(question)?.explanation || "").trim();
   }
 
   function getQuestionShortLabel(question) {
@@ -192,18 +330,33 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
           <div className="exPanelTitleWrap">
             <div className="exPanelTitle">Übungen</div>
             <div className="exPanelSubtitle">
-              {questions.length > 0 ? `Frage ${activeIndex + 1} / ${questions.length}` : "—"}
+              {activeModeMeta
+                ? `${activeModeMeta.title}${questions.length > 0 ? ` · Frage ${activeIndex + 1} / ${questions.length}` : ""}`
+                : "练习模式"}
             </div>
           </div>
         </div>
 
-        <button type="button" className="exPanelCloseButton" onClick={onClose} aria-label="Close">
-          ×
-        </button>
+        <div className="exPanelHeaderActions">
+          <button type="button" className="exPanelModeButton" onClick={openModePicker}>
+            切换模式
+          </button>
+          <button type="button" className="exPanelCloseButton" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        </div>
       </header>
 
       <div className="exPanelBody">
-        <aside className={["exPanelOutline", isOutlineOpen ? "isOpen" : "isClosed"].join(" ")}>
+        <aside
+          className={[
+            "exPanelOutline",
+            isModePickerOpen || !questions.length ? "isClosed" : "",
+            isOutlineOpen ? "isOpen" : "isClosed",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <div className="exPanelOutlineHeader">Inhalt</div>
 
           <div className="exPanelOutlineList" role="list">
@@ -238,26 +391,55 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
         </aside>
 
         <main className="exPanelMain">
-          {loadingState === "loading" && (
+          {isModePickerOpen && (
+            <section className="exPanelModeScreen" aria-label="Choose exercise mode">
+              <div className="exPanelModeIntro">
+                <div className="exPanelModeEyebrow">Übungen</div>
+                <h2 className="exPanelModeTitle">选择练习模式</h2>
+                <p className="exPanelModeText">先选择一种训练方式，再开始这一轮练习。</p>
+              </div>
+
+              <div className="exPanelModeList">
+                {EXERCISE_MODES.map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    className="exPanelModeCard"
+                    onClick={() => {
+                      handleModeSelect(mode.id);
+                    }}
+                  >
+                    <span className="exPanelModeCardTitle">{mode.title}</span>
+                    <span className="exPanelModeCardSubtitle">{mode.subtitle}</span>
+                    <span className="exPanelModeCardDetail">{mode.detail}</span>
+                    <span className="exPanelModeCardText">{mode.helper}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {!isModePickerOpen && loadingState === "loading" && (
             <div className="exPanelStateBox">
               <div className="exPanelStateTitle">Laden…</div>
             </div>
           )}
 
-          {loadingState === "error" && (
+          {!isModePickerOpen && loadingState === "error" && (
             <div className="exPanelStateBox exPanelStateBoxError">
               <div className="exPanelStateTitle">Fehler</div>
               <div className="exPanelStateText">{errorMessage}</div>
             </div>
           )}
 
-          {loadingState === "ready" && !activeQuestion && (
+          {!isModePickerOpen && loadingState === "ready" && !activeQuestion && (
             <div className="exPanelStateBox">
               <div className="exPanelStateTitle">Keine Fragen gefunden</div>
+              <div className="exPanelStateText">这个视频还没有练习哦。</div>
             </div>
           )}
 
-          {loadingState === "ready" && activeQuestion && (
+          {!isModePickerOpen && loadingState === "ready" && activeQuestion && activeMode === "listening" && (
             <div className="exPanelCard">
               <div className="exPanelQuestionMeta">
                 <span className="exPanelBadge">
@@ -309,6 +491,112 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
                       </div>
                     );
                   })}
+              </div>
+
+              <div className="exPanelNav">
+                <button
+                  type="button"
+                  className="exPanelNavButton"
+                  onClick={goPrev}
+                  disabled={activeIndex <= 0}
+                >
+                  ← Zurück
+                </button>
+
+                <button
+                  type="button"
+                  className="exPanelNavButton exPanelNavButtonPrimary"
+                  onClick={goNext}
+                  disabled={activeIndex >= questions.length - 1}
+                >
+                  Weiter →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!isModePickerOpen && loadingState === "ready" && activeQuestion && activeMode === "grammar" && (
+            <div className="exPanelCard exPanelCardGrammar">
+              <div className="exPanelQuestionMeta">
+                <span className="exPanelBadge exPanelBadgeGrammar">GRAMMAR</span>
+              </div>
+
+              <div className="exPanelGrammarLayout">
+                <section className="exPanelGrammarSection exPanelGrammarSectionSentence">
+                  <div className="exPanelGrammarSectionLabel">句子</div>
+                  <h2 className="exPanelPrompt exPanelPromptGrammar">
+                    {renderGrammarPrompt(activeQuestion.prompt, getSelectedOption(activeQuestion)?.text || "")}
+                  </h2>
+                </section>
+
+                <section className="exPanelGrammarSection exPanelGrammarSectionOptions">
+                  <div className="exPanelGrammarSectionLabel">答案选项</div>
+                  <div className="exPanelGrammarHint">选择一个答案后，点击“确定”查看解释。</div>
+                  <div className="exPanelGrammarOptionBox" role="list">
+                    {Array.isArray(activeQuestion.options)
+                      ? activeQuestion.options.map((option) => {
+                          const optionId = String(option.id);
+                          const isSelected = getSelectedOptionId(activeQuestion.id) === optionId;
+
+                          return (
+                            <button
+                              key={optionId}
+                              type="button"
+                              className={[
+                                "exPanelGrammarChoice",
+                                isSelected ? "isSelected" : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" ")}
+                              onClick={() => {
+                                handleSelectOption(activeQuestion.id, optionId);
+                              }}
+                              role="listitem"
+                            >
+                              {option.text}
+                            </button>
+                          );
+                        })
+                      : null}
+                  </div>
+
+                  <div className="exPanelGrammarActions">
+                    <button
+                      type="button"
+                      className="exPanelGrammarButton"
+                      disabled={!getSelectedOptionId(activeQuestion.id)}
+                      onClick={() => {
+                        handleConfirmAnswer(activeQuestion);
+                      }}
+                    >
+                      确定
+                    </button>
+                  </div>
+
+                  {isQuestionConfirmed(activeQuestion.id) && getSelectedOption(activeQuestion) ? (
+                    <div
+                      className={[
+                        "exPanelFeedback",
+                        "exPanelFeedbackGrammar",
+                        getSelectedOption(activeQuestion)?.is_correct ? "isCorrect" : "isWrong",
+                      ].join(" ")}
+                    >
+                      <div className="exPanelFeedbackHeader">
+                        {getSelectedOption(activeQuestion)?.is_correct ? "✓ 回答正确" : "✗ 回答不对"}
+                      </div>
+
+                      {!getSelectedOption(activeQuestion)?.is_correct && getCorrectOption(activeQuestion) ? (
+                        <div className="exPanelFeedbackText">
+                          正确答案：{getCorrectOption(activeQuestion)?.text}
+                        </div>
+                      ) : null}
+
+                      {getGrammarExplanation(activeQuestion) ? (
+                        <div className="exPanelFeedbackText">{getGrammarExplanation(activeQuestion)}</div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </section>
               </div>
 
               <div className="exPanelNav">

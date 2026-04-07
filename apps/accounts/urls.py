@@ -13,6 +13,10 @@ from apps.accounts.views.activation import ActivationCodeApplyAPIView
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.accounts.views.auth import LoginAPIView
+from apps.accounts.views.password_reset import (
+    PasswordResetConfirmAPIView,
+    PasswordResetRequestAPIView,
+)
 
 
 router = DefaultRouter()
@@ -57,5 +61,15 @@ urlpatterns += [
         "auth/refresh/",
         TokenRefreshView.as_view(),
         name="token-refresh",
+    ),
+    path(
+        "auth/password-reset/request/",
+        PasswordResetRequestAPIView.as_view(),
+        name="password-reset-request",
+    ),
+    path(
+        "auth/password-reset/confirm/",
+        PasswordResetConfirmAPIView.as_view(),
+        name="password-reset-confirm",
     ),
 ]

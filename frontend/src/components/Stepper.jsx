@@ -1,6 +1,8 @@
 import React from "react";
 
-export default function Stepper({ current = 1 }) {
+const DEFAULT_STEPS = ["验证激活码", "创建账户"];
+
+export default function Stepper({ current = 1, labels = DEFAULT_STEPS }) {
   const step1Active = current >= 1;
   const step2Active = current >= 2;
 
@@ -9,7 +11,7 @@ export default function Stepper({ current = 1 }) {
       <div className="step">
         <div className={`step-circle ${step1Active ? "active" : ""}`}>1</div>
         <div className={`step-label ${step1Active ? "active" : ""}`}>
-          验证激活码
+          {labels[0] || DEFAULT_STEPS[0]}
         </div>
       </div>
 
@@ -18,7 +20,7 @@ export default function Stepper({ current = 1 }) {
       <div className="step">
         <div className={`step-circle ${step2Active ? "active" : ""}`}>2</div>
         <div className={`step-label ${step2Active ? "active" : ""}`}>
-          创建账户
+          {labels[1] || DEFAULT_STEPS[1]}
         </div>
       </div>
     </div>

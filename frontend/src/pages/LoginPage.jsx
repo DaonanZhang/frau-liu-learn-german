@@ -160,10 +160,15 @@ export default function LoginPage() {
 
         <div className="auth-divider" />
 
-        <div className="auth-footer">
-          <span>还没有账号？</span>
-          <Link className="auth-link" to="/activate">
-            立即注册
+        <div className="auth-footer auth-footer--split">
+          <div className="auth-footerGroup">
+            <span>还没有账号？</span>
+            <Link className="auth-link" to="/activate">
+              立即注册
+            </Link>
+          </div>
+          <Link className="auth-link" to="/forgot-password">
+            忘记密码？
           </Link>
         </div>
       </form>

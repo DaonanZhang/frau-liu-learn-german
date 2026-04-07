@@ -146,3 +146,65 @@ export async function applyActivationCode(code) {
     return { ok: false };
   }
 }
+
+export async function requestPasswordReset(email) {
+  try {
+    const data = await apiFetch("/accounts/auth/password-reset/request/", {
+      method: "POST",
+      body: { email },
+    });
+
+    await Swal.fire({
+      icon: "success",
+      title: "请查收邮箱",
+      text: data?.detail || "验证码已经发送。",
+      timer: 1800,
+      showConfirmButton: false,
+    });
+
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[password-reset-request] failed:", err);
+
+    await Swal.fire({
+      icon: "error",
+      title: "暂时无法发送验证码",
+      text: err?.data?.detail || "请稍后再试。",
+    });
+
+    return { ok: false };
+  }
+}
+
+export async function confirmPasswordReset({ email, code, newPassword }) {
+  try {
+    const data = await apiFetch("/accounts/auth/password-reset/confirm/", {
+      method: "POST",
+      body: {
+        email,
+        code,
+        new_password: newPassword,
+      },
+    });
+
+    await Swal.fire({
+      icon: "success",
+      title: "密码已更新",
+      text: data?.detail || "现在可以用新密码登录了。",
+      timer: 1800,
+      showConfirmButton: false,
+    });
+
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[password-reset-confirm] failed:", err);
+
+    await Swal.fire({
+      icon: "error",
+      title: "无法重置密码",
+      text: err?.data?.detail || "请检查验证码后重试。",
+    });
+
+    return { ok: false };
+  }
+}

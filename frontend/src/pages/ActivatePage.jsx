@@ -99,21 +99,27 @@ export default function ActivatePage() {
 
   return (
     <AuthLayout className="auth-activate">
-      {step === 2 && (
-        <button
-          className="back-btn"
-          type="button"
-          aria-label="返回"
-          onClick={() => setStep(1)}
-        >
-          ←
-        </button>
-      )}
+      <button
+        className="back-btn"
+        type="button"
+        aria-label="返回"
+        onClick={() => {
+          if (step === 2) {
+            setStep(1);
+            return;
+          }
+          navigate("/login", { replace: true });
+        }}
+      >
+        ←
+      </button>
 
-      <div className="auth-logo" aria-hidden="true">
-        <div className="logo-pill">
-          <div className="logo-triangle" />
-        </div>
+      <div className="auth-logo">
+        <img
+          src="/images/icon.jpeg"
+          alt="logo"
+          className="auth-logo-img"
+        />
       </div>
 
       <h1 className="auth-title">账号激活</h1>

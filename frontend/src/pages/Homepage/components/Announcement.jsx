@@ -47,9 +47,7 @@ export default function Announcement({
         }
 
         const mapped = results.map((item) => ({
-          type: item?.priority !== null && item?.priority !== undefined
-            ? `优先级 ${item.priority}`
-            : "公告",
+          type: "公告",
           title: item?.title ? String(item.title) : "",
           description: item?.content ? String(item.content) : "",
           dateText: formatDate(item?.created_at),

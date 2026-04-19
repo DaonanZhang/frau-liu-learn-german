@@ -9,6 +9,11 @@ from apps.accounts.views.registration import (
     RegisterAPIView,
 )
 from apps.accounts.views.activation import ActivationCodeApplyAPIView
+from apps.accounts.views.payment import (
+    AlipayNotifyAPIView,
+    CreateAlipayPurchaseAPIView,
+    CreateAlipayDebugPaymentAPIView,
+)
 
 from rest_framework_simplejwt.views import TokenRefreshView
 
@@ -71,5 +76,20 @@ urlpatterns += [
         "auth/password-reset/confirm/",
         PasswordResetConfirmAPIView.as_view(),
         name="password-reset-confirm",
+    ),
+    path(
+        "payments/alipay/debug-create/",
+        CreateAlipayDebugPaymentAPIView.as_view(),
+        name="alipay-debug-create",
+    ),
+    path(
+        "payments/alipay/create/",
+        CreateAlipayPurchaseAPIView.as_view(),
+        name="alipay-create",
+    ),
+    path(
+        "payments/alipay/notify/",
+        AlipayNotifyAPIView.as_view(),
+        name="alipay-notify",
     ),
 ]

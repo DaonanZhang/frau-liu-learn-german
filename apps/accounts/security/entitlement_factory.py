@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Optional
-
 from django.apps import apps
 from django.utils import timezone
 
@@ -12,7 +10,7 @@ from apps.accounts.services.activation_codes import (
 )
 
 
-def _calculate_expires_at(plan: str):
+def calculate_expires_at_for_plan(plan: str):
     now = timezone.now()
 
     if plan == ActivationPlan.TRIAL_7D:
@@ -53,7 +51,7 @@ def create_entitlement_from_activation_item(
             season_number=item.season_number,
         )
 
-    expires_at = _calculate_expires_at(item.plan)
+    expires_at = calculate_expires_at_for_plan(item.plan)
 
     return Entitlement.objects.create(
         user=user,

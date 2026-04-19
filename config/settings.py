@@ -184,6 +184,36 @@ FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="")
 TEST_MAIL = env("TEST_MAIL", default="")
 
 # =========================
+# Alipay
+# =========================
+
+ALIPAY_APP_ID = env("ALIPAY_APP_ID", default="")
+ALIPAY_GATEWAY_URL = env(
+    "ALIPAY_GATEWAY_URL",
+    default="https://openapi.alipay.com/gateway.do",
+)
+ALIPAY_APP_PRIVATE_KEY = env("ALIPAY_APP_PRIVATE_KEY", default="")
+ALIPAY_APP_PUBLIC_KEY = env("ALIPAY_APP_PUBLIC_KEY", default="")
+ALIPAY_PUBLIC_KEY = env("ALIPAY_PUBLIC_KEY", default="")
+ALIPAY_NOTIFY_URL = env("ALIPAY_NOTIFY_URL", default="")
+ALIPAY_RETURN_URL = env("ALIPAY_RETURN_URL", default="")
+ALIPAY_SELLER_ID = env("ALIPAY_SELLER_ID", default="")
+ALIPAY_SIGN_TYPE = env("ALIPAY_SIGN_TYPE", default="RSA2")
+ALIPAY_TIMEOUT_EXPRESS = env("ALIPAY_TIMEOUT_EXPRESS", default="15m")
+
+# =========================
+# Celery
+# =========================
+
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default=REDIS_URL)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+
+# =========================
 # HTTPS / security switches (controlled via .env)
 # =========================
 

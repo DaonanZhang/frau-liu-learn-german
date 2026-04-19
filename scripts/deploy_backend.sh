@@ -10,6 +10,9 @@ cd "$PROJECT_ROOT"
 echo "📦 Pull latest code..."
 git pull
 
+echo "📦 Sync Python dependencies..."
+uv sync
+
 echo "🧪 Run Django checks..."
 uv run python manage.py check
 

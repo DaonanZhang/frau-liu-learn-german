@@ -14,7 +14,11 @@ echo "▶ Step 1: git pull"
 git pull
 
 echo ""
-echo "▶ Step 2: check Django migrations"
+echo "▶ Step 2: sync Python dependencies"
+uv sync
+
+echo ""
+echo "▶ Step 3: check Django migrations"
 
 # 2.1 Check if there are model changes without migrations
 echo "  - checking for model changes without migrations"
@@ -38,7 +42,7 @@ echo "  - applying migrations"
 uv run python manage.py migrate
 
 echo ""
-echo "▶ Step 3: deploy backend (Django)"
+echo "▶ Step 4: deploy backend (Django)"
 if [ -f "./scripts/deploy_backend.sh" ]; then
   bash ./scripts/deploy_backend.sh
 else
@@ -47,7 +51,7 @@ else
 fi
 
 echo ""
-echo "▶ Step 4: deploy frontend (React)"
+echo "▶ Step 5: deploy frontend (React)"
 if [ -f "./scripts/deploy_frontend.sh" ]; then
   bash ./scripts/deploy_frontend.sh
 else

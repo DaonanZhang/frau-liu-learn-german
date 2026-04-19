@@ -2,6 +2,7 @@
 .idea/
 __pycache__/
 *.py[cod]
+.DS_Store
 venv/
 .venv/
 /apps/learning_by_video/data/

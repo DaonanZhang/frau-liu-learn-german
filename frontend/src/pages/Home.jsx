@@ -13,7 +13,6 @@ import { fetchVideoList } from "../api/learning_by_video/videos.js";
 import { fetchVideoMeta } from "../api/learning_by_video/video_meta.js";
 import { markDailyActiveAndGetUserData } from "../api/user_data/userData";
 import { fetchLearningVideoUserData } from "../api/learning_by_video/userData";
-
 import {
   fetchUserVideoMarkByVideoId,
   setVideoFavorite,

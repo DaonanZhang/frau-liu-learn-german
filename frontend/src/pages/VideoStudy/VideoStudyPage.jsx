@@ -183,6 +183,7 @@ export default function VideoStudyPage() {
   const leftDuration = video?.duration_seconds ? formatDurationLabel(video.duration_seconds) : "";
   const leftDifficulty = video?.difficulty ?? "";
   const leftDescription = video?.description ?? "";
+  const leftCreator = video?.creator ?? "";
   const leftVideoUrl = video?.video_url ?? "";
   const isHlsUrl = useMemo(() => isProbablyHlsUrl(leftVideoUrl), [leftVideoUrl]);
   const playerErrorText = videoErrorText || playbackErrorText;
@@ -889,7 +890,7 @@ export default function VideoStudyPage() {
                 <video
                   ref={videoRef}
                   className="vs-playerPlaceholder"
-                  controls
+                  controls={!isMobile}
                   playsInline
                   controlsList="nodownload"
                   onContextMenu={(event) => event.preventDefault()}
@@ -909,6 +910,13 @@ export default function VideoStudyPage() {
             <div className="vs-descCard">
               <div className="vs-descTitle">视频简介</div>
               <div className="vs-descText">{loadingVideo ? "Loading…" : leftDescription || "暂无简介"}</div>
+              {!loadingVideo ? (
+                <div className="vs-descSource">
+                  {leftCreator
+                    ? `本期视频素材来源于 YouTube 频道 ${leftCreator}。本平台仅对视频语料进行深度的教学加工，视频版权归原博主所有。`
+                    : "本期视频素材来源于 YouTube。本平台仅对视频语料进行深度的教学加工，视频版权归原博主所有。"}
+                </div>
+              ) : null}
             </div>
           ) : null}
 

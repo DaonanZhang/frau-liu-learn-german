@@ -110,6 +110,13 @@
   line-height: 1.5;
 }
 
+.vs-descSource {
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  line-height: 1.55;
+}
+
 /* Middle subtitles */
 .vs-panelHeader {
   display: flex;

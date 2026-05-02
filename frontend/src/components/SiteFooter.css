@@ -2,7 +2,76 @@
   text-align: center;
   font-size: 12px;
   color: #6b7280;
-  padding: 0.75rem 0 1.75rem;
+  padding: 1rem 0 1.75rem;
+  border-top: 1px solid rgba(156, 163, 175, 0.2);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(255, 255, 255, 0.98)),
+    radial-gradient(circle at top, rgba(226, 232, 240, 0.35), transparent 60%);
+}
+
+.site-footer__notice {
+  max-width: 1100px;
+  margin: 0 auto 1.25rem;
+  padding: 0 1.25rem;
+  text-align: left;
+}
+
+.site-footer__noticeHeader {
+  margin-bottom: 1rem;
+}
+
+.site-footer__noticeEyebrow {
+  margin: 0 0 0.35rem;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #9ca3af;
+}
+
+.site-footer__noticeTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.site-footer__noticeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.site-footer__noticeCard,
+.site-footer__contactCard {
+  padding: 1rem 1.05rem;
+  border: 1px solid rgba(203, 213, 225, 0.7);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 10px 26px rgba(148, 163, 184, 0.08);
+  backdrop-filter: blur(6px);
+}
+
+.site-footer__noticeLabel {
+  margin: 0 0 0.55rem;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.site-footer__noticeCard p,
+.site-footer__contactCard p {
+  margin: 0 0 0.72rem;
+  line-height: 1.72;
+  color: #4b5563;
+}
+
+.site-footer__noticeCard p:last-child,
+.site-footer__contactCard p:last-child {
+  margin-bottom: 0;
 }
 
 .site-footer__inner {
@@ -11,10 +80,13 @@
   justify-content: center;
   gap: 10px;
   flex-wrap: wrap;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1.25rem;
 }
 
 .site-footer a {
-  color: inherit;
+  color: #2563eb;
   text-decoration: none;
 }
 
@@ -28,4 +100,29 @@
 
 .site-footer--auth {
   padding: 0.5rem 0 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .site-footer__notice {
+    padding: 0 0.75rem;
+  }
+
+  .site-footer__noticeGrid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .site-footer__noticeCard,
+  .site-footer__contactCard {
+    padding: 0.9rem 0.85rem;
+    border-radius: 12px;
+  }
+
+  .site-footer__noticeTitle {
+    font-size: 14px;
+  }
+
+  .site-footer__inner {
+    padding: 0 0.75rem;
+  }
 }

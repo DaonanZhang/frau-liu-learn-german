@@ -436,6 +436,17 @@ class Command(BaseCommand):
             ext_preference={".mp4": 0},
             key_normalizer=_normalize_ascii_media_key,
         )
+        video_map_hls = _build_file_map(
+            video_dir,
+            allowed_exts={".m3u8"},
+            ext_preference={".m3u8": 0},
+        )
+        video_map_hls_ascii = _build_file_map(
+            video_dir,
+            allowed_exts={".m3u8"},
+            ext_preference={".m3u8": 0},
+            key_normalizer=_normalize_ascii_media_key,
+        )
 
         qs = Video.objects.all().order_by("id")
         if video_ids:
@@ -500,6 +511,16 @@ class Command(BaseCommand):
                             file_map_ascii=video_map_ascii,
                         )
                         if video_filename:
+                            # If the exact-title match landed on a raw MOV while an
+                            # ASCII-normalized HLS playlist also exists, prefer HLS.
+                            if Path(video_filename).suffix.lower() != ".m3u8":
+                                hls_filename = _find_filename(
+                                    t,
+                                    video_map_hls,
+                                    file_map_ascii=video_map_hls_ascii,
+                                )
+                                if hls_filename:
+                                    video_filename = hls_filename
                             break
                     # If chosen HLS filename is unsafe (e.g. contains '?'),
                     # prefer a safe-named HLS alias when present;

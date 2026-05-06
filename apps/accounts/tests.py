@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import shutil
+import tempfile
 import re
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -99,3 +103,76 @@ class PasswordResetApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 0)
+
+
+class HomepageSettingApiTests(APITestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.temp_dir = tempfile.mkdtemp()
+        self.qr_path = Path(self.temp_dir) / "wechat-qr.png"
+        self.qr_path.write_bytes(b"old-image")
+        self.override = override_settings(HOMEPAGE_WECHAT_QR_IMAGE_PATH=str(self.qr_path))
+        self.override.enable()
+        self.admin_user = get_user_model().objects.create_user(
+            telephone="13900139000",
+            country_code="+86",
+            password="pass-123456",
+            is_superuser=True,
+            is_staff=True,
+        )
+        self.normal_user = get_user_model().objects.create_user(
+            telephone="13800138000",
+            country_code="+86",
+            password="pass-123456",
+        )
+
+    def tearDown(self) -> None:
+        self.override.disable()
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        super().tearDown()
+
+    def test_get_wechat_qr_returns_default_state(self) -> None:
+        self.client.force_authenticate(user=self.normal_user)
+
+        response = self.client.get("/api/accounts/homepage-settings/wechat-qr/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("/images/wechat-qr.png?v=", response.data["wechat_qr_image_url"])
+        self.assertFalse(response.data["can_manage"])
+
+    def test_non_superuser_cannot_upload_wechat_qr(self) -> None:
+        self.client.force_authenticate(user=self.normal_user)
+
+        response = self.client.post(
+            "/api/accounts/homepage-settings/wechat-qr/",
+            {
+                "wechat_qr_image": SimpleUploadedFile(
+                    "qr.png",
+                    b"fake-image-content",
+                    content_type="image/png",
+                )
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superuser_can_upload_wechat_qr(self) -> None:
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.post(
+            "/api/accounts/homepage-settings/wechat-qr/",
+            {
+                "wechat_qr_image": SimpleUploadedFile(
+                    "qr.png",
+                    b"new-image-content",
+                    content_type="image/png",
+                )
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["can_manage"])
+        self.assertEqual(self.qr_path.read_bytes(), b"new-image-content")
+        self.assertIn("/images/wechat-qr.png?v=", response.data["wechat_qr_image_url"])

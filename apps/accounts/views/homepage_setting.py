@@ -25,6 +25,23 @@ class HomepageSettingViewSet(viewsets.GenericViewSet):
             return Path(configured)
         return settings.BASE_DIR / "frontend" / "public" / "images" / "wechat-qr.png"
 
+    @staticmethod
+    def _qr_dist_image_path() -> Path:
+        return settings.BASE_DIR / "frontend" / "dist" / "images" / "wechat-qr.png"
+
+    @classmethod
+    def _write_qr_image(cls, content: bytes) -> None:
+        image_path = cls._qr_image_path()
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        image_path.write_bytes(content)
+
+        dist_image_path = cls._qr_dist_image_path()
+        dist_parent = dist_image_path.parent
+        # Keep the live dist asset in sync when the deployed frontend is served from dist.
+        if dist_parent.exists():
+            dist_parent.mkdir(parents=True, exist_ok=True)
+            dist_image_path.write_bytes(content)
+
     @classmethod
     def _build_qr_image_url(cls) -> str:
         image_path = cls._qr_image_path()
@@ -63,11 +80,8 @@ class HomepageSettingViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        image_path = self._qr_image_path()
-        image_path.parent.mkdir(parents=True, exist_ok=True)
-        with image_path.open("wb") as destination:
-            for chunk in uploaded_file.chunks():
-                destination.write(chunk)
+        image_content = b"".join(uploaded_file.chunks())
+        self._write_qr_image(image_content)
 
         return Response(
             {

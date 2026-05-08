@@ -111,7 +111,15 @@ class HomepageSettingApiTests(APITestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.qr_path = Path(self.temp_dir) / "wechat-qr.png"
         self.qr_path.write_bytes(b"old-image")
-        self.override = override_settings(HOMEPAGE_WECHAT_QR_IMAGE_PATH=str(self.qr_path))
+        self.dist_qr_path = (
+            Path(self.temp_dir) / "frontend" / "dist" / "images" / "wechat-qr.png"
+        )
+        self.dist_qr_path.parent.mkdir(parents=True, exist_ok=True)
+        self.dist_qr_path.write_bytes(b"old-dist-image")
+        self.override = override_settings(
+            BASE_DIR=Path(self.temp_dir),
+            HOMEPAGE_WECHAT_QR_IMAGE_PATH=str(self.qr_path),
+        )
         self.override.enable()
         self.admin_user = get_user_model().objects.create_user(
             telephone="13900139000",
@@ -175,4 +183,5 @@ class HomepageSettingApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["can_manage"])
         self.assertEqual(self.qr_path.read_bytes(), b"new-image-content")
+        self.assertEqual(self.dist_qr_path.read_bytes(), b"new-image-content")
         self.assertIn("/images/wechat-qr.png?v=", response.data["wechat_qr_image_url"])

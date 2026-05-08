@@ -527,9 +527,9 @@ export default function Home() {
   }, [videos, videoMarkById]);
 
   const seasonBanner = (
-    <div className="home-season-banner" aria-label="科普季（50期持续更新中）">
+    <div className="home-season-banner" aria-label="科普季（50期已完结）">
       <span className="home-season-title">科普季</span>
-      <span className="home-season-sub">（50期持续更新中）</span>
+      <span className="home-season-sub">（50期已完结）</span>
     </div>
   );
 

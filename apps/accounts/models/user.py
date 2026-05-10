@@ -86,12 +86,14 @@ class User(AbstractUser):
         return self.telephone
 
     @property
-    def has_lifetime_access(self) -> bool:
+    def has_platform_wide_access(self) -> bool:
         Entitlement = apps.get_model("accounts", "Entitlement")
         now = timezone.now()
         return self.entitlements.filter(
-            plan=Entitlement.Plan.LIFETIME,
             status=Entitlement.Status.ACTIVE,
+            module__isnull=True,
+            season__isnull=True,
+            starts_at__lte=now,
         ).filter(
             models.Q(expires_at__isnull=True)
             | models.Q(expires_at__gt=now)

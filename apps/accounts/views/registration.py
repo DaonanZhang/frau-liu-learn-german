@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.security.registration import (
     verify_registration_code,
-    register_user_with_activation_code,
+    register_user,
 )
 from apps.accounts.serializers.registration import (
     RegisterVerifyCodeSerializer,
@@ -42,7 +42,7 @@ class RegisterVerifyCodeAPIView(APIView):
 
 class RegisterAPIView(APIView):
     """
-    Step 2: create user + entitlements.
+    Create a user account without requiring an activation code.
     """
 
     permission_classes = [AllowAny]
@@ -54,10 +54,10 @@ class RegisterAPIView(APIView):
         data = serializer.validated_data
 
         try:
-            user = register_user_with_activation_code(
-                code=data["code"],
+            user = register_user(
                 telephone=data["telephone"],
                 country_code=data["country_code"],
+                email=data["email"],
                 password=data["password"],
             )
         except ValueError as exc:
@@ -71,6 +71,7 @@ class RegisterAPIView(APIView):
                 "id": user.id,
                 "telephone": user.telephone,
                 "country_code": user.country_code,
+                "email": user.email,
             },
             status=status.HTTP_201_CREATED,
         )

@@ -40,4 +40,17 @@ class Command(BaseCommand):
         else:
             self.stdout.write("ℹ️ Module season already exists: Season 1")
 
+        season2, season2_created = ModuleSeason.objects.get_or_create(
+            module=module,
+            season_number=2,
+            defaults={
+                "title": "Season 2",
+            },
+        )
+
+        if season2_created:
+            self.stdout.write("✅ Created module season: Season 2")
+        else:
+            self.stdout.write("ℹ️ Module season already exists: Season 2")
+
         self.stdout.write(self.style.SUCCESS("🎉 Module initialization finished."))

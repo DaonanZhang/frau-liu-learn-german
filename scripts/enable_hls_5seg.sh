@@ -20,7 +20,7 @@ Behavior:
 Options:
   --overwrite            Overwrite existing outputs
   --reencode             Re-encode to H.264/AAC for maximum HLS compatibility
-  --update-db            Update Video.video_url in DB to use .m3u8 for ScienceSeason1
+  --update-db            Update Video.video_url in DB to use .m3u8 under the resolved output prefix
   --whitelist-file FILE  Only process mp4 names listed in FILE (one per line, supports .mp4 or stem)
   --allow NAME           Add one whitelist item (repeatable; supports .mp4 or stem)
 EOF
@@ -331,9 +331,16 @@ if [[ "$update_db" -eq 1 ]]; then
     PY_BIN="${PYTHON_BIN:-python}"
   fi
 
+  public_root="$repo_root/frontend/public"
+  video_prefix="/resources/ScienceSeason1/learning_by_video_video/"
+  if [[ "$output_dir" == "$public_root"/* ]]; then
+    rel_path="${output_dir#$public_root/}"
+    video_prefix="/${rel_path%/}/"
+  fi
+
   "$PY_BIN" "$repo_root/manage.py" shell -c "from urllib.parse import urlsplit,urlunsplit;import os;from django.db import transaction;from apps.learning_by_video.models import Video
 
-VIDEO_PREFIX = '/resources/ScienceSeason1/learning_by_video_video/'
+VIDEO_PREFIX = '$video_prefix'
 
 def to_m3u8(url):
     if not url or VIDEO_PREFIX not in url:

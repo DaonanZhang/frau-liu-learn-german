@@ -70,9 +70,10 @@ function renderGrammarPrompt(promptText, selectedOptionText, onBlankClick, isOpe
  * @param {boolean} props.isOpen - Whether panel is visible.
  * @param {Function} props.onClose - Close handler.
  * @param {number|string} props.videoId - Video id for loading questions.
+ * @param {number|string|null} props.seasonNumber - Season number for exercise mode gating.
  * @returns {JSX.Element|null} Panel component.
  */
-export default function ExercisePanel({ isOpen, onClose, videoId }) {
+export default function ExercisePanel({ isOpen, onClose, videoId, seasonNumber = null }) {
   const [questions, setQuestions] = useState([]);
   const [loadingState, setLoadingState] = useState("idle"); // idle | loading | ready | error
   const [errorMessage, setErrorMessage] = useState("");
@@ -85,6 +86,14 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
   // Track selected option per question id: { [questionId]: optionId }
   const [selectedOptionByQuestionId, setSelectedOptionByQuestionId] = useState({});
   const [confirmedQuestionIds, setConfirmedQuestionIds] = useState({});
+  const normalizedSeasonNumber = Number(seasonNumber);
+  const isVlogSeason = normalizedSeasonNumber === 4;
+  const availableModes = useMemo(() => {
+    if (isVlogSeason) {
+      return EXERCISE_MODES.filter((mode) => mode.id === "grammar");
+    }
+    return EXERCISE_MODES;
+  }, [isVlogSeason]);
 
   const activeQuestion = useMemo(() => {
     if (!questions.length) {
@@ -94,6 +103,28 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
   }, [questions, activeIndex]);
 
   const activeModeMeta = useMemo(() => getModeMeta(activeMode), [activeMode]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (availableModes.length === 1) {
+      const onlyModeId = availableModes[0]?.id || "";
+      if (activeMode !== onlyModeId) {
+        setActiveMode(onlyModeId);
+      }
+      if (isModePickerOpen) {
+        setIsModePickerOpen(false);
+      }
+      return;
+    }
+
+    if (!availableModes.some((mode) => mode.id === activeMode)) {
+      setActiveMode("");
+      setIsModePickerOpen(true);
+    }
+  }, [activeMode, availableModes, isModePickerOpen, isOpen]);
 
   useEffect(() => {
     if (!isOpen || !activeMode) {
@@ -351,9 +382,11 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
         </div>
 
         <div className="exPanelHeaderActions">
-          <button type="button" className="exPanelModeButton" onClick={openModePicker}>
-            切换模式
-          </button>
+          {availableModes.length > 1 ? (
+            <button type="button" className="exPanelModeButton" onClick={openModePicker}>
+              切换模式
+            </button>
+          ) : null}
           <button type="button" className="exPanelCloseButton" onClick={onClose} aria-label="Close">
             ×
           </button>
@@ -413,7 +446,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId }) {
               </div>
 
               <div className="exPanelModeList">
-                {EXERCISE_MODES.map((mode) => (
+                {availableModes.map((mode) => (
                   <button
                     key={mode.id}
                     type="button"

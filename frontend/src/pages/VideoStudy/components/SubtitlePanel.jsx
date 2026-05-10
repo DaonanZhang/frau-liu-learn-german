@@ -165,6 +165,7 @@ export default function SubtitlePanel({
   panelShape,
   onPanelShapeChange,
   isMobile,
+  onOpenVideoNotes,
 }) {
   const [subtitles, setSubtitles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1441,6 +1442,16 @@ export default function SubtitlePanel({
                         }}
                       >
                         {isLexiconOpen ? "收起词典" : "打开词典"}
+                      </button>
+                      <button
+                        type="button"
+                        className="vs-mobileSheetItem"
+                        onClick={() => {
+                          onOpenVideoNotes?.();
+                          setMobileSheet("");
+                        }}
+                      >
+                        打开学习笔记
                       </button>
                       <button
                         type="button"

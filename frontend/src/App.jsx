@@ -10,6 +10,11 @@ import LexiconPage from "./pages/LexiconPage/LexiconPage.jsx";
 import LearningRecordPage from "./pages/RecordPage/LearningRecordPage.jsx";
 import ManualPage from "./pages/ManualPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
+import ModulePage from "./pages/ModulePage.jsx";
+import VlogModulePage from "./pages/VlogModulePage.jsx";
+import ModulePurchasePage from "./pages/ModulePurchasePage.jsx";
+import ModuleCheckoutPage from "./pages/ModuleCheckoutPage.jsx";
+import AlipayReturnPage from "./pages/AlipayReturnPage.jsx";
 
 import { AuthProvider } from "./api/auth";
 import { useAuth } from "./api/auth/useAuth.js";
@@ -29,10 +34,15 @@ const router = createBrowserRouter([
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
   { path: "/activate", element: <ActivatePage /> },
   { path: "/activate-entitlement", element: <ActivateEntitlementPage /> },
+  { path: "/payments/alipay/return", element: <AlipayReturnPage /> },
   {
     element: <AppLayout />,
     children: [
       { path: "/", element: <Home /> },
+      { path: "/modules/science-season", element: <ModulePage /> },
+      { path: "/modules/vlog-season", element: <VlogModulePage /> },
+      { path: "/modules/:moduleId/preview", element: <ModulePurchasePage /> },
+      { path: "/modules/:moduleId/purchase", element: <ModuleCheckoutPage /> },
       { path: "/manual", element: <ManualPage /> },
       { path: "/videos/:videoId", element: <VideoStudyPage /> },
       { path: "/lexicon", element: <LexiconPage /> },

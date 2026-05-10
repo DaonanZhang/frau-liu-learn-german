@@ -1,27 +1,45 @@
 import "./VideoGrid.css";
 import "./LockedVideoAlert.css";
+import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
+import useMaxWidth from "../../hooks/useMaxWidth.js";
 import VideoCard from "./VideoCard.jsx";
 
-const PURCHASE_URL = "https://xhslink.com/m/7dqIcM8QWof";
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
-async function showLockedVideoAlert() {
-  await Swal.fire({
-    title: "暂未解锁",
-    html:
-      '点击 <a class="locked-video-alert__link" href="' +
-      PURCHASE_URL +
-      '" target="_blank" rel="noopener noreferrer">购买</a>，解锁全部50期学习资料哦，永久有效！',
-    confirmButtonText: "好的",
-    customClass: {
-      popup: "locked-video-alert",
-      title: "locked-video-alert__title",
-      htmlContainer: "locked-video-alert__content",
-      actions: "locked-video-alert__actions",
-      confirmButton: "locked-video-alert__button",
-    },
-    buttonsStyling: false,
-  });
+function buildPurchaseModalHtml(module) {
+  const image = module?.image
+    ? `<img class="module-purchase-modal__image" src="${escapeHtml(module.image)}" alt="${escapeHtml(module.title)}" />`
+    : "";
+  const labels = Array.isArray(module?.purchaseLabels) && module.purchaseLabels.length
+    ? `<div class="module-purchase-modal__labels">${module.purchaseLabels
+        .map((item) => `<span class="module-purchase-modal__label">${escapeHtml(item)}</span>`)
+        .join("")}</div>`
+    : "";
+  const description = module?.purchaseDescription
+    ? `<p class="module-purchase-modal__description">${escapeHtml(module.purchaseDescription)}</p>`
+    : "";
+  const features = Array.isArray(module?.purchaseFeatures) && module.purchaseFeatures.length
+    ? `<ul class="module-purchase-modal__list">${module.purchaseFeatures
+        .map((item) => `<li>${escapeHtml(item)}</li>`)
+        .join("")}</ul>`
+    : "";
+
+  return `
+    <div class="module-purchase-modal">
+      ${image}
+      ${labels}
+      ${description}
+      ${features}
+    </div>
+  `;
 }
 
 /**
@@ -32,12 +50,16 @@ export default function VideoGrid({
   videos,
   loading,
   errorText,
+  module,
   onVideoClick,
   videoMarkById,
   onInitLoadMark,
   onToggleFavorite,
   onToggleCompleted,
 }) {
+  const navigate = useNavigate();
+  const isMobileView = useMaxWidth(990);
+
   if (loading) {
     return <div className="video-grid__state">Loading videos…</div>;
   }
@@ -65,9 +87,45 @@ export default function VideoGrid({
           <VideoCard
             key={video.id}
             video={video}
-            onClick={() => {
+            onClick={async () => {
               if (isLocked) {
-                showLockedVideoAlert();
+                if (module?.id) {
+                  if (isMobileView) {
+                    navigate(`/modules/${module.id}/preview`);
+                    return;
+                  }
+
+                  const result = await Swal.fire({
+                    title: module?.title || "暂未解锁",
+                    html: buildPurchaseModalHtml(module),
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: "立刻购买",
+                    denyButtonText: "立刻试用",
+                    cancelButtonText: "稍后再看",
+                    customClass: {
+                      popup: "module-purchase-modal-popup",
+                      title: "module-purchase-modal-title",
+                      htmlContainer: "module-purchase-modal-container",
+                      actions: "module-purchase-modal-actions",
+                      confirmButton: "module-purchase-modal-confirm",
+                      denyButton: "module-purchase-modal-confirm",
+                      cancelButton: "module-purchase-modal-cancel",
+                    },
+                    buttonsStyling: false,
+                    width: 720,
+                  });
+
+                  if (result.isConfirmed) {
+                    navigate(`/modules/${module.id}/purchase`);
+                    return;
+                  }
+
+                  if (result.isDenied && module?.route) {
+                    navigate(module.route);
+                    return;
+                  }
+                }
                 return;
               }
               onVideoClick?.(video);

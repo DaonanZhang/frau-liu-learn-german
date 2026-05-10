@@ -6,6 +6,13 @@ import { apiFetch } from "../client";
  */
 const BASE = "/learning_by_video";
 
-export async function fetchVideoMeta() {
-  return apiFetch(`${BASE}/videos/meta/`);
+export async function fetchVideoMeta({ seasonNumbers, seasonNumber } = {}) {
+  const sp = new URLSearchParams();
+  if (Array.isArray(seasonNumbers) && seasonNumbers.length) {
+    sp.set("season_number", seasonNumbers.join(","));
+  } else if (seasonNumber) {
+    sp.set("season_number", String(seasonNumber));
+  }
+  const qs = sp.toString();
+  return apiFetch(qs ? `${BASE}/videos/meta/?${qs}` : `${BASE}/videos/meta/`);
 }

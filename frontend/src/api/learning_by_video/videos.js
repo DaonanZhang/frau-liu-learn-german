@@ -31,6 +31,8 @@ export async function fetchVideoList({
   topic,
   duration,
   ordering,
+  seasonNumbers,
+  seasonNumber,
 } = {}) {
   const sp = new URLSearchParams();
   if (search) sp.set("search", search);
@@ -39,6 +41,11 @@ export async function fetchVideoList({
   if (topic && topic.length) sp.set("topic", topic.join(","));
   if (duration && duration.length) sp.set("duration", duration.join(","));
   if (ordering) sp.set("ordering", ordering);
+  if (Array.isArray(seasonNumbers) && seasonNumbers.length) {
+    sp.set("season_number", seasonNumbers.join(","));
+  } else if (seasonNumber) {
+    sp.set("season_number", String(seasonNumber));
+  }
 
   const qs = sp.toString();
   const path = qs ? `${BASE}/videos/?${qs}` : `${BASE}/videos/`;

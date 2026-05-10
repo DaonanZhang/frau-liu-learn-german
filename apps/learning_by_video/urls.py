@@ -12,6 +12,7 @@ from apps.learning_by_video.views import (
     VideoWordOccurrenceViewSet,
     VideoExerciseQuestionViewSet,
     LearningVideoUserVideoMarkViewSet,
+    LearningVideoUserVideoNoteViewSet,
     LearningVideoUserSubtitleFavoriteViewSet,
 )
 
@@ -23,6 +24,7 @@ router.register(r"occurrences/sentences", VideoSentenceOccurrenceViewSet, basena
 router.register(r"occurrences/expressions", VideoExpressionOccurrenceViewSet, basename="occ-expressions")
 router.register(r"exercise-questions", VideoExerciseQuestionViewSet, basename="exercise-question")
 router.register("user-video-marks", LearningVideoUserVideoMarkViewSet, basename="user-video-marks")
+router.register("user-video-notes", LearningVideoUserVideoNoteViewSet, basename="user-video-notes")
 router.register(
     "user-subtitle-favorites",
     LearningVideoUserSubtitleFavoriteViewSet,

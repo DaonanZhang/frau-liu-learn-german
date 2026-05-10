@@ -1,0 +1,139 @@
+.module-purchase-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-height: 100%;
+}
+
+.module-purchase-page__back {
+  width: fit-content;
+  min-width: 2.4rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0 0.85rem;
+  cursor: pointer;
+}
+
+.module-purchase-page__card {
+  overflow: hidden;
+  border-radius: 1.2rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
+}
+
+.module-purchase-page__image {
+  width: 100%;
+  height: 13rem;
+  object-fit: cover;
+  display: block;
+}
+
+.module-purchase-page__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem;
+}
+
+.module-purchase-page__title {
+  margin: 0;
+  color: #111827;
+  font-size: 1.45rem;
+  font-weight: 800;
+}
+
+.module-purchase-page__labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.module-purchase-page__label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.72rem;
+  border-radius: 999px;
+  background: #fff8ee;
+  border: 1px solid #efd8b9;
+  color: #7b5b2f;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.module-purchase-page__description {
+  margin: 0;
+  color: #4b5563;
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+.module-purchase-page__list {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: #374151;
+  display: grid;
+  gap: 0.65rem;
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.module-purchase-page__footer {
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.module-purchase-page__footer-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.module-purchase-page__ghost {
+  width: 100%;
+  height: 48px;
+  border: 1px solid #d1d5db;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.module-purchase-page__trial {
+  width: 100%;
+  height: 48px;
+  border: 1px solid #a7d9d2;
+  border-radius: 14px;
+  background: #f3fbf9;
+  color: #155e58;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.module-purchase-page__cta {
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgba(173, 235, 230, 1), rgba(247, 213, 234, 1));
+  color: #111827;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 14px 30px rgba(173, 235, 230, 0.24);
+}

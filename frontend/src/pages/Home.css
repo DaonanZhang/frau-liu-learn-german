@@ -1,35 +1,7 @@
-@import url("https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&display=swap");
-
 .home-page {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-}
-
-.home-season-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem;
-  margin: 0.2rem 0 0.9rem;
-}
-
-.home-season-title {
-  font-family: "ZCOOL KuaiLe", "Ma Shan Zheng", "KaiTi", "STKaiti", cursive;
-  font-size: clamp(1.35rem, 2.2vw, 1.9rem);
-  letter-spacing: 0.04em;
-  color: #2f2a25;
-  text-shadow:
-    0.6px 0.6px 0 #f3e7d3,
-    1.2px 1.2px 0 rgba(0, 0, 0, 0.08),
-    2.4px 2.4px 6px rgba(47, 42, 37, 0.12);
-}
-
-.home-season-sub {
-  font-family: "ZCOOL KuaiLe", "Ma Shan Zheng", "KaiTi", "STKaiti", cursive;
-  font-size: clamp(0.9rem, 1.6vw, 1.05rem);
-  color: #6b5a48;
-  letter-spacing: 0.02em;
 }
 
 .home-layout {
@@ -45,22 +17,33 @@
   gap: 1rem;
 }
 
-@media (min-width: 991px) {
-  .home-left {
-    margin-top: -0.3rem;
-  }
-}
-
 .home-right {
   flex: 1;
   min-width: 0;
 }
 
+.home-module-section {
+  display: flex;
+  flex-direction: column;
+}
+
 @media (min-width: 991px) {
-  .home-right > .vf-card {
-    margin-top: 0.6rem;
-    margin-bottom: 1rem;
+  .home-left {
+    margin-top: -0.7rem;
   }
+
+  .home-module-section {
+    margin-top: 0.3rem;
+  }
+}
+
+.home-module-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  max-width: 74rem;
+  width: 100%;
+  margin: 0 auto;
 }
 
 /* ------------------------- */
@@ -82,11 +65,6 @@
 
   .home-right {
     width: 100%;
-  }
-
-  .home-season-banner {
-    gap: 0.25rem;
-    margin: 0 0 0.6rem;
   }
 
   .home-left-content {

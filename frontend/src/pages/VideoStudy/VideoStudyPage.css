@@ -75,7 +75,23 @@
 }
 
 .vs-player {
+  position: relative;
   padding: 0.75rem 1rem 1rem;
+}
+
+.vs-previewBadge {
+  position: absolute;
+  top: 1.35rem;
+  left: 1.6rem;
+  z-index: 2;
+  padding: 0.35rem 0.7rem;
+  border-radius: 9999px;
+  background: rgba(251, 191, 36, 0.96);
+  color: #3b2200;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 0.4rem 1rem rgba(120, 53, 15, 0.18);
 }
 
 .vs-playerPlaceholder {

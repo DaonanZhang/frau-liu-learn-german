@@ -8,6 +8,7 @@ from .occurrences import (
 from .user_data import LearningVideoUserDataViewSet
 from .exercise import VideoExerciseQuestionViewSet
 from .user_video_mark import LearningVideoUserVideoMarkViewSet
+from .user_video_note import LearningVideoUserVideoNoteViewSet
 from .user_subtitle_favorite import LearningVideoUserSubtitleFavoriteViewSet
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "LearningVideoUserDataViewSet",
     "VideoExerciseQuestionViewSet",
     "LearningVideoUserVideoMarkViewSet",
+    "LearningVideoUserVideoNoteViewSet",
     "LearningVideoUserSubtitleFavoriteViewSet",
 ]

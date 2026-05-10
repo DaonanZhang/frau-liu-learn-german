@@ -117,6 +117,7 @@ function buildActiveDaySet(activeDates, year, month) {
 export default function CalendarCard({
   activeDates = [],
   maxPastMonths = 3,
+  activeDaysCount = null,
 }) {
   const today = useMemo(() => {
     const now = new Date();
@@ -229,6 +230,18 @@ export default function CalendarCard({
             );
           })}
         </div>
+
+        {activeDaysCount !== null && activeDaysCount !== undefined ? (
+          <div className="cal-summary" aria-label={`累计活跃 ${activeDaysCount} 天`}>
+            <div className="cal-summary__meta">
+              <span className="cal-summary__label">累计活跃</span>
+            </div>
+            <div className="cal-summary__badge">
+              <span className="cal-summary__value">{activeDaysCount}</span>
+              <span className="cal-summary__unit">天</span>
+            </div>
+          </div>
+        ) : null}
       </div>
     </Card>
   );

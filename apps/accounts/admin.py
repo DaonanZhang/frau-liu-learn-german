@@ -7,6 +7,7 @@ from django.db.models import Q
 from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.module import Module
 from apps.accounts.models.module_season import ModuleSeason
+from apps.accounts.models.purchase_offer import PurchaseOffer
 from apps.accounts.models.user_data import UserData, UserActiveDay
 
 User = get_user_model()
@@ -96,6 +97,24 @@ class EntitlementAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "module", "season", "plan", "status", "starts_at", "expires_at")
     list_filter = ("module", "season", "plan", "status")
     search_fields = ("user__telephone", "module__key", "external_ref")
+
+
+@admin.register(PurchaseOffer)
+class PurchaseOfferAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "code",
+        "title",
+        "module",
+        "season",
+        "plan",
+        "price_amount",
+        "currency",
+        "is_active",
+        "sort_order",
+    )
+    list_filter = ("module", "season", "plan", "currency", "is_active")
+    search_fields = ("code", "title", "module__key", "season__title")
 
 
 @admin.register(UserData)

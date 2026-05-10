@@ -173,6 +173,7 @@ export default function VideoCard({
   }, [coverCandidates, coverCandidateSignature, failedCoverBySrc]);
   const durationLabel = formatDuration(video?.duration_seconds);
   const topicTags = useMemo(() => getTopicTags(video), [video]);
+  const isFreePreview = Boolean(video?.show_free_preview_badge ?? video?.is_free_preview);
 
   const shouldKeepActionsVisible = isFavorite || isCompleted;
 
@@ -212,6 +213,12 @@ export default function VideoCard({
         )}
 
         <div className="video-card__overlay" aria-hidden="true" />
+
+        {isFreePreview ? (
+          <div className="video-card__preview-badge" aria-label="免费试用">
+            免费试用
+          </div>
+        ) : null}
 
         {isLocked ? (
           <div className="video-card__lock" aria-label="locked">

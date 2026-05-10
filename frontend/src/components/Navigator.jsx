@@ -1,48 +1,14 @@
-import { useEffect, useState } from "react";
 import "./Navigator.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../api/auth";
-
-/**
- * Hook: track whether viewport is <= maxWidth.
- *
- * @param {number} maxWidth - Max viewport width in px.
- * @returns {boolean} True when viewport matches.
- */
-function useIsMobileView(maxWidth) {
-  const [isMobileView, setIsMobileView] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia(`(max-width: ${maxWidth}px)`);
-
-    const update = () => {
-      setIsMobileView(mediaQuery.matches);
-    };
-
-    update();
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", update);
-      return () => {
-        mediaQuery.removeEventListener("change", update);
-      };
-    }
-
-    mediaQuery.addListener(update);
-    return () => {
-      mediaQuery.removeListener(update);
-    };
-  }, [maxWidth]);
-
-  return isMobileView;
-}
+import useMaxWidth from "../hooks/useMaxWidth.js";
 
 export default function Navigator() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isMobileView = useIsMobileView(990);
+  const isMobileView = useMaxWidth(990);
 
   if (loading) {
     return null;

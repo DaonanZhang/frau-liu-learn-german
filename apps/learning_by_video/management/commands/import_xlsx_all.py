@@ -10,7 +10,7 @@ from django.core.management.base import BaseCommand, CommandParser
 from django.db import transaction
 
 from apps.learning_by_video.models import Video
-from apps.learning_by_video.management.commands.import_videos import _pick_title
+from apps.learning_by_video.management.commands.import_videos import _get_target_season, _pick_title
 
 # =========================
 # Constants (sheet names)
@@ -27,7 +27,7 @@ def _get_learning_by_video_data_dir() -> Path:
     return Path(app_config.path) / "data"
 
 
-def _resolve_video_id_from_xlsx(xlsx_path: Path) -> int:
+def _resolve_video_id_from_xlsx(xlsx_path: Path, *, season_id: int | None = None) -> int:
     """
     Resolve Video.id for downstream imports.
 
@@ -68,11 +68,15 @@ def _resolve_video_id_from_xlsx(xlsx_path: Path) -> int:
     if not title:
         raise ValueError(f"{xlsx_path.name}: empty 标题 in sheet {SHEET_VIDEO_DESCRIPTION!r}")
 
-    video = Video.objects.filter(title=title, creator=creator).only("id").first()
+    qs = Video.objects.filter(title=title, creator=creator)
+    if season_id is not None:
+        qs = qs.filter(season_id=season_id)
+    video = qs.only("id").first()
     if not video:
+        season_hint = f", season_id={season_id!r}" if season_id is not None else ""
         raise ValueError(
             f"{xlsx_path.name}: Video not found after import_videos "
-            f"(title={title!r}, creator={creator!r})."
+            f"(title={title!r}, creator={creator!r}{season_hint})."
         )
     return int(video.id)
 
@@ -182,6 +186,12 @@ class Command(BaseCommand):
         no_ensure_season = bool(options.get("no_ensure_season"))
         force_season = bool(options.get("force_season"))
         no_bind_access_season = bool(options.get("no_bind_access_season"))
+        target_season = None
+        if not no_ensure_season or not no_bind_access_season:
+            target_season = _get_target_season(
+                module_key=module_key,
+                season_number=season_number,
+            )
 
         for xlsx_path in xlsx_files:
             if not xlsx_path.exists():
@@ -204,7 +214,10 @@ class Command(BaseCommand):
                 )
 
                 # 2) Resolve video id based on the imported video row
-                video_id = _resolve_video_id_from_xlsx(xlsx_path)
+                video_id = _resolve_video_id_from_xlsx(
+                    xlsx_path,
+                    season_id=getattr(target_season, "id", None),
+                )
 
                 # 3) Import subtitles
                 call_command(
@@ -245,6 +258,15 @@ class Command(BaseCommand):
                     video_id=video_id,
                     sheet=word_sheet,
                     no_move=True,
+                )
+
+                # 7) Rebuild aggregated full subtitles for the imported video.
+                # Use --all semantics for this specific video so reruns refresh
+                # the aggregate fields even when they were already filled before.
+                call_command(
+                    "backfill_video_full_subtitles",
+                    video_id=[video_id],
+                    all=True,
                 )
 
                 # Move only after successful commit

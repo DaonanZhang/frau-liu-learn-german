@@ -10,12 +10,14 @@ set -euo pipefail
 #   bash scripts/push_learning_media.sh --dry-run
 #   bash scripts/push_learning_media.sh --host ubuntu@81.68.211.13
 #   bash scripts/push_learning_media.sh --remote-root /srv/projects/frau-liu-learn-german
+#   bash scripts/push_learning_media.sh --resource-profile vlog
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 HOST="ubuntu@81.68.211.13"
 REMOTE_ROOT="/srv/projects/frau-liu-learn-german"
 DRY_RUN=0
+RESOURCE_PROFILE="science"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -31,6 +33,10 @@ while [[ $# -gt 0 ]]; do
       REMOTE_ROOT="${2:-}"
       shift 2
       ;;
+    --resource-profile)
+      RESOURCE_PROFILE="${2:-}"
+      shift 2
+      ;;
     *)
       echo "Unknown argument: $1" >&2
       exit 1
@@ -43,11 +49,24 @@ if [[ -z "$HOST" || -z "$REMOTE_ROOT" ]]; then
   exit 1
 fi
 
-LOCAL_BASE="$ROOT_DIR/frontend/public/resources/ScienceSeason1"
+case "$RESOURCE_PROFILE" in
+  science)
+    RESOURCE_BUCKET="ScienceSeason1"
+    ;;
+  vlog)
+    RESOURCE_BUCKET="VlogSeason1"
+    ;;
+  *)
+    echo "Unsupported --resource-profile: $RESOURCE_PROFILE" >&2
+    exit 1
+    ;;
+esac
+
+LOCAL_BASE="$ROOT_DIR/frontend/public/resources/$RESOURCE_BUCKET"
 LOCAL_VIDEO="$LOCAL_BASE/learning_by_video_video/"
 LOCAL_COVER="$LOCAL_BASE/learning_by_video_cover_letters/"
 
-REMOTE_BASE="$REMOTE_ROOT/frontend/public/resources/ScienceSeason1"
+REMOTE_BASE="$REMOTE_ROOT/frontend/public/resources/$RESOURCE_BUCKET"
 REMOTE_VIDEO="$HOST:$REMOTE_BASE/learning_by_video_video/"
 REMOTE_COVER="$HOST:$REMOTE_BASE/learning_by_video_cover_letters/"
 
@@ -75,4 +94,3 @@ echo "[2/2] Sync video files -> $REMOTE_VIDEO"
 rsync "${RSYNC_ARGS[@]}" -e "$RSYNC_SSH" "$LOCAL_VIDEO" "$REMOTE_VIDEO"
 
 echo "Done."
-

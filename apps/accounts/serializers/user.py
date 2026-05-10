@@ -16,7 +16,7 @@ class UserMeReadSerializer(serializers.ModelSerializer):
 
     user_data = UserDataReadSerializer(read_only=True)
     entitlements = EntitlementReadSerializer(many=True, read_only=True)
-    has_lifetime_access = serializers.BooleanField(read_only=True)
+    has_platform_wide_access = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -28,7 +28,7 @@ class UserMeReadSerializer(serializers.ModelSerializer):
             "email",
             "is_staff",
             "is_superuser",
-            "has_lifetime_access",
+            "has_platform_wide_access",
             "user_data",
             "entitlements",
         )

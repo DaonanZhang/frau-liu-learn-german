@@ -7,6 +7,7 @@ from apps.accounts.views import (
     EntitlementViewSet,
     HomepageSettingViewSet,
     ModuleSeasonViewSet,
+    PurchaseOfferViewSet,
     UserDataViewSet,
     UserViewSet,
 )
@@ -17,6 +18,7 @@ from apps.accounts.views.registration import (
 from apps.accounts.views.activation import ActivationCodeApplyAPIView
 from apps.accounts.views.payment import (
     AlipayNotifyAPIView,
+    AlipayPaymentStatusAPIView,
     CreateAlipayPurchaseAPIView,
     CreateAlipayDebugPaymentAPIView,
 )
@@ -36,6 +38,7 @@ router.register(r"user-data", UserDataViewSet, basename="user-data")
 router.register(r"entitlements", EntitlementViewSet, basename="entitlement")
 router.register(r"module-seasons", ModuleSeasonViewSet, basename="module-season")
 router.register(r"homepage-settings", HomepageSettingViewSet, basename="homepage-setting")
+router.register(r"purchase-offers", PurchaseOfferViewSet, basename="purchase-offer")
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -98,5 +101,10 @@ urlpatterns += [
         "payments/alipay/notify/",
         AlipayNotifyAPIView.as_view(),
         name="alipay-notify",
+    ),
+    path(
+        "payments/alipay/status/",
+        AlipayPaymentStatusAPIView.as_view(),
+        name="alipay-status",
     ),
 ]

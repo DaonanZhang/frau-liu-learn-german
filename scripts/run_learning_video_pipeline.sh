@@ -6,11 +6,12 @@ usage() {
 Usage:
   scripts/run_learning_video_pipeline.sh [options]
 
-One-stop pipeline (Step 0 -> Step 3):
+One-stop pipeline (Step 0 -> Step 4):
   0) Convert MOV -> MP4 (optional, auto-skip if no MOV)
   1) Build HLS from MP4
   2) Import XLSX into DB (videos/subtitles/exercises/expressions/words)
   3) Backfill video_url / cover_letter_url
+  4) Aggregate full German/Chinese subtitles onto Video fields
 
 Assumptions:
   - cover_letter files already exist in resources folder
@@ -20,6 +21,10 @@ Assumptions:
 Options:
   --video-dir DIR       Video resource dir
                         (default: <repo>/frontend/public/resources/ScienceSeason1/learning_by_video_video)
+  --cover-dir DIR       Cover resource dir
+                        (default: <repo>/frontend/public/resources/ScienceSeason1/learning_by_video_cover_letters)
+  --resource-profile P  Resource profile used to derive default video/cover dirs
+                        (default: auto; supported: auto, science, vlog)
   --xlsx-dir DIR        XLSX raw dir
                         (default: <repo>/apps/learning_by_video/data/raw)
   --module-key KEY      Django module key for import/sync (default: learning_by_video)
@@ -33,19 +38,22 @@ Options:
   --skip-step1          Skip HLS build
   --skip-step2          Skip XLSX import
   --skip-step3          Skip URL backfill
+  --skip-step4          Skip subtitle aggregate backfill
   --dry-run             Print commands only (no execution)
   -h, --help            Show this help
 EOF
 }
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_VIDEO_DIR="$ROOT_DIR/frontend/public/resources/ScienceSeason1/learning_by_video_video"
 DEFAULT_XLSX_DIR="$ROOT_DIR/apps/learning_by_video/data/raw"
+DEFAULT_RESOURCE_PROFILE="auto"
 
-VIDEO_DIR="$DEFAULT_VIDEO_DIR"
+VIDEO_DIR=""
+COVER_DIR=""
 XLSX_DIR="$DEFAULT_XLSX_DIR"
 MODULE_KEY="learning_by_video"
 SEASON_NUMBER="1"
+RESOURCE_PROFILE="$DEFAULT_RESOURCE_PROFILE"
 
 OVERWRITE=0
 REENCODE=0
@@ -54,12 +62,21 @@ SKIP_STEP0=0
 SKIP_STEP1=0
 SKIP_STEP2=0
 SKIP_STEP3=0
+SKIP_STEP4=0
 DRY_RUN=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --video-dir)
       VIDEO_DIR="${2:-}"
+      shift 2
+      ;;
+    --cover-dir)
+      COVER_DIR="${2:-}"
+      shift 2
+      ;;
+    --resource-profile)
+      RESOURCE_PROFILE="${2:-}"
       shift 2
       ;;
     --xlsx-dir)
@@ -102,6 +119,10 @@ while [[ $# -gt 0 ]]; do
       SKIP_STEP3=1
       shift
       ;;
+    --skip-step4)
+      SKIP_STEP4=1
+      shift
+      ;;
     --dry-run)
       DRY_RUN=1
       shift
@@ -117,6 +138,40 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+resolve_resource_root() {
+  local profile="$1"
+  case "$profile" in
+    auto)
+      if [[ "$SEASON_NUMBER" == "4" ]]; then
+        printf '%s' "$ROOT_DIR/frontend/public/resources/VlogSeason1"
+      else
+        printf '%s' "$ROOT_DIR/frontend/public/resources/ScienceSeason1"
+      fi
+      ;;
+    science)
+      printf '%s' "$ROOT_DIR/frontend/public/resources/ScienceSeason1"
+      ;;
+    vlog)
+      printf '%s' "$ROOT_DIR/frontend/public/resources/VlogSeason1"
+      ;;
+    *)
+      echo "Unsupported --resource-profile: $profile" >&2
+      exit 1
+      ;;
+  esac
+}
+
+RESOURCE_ROOT="$(resolve_resource_root "$RESOURCE_PROFILE")"
+DEFAULT_VIDEO_DIR="$RESOURCE_ROOT/learning_by_video_video"
+DEFAULT_COVER_DIR="$RESOURCE_ROOT/learning_by_video_cover_letters"
+
+if [[ -z "$VIDEO_DIR" ]]; then
+  VIDEO_DIR="$DEFAULT_VIDEO_DIR"
+fi
+if [[ -z "$COVER_DIR" ]]; then
+  COVER_DIR="$DEFAULT_COVER_DIR"
+fi
 
 run_cmd() {
   printf '+'
@@ -138,6 +193,11 @@ count_files() {
 
 if [[ ! -d "$VIDEO_DIR" ]]; then
   echo "Video dir not found: $VIDEO_DIR" >&2
+  exit 1
+fi
+
+if [[ ! -d "$COVER_DIR" ]]; then
+  echo "Cover dir not found: $COVER_DIR" >&2
   exit 1
 fi
 
@@ -167,8 +227,10 @@ fi
 
 echo "Pipeline root: $ROOT_DIR"
 echo "Video dir: $VIDEO_DIR"
+echo "Cover dir: $COVER_DIR"
 echo "XLSX dir: $XLSX_DIR"
 echo "Module/Season: $MODULE_KEY / $SEASON_NUMBER"
+echo "Resource profile: $RESOURCE_PROFILE"
 echo "Dry run: $DRY_RUN"
 
 # Step 0: MOV -> MP4
@@ -245,6 +307,18 @@ else
     --mode apply \
     --only-missing \
     --empty-only \
+    --module-key "$MODULE_KEY" \
+    --video-dir "$VIDEO_DIR" \
+    --cover-dir "$COVER_DIR" \
+    --season-number "$SEASON_NUMBER"
+fi
+
+# Step 4: aggregate subtitle text
+if [[ "$SKIP_STEP4" -eq 1 ]]; then
+  echo "Step 4 skipped."
+else
+  run_cmd "${MANAGE_RUNNER[@]}" backfill_video_full_subtitles \
+    --only-missing \
     --module-key "$MODULE_KEY" \
     --season-number "$SEASON_NUMBER"
 fi

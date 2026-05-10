@@ -15,6 +15,8 @@ class Video(models.Model):
 
     video_url = models.URLField(blank=True, default="")
     cover_letter_url = models.URLField(blank=True, default="")
+    full_subtitle_de = models.TextField(blank=True, default="")
+    full_subtitle_zh = models.TextField(blank=True, default="")
 
     duration_seconds = models.PositiveIntegerField(default=0)
 

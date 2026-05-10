@@ -1,6 +1,24 @@
 import Swal from "sweetalert2";
 import { apiFetch } from "../client";
 
+function pickErrorMessage(err, fallback) {
+  const data = err?.data;
+  if (typeof data?.detail === "string" && data.detail.trim()) {
+    return data.detail;
+  }
+  if (data && typeof data === "object") {
+    for (const value of Object.values(data)) {
+      if (Array.isArray(value) && value.length > 0) {
+        return String(value[0]);
+      }
+      if (typeof value === "string" && value.trim()) {
+        return value;
+      }
+    }
+  }
+  return fallback;
+}
+
 /**
  * Login with telephone + password.
  * On success:
@@ -61,7 +79,7 @@ export function logout() {
 }
 
 /* =========================================================
- * Registration (activation-code based)
+ * Registration / activation
  * ========================================================= */
 
 /**
@@ -76,21 +94,21 @@ export async function verifyActivationCode(code) {
 }
 
 /**
- * Step 2: register new user with activation code.
+ * Register new user directly.
  */
-export async function registerWithActivationCode({
-  code,
+export async function registerUser({
   telephone,
   countryCode,
+  email,
   password,
 }) {
   try {
     const data = await apiFetch("/accounts/auth/register/", {
       method: "POST",
       body: {
-        code,
         telephone,
         country_code: countryCode,
+        email,
         password,
       },
     });
@@ -110,7 +128,7 @@ export async function registerWithActivationCode({
     await Swal.fire({
       icon: "error",
       title: "注册失败",
-      text: err?.data?.detail || "注册失败，请检查信息",
+      text: pickErrorMessage(err, "注册失败，请检查信息"),
     });
 
     return { ok: false };

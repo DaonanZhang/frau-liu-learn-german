@@ -7,6 +7,13 @@
   background: transparent;
 }
 
+.site-footer__contact {
+  margin-bottom: 0.4rem;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
 .site-footer__inner {
   display: flex;
   align-items: center;

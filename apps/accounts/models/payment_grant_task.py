@@ -22,6 +22,15 @@ class PaymentGrantTask(models.Model):
         db_index=True,
         help_text="Payment record that triggered this entitlement grant task.",
     )
+    offer = models.ForeignKey(
+        "accounts.PurchaseOffer",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payment_grant_tasks",
+        db_index=True,
+        help_text="Purchase offer used to create this payment, if applicable.",
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

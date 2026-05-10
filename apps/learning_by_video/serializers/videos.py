@@ -4,6 +4,7 @@ from typing import Any
 
 from rest_framework import serializers
 from apps.learning_by_video.models import Video
+from apps.learning_by_video.access import is_video_free_preview, user_has_video_entitlement
 from .subtitles import SubtitleSerializer
 from .progress import VideoProgressSerializer
 
@@ -12,6 +13,8 @@ class VideoListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for video list pages."""
     season_number = serializers.SerializerMethodField()
     is_locked = serializers.SerializerMethodField()
+    is_free_preview = serializers.SerializerMethodField()
+    show_free_preview_badge = serializers.SerializerMethodField()
 
     class Meta:
         model = Video
@@ -28,6 +31,8 @@ class VideoListSerializer(serializers.ModelSerializer):
             "created_at",
             "season_number",
             "is_locked",
+            "is_free_preview",
+            "show_free_preview_badge",
         ]
         read_only_fields = fields
 
@@ -45,6 +50,9 @@ class VideoListSerializer(serializers.ModelSerializer):
         return obj.season.season_number if obj.season_id else None
 
     def get_is_locked(self, obj: Video) -> bool:
+        if is_video_free_preview(video=obj, module_key="learning_by_video"):
+            return False
+
         # No season assigned => locked
         video_season_ids = self._get_video_season_ids(obj)
         if not video_season_ids:
@@ -62,6 +70,18 @@ class VideoListSerializer(serializers.ModelSerializer):
             return True
         return not video_season_ids.intersection(season_ids)
 
+    def get_is_free_preview(self, obj: Video) -> bool:
+        return is_video_free_preview(video=obj, module_key="learning_by_video")
+
+    def get_show_free_preview_badge(self, obj: Video) -> bool:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return self.get_is_free_preview(obj) and not user_has_video_entitlement(
+            user=user,
+            video=obj,
+            module_key="learning_by_video",
+        )
+
 
 class VideoDetailSerializer(serializers.ModelSerializer):
     """
@@ -74,6 +94,8 @@ class VideoDetailSerializer(serializers.ModelSerializer):
     progress = VideoProgressSerializer(read_only=True)
     season_number = serializers.SerializerMethodField()
     is_locked = serializers.SerializerMethodField()
+    is_free_preview = serializers.SerializerMethodField()
+    show_free_preview_badge = serializers.SerializerMethodField()
 
     class Meta:
         model = Video
@@ -90,6 +112,8 @@ class VideoDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "season_number",
             "is_locked",
+            "is_free_preview",
+            "show_free_preview_badge",
             "subtitles",
             "progress",
         ]
@@ -109,6 +133,9 @@ class VideoDetailSerializer(serializers.ModelSerializer):
         return obj.season.season_number if obj.season_id else None
 
     def get_is_locked(self, obj: Video) -> bool:
+        if is_video_free_preview(video=obj, module_key="learning_by_video"):
+            return False
+
         video_season_ids = self._get_video_season_ids(obj)
         if not video_season_ids:
             return True
@@ -124,6 +151,18 @@ class VideoDetailSerializer(serializers.ModelSerializer):
         if not season_ids:
             return True
         return not video_season_ids.intersection(season_ids)
+
+    def get_is_free_preview(self, obj: Video) -> bool:
+        return is_video_free_preview(video=obj, module_key="learning_by_video")
+
+    def get_show_free_preview_badge(self, obj: Video) -> bool:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return self.get_is_free_preview(obj) and not user_has_video_entitlement(
+            user=user,
+            video=obj,
+            module_key="learning_by_video",
+        )
 
     def to_representation(self, instance: Video) -> dict[str, Any]:
         data = super().to_representation(instance)

@@ -20,11 +20,20 @@ Use:
 
 Default behavior:
 - Uses `frontend/public/resources/ScienceSeason1/learning_by_video_video` as video folder.
+- `--resource-profile auto` maps Season 1/2/3 to `ScienceSeason1`, and Season 4 to `VlogSeason1`.
 - Uses `apps/learning_by_video/data/raw` as xlsx folder.
 - Runs Step 0 -> Step 3 in order.
 - Auto-skips Step 0 if no MOV files exist.
 - Auto-skips Step 2 if no XLSX files exist.
 - Backfill runs in safe mode (`--only-missing --empty-only`) to avoid overwriting existing non-empty URLs.
+
+Alternative resource buckets:
+- `frontend/public/resources/ScienceSeason1`
+- `frontend/public/resources/VlogSeason1`
+
+Each resource bucket should contain:
+- `learning_by_video_video`
+- `learning_by_video_cover_letters`
 
 Server run from MP4 stage:
 
@@ -33,6 +42,43 @@ Server run from MP4 stage:
 Dry run:
 
 `scripts/run_learning_video_pipeline.sh --skip-step0 --dry-run`
+
+## Vlog Season Runbook
+Use this when importing or updating `Vlog season` videos, which currently maps to `season_number=4` and resource bucket `VlogSeason1`.
+
+Required file placement:
+- videos: `frontend/public/resources/VlogSeason1/learning_by_video_video`
+- covers: `frontend/public/resources/VlogSeason1/learning_by_video_cover_letters`
+- xlsx: `apps/learning_by_video/data/raw`
+
+Step 0 only, for new MOV sources:
+
+`scripts/run_learning_video_pipeline.sh --season-number 4 --resource-profile vlog --skip-step1 --skip-step2 --skip-step3 --skip-step4`
+
+What this does:
+- converts all `*.mov` in the Vlog video folder to `*.mp4`
+- deletes the original `*.mov` after successful conversion
+- does not run HLS slicing, xlsx import, URL backfill, or subtitle backfill
+
+Dry run for Step 1 to Step 4:
+
+`scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --dry-run`
+
+Actual Step 1 to Step 4 run:
+
+`scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog`
+
+Observed successful run shape for Vlog season:
+- Step 1 slices each `mp4` into `.m3u8`, `-init.mp4`, and `.m4s` files in `frontend/public/resources/VlogSeason1/learning_by_video_video`
+- Step 2 runs `manage.py import_xlsx_all --module-key learning_by_video --season-number 4`
+- Step 3 runs `manage.py sync_video_media_urls --mode apply --only-missing --empty-only --module-key learning_by_video --video-dir frontend/public/resources/VlogSeason1/learning_by_video_video --cover-dir frontend/public/resources/VlogSeason1/learning_by_video_cover_letters --season-number 4`
+- Step 4 runs `manage.py backfill_video_full_subtitles --only-missing --module-key learning_by_video --season-number 4`
+
+Important operational notes from the real Vlog run:
+- rerunning Step 1 after HLS files already exist is safe; existing playlists are skipped automatically
+- after Step 0, the video folder contains both source `*.mp4` and HLS `*-init.mp4`; the HLS script already skips `*-init.mp4`
+- the import step moved processed xlsx files into `apps/learning_by_video/data/raw/processed`
+- in the actual run, `import_xlsx_all --season-number 4` logged `season assigned=1` and `access_season bound=1` for each imported xlsx; this should be treated as a warning and DB season assignment should be spot-checked after each Vlog import until the root cause is confirmed
 
 ## Special Character Strategy
 Goal: no frontend change, stable URL matching, and no duplicate alias files.
@@ -83,10 +129,15 @@ Run:
   - `scripts/run_learning_video_pipeline.sh --skip-step0 --dry-run`
 - Actual run:
   - `scripts/run_learning_video_pipeline.sh --skip-step0`
+- Vlog season dry run:
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --dry-run`
+- Vlog season actual run:
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog`
 
 After run:
 - Spot check DB rows for new videos (`video_url`, `cover_letter_url`, `season`).
 - Verify a few frontend pages: playlist loads, cover renders.
+- For Vlog season specifically, verify that imported rows actually landed on `season 4`, because the current import logs showed `season assigned=1`.
 
 ## Known Boundaries
 - Manual asset copy/upload remains manual by design.

@@ -19,7 +19,10 @@ from apps.accounts.serializers.payment import (
     CreateAlipayPurchaseSerializer,
 )
 from apps.accounts.services import AlipayConfigurationError, get_alipay_service
-from apps.accounts.services import enqueue_pending_payment_grant_tasks_for_payment
+from apps.accounts.services import (
+    enqueue_pending_payment_grant_tasks_for_payment,
+    process_payment_grant_task_by_id,
+)
 
 
 def _build_debug_merchant_order_no(*, user_id: int) -> str:
@@ -32,6 +35,7 @@ def _build_merchant_order_no(*, user_id: int) -> str:
 
 def _build_payment_subject(
     *,
+    offer_title: str,
     module_name: str,
     season_title: str | None,
     plan_label: str,
@@ -39,6 +43,8 @@ def _build_payment_subject(
 ) -> str:
     if subject.strip():
         return subject.strip()
+    if offer_title.strip():
+        return offer_title.strip()
     if season_title:
         return f"{module_name} {season_title} {plan_label}"
     return f"{module_name} {plan_label}"
@@ -98,7 +104,10 @@ class CreateAlipayPurchaseAPIView(APIView):
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
-        serializer = CreateAlipayPurchaseSerializer(data=request.data)
+        serializer = CreateAlipayPurchaseSerializer(
+            data=request.data,
+            context={"request": request},
+        )
         serializer.is_valid(raise_exception=True)
 
         validated_data = serializer.validated_data
@@ -121,6 +130,7 @@ class CreateAlipayPurchaseAPIView(APIView):
             season_title = season.title or f"Season {season.season_number}"
 
         payment_subject = _build_payment_subject(
+            offer_title=validated_data["offer"].title,
             module_name=module.name,
             season_title=season_title,
             plan_label=dict(PaymentGrantTask._meta.get_field("plan").choices)[plan],
@@ -135,6 +145,7 @@ class CreateAlipayPurchaseAPIView(APIView):
         )
         payment_grant_task = PaymentGrantTask.objects.create(
             payment=payment,
+            offer=validated_data["offer"],
             user=request.user,
             module=module,
             season=season,
@@ -150,6 +161,7 @@ class CreateAlipayPurchaseAPIView(APIView):
             {
                 "payment_id": payment.id,
                 "payment_grant_task_id": payment_grant_task.id,
+                "offer_code": validated_data["offer"].code,
                 "merchant_order_no": payment.merchant_order_no,
                 "subject": payment.subject,
                 "amount": f"{payment.total_amount:.2f}",
@@ -246,3 +258,80 @@ class AlipayNotifyAPIView(APIView):
             )
 
         return HttpResponse("success", content_type="text/plain")
+
+
+class AlipayPaymentStatusAPIView(APIView):
+    """
+    Return the current payment/grant status for the authenticated buyer.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        merchant_order_no = str(request.query_params.get("merchant_order_no") or "").strip()
+        if not merchant_order_no:
+            return Response(
+                {"detail": "merchant_order_no is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payment = AlipayWebsitePayment.objects.filter(merchant_order_no=merchant_order_no).first()
+        if payment is None:
+            return Response(
+                {"detail": "Payment not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        grant_task = (
+            PaymentGrantTask.objects
+            .select_related("module", "season", "offer")
+            .filter(payment=payment, user=request.user)
+            .order_by("id")
+            .first()
+        )
+        if grant_task is None:
+            return Response(
+                {"detail": "Payment does not belong to the current user."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if (
+            payment.status == AlipayWebsitePayment.Status.PAID
+            and grant_task.status != PaymentGrantTask.Status.SUCCEEDED
+        ):
+            try:
+                process_payment_grant_task_by_id(payment_grant_task_id=grant_task.id)
+            except Exception:
+                pass
+            payment.refresh_from_db(fields=["status", "updated_at", "paid_at"])
+            grant_task.refresh_from_db()
+
+        payment_status = payment.status
+        grant_status = grant_task.status
+        is_paid = payment_status == AlipayWebsitePayment.Status.PAID
+        is_granted = grant_status == PaymentGrantTask.Status.SUCCEEDED
+        is_pending_grant = is_paid and not is_granted and grant_status in {
+            PaymentGrantTask.Status.PENDING,
+            PaymentGrantTask.Status.PROCESSING,
+        }
+        is_failed = payment_status in {
+            AlipayWebsitePayment.Status.FAILED,
+            AlipayWebsitePayment.Status.CLOSED,
+        } or grant_status == PaymentGrantTask.Status.FAILED
+
+        return Response(
+            {
+                "merchant_order_no": payment.merchant_order_no,
+                "payment_status": payment_status,
+                "grant_status": grant_status,
+                "is_paid": is_paid,
+                "is_granted": is_granted,
+                "is_pending_grant": is_pending_grant,
+                "is_failed": is_failed,
+                "module_key": grant_task.module.key if grant_task.module_id else "",
+                "season_number": grant_task.season.season_number if grant_task.season_id else None,
+                "offer_code": grant_task.offer.code if grant_task.offer_id else "",
+                "last_error": grant_task.last_error,
+            },
+            status=status.HTTP_200_OK,
+        )

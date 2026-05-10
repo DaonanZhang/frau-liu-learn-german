@@ -23,6 +23,10 @@ export default function SiteFooter({ className = "" }) {
 
   return (
     <footer className={["site-footer", className].filter(Boolean).join(" ")}>
+      <div className="site-footer__contact">
+        联系我们（客服）：
+        <a href="mailto:contact@frauliu.com">contact@frauliu.com</a>
+      </div>
       <div className="site-footer__inner">
         <button
           type="button"

@@ -196,7 +196,10 @@ ALIPAY_APP_PRIVATE_KEY = env("ALIPAY_APP_PRIVATE_KEY", default="")
 ALIPAY_APP_PUBLIC_KEY = env("ALIPAY_APP_PUBLIC_KEY", default="")
 ALIPAY_PUBLIC_KEY = env("ALIPAY_PUBLIC_KEY", default="")
 ALIPAY_NOTIFY_URL = env("ALIPAY_NOTIFY_URL", default="")
-ALIPAY_RETURN_URL = env("ALIPAY_RETURN_URL", default="")
+ALIPAY_RETURN_URL = env(
+    "ALIPAY_RETURN_URL",
+    default=(f"{FRONTEND_BASE_URL.rstrip('/')}/payments/alipay/return" if FRONTEND_BASE_URL else ""),
+)
 ALIPAY_SELLER_ID = env("ALIPAY_SELLER_ID", default="")
 ALIPAY_SIGN_TYPE = env("ALIPAY_SIGN_TYPE", default="RSA2")
 ALIPAY_TIMEOUT_EXPRESS = env("ALIPAY_TIMEOUT_EXPRESS", default="15m")

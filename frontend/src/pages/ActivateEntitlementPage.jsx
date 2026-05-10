@@ -3,11 +3,13 @@ import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import AuthLayout from "../components/AuthLayout.jsx";
 import { applyActivationCode, verifyActivationCode } from "../api/auth/auth";
+import { useAuth } from "../api/auth/useAuth.js";
 
 export default function ActivateEntitlementPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { reloadMe } = useAuth();
 
   const canVerify = useMemo(
     () => code.trim().length > 0 && !loading,
@@ -31,6 +33,7 @@ export default function ActivateEntitlementPage() {
       }
       const result = await applyActivationCode(code.trim());
       if (result.ok) {
+        await reloadMe();
         navigate("/", { replace: true });
       }
     } catch (err) {

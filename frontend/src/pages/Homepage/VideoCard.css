@@ -49,6 +49,23 @@
   pointer-events: none;
 }
 
+.video-card__preview-badge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.62rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.96), rgba(34, 197, 94, 0.96));
+  color: #f0fdf4;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 0.45rem 1rem rgba(21, 128, 61, 0.24);
+}
+
 .video-card:hover .video-card__overlay {
   opacity: 1;
 }

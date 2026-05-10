@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Hls from "hls.js";
-import { useParams, Link } from "react-router-dom";
+import { useLocation, useParams, Link } from "react-router-dom";
 import "./VideoStudyPage.css";
 import { fetchVideoDetail } from "../../api/learning_by_video/videos.js";
 import SubtitlePanel from "./components/SubtitlePanel.jsx";
 import LexiconPanel from "./components/LexiconPanel.jsx";
 import ExercisePanel from "./components/ExercisePanel.jsx";
+import VideoNotePanel from "./components/VideoNotePanel.jsx";
+import { useAuth } from "../../api/auth/useAuth.js";
 import useBodyScrollLock from "../../hooks/useBodyScrollLock";
 
 
@@ -31,8 +33,73 @@ function isProbablyHlsUrl(url) {
   return /\.m3u8($|[?#])/i.test(url);
 }
 
+function getSeasonReturnPath(seasonNumber) {
+  const parsedSeasonNumber = Number(seasonNumber);
+  if (!Number.isFinite(parsedSeasonNumber) || parsedSeasonNumber <= 0) {
+    return "/";
+  }
+
+  if (parsedSeasonNumber === 4) {
+    return "/modules/vlog-season";
+  }
+
+  if (parsedSeasonNumber >= 1 && parsedSeasonNumber <= 3) {
+    return "/modules/science-season";
+  }
+
+  return "/";
+}
+
+function userHasSeasonAccess(user, seasonNumber) {
+  if (!user) {
+    return false;
+  }
+
+  if (user.is_staff || user.is_superuser || user.has_platform_wide_access) {
+    return true;
+  }
+
+  const normalizedSeasonNumber = Number(seasonNumber);
+  if (!Number.isFinite(normalizedSeasonNumber) || normalizedSeasonNumber <= 0) {
+    return false;
+  }
+
+  const entitlements = Array.isArray(user.entitlements) ? user.entitlements : [];
+  return entitlements.some((item) => {
+    if (!item?.is_valid_now) {
+      return false;
+    }
+
+    const scope = String(item.scope || "");
+    if (scope === "platform") {
+      return true;
+    }
+
+    if (item?.module?.key !== "learning_by_video") {
+      return false;
+    }
+
+    if (!item?.season) {
+      return true;
+    }
+
+    const entitledSeasonNumber = Number(item.season?.season_number);
+    if (entitledSeasonNumber === normalizedSeasonNumber) {
+      return true;
+    }
+
+    if (normalizedSeasonNumber === 2 && entitledSeasonNumber === 1) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
 export default function VideoStudyPage() {
   const { videoId } = useParams();
+  const location = useLocation();
+  const { user } = useAuth();
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
 
@@ -59,9 +126,14 @@ export default function VideoStudyPage() {
   const [isMobile, setIsMobile] = useState(false);
 
   const [isExerciseOpen, setIsExerciseOpen] = useState(false);
+  const [openVideoNotePanel, setOpenVideoNotePanel] = useState(null);
   const [lexiconFocusRequest, setLexiconFocusRequest] = useState(null);
   const [panelShape, setPanelShape] = useState("normal");
   useBodyScrollLock(isMobile && (isLexiconOpen || isExerciseOpen));
+
+  const handleVideoNoteOpenRequestReady = useCallback((openFn) => {
+    setOpenVideoNotePanel(() => openFn);
+  }, []);
 
   const [pipOffset, setPipOffset] = useState({ x: 0, y: 0 });
   const pipDragRef = useRef({
@@ -187,6 +259,21 @@ export default function VideoStudyPage() {
   const leftVideoUrl = video?.video_url ?? "";
   const isHlsUrl = useMemo(() => isProbablyHlsUrl(leftVideoUrl), [leftVideoUrl]);
   const playerErrorText = videoErrorText || playbackErrorText;
+  const backPath = useMemo(() => {
+    const requestedReturnPath = String(location.state?.returnTo || "").trim();
+    if (requestedReturnPath) {
+      return requestedReturnPath;
+    }
+
+    return getSeasonReturnPath(video?.season_number);
+  }, [location.state, video?.season_number]);
+  const isTrialBadgeVisible = useMemo(() => {
+    if (!video?.is_free_preview) {
+      return false;
+    }
+
+    return !userHasSeasonAccess(user, video?.season_number);
+  }, [user, video?.is_free_preview, video?.season_number]);
 
   useEffect(() => {
     const videoElement = videoRef.current;
@@ -866,7 +953,7 @@ export default function VideoStudyPage() {
             onPointerCancel={handlePipPointerUp}
           >
             <div className="vs-playerHeader">
-              <Link to="/" className="vs-backBtn" aria-label="Back">
+              <Link to={backPath} className="vs-backBtn" aria-label="Back">
                 ‹
               </Link>
 
@@ -882,6 +969,12 @@ export default function VideoStudyPage() {
             </div>
 
             <div className="vs-player">
+              {isTrialBadgeVisible ? (
+                <div className="vs-previewBadge" aria-label="免费试用">
+                  免费试用
+                </div>
+              ) : null}
+
               {playerErrorText ? (
                 <div className="vs-playerPlaceholder">
                   <div className="vs-playerPlaceholderText">Failed to load video: {playerErrorText}</div>
@@ -941,6 +1034,12 @@ export default function VideoStudyPage() {
               </button>
             </div>
           ) : null}
+
+          <VideoNotePanel
+            videoId={videoId}
+            showTrigger={!isMobile}
+            onOpenRequestReady={handleVideoNoteOpenRequestReady}
+          />
         </section>
 
         {/* Middle: subtitles */}
@@ -973,6 +1072,9 @@ export default function VideoStudyPage() {
               setPanelShape(nextShape);
             }}
             isMobile={isMobile}
+            onOpenVideoNotes={() => {
+              openVideoNotePanel?.();
+            }}
           />
         ) : null}
 
@@ -1001,6 +1103,7 @@ export default function VideoStudyPage() {
                 setIsExerciseOpen(false);
               }}
               videoId={videoId}
+              seasonNumber={video?.season_number ?? null}
             />
           </section>
         ) : null}

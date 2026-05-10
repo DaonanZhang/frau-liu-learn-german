@@ -1,321 +1,123 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-import StatsCard from "../pages/Homepage/components/StatsCard.jsx";
-import CalendarCard from "../pages/Homepage/components/CalendarCard";
-import Announcement from "../pages/Homepage/components/Announcement";
-import WeChatQrCard from "../pages/Homepage/components/WeChatQrCard";
-
-import VideoFilter from "../pages/Homepage/VideoFilter";
-import VideoGrid from "../pages/Homepage/VideoGrid";
-
-import { fetchVideoList } from "../api/learning_by_video/videos.js";
-import { fetchVideoMeta } from "../api/learning_by_video/video_meta.js";
+import Swal from "sweetalert2";
 import { markDailyActiveAndGetUserData } from "../api/user_data/userData";
 import { fetchLearningVideoUserData } from "../api/learning_by_video/userData";
-import {
-  fetchUserVideoMarkByVideoId,
-  setVideoFavorite,
-  setVideoCompleted,
-} from "../api/learning_by_video/mark_videos.js";
+import { useAuth } from "../api/auth/useAuth.js";
 import useBodyScrollLock from "../hooks/useBodyScrollLock";
+import useMaxWidth from "../hooks/useMaxWidth.js";
+import HomeSidebarContent from "./Homepage/HomeSidebarContent.jsx";
+import {
+  SCIENCE_SEASON_MODULE,
+  VLOG_SEASON_MODULE,
+  buildStats,
+  toSafeNumber,
+} from "./Homepage/homeShared.js";
 
 import "./Home.css";
+import "./Homepage/ModuleEntryCard.css";
 
-/**
- * Safely convert a value into a number.
- *
- * @param {unknown} value - Any input.
- * @returns {number} Parsed number or 0.
- */
-function toSafeNumber(value) {
-  const parsed = Number(value);
-  if (Number.isFinite(parsed)) {
-    return parsed;
-  }
-  return 0;
-}
-
-/**
- * Group raw duration seconds into minute buckets for filters.
- *
- * @param {Array<unknown>} rawDurations - Duration seconds from API.
- * @returns {{options: number[], lookup: Map<number, number[]>}}
- */
-function buildDurationBuckets(rawDurations) {
-  const lookup = new Map();
-  if (!Array.isArray(rawDurations)) {
-    return { options: [], lookup };
+function hasModuleAccess(user, module) {
+  if (!user || !module?.moduleKey) {
+    return false;
   }
 
-  rawDurations.forEach((value) => {
-    const seconds = Number(value);
-    if (!Number.isFinite(seconds) || seconds <= 0) {
-      return;
+  if (user.is_staff || user.is_superuser) {
+    return true;
+  }
+
+  const entitlements = Array.isArray(user.entitlements) ? user.entitlements : [];
+  const allowedSeasonNumbers = Array.isArray(module?.seasonNumbers)
+    ? module.seasonNumbers.map((item) => Number(item)).filter(Number.isFinite)
+    : [Number(module?.seasonNumber)].filter(Number.isFinite);
+
+  return entitlements.some((item) => {
+    if (!item?.is_valid_now) {
+      return false;
     }
-    const minutes = Math.max(1, Math.round(seconds / 60));
-    const existing = lookup.get(minutes) || [];
-    existing.push(seconds);
-    lookup.set(minutes, existing);
+
+    const scope = String(item.scope || "");
+    if (scope === "platform") {
+      return true;
+    }
+
+    const moduleKey = item?.module?.key;
+    if (moduleKey !== module.moduleKey) {
+      return false;
+    }
+
+    if (!item?.season) {
+      return true;
+    }
+
+    return allowedSeasonNumbers.includes(Number(item.season?.season_number));
   });
-
-  const options = Array.from(lookup.keys()).sort((a, b) => a - b);
-  return { options, lookup };
 }
 
-/**
- * Build dashboard stats for StatsCard.
- *
- * @param {number} totalVideoCount - Total number of videos.
- * @param {number} completedVideos - Total video completed.
- * @param {number} activeDays - Active days count.
- * @returns {Array<{label: string, value: string, tone?: string}>} Stats items.
- */
-function buildStats(totalVideoCount, completedVideos, activeDays) {
-  return [
-    { label: "总视频数", value: String(totalVideoCount) },
-    { label: "完成视频", value: String(completedVideos), tone: "green" },
-    { label: "学习天数", value: String(activeDays), tone: "blue" },
-  ];
-}
-
-/**
- * Parse trailing sequence from titles like:
- * - 标题（1）
- * - 标题 (2)
- *
- * @param {unknown} titleValue
- * @returns {{baseTitle: string, sequence: number|null}}
- */
-function parseTitleSequence(titleValue) {
-  const rawTitle = String(titleValue || "").trim();
-  if (!rawTitle) {
-    return { baseTitle: "", sequence: null };
+function buildCoverCandidates(src) {
+  const normalized = typeof src === "string" ? src.trim() : "";
+  if (!normalized) {
+    return [];
   }
-
-  const normalizedTitle = rawTitle.replace(/（/g, "(").replace(/）/g, ")");
-  const matched = normalizedTitle.match(/^(.*?)(?:\s*\((\d+)\))\s*$/);
-  if (!matched) {
-    return { baseTitle: rawTitle, sequence: null };
+  if (/\.(png|jpe?g|webp)$/i.test(normalized)) {
+    return [normalized];
   }
-
-  const sequence = Number(matched[2]);
-  return {
-    baseTitle: (matched[1] || "").trim(),
-    sequence: Number.isFinite(sequence) ? sequence : null,
-  };
+  return [`${normalized}.png`, `${normalized}.jpg`, `${normalized}.webp`];
 }
 
-/**
- * Hook: track whether viewport is <= maxWidth.
- *
- * @param {number} maxWidth - Max viewport width in px.
- * @returns {boolean} True when viewport matches.
- */
-function useMaxWidth(maxWidth) {
-  const [isMatch, setIsMatch] = useState(false);
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
-  useEffect(() => {
-    const mediaQuery = window.matchMedia(`(max-width: ${maxWidth}px)`);
+function buildPurchaseModalHtml(module) {
+  const image = module?.image
+    ? `<img class="module-purchase-modal__image" src="${escapeHtml(module.image)}" alt="${escapeHtml(module.title)}" />`
+    : "";
+  const labels = Array.isArray(module?.purchaseLabels) && module.purchaseLabels.length
+    ? `<div class="module-purchase-modal__labels">${module.purchaseLabels
+        .map((item) => `<span class="module-purchase-modal__label">${escapeHtml(item)}</span>`)
+        .join("")}</div>`
+    : "";
+  const description = module?.purchaseDescription
+    ? `<p class="module-purchase-modal__description">${escapeHtml(module.purchaseDescription)}</p>`
+    : "";
+  const features = Array.isArray(module?.purchaseFeatures) && module.purchaseFeatures.length
+    ? `<ul class="module-purchase-modal__list">${module.purchaseFeatures
+        .map((item) => `<li>${escapeHtml(item)}</li>`)
+        .join("")}</ul>`
+    : "";
 
-    const update = () => {
-      setIsMatch(mediaQuery.matches);
-    };
-
-    update();
-
-    if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener("change", update);
-      return () => {
-        mediaQuery.removeEventListener("change", update);
-      };
-    }
-
-    mediaQuery.addListener(update);
-    return () => {
-      mediaQuery.removeListener(update);
-    };
-  }, [maxWidth]);
-
-  return isMatch;
+  return `
+    <div class="module-purchase-modal">
+      ${image}
+      ${labels}
+      ${description}
+      ${features}
+    </div>
+  `;
 }
 
 export default function Home() {
-  const [videos, setVideos] = useState([]);
-  const [loadingVideos, setLoadingVideos] = useState(true);
-  const [videosErrorText, setVideosErrorText] = useState("");
-
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [userData, setUserData] = useState(null);
   const [learningVideoUserData, setLearningVideoUserData] = useState(null);
-  const navigate = useNavigate();
-
-  const [videoMarkById, setVideoMarkById] = useState({});
-  const requestedMarkIdsRef = useRef(new Set());
-
-  const [videoMeta, setVideoMeta] = useState({
-    difficulties: [],
-    creators: [],
-    topics: [],
-    durations: [],
-    totalCount: 0,
-  });
-
-  const [selectedDifficulties, setSelectedDifficulties] = useState([]);
-  const [selectedCreators, setSelectedCreators] = useState([]);
-  const [selectedTopics, setSelectedTopics] = useState([]);
-  const [selectedDurations, setSelectedDurations] = useState([]);
+  const [failedSources, setFailedSources] = useState({});
 
   const isMobileView = useMaxWidth(990);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   useBodyScrollLock(isMobileView && isMobileSidebarOpen);
-
-  function normalizeTopicMeta(rawTopics) {
-    if (!Array.isArray(rawTopics)) {
-      return [];
-    }
-
-    const results = [];
-    const separators = /[,\uFF0C\u3001]/; // , ， 、
-    const quoteTrim = /^["'“”‘’]+|["'“”‘’]+$/g;
-    rawTopics.forEach((item) => {
-      if (item == null) return;
-      const str = String(item);
-      str.split(separators).forEach((part) => {
-        const cleaned = part.trim().replace(quoteTrim, "");
-        if (cleaned) {
-          results.push(cleaned);
-        }
-      });
-    });
-
-    return Array.from(new Set(results));
-  }
 
   useEffect(() => {
     if (!isMobileView) {
       setIsMobileSidebarOpen(false);
     }
   }, [isMobileView]);
-
-  /**
-   * Navigate to a video detail page.
-   *
-   * @param {any} video - Video object.
-   * @returns {void}
-   */
-  function handleOpenVideo(video) {
-    const videoId = video?.id;
-    if (!videoId) {
-      return;
-    }
-
-    if (isMobileView) {
-      setIsMobileSidebarOpen(false);
-    }
-
-    navigate(`/videos/${videoId}`);
-  }
-
-  async function handleInitLoadMark(videoId) {
-    const parsedVideoId = Number(videoId);
-    if (!Number.isFinite(parsedVideoId) || parsedVideoId <= 0) {
-      return;
-    }
-
-    if (videoMarkById?.[parsedVideoId]) {
-      return;
-    }
-
-    if (requestedMarkIdsRef.current.has(parsedVideoId)) {
-      return;
-    }
-    requestedMarkIdsRef.current.add(parsedVideoId);
-
-    try {
-      const mark = await fetchUserVideoMarkByVideoId(parsedVideoId);
-      setVideoMarkById((previous) => ({
-        ...previous,
-        [parsedVideoId]: mark,
-      }));
-    } catch {
-      requestedMarkIdsRef.current.delete(parsedVideoId);
-      // silently fail
-    }
-  }
-
-  async function handleToggleFavorite(video) {
-    const parsedVideoId = Number(video?.id);
-    if (!Number.isFinite(parsedVideoId) || parsedVideoId <= 0) {
-      return;
-    }
-
-    const current = videoMarkById?.[parsedVideoId];
-    const nextValue = !current?.is_favorite;
-
-    try {
-      const updated = await setVideoFavorite(parsedVideoId, nextValue);
-
-      setVideoMarkById((previous) => ({
-        ...previous,
-        [parsedVideoId]: updated,
-      }));
-
-      setLearningVideoUserData((previous) => {
-        if (!previous) {
-          return previous;
-        }
-
-        const previousCount = toSafeNumber(previous.favorite_count);
-        const nextCount = nextValue
-          ? previousCount + 1
-          : Math.max(0, previousCount - 1);
-
-        return {
-          ...previous,
-          favorite_count: nextCount,
-        };
-      });
-    } catch {
-      // silently fail
-    }
-  }
-
-  async function handleToggleCompleted(video) {
-    const parsedVideoId = Number(video?.id);
-    if (!Number.isFinite(parsedVideoId) || parsedVideoId <= 0) {
-      return;
-    }
-
-    const current = videoMarkById?.[parsedVideoId];
-    const nextValue = !current?.is_completed;
-
-    try {
-      const updated = await setVideoCompleted(parsedVideoId, nextValue);
-
-      setVideoMarkById((previous) => ({
-        ...previous,
-        [parsedVideoId]: updated,
-      }));
-
-      setLearningVideoUserData((previous) => {
-        if (!previous) {
-          return previous;
-        }
-
-        const previousCount = toSafeNumber(previous.completed_count);
-        const nextCount = nextValue
-          ? previousCount + 1
-          : Math.max(0, previousCount - 1);
-
-        return {
-          ...previous,
-          completed_count: nextCount,
-        };
-      });
-    } catch {
-      // silently fail
-    }
-  }
 
   useEffect(() => {
     let aborted = false;
@@ -336,41 +138,6 @@ export default function Home() {
     };
   }, []);
 
-  const durationBuckets = useMemo(() => {
-    return buildDurationBuckets(videoMeta.durations);
-  }, [videoMeta.durations]);
-
-  const selectedDurationSeconds = useMemo(() => {
-    if (!selectedDurations.length) {
-      return [];
-    }
-    const results = [];
-    selectedDurations.forEach((minutesValue) => {
-      const minutes = Number(minutesValue);
-      if (!Number.isFinite(minutes)) {
-        return;
-      }
-      const bucket = durationBuckets.lookup.get(minutes) || [];
-      bucket.forEach((seconds) => results.push(seconds));
-    });
-    return results;
-  }, [selectedDurations, durationBuckets]);
-
-  useEffect(() => {
-    if (!selectedDurations.length) {
-      return;
-    }
-    const allowed = new Set(durationBuckets.options);
-    const next = selectedDurations.filter((value) => allowed.has(Number(value)));
-    if (
-      next.length === selectedDurations.length &&
-      next.every((value, index) => value === selectedDurations[index])
-    ) {
-      return;
-    }
-    setSelectedDurations(next);
-  }, [durationBuckets.options, selectedDurations]);
-
   useEffect(() => {
     let aborted = false;
 
@@ -390,84 +157,6 @@ export default function Home() {
     };
   }, []);
 
-  useEffect(() => {
-    let aborted = false;
-
-    fetchVideoMeta()
-      .then((data) => {
-        if (aborted) {
-          return;
-        }
-        setVideoMeta({
-          difficulties: Array.isArray(data?.difficulties) ? data.difficulties : [],
-          creators: Array.isArray(data?.creators) ? data.creators : [],
-          topics: normalizeTopicMeta(data?.topics),
-          durations: Array.isArray(data?.durations) ? data.durations : [],
-          totalCount: Number.isFinite(Number(data?.total_count)) ? Number(data.total_count) : 0,
-        });
-      })
-      .catch(() => {
-        // silently fail
-      });
-
-    return () => {
-      aborted = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let aborted = false;
-
-    async function loadVideos() {
-      try {
-        setLoadingVideos(true);
-        setVideosErrorText("");
-
-        const response = await fetchVideoList({
-          ordering: "-created_at",
-          difficulty: selectedDifficulties,
-          creator: selectedCreators,
-          topic: selectedTopics,
-          duration: selectedDurationSeconds,
-        });
-
-        if (aborted) {
-          return;
-        }
-
-        const results = Array.isArray(response?.results) ? response.results : [];
-        setVideos(results);
-      } catch (err) {
-        if (aborted) {
-          return;
-        }
-        setVideosErrorText(err?.message ? String(err.message) : "Unknown error");
-      } finally {
-        if (!aborted) {
-          setLoadingVideos(false);
-        }
-      }
-    }
-
-    loadVideos();
-
-    return () => {
-      aborted = true;
-    };
-  }, [
-    selectedDifficulties,
-    selectedCreators,
-    selectedTopics,
-    selectedDurationSeconds,
-  ]);
-
-  const totalVideoCount = useMemo(() => {
-    if (Number.isFinite(Number(videoMeta.totalCount)) && videoMeta.totalCount > 0) {
-      return Number(videoMeta.totalCount);
-    }
-    return Array.isArray(videos) ? videos.length : 0;
-  }, [videoMeta.totalCount, videos]);
-
   const completedVideos = useMemo(() => {
     return toSafeNumber(learningVideoUserData?.completed_count);
   }, [learningVideoUserData]);
@@ -477,61 +166,12 @@ export default function Home() {
   }, [userData]);
 
   const stats = useMemo(() => {
-    return buildStats(totalVideoCount, completedVideos, activeDays);
-  }, [totalVideoCount, completedVideos, activeDays]);
+    return buildStats(50, completedVideos, activeDays);
+  }, [completedVideos, activeDays]);
 
-  const sortedVideos = useMemo(() => {
-    if (!Array.isArray(videos) || videos.length === 0) {
-      return [];
-    }
-
-    return videos
-      .map((video, index) => ({
-        video,
-        index,
-        titleInfo: parseTitleSequence(video?.title),
-      }))
-      .sort((left, right) => {
-        const leftLocked = Boolean(left.video?.is_locked);
-        const rightLocked = Boolean(right.video?.is_locked);
-        if (leftLocked !== rightLocked) {
-          return leftLocked ? 1 : -1; // unlocked first
-        }
-
-        const leftId = Number(left.video?.id);
-        const rightId = Number(right.video?.id);
-        const leftMark = Number.isFinite(leftId) ? videoMarkById?.[leftId] : null;
-        const rightMark = Number.isFinite(rightId) ? videoMarkById?.[rightId] : null;
-        const leftCompleted = Boolean(leftMark?.is_completed);
-        const rightCompleted = Boolean(rightMark?.is_completed);
-        if (leftCompleted !== rightCompleted) {
-          return leftCompleted ? 1 : -1; // uncompleted first
-        }
-
-        const sameBaseTitle =
-          Boolean(left.titleInfo.baseTitle) &&
-          left.titleInfo.baseTitle === right.titleInfo.baseTitle;
-
-        if (sameBaseTitle) {
-          const leftHasSequence = Number.isFinite(left.titleInfo.sequence);
-          const rightHasSequence = Number.isFinite(right.titleInfo.sequence);
-
-          if (leftHasSequence && rightHasSequence && left.titleInfo.sequence !== right.titleInfo.sequence) {
-            return left.titleInfo.sequence - right.titleInfo.sequence;
-          }
-        }
-
-        return left.index - right.index; // keep backend order within same group
-      })
-      .map((item) => item.video);
-  }, [videos, videoMarkById]);
-
-  const seasonBanner = (
-    <div className="home-season-banner" aria-label="科普季（50期已完结）">
-      <span className="home-season-title">科普季</span>
-      <span className="home-season-sub">（50期已完结）</span>
-    </div>
-  );
+  const modules = useMemo(() => {
+    return [SCIENCE_SEASON_MODULE, VLOG_SEASON_MODULE];
+  }, []);
 
   return (
     <div className="home-page">
@@ -558,47 +198,16 @@ export default function Home() {
           } ${isMobileView && isMobileSidebarOpen ? "home-left--open" : ""}`}
           aria-hidden={isMobileView && !isMobileSidebarOpen}
         >
-          <div className="home-left-content">
-            {isMobileView && (
-              <div className="home-drawer-header">
-                <div className="home-drawer-title">学习面板</div>
-                <button
-                  className="home-drawer-close"
-                  type="button"
-                  onClick={() => {
-                    setIsMobileSidebarOpen(false);
-                  }}
-                  aria-label="Close drawer"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            <StatsCard stats={stats} />
-            <CalendarCard activeDates={userData?.active_dates || []} maxPastMonths={3} />
-            <Announcement />
-            <WeChatQrCard />
-
-            {isMobileView && (
-              <div className="home-mobile-filter">
-                <VideoFilter
-                  difficultyOptions={videoMeta.difficulties}
-                  durationOptions={durationBuckets.options}
-                  creatorOptions={videoMeta.creators}
-                  topicOptions={videoMeta.topics}
-                  selectedDifficulties={selectedDifficulties}
-                  selectedDurations={selectedDurations}
-                  selectedCreators={selectedCreators}
-                  selectedTopics={selectedTopics}
-                  onDifficultyChange={setSelectedDifficulties}
-                  onDurationChange={setSelectedDurations}
-                  onCreatorChange={setSelectedCreators}
-                  onTopicChange={setSelectedTopics}
-                />
-              </div>
-            )}
-          </div>
+          <HomeSidebarContent
+            stats={stats}
+            activeDates={userData?.active_dates || []}
+            activeDaysCount={activeDays}
+            isMobileView={isMobileView}
+            showStats={false}
+            onCloseMobile={() => {
+              setIsMobileSidebarOpen(false);
+            }}
+          />
         </aside>
 
         <main className="home-right">
@@ -623,40 +232,114 @@ export default function Home() {
             </div>
           )}
 
-          {!isMobileView && (
-            <>
-              {seasonBanner}
-              <VideoFilter
-                difficultyOptions={videoMeta.difficulties}
-                durationOptions={durationBuckets.options}
-                creatorOptions={videoMeta.creators}
-                topicOptions={videoMeta.topics}
-                selectedDifficulties={selectedDifficulties}
-                selectedDurations={selectedDurations}
-                selectedCreators={selectedCreators}
-                selectedTopics={selectedTopics}
-                onDifficultyChange={setSelectedDifficulties}
-                onDurationChange={setSelectedDurations}
-                onCreatorChange={setSelectedCreators}
-                onTopicChange={setSelectedTopics}
-              />
-            </>
-          )}
-          {isMobileView ? seasonBanner : null}
+          <section className="home-module-section" aria-label="学习模块">
+            <div className="home-module-grid">
+              {modules.map((module) => {
+                const canEnterModule = hasModuleAccess(user, module);
+                const coverCandidates = buildCoverCandidates(module?.image);
+                const coverSrc = coverCandidates.find((item) => !failedSources[item]) || "";
 
-          <VideoGrid
-            videos={sortedVideos}
-            loading={loadingVideos}
-            errorText={videosErrorText}
-            onVideoClick={handleOpenVideo}
-            videoMarkById={videoMarkById}
-            onInitLoadMark={handleInitLoadMark}
-            onToggleFavorite={handleToggleFavorite}
-            onToggleCompleted={handleToggleCompleted}
-          />
+                return (
+                  <article
+                    key={module.id}
+                    className="module-entry-card"
+                    role="button"
+                    tabIndex={0}
+                    onClick={async () => {
+                      if (canEnterModule && module?.route) {
+                        navigate(module.route);
+                        return;
+                      }
+
+                      const result = await Swal.fire({
+                        title: module?.title || "立刻查看",
+                        html: buildPurchaseModalHtml(module),
+                        showCancelButton: true,
+                        showDenyButton: true,
+                        confirmButtonText: "立刻购买",
+                        denyButtonText: "立刻试用",
+                        cancelButtonText: "稍后再看",
+                        customClass: {
+                          popup: "module-purchase-modal-popup",
+                          title: "module-purchase-modal-title",
+                          htmlContainer: "module-purchase-modal-container",
+                          actions: "module-purchase-modal-actions",
+                          confirmButton: "module-purchase-modal-confirm",
+                          denyButton: "module-purchase-modal-confirm",
+                          cancelButton: "module-purchase-modal-cancel",
+                        },
+                        buttonsStyling: false,
+                        width: 720,
+                      });
+
+                      if (result.isConfirmed) {
+                        navigate(`/modules/${module.id}/purchase`);
+                        return;
+                      }
+
+                      if (result.isDenied && module?.route) {
+                        navigate(module.route);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.currentTarget.click();
+                      }
+                    }}
+                  >
+                    <div className="module-entry-card__media">
+                      {coverSrc ? (
+                        <img
+                          className="module-entry-card__image"
+                          src={coverSrc}
+                          alt={module?.title || "module"}
+                          onError={() => {
+                            setFailedSources((previous) => ({
+                              ...previous,
+                              [coverSrc]: true,
+                            }));
+                          }}
+                        />
+                      ) : (
+                        <div className="module-entry-card__image module-entry-card__image--placeholder" />
+                      )}
+                      <div className="module-entry-card__overlay" />
+                      {module?.badge ? <span className="module-entry-card__badge">{module.badge}</span> : null}
+                    </div>
+
+                    <div className="module-entry-card__body">
+                      <div className="module-entry-card__heading">
+                        <h2 className="module-entry-card__title">{module?.title}</h2>
+                        {module?.subtitle ? (
+                          <p className="module-entry-card__subtitle">{module.subtitle}</p>
+                        ) : null}
+                      </div>
+
+                      {module?.description ? (
+                        <p className="module-entry-card__description">{module.description}</p>
+                      ) : null}
+
+                      <div className="module-entry-card__chips">
+                        {(module?.stats || []).map((item) => (
+                          <span key={item} className="module-entry-card__chip">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="module-entry-card__cta">
+                        <span>{canEnterModule ? "进入模块" : "立刻查看"}</span>
+                        <span aria-hidden="true">→</span>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
         </main>
       </div>
-
     </div>
   );
 }

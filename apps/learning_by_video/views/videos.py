@@ -17,6 +17,7 @@ from apps.learning_by_video.models import LearningVideoUserData, Video, VideoPro
 from apps.learning_by_video.serializers import VideoDetailSerializer, VideoListSerializer, VideoProgressSerializer
 from apps.learning_by_video.throttles import VideoProgressWriteThrottle
 from apps.learning_by_video.access import ensure_video_access, get_accessible_season_ids
+from django.db import models
 
 
 @dataclass(frozen=True)
@@ -43,6 +44,18 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
     def get_permissions(self):
         return [IsAuthenticated()]
 
+    def _parse_season_numbers(self) -> list[int]:
+        values = self._parse_list_param("season_number")
+        parsed: list[int] = []
+        for value in values:
+            try:
+                number = int(value)
+            except (TypeError, ValueError):
+                continue
+            if number > 0:
+                parsed.append(number)
+        return sorted(set(parsed))
+
     def _parse_list_param(self, name: str) -> list[str]:
         params = self.request.query_params
         raw_items: list[str] = []
@@ -67,6 +80,13 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset().prefetch_related("access_seasons")
+
+        season_numbers = self._parse_season_numbers()
+        if season_numbers:
+            qs = qs.filter(
+                models.Q(season__season_number__in=season_numbers) |
+                models.Q(access_seasons__season_number__in=season_numbers)
+            ).distinct()
 
         difficulties = self._parse_list_param("difficulty")
         if difficulties:
@@ -149,7 +169,7 @@ class VideoViewSet(viewsets.ReadOnlyModelViewSet):
         url_path="meta",
     )
     def meta(self, request: Request) -> Response:
-        qs = Video.objects.all()
+        qs = self.get_queryset()
 
         difficulties = sorted({item for item in qs.values_list("difficulty", flat=True) if item})
         creators = sorted({item for item in qs.values_list("creator", flat=True) if item})

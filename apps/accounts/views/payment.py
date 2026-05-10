@@ -4,6 +4,7 @@ from decimal import Decimal
 from decimal import InvalidOperation
 from uuid import uuid4
 
+from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
@@ -12,13 +13,18 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from urllib.parse import urlencode
 
 from apps.accounts.models import AlipayWebsitePayment, PaymentGrantTask
 from apps.accounts.serializers.payment import (
     CreateAlipayDebugPaymentSerializer,
     CreateAlipayPurchaseSerializer,
 )
-from apps.accounts.services import AlipayConfigurationError, get_alipay_service
+from apps.accounts.services import (
+    AlipayConfigurationError,
+    AlipayGatewayError,
+    get_alipay_service,
+)
 from apps.accounts.services import (
     enqueue_pending_payment_grant_tasks_for_payment,
     process_payment_grant_task_by_id,
@@ -31,6 +37,10 @@ def _build_debug_merchant_order_no(*, user_id: int) -> str:
 
 def _build_merchant_order_no(*, user_id: int) -> str:
     return f"pay-u{user_id}-{uuid4().hex[:20]}"
+
+
+def _build_simulated_alipay_trade_no(*, payment_id: int) -> str:
+    return f"localsim-{payment_id}-{uuid4().hex[:12]}"
 
 
 def _build_payment_subject(
@@ -48,6 +58,151 @@ def _build_payment_subject(
     if season_title:
         return f"{module_name} {season_title} {plan_label}"
     return f"{module_name} {plan_label}"
+
+
+def _resolve_frontend_return_url(request: Request) -> str:
+    configured_return_url = str(getattr(settings, "ALIPAY_RETURN_URL", "") or "").strip()
+    if configured_return_url:
+        return configured_return_url
+
+    origin = str(request.headers.get("Origin") or "").strip()
+    if origin:
+        return f"{origin.rstrip('/')}/payments/alipay/return"
+
+    return request.build_absolute_uri("/payments/alipay/return")
+
+
+def _apply_payment_status(
+    *,
+    payment: AlipayWebsitePayment,
+    trade_status: str,
+    alipay_trade_no: str = "",
+    raw_payload: dict[str, str] | None = None,
+) -> None:
+    if raw_payload is not None:
+        payment.raw_notify_payload = raw_payload
+
+    if alipay_trade_no:
+        payment.alipay_trade_no = alipay_trade_no
+
+    normalized_trade_status = str(trade_status or "").strip()
+    if normalized_trade_status in {"TRADE_SUCCESS", "TRADE_FINISHED"}:
+        payment.status = AlipayWebsitePayment.Status.PAID
+        if payment.paid_at is None:
+            payment.paid_at = timezone.now()
+    elif normalized_trade_status == "TRADE_CLOSED":
+        payment.status = AlipayWebsitePayment.Status.CLOSED
+    elif normalized_trade_status == "WAIT_BUYER_PAY":
+        payment.status = AlipayWebsitePayment.Status.PENDING
+    else:
+        payment.status = AlipayWebsitePayment.Status.FAILED
+
+
+def _query_and_sync_payment_status(
+    *,
+    payment: AlipayWebsitePayment,
+) -> bool:
+    """
+    Query Alipay directly for the latest trade state and update the local payment record.
+
+    Returns True when local payment fields were refreshed from query data.
+    """
+
+    alipay_service = get_alipay_service()
+    query_response = alipay_service.query_trade(
+        merchant_order_no=payment.merchant_order_no
+    )
+    response_code = str(query_response.get("code") or "").strip()
+    if response_code != "10000":
+        return False
+
+    trade_status = str(query_response.get("trade_status") or "").strip()
+    alipay_trade_no = str(query_response.get("trade_no") or "").strip()
+    if not trade_status:
+        return False
+
+    configured_seller_id = alipay_service.config.seller_id
+    queried_seller_id = str(query_response.get("seller_id") or "").strip()
+    if configured_seller_id and queried_seller_id and queried_seller_id != configured_seller_id:
+        raise AlipayGatewayError("Queried seller_id does not match configured seller_id.")
+
+    queried_total_amount_raw = str(query_response.get("total_amount") or "").strip()
+    if queried_total_amount_raw:
+        try:
+            queried_total_amount = Decimal(queried_total_amount_raw)
+        except (InvalidOperation, ValueError) as exc:
+            raise AlipayGatewayError("Queried total_amount is invalid.") from exc
+        if queried_total_amount != payment.total_amount:
+            raise AlipayGatewayError("Queried total_amount does not match local payment.")
+
+    previous_status = payment.status
+    _apply_payment_status(
+        payment=payment,
+        trade_status=trade_status,
+        alipay_trade_no=alipay_trade_no,
+    )
+    payment.save(
+        update_fields=[
+            "alipay_trade_no",
+            "status",
+            "paid_at",
+            "updated_at",
+        ]
+    )
+
+    if (
+        payment.status == AlipayWebsitePayment.Status.PAID
+        and previous_status != AlipayWebsitePayment.Status.PAID
+    ):
+        transaction.on_commit(
+            lambda: _enqueue_pending_payment_grant_tasks_safely(payment_id=payment.id)
+        )
+
+    return True
+
+
+def _enqueue_pending_payment_grant_tasks_safely(*, payment_id: int) -> None:
+    try:
+        enqueue_pending_payment_grant_tasks_for_payment(payment_id=payment_id)
+    except Exception:
+        # Keep local payment confirmation durable even if async queue is temporarily unavailable.
+        pass
+
+
+def _simulate_local_paid_purchase(
+    *,
+    request: Request,
+    payment: AlipayWebsitePayment,
+    payment_grant_task: PaymentGrantTask,
+) -> str:
+    simulated_trade_no = _build_simulated_alipay_trade_no(payment_id=payment.id)
+    _apply_payment_status(
+        payment=payment,
+        trade_status="TRADE_SUCCESS",
+        alipay_trade_no=simulated_trade_no,
+        raw_payload={
+            "out_trade_no": payment.merchant_order_no,
+            "trade_no": simulated_trade_no,
+            "trade_status": "TRADE_SUCCESS",
+            "total_amount": f"{payment.total_amount:.2f}",
+            "app_id": "local-simulated",
+            "seller_id": "local-simulated",
+            "notify_id": f"local-notify-{payment.id}",
+        },
+    )
+    payment.save(
+        update_fields=[
+            "raw_notify_payload",
+            "alipay_trade_no",
+            "status",
+            "paid_at",
+            "updated_at",
+        ]
+    )
+    process_payment_grant_task_by_id(payment_grant_task_id=payment_grant_task.id)
+
+    return_url = _resolve_frontend_return_url(request)
+    return f"{return_url}?{urlencode({'out_trade_no': payment.merchant_order_no, 'trade_status': 'TRADE_SUCCESS'})}"
 
 
 class CreateAlipayDebugPaymentAPIView(APIView):
@@ -117,14 +272,6 @@ class CreateAlipayPurchaseAPIView(APIView):
         total_amount = Decimal(validated_data["total_amount"])
         requested_subject = str(validated_data.get("subject") or "")
 
-        try:
-            alipay_service = get_alipay_service()
-        except AlipayConfigurationError as exc:
-            return Response(
-                {"detail": str(exc)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-
         season_title = None
         if season is not None:
             season_title = season.title or f"Season {season.season_number}"
@@ -153,9 +300,35 @@ class CreateAlipayPurchaseAPIView(APIView):
             status=PaymentGrantTask.Status.PENDING,
         )
 
-        pay_url = alipay_service.build_page_pay_url(payment=payment)
-        payment.status = AlipayWebsitePayment.Status.PENDING
-        payment.save(update_fields=["status", "updated_at"])
+        if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
+            try:
+                pay_url = _simulate_local_paid_purchase(
+                    request=request,
+                    payment=payment,
+                    payment_grant_task=payment_grant_task,
+                )
+            except Exception as exc:
+                payment.status = AlipayWebsitePayment.Status.FAILED
+                payment.save(update_fields=["status", "updated_at"])
+                payment_grant_task.status = PaymentGrantTask.Status.FAILED
+                payment_grant_task.last_error = str(exc)
+                payment_grant_task.save(update_fields=["status", "last_error", "updated_at"])
+                return Response(
+                    {"detail": f"Local simulated payment failed: {exc}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+        else:
+            try:
+                alipay_service = get_alipay_service()
+            except AlipayConfigurationError as exc:
+                return Response(
+                    {"detail": str(exc)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            pay_url = alipay_service.build_page_pay_url(payment=payment)
+            payment.status = AlipayWebsitePayment.Status.PENDING
+            payment.save(update_fields=["status", "updated_at"])
 
         return Response(
             {
@@ -228,20 +401,13 @@ class AlipayNotifyAPIView(APIView):
         if notify_amount != payment.total_amount:
             return HttpResponse("failure", status=400, content_type="text/plain")
 
-        payment.raw_notify_payload = payload
-        payment.alipay_trade_no = alipay_trade_no
-
-        if trade_status in {"TRADE_SUCCESS", "TRADE_FINISHED"}:
-            payment.status = AlipayWebsitePayment.Status.PAID
-            if payment.paid_at is None:
-                payment.paid_at = timezone.now()
-        elif trade_status == "TRADE_CLOSED":
-            payment.status = AlipayWebsitePayment.Status.CLOSED
-        elif trade_status == "WAIT_BUYER_PAY":
-            payment.status = AlipayWebsitePayment.Status.PENDING
-        else:
-            payment.status = AlipayWebsitePayment.Status.FAILED
-
+        previous_status = payment.status
+        _apply_payment_status(
+            payment=payment,
+            trade_status=trade_status,
+            alipay_trade_no=alipay_trade_no,
+            raw_payload=payload,
+        )
         payment.save(
             update_fields=[
                 "raw_notify_payload",
@@ -252,9 +418,12 @@ class AlipayNotifyAPIView(APIView):
             ]
         )
 
-        if payment.status == AlipayWebsitePayment.Status.PAID:
+        if (
+            payment.status == AlipayWebsitePayment.Status.PAID
+            and previous_status != AlipayWebsitePayment.Status.PAID
+        ):
             transaction.on_commit(
-                lambda: enqueue_pending_payment_grant_tasks_for_payment(payment_id=payment.id)
+                lambda: _enqueue_pending_payment_grant_tasks_safely(payment_id=payment.id)
             )
 
         return HttpResponse("success", content_type="text/plain")
@@ -294,6 +463,16 @@ class AlipayPaymentStatusAPIView(APIView):
                 {"detail": "Payment does not belong to the current user."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        if payment.status in {
+            AlipayWebsitePayment.Status.CREATED,
+            AlipayWebsitePayment.Status.PENDING,
+        }:
+            try:
+                _query_and_sync_payment_status(payment=payment)
+            except (AlipayConfigurationError, AlipayGatewayError):
+                pass
+            payment.refresh_from_db(fields=["status", "updated_at", "paid_at", "alipay_trade_no"])
 
         if (
             payment.status == AlipayWebsitePayment.Status.PAID

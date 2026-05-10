@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.db import models
+from django.utils import timezone
+from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.purchase_offer import PurchaseOffer
 from apps.accounts.services import get_purchase_pricing
 from rest_framework import serializers
@@ -38,6 +41,31 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
         allow_blank=True,
     )
 
+    @staticmethod
+    def _user_already_has_access(*, user, offer: PurchaseOffer) -> bool:
+        if not user or not getattr(user, "is_authenticated", False):
+            return False
+
+        now = timezone.now()
+        active_entitlements = Entitlement.objects.filter(
+            user=user,
+            status=Entitlement.Status.ACTIVE,
+            starts_at__lte=now,
+        ).filter(
+            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+        )
+
+        if active_entitlements.filter(module__isnull=True, season__isnull=True).exists():
+            return True
+
+        if active_entitlements.filter(module=offer.module, season__isnull=True).exists():
+            return True
+
+        if offer.season_id and active_entitlements.filter(module=offer.module, season=offer.season).exists():
+            return True
+
+        return False
+
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         offer_code = str(attrs["offer_code"]).strip()
         offer = (
@@ -49,13 +77,19 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
         if offer is None:
             raise serializers.ValidationError({"offer_code": "Invalid active purchase offer."})
 
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if self._user_already_has_access(user=user, offer=offer):
+            raise serializers.ValidationError(
+                {"detail": "You already have active access to this content."}
+            )
+
         attrs["offer"] = offer
         attrs["module"] = offer.module
         attrs["season"] = offer.season
         attrs["plan"] = offer.plan
-        request = self.context.get("request")
         pricing = get_purchase_pricing(
-            user=getattr(request, "user", None),
+            user=user,
             offer=offer,
         )
         attrs["total_amount"] = pricing.final_amount

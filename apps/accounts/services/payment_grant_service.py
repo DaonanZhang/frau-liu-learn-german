@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.db import transaction
+from django.db import models
 from django.utils import timezone
 
 from apps.accounts.models import Entitlement, PaymentGrantTask
@@ -43,6 +44,35 @@ def enqueue_pending_payment_grant_tasks_for_payment(*, payment_id: int) -> list[
     return task_ids
 
 
+def _find_existing_valid_entitlement_for_task(
+    *,
+    payment_grant_task: PaymentGrantTask,
+) -> Entitlement | None:
+    now = timezone.now()
+    external_ref = f"alipay_payment:{payment_grant_task.payment.merchant_order_no}"
+
+    entitlement = Entitlement.objects.filter(
+        user=payment_grant_task.user,
+        module=payment_grant_task.module,
+        season=payment_grant_task.season,
+        plan=payment_grant_task.plan,
+        external_ref=external_ref,
+    ).first()
+    if entitlement is not None:
+        return entitlement
+
+    return Entitlement.objects.filter(
+        user=payment_grant_task.user,
+        module=payment_grant_task.module,
+        season=payment_grant_task.season,
+        plan=payment_grant_task.plan,
+        status=Entitlement.Status.ACTIVE,
+        starts_at__lte=now,
+    ).filter(
+        models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+    ).order_by("-created_at").first()
+
+
 def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
     """
     Process one deferred payment grant task.
@@ -55,7 +85,6 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
         with transaction.atomic():
             payment_grant_task = (
                 PaymentGrantTask.objects.select_for_update()
-                .select_related("payment", "user", "module", "season")
                 .get(pk=payment_grant_task_id)
             )
 
@@ -72,16 +101,9 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
             if payment_grant_task.payment.status != payment_grant_task.payment.Status.PAID:
                 raise ValueError("Payment is not confirmed as paid.")
 
-            external_ref = (
-                f"alipay_payment:{payment_grant_task.payment.merchant_order_no}"
+            entitlement = _find_existing_valid_entitlement_for_task(
+                payment_grant_task=payment_grant_task
             )
-            entitlement = Entitlement.objects.filter(
-                user=payment_grant_task.user,
-                module=payment_grant_task.module,
-                season=payment_grant_task.season,
-                plan=payment_grant_task.plan,
-                external_ref=external_ref,
-            ).first()
 
             if entitlement is None:
                 Entitlement.objects.create(
@@ -92,7 +114,7 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
                     status=Entitlement.Status.ACTIVE,
                     starts_at=timezone.now(),
                     expires_at=calculate_expires_at_for_plan(payment_grant_task.plan),
-                    external_ref=external_ref,
+                    external_ref=f"alipay_payment:{payment_grant_task.payment.merchant_order_no}",
                 )
 
             payment_grant_task.status = PaymentGrantTask.Status.SUCCEEDED

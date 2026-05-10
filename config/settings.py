@@ -200,6 +200,10 @@ ALIPAY_RETURN_URL = env(
     "ALIPAY_RETURN_URL",
     default=(f"{FRONTEND_BASE_URL.rstrip('/')}/payments/alipay/return" if FRONTEND_BASE_URL else ""),
 )
+ALIPAY_LOCAL_SIMULATE_SUCCESS = env.bool(
+    "ALIPAY_LOCAL_SIMULATE_SUCCESS",
+    default=False,
+)
 ALIPAY_SELLER_ID = env("ALIPAY_SELLER_ID", default="")
 ALIPAY_SIGN_TYPE = env("ALIPAY_SIGN_TYPE", default="RSA2")
 ALIPAY_TIMEOUT_EXPRESS = env("ALIPAY_TIMEOUT_EXPRESS", default="15m")

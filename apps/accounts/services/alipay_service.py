@@ -6,18 +6,25 @@ import textwrap
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Mapping
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from django.conf import settings
+from django.utils import timezone
 
 from apps.accounts.models import AlipayWebsitePayment
 
 
 class AlipayConfigurationError(ValueError):
     """Raised when required Alipay configuration is missing or invalid."""
+
+
+class AlipayGatewayError(RuntimeError):
+    """Raised when a direct Alipay gateway request fails."""
 
 
 @dataclass(frozen=True)
@@ -188,6 +195,87 @@ class AlipayService:
         }
         signed_params["sign"] = sign
         return signed_params
+
+    def build_api_params(
+        self,
+        *,
+        method: str,
+        biz_content: Mapping[str, object],
+    ) -> dict[str, str]:
+        """
+        Build signed API request parameters for Alipay gateway RPC methods.
+        """
+
+        params: dict[str, object] = {
+            "app_id": self.config.app_id,
+            "method": method,
+            "charset": "utf-8",
+            "sign_type": self.config.sign_type,
+            "timestamp": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "version": "1.0",
+            "biz_content": dict(biz_content),
+        }
+        sign = self.sign(params)
+        signed_params = {
+            key: _serialize_value(value)
+            for key, value in params.items()
+            if value is not None and value != ""
+        }
+        signed_params["sign"] = sign
+        return signed_params
+
+    def execute_api(
+        self,
+        *,
+        method: str,
+        biz_content: Mapping[str, object],
+    ) -> dict[str, object]:
+        """
+        Execute a direct Alipay gateway API call and return the decoded JSON body.
+        """
+
+        params = self.build_api_params(method=method, biz_content=biz_content)
+        body = urlencode(params).encode("utf-8")
+        request = Request(
+            self.config.gateway_url,
+            data=body,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlopen(request, timeout=10) as response:
+                response_body = response.read().decode("utf-8")
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            raise AlipayGatewayError(f"Failed to call Alipay gateway: {exc}") from exc
+
+        try:
+            parsed = json.loads(response_body)
+        except json.JSONDecodeError as exc:
+            raise AlipayGatewayError("Alipay gateway returned invalid JSON.") from exc
+
+        if not isinstance(parsed, dict):
+            raise AlipayGatewayError("Alipay gateway returned an unexpected response shape.")
+
+        return parsed
+
+    def query_trade(self, *, merchant_order_no: str) -> dict[str, object]:
+        """
+        Query one trade by merchant order number using `alipay.trade.query`.
+        """
+
+        payload = self.execute_api(
+            method="alipay.trade.query",
+            biz_content={
+                "out_trade_no": merchant_order_no,
+            },
+        )
+        response = payload.get("alipay_trade_query_response")
+        if not isinstance(response, dict):
+            raise AlipayGatewayError("Missing alipay_trade_query_response in gateway reply.")
+        return response
 
     def build_page_pay_url(
         self,

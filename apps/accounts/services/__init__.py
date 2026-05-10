@@ -1,6 +1,7 @@
 from .alipay_service import (
     AlipayClientConfig,
     AlipayConfigurationError,
+    AlipayGatewayError,
     AlipayService,
     get_alipay_service,
     load_alipay_client_config,
@@ -18,6 +19,7 @@ from .purchase_pricing import (
 __all__ = [
     "AlipayClientConfig",
     "AlipayConfigurationError",
+    "AlipayGatewayError",
     "AlipayService",
     "get_alipay_service",
     "load_alipay_client_config",

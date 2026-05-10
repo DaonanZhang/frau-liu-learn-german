@@ -9,7 +9,7 @@ import {
   loadPendingPaymentContext,
 } from "../api/payments/alipay.js";
 
-const MAX_POLL_ATTEMPTS = 20;
+const MAX_POLL_ATTEMPTS = 30;
 const POLL_INTERVAL_MS = 2000;
 
 function sleep(ms) {
@@ -60,7 +60,7 @@ export default function AlipayReturnPage() {
             await Swal.fire({
               icon: "success",
               title: "支付成功",
-              text: "对应模块权限已解锁。",
+              text: "购买的内容已经解锁。",
             });
             if (!cancelled) {
               navigate(returnPath, { replace: true });
@@ -89,19 +89,11 @@ export default function AlipayReturnPage() {
         }
       }
 
-      if (lastStatus?.is_paid || lastStatus?.is_pending_grant) {
-        await Swal.fire({
-          icon: "info",
-          title: "支付已确认",
-          text: "订单支付已成功，权限正在开通中，请稍后刷新页面确认。",
-        });
-      } else {
-        await Swal.fire({
-          icon: "error",
-          title: "支付状态确认失败",
-          text: "暂时无法确认支付结果，正在返回原页面。",
-        });
-      }
+      await Swal.fire({
+        icon: "error",
+        title: "支付失败",
+        text: "未确认到支付成功或权限开通失败，请稍后重试或联系客服处理。",
+      });
       if (!cancelled) {
         navigate(returnPath, { replace: true });
       }

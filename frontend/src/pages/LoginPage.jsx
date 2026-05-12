@@ -162,10 +162,6 @@ export default function LoginPage() {
           登录
         </button>
 
-        <p className="auth-hint auth-hint--left">
-          维护期间，只有手机号为 <strong>110</strong> 的账号可以登录。
-        </p>
-
         <div className="auth-divider" />
 
         <div className="auth-footer auth-footer--split">

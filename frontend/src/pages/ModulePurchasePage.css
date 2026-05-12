@@ -140,6 +140,8 @@
 
 .module-purchase-page__cta:disabled {
   cursor: not-allowed;
-  opacity: 0.65;
+  opacity: 1;
   box-shadow: none;
+  background: #d1d5db;
+  color: #6b7280;
 }

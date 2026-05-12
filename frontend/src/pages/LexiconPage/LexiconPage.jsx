@@ -365,8 +365,11 @@ function normalizeVideo(video) {
     normalizeText(video.display_name) ||
     normalizeText(video.displayName) ||
     `Video ${id}`;
+  const seasonNumber = toIntOrNull(video.season_number);
+  const moduleKey = seasonNumber === 4 ? "vlog" : "science";
+  const moduleLabel = moduleKey === "vlog" ? "Vlog" : "Science";
 
-  return { id, name };
+  return { id, name, seasonNumber, moduleKey, moduleLabel };
 }
 
 /**
@@ -504,6 +507,20 @@ export default function LexiconPage() {
   }, [selectedVideoId]);
 
   const effectiveSidebarCollapsed = isMobileView ? !isMobileSidebarOpen : isSidebarCollapsed;
+
+  const groupedVideos = useMemo(() => {
+    const groups = [
+      { key: "science", label: "Science", videos: [] },
+      { key: "vlog", label: "Vlog", videos: [] },
+    ];
+
+    for (const video of videos) {
+      const targetGroup = video.moduleKey === "vlog" ? groups[1] : groups[0];
+      targetGroup.videos.push(video);
+    }
+
+    return groups.filter((group) => group.videos.length > 0);
+  }, [videos]);
 
   useEffect(() => {
     if (!effectiveSidebarCollapsed) {
@@ -1044,6 +1061,7 @@ export default function LexiconPage() {
           isCollapsed={effectiveSidebarCollapsed}
           isLoading={isVideosLoading}
           videos={videos}
+          videoGroups={groupedVideos}
           selectedVideoId={selectedVideoId}
           onSelectVideo={onSelectVideo}
           onToggleCollapsed={onToggleSidebar}

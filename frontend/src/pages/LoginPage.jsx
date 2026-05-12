@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
 import { login, useAuth } from "../api/auth";
+import { fetchPublicStatus } from "../api/auth/publicStatus.js";
 
 const COUNTRY_CODE_OPTIONS = [
   { value: "+86", label: "🇨🇳 中国 +86" },
@@ -25,6 +26,7 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [maintenanceNotice, setMaintenanceNotice] = useState("");
 
   const navigate = useNavigate();
   const { notifyLogin, loading, isAuthenticated } = useAuth();
@@ -34,6 +36,31 @@ export default function LoginPage() {
       navigate("/", { replace: true });
     }
   }, [loading, isAuthenticated, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPublicStatus() {
+      try {
+        const data = await fetchPublicStatus();
+        if (cancelled) {
+          return;
+        }
+        setMaintenanceNotice(
+          data?.maintenance_mode_enabled ? String(data?.maintenance_message || "").trim() : ""
+        );
+      } catch {
+        if (!cancelled) {
+          setMaintenanceNotice("");
+        }
+      }
+    }
+
+    loadPublicStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const canSubmit = phone.trim().length > 0 && password.trim().length > 0;
 
@@ -63,10 +90,12 @@ export default function LoginPage() {
 
       <h1 className="auth-title">符号刘的德语学习平台</h1>
       <p className="auth-subtitle">Dein Weg zum Deutsch</p>
-      <div className="auth-notice" role="status" aria-live="polite">
-        <strong>系统更新公告</strong>
-        <span>网站正在更新升级中，请稍后再试。当前仅开放维护账号登录。</span>
-      </div>
+      {maintenanceNotice ? (
+        <div className="auth-notice" role="status" aria-live="polite">
+          <strong>系统更新公告</strong>
+          <span>{maintenanceNotice}</span>
+        </div>
+      ) : null}
 
       <form className="auth-form" onSubmit={onSubmit}>
         <label className="auth-label">

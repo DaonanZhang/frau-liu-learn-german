@@ -7,6 +7,7 @@ import "./Sidebar.css";
  *  isCollapsed: boolean,
  *  isLoading: boolean,
  *  videos: {id: number|string, name: string}[],
+ *  videoGroups?: {key: string, label: string, videos: {id: number|string, name: string}[]}[],
  *  selectedVideoId: number|string|null,
  *  onSelectVideo: (videoId: number|string) => void,
  *  onToggleCollapsed: () => void,
@@ -18,6 +19,7 @@ export default function Sidebar({
 	isCollapsed,
 	isLoading,
 	videos,
+	videoGroups = [],
 	selectedVideoId,
 	onSelectVideo,
 	onToggleCollapsed,
@@ -47,23 +49,50 @@ export default function Sidebar({
 					</div>
 
 					<div className="lp-videoList" role="list">
-						{videos.map((video) => {
-							const isActive = video.id === selectedVideoId;
+						{videoGroups.length > 0 ? (
+							videoGroups.map((group) => (
+								<section key={group.key} className="lp-videoGroup" aria-label={group.label}>
+									<div className="lp-videoGroupTitle">{group.label}</div>
+									<div className="lp-videoGroupItems">
+										{group.videos.map((video) => {
+											const isActive = video.id === selectedVideoId;
 
-							return (
-								<button
-									key={String(video.id)}
-									type="button"
-									className={["lp-videoItem", isActive ? "is-active" : ""].filter(Boolean).join(" ")}
-									onClick={() => {
-										onSelectVideo(video.id);
-									}}
-									role="listitem"
-								>
-									<span className="lp-videoItemText">{video.name}</span>
-								</button>
-							);
-						})}
+											return (
+												<button
+													key={String(video.id)}
+													type="button"
+													className={["lp-videoItem", isActive ? "is-active" : ""].filter(Boolean).join(" ")}
+													onClick={() => {
+														onSelectVideo(video.id);
+													}}
+													role="listitem"
+												>
+													<span className="lp-videoItemText">{video.name}</span>
+												</button>
+											);
+										})}
+									</div>
+								</section>
+							))
+						) : (
+							videos.map((video) => {
+								const isActive = video.id === selectedVideoId;
+
+								return (
+									<button
+										key={String(video.id)}
+										type="button"
+										className={["lp-videoItem", isActive ? "is-active" : ""].filter(Boolean).join(" ")}
+										onClick={() => {
+											onSelectVideo(video.id);
+										}}
+										role="listitem"
+									>
+										<span className="lp-videoItemText">{video.name}</span>
+									</button>
+								);
+							})
+						)}
 					</div>
 				</div>
 			) : null}

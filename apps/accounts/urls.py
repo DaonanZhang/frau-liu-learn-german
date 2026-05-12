@@ -28,6 +28,7 @@ from apps.accounts.views.password_reset import (
     PasswordResetConfirmAPIView,
     PasswordResetRequestAPIView,
 )
+from apps.accounts.views.public_status import PublicStatusAPIView
 
 
 router = DefaultRouter()
@@ -65,6 +66,11 @@ urlpatterns += [
 
 # Login Urls
 urlpatterns += [
+    path(
+        "public/status/",
+        PublicStatusAPIView.as_view(),
+        name="public-status",
+    ),
     path(
         "auth/login/",
         LoginAPIView.as_view(),

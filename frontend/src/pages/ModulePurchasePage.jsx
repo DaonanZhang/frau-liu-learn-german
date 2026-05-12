@@ -52,9 +52,7 @@ export default function ModulePurchasePage() {
         <button
           className="module-purchase-page__cta"
           type="button"
-          onClick={() => {
-            navigate(`/modules/${module.id}/purchase`);
-          }}
+          disabled
         >
           立刻购买
         </button>

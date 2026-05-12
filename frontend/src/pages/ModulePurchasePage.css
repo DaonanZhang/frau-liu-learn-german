@@ -137,3 +137,9 @@
   cursor: pointer;
   box-shadow: 0 14px 30px rgba(173, 235, 230, 0.24);
 }
+
+.module-purchase-page__cta:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
+}

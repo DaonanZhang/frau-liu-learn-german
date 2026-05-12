@@ -177,7 +177,6 @@ def load_alipay_client_config() -> AlipayClientConfig:
             ("ALIPAY_PUBLIC_KEY", config.alipay_public_key),
             ("ALIPAY_NOTIFY_URL", config.notify_url),
             ("ALIPAY_RETURN_URL", config.return_url),
-            ("ALIPAY_SELLER_ID", config.seller_id),
         )
         if not field_value
     ]

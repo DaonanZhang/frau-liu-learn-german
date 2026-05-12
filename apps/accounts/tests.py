@@ -42,7 +42,6 @@ class PasswordResetApiTests(APITestCase):
             country_code="+86",
             password="old-pass-123",
             email="learner@example.com",
-            username="Liu",
         )
 
     def test_request_password_reset_sends_email_and_stores_code(self) -> None:

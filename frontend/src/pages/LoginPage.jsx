@@ -63,6 +63,10 @@ export default function LoginPage() {
 
       <h1 className="auth-title">符号刘的德语学习平台</h1>
       <p className="auth-subtitle">Dein Weg zum Deutsch</p>
+      <div className="auth-notice" role="status" aria-live="polite">
+        <strong>系统更新公告</strong>
+        <span>网站正在更新升级中，请稍后再试。当前仅开放维护账号登录。</span>
+      </div>
 
       <form className="auth-form" onSubmit={onSubmit}>
         <label className="auth-label">
@@ -157,6 +161,10 @@ export default function LoginPage() {
         <button className="auth-btn gradient" type="submit" disabled={!canSubmit}>
           登录
         </button>
+
+        <p className="auth-hint auth-hint--left">
+          维护期间，只有手机号为 <strong>110</strong> 的账号可以登录。
+        </p>
 
         <div className="auth-divider" />
 

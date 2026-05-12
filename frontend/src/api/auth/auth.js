@@ -62,7 +62,7 @@ export async function login(telephone, password, countryCode) {
     await Swal.fire({
       icon: "error",
       title: "登录失败",
-      text: "手机号或密码不匹配",
+      text: pickErrorMessage(err, "手机号或密码不匹配"),
     });
 
     return { ok: false };

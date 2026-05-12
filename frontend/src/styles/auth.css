@@ -105,6 +105,24 @@ body {
   color: var(--auth-muted);
 }
 
+.auth-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 247, 237, 0.96), rgba(255, 251, 235, 0.96));
+  color: #9a3412;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.auth-notice strong {
+  color: #7c2d12;
+}
+
 /* =========================
    Form
    ========================= */

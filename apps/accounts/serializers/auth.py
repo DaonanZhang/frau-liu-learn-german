@@ -5,8 +5,11 @@ from django.contrib.auth.models import update_last_login
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.tokens import RefreshToken
 
+from apps.accounts.maintenance import maintenance_message, user_allowed_during_maintenance
 from apps.accounts.serializers.registration import COUNTRY_CODE_CHOICES
 
 
@@ -37,6 +40,11 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
                 self.error_messages["no_active_account"],
                 "no_active_account",
             )
+        if not user_allowed_during_maintenance(user):
+            raise AuthenticationFailed(
+                maintenance_message(),
+                "maintenance_mode",
+            )
 
         refresh = self.get_token(user)
         data = {
@@ -48,3 +56,19 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
             update_last_login(None, user)
 
         return data
+
+
+class MaintenanceAwareTokenRefreshSerializer(TokenRefreshSerializer):
+    def validate(self, attrs):
+        refresh = RefreshToken(attrs["refresh"])
+        user_id = refresh.get("user_id")
+
+        User = get_user_model()
+        user = User.objects.filter(pk=user_id).first()
+        if not user or not user_allowed_during_maintenance(user):
+            raise AuthenticationFailed(
+                maintenance_message(),
+                "maintenance_mode",
+            )
+
+        return super().validate(attrs)

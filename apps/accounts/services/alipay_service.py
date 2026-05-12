@@ -91,6 +91,56 @@ def _build_signing_string(params: Mapping[str, object]) -> str:
     return "&".join(f"{key}={value}" for key, value in filtered_items)
 
 
+def _extract_json_object_string(payload: str, *, field_name: str) -> str:
+    """
+    Extract the exact JSON object string for one top-level field from a raw body.
+    """
+
+    field_token = f'"{field_name}"'
+    field_index = payload.find(field_token)
+    if field_index < 0:
+        raise AlipayGatewayError(f"Missing {field_name} in gateway reply.")
+
+    colon_index = payload.find(":", field_index + len(field_token))
+    if colon_index < 0:
+        raise AlipayGatewayError(f"Malformed {field_name} field in gateway reply.")
+
+    value_start = colon_index + 1
+    while value_start < len(payload) and payload[value_start].isspace():
+        value_start += 1
+
+    if value_start >= len(payload) or payload[value_start] != "{":
+        raise AlipayGatewayError(f"{field_name} is not a JSON object in gateway reply.")
+
+    brace_depth = 0
+    in_string = False
+    is_escaped = False
+
+    for index in range(value_start, len(payload)):
+        char = payload[index]
+        if in_string:
+            if is_escaped:
+                is_escaped = False
+            elif char == "\\":
+                is_escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+            continue
+        if char == "{":
+            brace_depth += 1
+            continue
+        if char == "}":
+            brace_depth -= 1
+            if brace_depth == 0:
+                return payload[value_start:index + 1]
+
+    raise AlipayGatewayError(f"Failed to extract signed payload for {field_name}.")
+
+
 def load_alipay_client_config() -> AlipayClientConfig:
     """
     Load and validate Alipay configuration from Django settings.
@@ -125,7 +175,9 @@ def load_alipay_client_config() -> AlipayClientConfig:
             ("ALIPAY_GATEWAY_URL", config.gateway_url),
             ("ALIPAY_APP_PRIVATE_KEY", config.app_private_key),
             ("ALIPAY_PUBLIC_KEY", config.alipay_public_key),
+            ("ALIPAY_NOTIFY_URL", config.notify_url),
             ("ALIPAY_RETURN_URL", config.return_url),
+            ("ALIPAY_SELLER_ID", config.seller_id),
         )
         if not field_value
     ]
@@ -229,7 +281,7 @@ class AlipayService:
         *,
         method: str,
         biz_content: Mapping[str, object],
-    ) -> dict[str, object]:
+    ) -> tuple[dict[str, object], str]:
         """
         Execute a direct Alipay gateway API call and return the decoded JSON body.
         """
@@ -259,14 +311,14 @@ class AlipayService:
         if not isinstance(parsed, dict):
             raise AlipayGatewayError("Alipay gateway returned an unexpected response shape.")
 
-        return parsed
+        return parsed, response_body
 
     def query_trade(self, *, merchant_order_no: str) -> dict[str, object]:
         """
         Query one trade by merchant order number using `alipay.trade.query`.
         """
 
-        payload = self.execute_api(
+        payload, response_body = self.execute_api(
             method="alipay.trade.query",
             biz_content={
                 "out_trade_no": merchant_order_no,
@@ -275,6 +327,25 @@ class AlipayService:
         response = payload.get("alipay_trade_query_response")
         if not isinstance(response, dict):
             raise AlipayGatewayError("Missing alipay_trade_query_response in gateway reply.")
+
+        signature = str(payload.get("sign") or "").strip()
+        if not signature:
+            raise AlipayGatewayError("Missing gateway response signature.")
+
+        response_string = _extract_json_object_string(
+            response_body,
+            field_name="alipay_trade_query_response",
+        )
+        try:
+            self._alipay_public_key.verify(
+                base64.b64decode(signature),
+                response_string.encode("utf-8"),
+                padding.PKCS1v15(),
+                hashes.SHA256(),
+            )
+        except (InvalidSignature, ValueError, TypeError) as exc:
+            raise AlipayGatewayError("Invalid gateway response signature.") from exc
+
         return response
 
     def build_page_pay_url(

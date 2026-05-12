@@ -254,6 +254,58 @@ Expected result:
 - `ALIPAY_NOTIFY_URL` is a public HTTPS backend URL
 - `ALIPAY_RETURN_URL` is the frontend `/payments/alipay/return` URL
 
+### Verify Alipay notify reachability
+
+Code-level correctness is not enough here. You must also confirm that the public
+`ALIPAY_NOTIFY_URL` actually reaches Django through your HTTPS and reverse-proxy
+stack.
+
+Expected routing split:
+
+- `ALIPAY_NOTIFY_URL` is a backend callback endpoint for Alipay server-to-server async notify
+- `ALIPAY_RETURN_URL` is a frontend browser return page for the user
+
+Quick public POST probe:
+
+```bash
+curl -i -X POST https://www.frauliu.com/api/accounts/payments/alipay/notify/
+```
+
+Expected behavior:
+
+- `400` or body `failure` is acceptable for this empty probe
+- this means the URL is reachable and Django rejected the request because it was not a real signed Alipay payload
+
+Bad signs:
+
+- `404`: route is not reaching Django
+- frontend HTML page: request is being handled by the frontend site instead of the API backend
+- `301` or `302`: redirect in front of notify endpoint; avoid this for payment callbacks
+- `502` or `504`: reverse proxy cannot reach Django/gunicorn
+
+If the probe is inconclusive, check service logs immediately after the request:
+
+```bash
+sudo journalctl -u frau-liu -n 100 --no-pager
+sudo tail -n 100 /var/log/nginx/access.log
+sudo tail -n 100 /var/log/nginx/error.log
+```
+
+You should see a hit for:
+
+- `/api/accounts/payments/alipay/notify/`
+
+If you do not see the request reach Django, inspect your reverse proxy config and
+confirm `/api/` is forwarded to the Django service rather than the frontend build.
+
+Typical nginx shape:
+
+```nginx
+location /api/ {
+    proxy_pass http://127.0.0.1:8000;
+}
+```
+
 ### Verify recent payment / grant state when debugging
 
 ```bash

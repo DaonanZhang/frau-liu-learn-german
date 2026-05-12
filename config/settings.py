@@ -53,7 +53,7 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.accounts.authentication.MaintenanceAwareJWTAuthentication",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
@@ -91,6 +91,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.accounts.middleware.MaintenanceSessionKickoutMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -207,6 +208,20 @@ ALIPAY_LOCAL_SIMULATE_SUCCESS = env.bool(
 ALIPAY_SELLER_ID = env("ALIPAY_SELLER_ID", default="")
 ALIPAY_SIGN_TYPE = env("ALIPAY_SIGN_TYPE", default="RSA2")
 ALIPAY_TIMEOUT_EXPRESS = env("ALIPAY_TIMEOUT_EXPRESS", default="15m")
+
+# =========================
+# Maintenance mode
+# =========================
+
+MAINTENANCE_MODE_ENABLED = env.bool("MAINTENANCE_MODE_ENABLED", default=False)
+MAINTENANCE_ALLOWED_TELEPHONE = env(
+    "MAINTENANCE_ALLOWED_TELEPHONE",
+    default="110",
+)
+MAINTENANCE_MESSAGE = env(
+    "MAINTENANCE_MESSAGE",
+    default="网站正在更新中，请稍后再试。当前仅允许维护账号登录。",
+)
 
 # =========================
 # Celery

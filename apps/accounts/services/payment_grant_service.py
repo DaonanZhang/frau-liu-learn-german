@@ -44,6 +44,31 @@ def enqueue_pending_payment_grant_tasks_for_payment(*, payment_id: int) -> list[
     return task_ids
 
 
+def process_pending_payment_grant_tasks_for_payment(*, payment_id: int) -> list[int]:
+    """
+    Process all pending payment grant tasks linked to one confirmed payment synchronously.
+
+    Args:
+        payment_id: Primary key of the confirmed payment record.
+    """
+
+    processed_task_ids: list[int] = []
+    pending_task_ids = list(
+        PaymentGrantTask.objects.filter(
+            payment_id=payment_id,
+            status=PaymentGrantTask.Status.PENDING,
+        ).order_by("id").values_list("id", flat=True)
+    )
+
+    for payment_grant_task_id in pending_task_ids:
+        process_payment_grant_task_by_id(
+            payment_grant_task_id=payment_grant_task_id,
+        )
+        processed_task_ids.append(payment_grant_task_id)
+
+    return processed_task_ids
+
+
 def _find_existing_valid_entitlement_for_task(
     *,
     payment_grant_task: PaymentGrantTask,

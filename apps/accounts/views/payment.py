@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status
@@ -26,7 +27,7 @@ from apps.accounts.services import (
     get_alipay_service,
 )
 from apps.accounts.services import (
-    enqueue_pending_payment_grant_tasks_for_payment,
+    process_pending_payment_grant_tasks_for_payment,
     process_payment_grant_task_by_id,
 )
 
@@ -86,6 +87,9 @@ def _apply_payment_status(
         payment.alipay_trade_no = alipay_trade_no
 
     normalized_trade_status = str(trade_status or "").strip()
+    if payment.status == AlipayWebsitePayment.Status.PAID:
+        return
+
     if normalized_trade_status in {"TRADE_SUCCESS", "TRADE_FINISHED"}:
         payment.status = AlipayWebsitePayment.Status.PAID
         if payment.paid_at is None:
@@ -94,8 +98,6 @@ def _apply_payment_status(
         payment.status = AlipayWebsitePayment.Status.CLOSED
     elif normalized_trade_status == "WAIT_BUYER_PAY":
         payment.status = AlipayWebsitePayment.Status.PENDING
-    else:
-        payment.status = AlipayWebsitePayment.Status.FAILED
 
 
 def _query_and_sync_payment_status(
@@ -154,19 +156,99 @@ def _query_and_sync_payment_status(
         payment.status == AlipayWebsitePayment.Status.PAID
         and previous_status != AlipayWebsitePayment.Status.PAID
     ):
-        transaction.on_commit(
-            lambda: _enqueue_pending_payment_grant_tasks_safely(payment_id=payment.id)
-        )
+        _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
 
     return True
 
 
-def _enqueue_pending_payment_grant_tasks_safely(*, payment_id: int) -> None:
+def _process_pending_payment_grant_tasks_safely(*, payment_id: int) -> None:
     try:
-        enqueue_pending_payment_grant_tasks_for_payment(payment_id=payment_id)
+        process_pending_payment_grant_tasks_for_payment(payment_id=payment_id)
     except Exception:
-        # Keep local payment confirmation durable even if async queue is temporarily unavailable.
         pass
+
+
+def _find_reusable_pending_purchase(
+    *,
+    user_id: int,
+    offer_id: int,
+    module_id: int | None,
+    season_id: int | None,
+    plan: str,
+) -> PaymentGrantTask | None:
+    pending_statuses = [
+        AlipayWebsitePayment.Status.CREATED,
+        AlipayWebsitePayment.Status.PENDING,
+    ]
+
+    candidates = (
+        PaymentGrantTask.objects
+        .select_related("payment")
+        .filter(
+            user_id=user_id,
+            offer_id=offer_id,
+            module_id=module_id,
+            season_id=season_id,
+            plan=plan,
+        )
+        .filter(
+            Q(payment__status__in=pending_statuses)
+            | Q(
+                payment__status=AlipayWebsitePayment.Status.PAID,
+                status__in=[
+                    PaymentGrantTask.Status.PENDING,
+                    PaymentGrantTask.Status.PROCESSING,
+                ],
+            )
+        )
+        .order_by("-id")
+    )
+
+    for grant_task in candidates:
+        payment = grant_task.payment
+        if payment.status in pending_statuses:
+            try:
+                _query_and_sync_payment_status(payment=payment)
+            except (AlipayConfigurationError, AlipayGatewayError):
+                pass
+            payment.refresh_from_db(fields=["status", "updated_at", "paid_at", "alipay_trade_no"])
+            grant_task.refresh_from_db()
+
+        if payment.status in pending_statuses:
+            return grant_task
+
+        if (
+            payment.status == AlipayWebsitePayment.Status.PAID
+            and grant_task.status != PaymentGrantTask.Status.SUCCEEDED
+        ):
+            _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
+
+    return None
+
+
+def _find_incomplete_paid_purchase(
+    *,
+    user_id: int,
+    offer_id: int,
+    module_id: int | None,
+    season_id: int | None,
+    plan: str,
+) -> PaymentGrantTask | None:
+    return (
+        PaymentGrantTask.objects
+        .select_related("payment")
+        .filter(
+            user_id=user_id,
+            offer_id=offer_id,
+            module_id=module_id,
+            season_id=season_id,
+            plan=plan,
+            payment__status=AlipayWebsitePayment.Status.PAID,
+        )
+        .exclude(status=PaymentGrantTask.Status.SUCCEEDED)
+        .order_by("-id")
+        .first()
+    )
 
 
 def _simulate_local_paid_purchase(
@@ -283,6 +365,68 @@ class CreateAlipayPurchaseAPIView(APIView):
             plan_label=dict(PaymentGrantTask._meta.get_field("plan").choices)[plan],
             subject=requested_subject,
         )
+
+        reusable_grant_task = _find_reusable_pending_purchase(
+            user_id=request.user.id,
+            offer_id=validated_data["offer"].id,
+            module_id=module.id if module is not None else None,
+            season_id=season.id if season is not None else None,
+            plan=plan,
+        )
+        if reusable_grant_task is not None:
+            payment = reusable_grant_task.payment
+            try:
+                alipay_service = get_alipay_service()
+            except AlipayConfigurationError as exc:
+                return Response(
+                    {"detail": str(exc)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+            pay_url = alipay_service.build_page_pay_url(payment=payment)
+            return Response(
+                {
+                    "payment_id": payment.id,
+                    "payment_grant_task_id": reusable_grant_task.id,
+                    "offer_code": validated_data["offer"].code,
+                    "merchant_order_no": payment.merchant_order_no,
+                    "subject": payment.subject,
+                    "amount": f"{payment.total_amount:.2f}",
+                    "module_key": module.key,
+                    "season_number": season.season_number if season is not None else None,
+                    "plan": plan,
+                    "pay_url": pay_url,
+                    "reused_existing_payment": True,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        incomplete_paid_grant_task = _find_incomplete_paid_purchase(
+            user_id=request.user.id,
+            offer_id=validated_data["offer"].id,
+            module_id=module.id if module is not None else None,
+            season_id=season.id if season is not None else None,
+            plan=plan,
+        )
+        if incomplete_paid_grant_task is not None:
+            try:
+                process_payment_grant_task_by_id(
+                    payment_grant_task_id=incomplete_paid_grant_task.id,
+                )
+            except Exception:
+                pass
+            incomplete_paid_grant_task.refresh_from_db()
+            return Response(
+                {
+                    "detail": (
+                        "An existing paid order is already being finalized. "
+                        "Refresh your access instead of creating a new payment."
+                    ),
+                    "merchant_order_no": incomplete_paid_grant_task.payment.merchant_order_no,
+                    "grant_status": incomplete_paid_grant_task.status,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
 
         payment = AlipayWebsitePayment.objects.create(
             merchant_order_no=_build_merchant_order_no(user_id=request.user.id),
@@ -422,9 +566,7 @@ class AlipayNotifyAPIView(APIView):
             payment.status == AlipayWebsitePayment.Status.PAID
             and previous_status != AlipayWebsitePayment.Status.PAID
         ):
-            transaction.on_commit(
-                lambda: _enqueue_pending_payment_grant_tasks_safely(payment_id=payment.id)
-            )
+            _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
 
         return HttpResponse("success", content_type="text/plain")
 

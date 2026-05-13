@@ -18,17 +18,19 @@ export function AuthProvider({ children }) {
     if (!hasToken()) {
       setUser(null);
       setTokenPresent(false);
-      return;
+      return null;
     }
 
     try {
       const me = await apiFetch("/accounts/users/me/");
       setUser(me);
       setTokenPresent(true);
+      return me;
     } catch {
       clearAuthTokens();
       setUser(null);
       setTokenPresent(false);
+      return null;
     } finally {
       // keep loading as a bootstrap-only flag
     }

@@ -1,11 +1,49 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
+import Swal from "sweetalert2";
 
 import { fetchPurchaseOffers, createAlipayPurchase, savePendingPaymentContext } from "../api/payments/alipay.js";
 import { useAuth } from "../api/auth/useAuth.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
 
 import "./ModuleCheckoutPage.css";
+
+function hasModuleAccess(user, module) {
+  if (!user || !module?.moduleKey) {
+    return false;
+  }
+
+  if (user.is_staff || user.is_superuser) {
+    return true;
+  }
+
+  const entitlements = Array.isArray(user.entitlements) ? user.entitlements : [];
+  const allowedSeasonNumbers = Array.isArray(module?.seasonNumbers)
+    ? module.seasonNumbers.map((item) => Number(item)).filter(Number.isFinite)
+    : [Number(module?.seasonNumber)].filter(Number.isFinite);
+
+  return entitlements.some((item) => {
+    if (!item?.is_valid_now) {
+      return false;
+    }
+
+    const scope = String(item.scope || "");
+    if (scope === "platform") {
+      return true;
+    }
+
+    const moduleKey = item?.module?.key;
+    if (moduleKey !== module.moduleKey) {
+      return false;
+    }
+
+    if (!item?.season) {
+      return true;
+    }
+
+    return allowedSeasonNumbers.includes(Number(item.season?.season_number));
+  });
+}
 
 function formatPromoPrice(amount) {
   const numeric = Number(amount);
@@ -34,7 +72,7 @@ function getOriginalPrice(offer) {
 export default function ModuleCheckoutPage() {
   const { moduleId } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, reloadMe } = useAuth();
   const module = MODULES_BY_ID[moduleId];
 
   const [offers, setOffers] = useState([]);
@@ -89,6 +127,59 @@ export default function ModuleCheckoutPage() {
       aborted = true;
     };
   }, [module, targetSeasonNumber]);
+
+  useEffect(() => {
+    if (!creatingOrderCode || !isAuthenticated || !module) {
+      return;
+    }
+
+    let cancelled = false;
+    let successHandled = false;
+
+    async function syncAfterReturn() {
+      const latestUser = await reloadMe();
+      if (cancelled) {
+        return;
+      }
+
+      if (hasModuleAccess(latestUser, module)) {
+        successHandled = true;
+        setCreatingOrderCode("");
+        await Swal.fire({
+          icon: "success",
+          title: "支付成功",
+          text: "购买的内容已经解锁。",
+        });
+        if (!cancelled) {
+          navigate("/", { replace: true });
+        }
+        return;
+      }
+
+      setCreatingOrderCode("");
+    }
+
+    function handleWindowFocus() {
+      if (!successHandled) {
+        syncAfterReturn();
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible" && !successHandled) {
+        syncAfterReturn();
+      }
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [creatingOrderCode, isAuthenticated, module, navigate, reloadMe]);
 
   async function handlePay(offer) {
     const offerCode = String(offer?.code || "").trim();

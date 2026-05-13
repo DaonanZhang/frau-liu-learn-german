@@ -826,15 +826,6 @@ export default function LexiconPage() {
             },
             buttonsStyling: false,
             width: 720,
-            didOpen: () => {
-              const button = Swal.getConfirmButton();
-              if (button) {
-                button.disabled = true;
-                button.style.opacity = "0.6";
-                button.style.cursor = "not-allowed";
-                button.style.pointerEvents = "none";
-              }
-            },
           });
 
           if (result.isConfirmed) {

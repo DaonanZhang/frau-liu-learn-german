@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 
 import { fetchVideoList } from "../../api/learning_by_video/videos";
 import {
@@ -12,6 +13,7 @@ import {
   fetchUserSubtitleFavoritesByVideo,
   setSubtitleFavorite,
 } from "../../api/learning_by_video/subtitle_favorites.js";
+import { SCIENCE_SEASON_MODULE, VLOG_SEASON_MODULE, getLearningVideoModuleBySeasonNumber } from "../Homepage/homeShared.js";
 
 import Sidebar from "./components/Sidebar.jsx";
 import LexiconCard from "./components/LexiconCard";
@@ -366,10 +368,17 @@ function normalizeVideo(video) {
     normalizeText(video.displayName) ||
     `Video ${id}`;
   const seasonNumber = toIntOrNull(video.season_number);
-  const moduleKey = seasonNumber === 4 ? "vlog" : "science";
-  const moduleLabel = moduleKey === "vlog" ? "Vlog" : "Science";
+  const moduleConfig = getLearningVideoModuleBySeasonNumber(seasonNumber);
 
-  return { id, name, seasonNumber, moduleKey, moduleLabel };
+  return {
+    id,
+    name,
+    seasonNumber,
+    moduleKey: moduleConfig.id,
+    moduleLabel: moduleConfig.title,
+    isLocked: Boolean(video?.is_locked),
+    raw: video,
+  };
 }
 
 /**
@@ -402,6 +411,43 @@ function clampNumber(value, min, max) {
     return max;
   }
   return value;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildPurchaseModalHtml(module) {
+  const image = module?.image
+    ? `<img class="module-purchase-modal__image" src="${escapeHtml(module.image)}" alt="${escapeHtml(module.title)}" />`
+    : "";
+  const labels = Array.isArray(module?.purchaseLabels) && module.purchaseLabels.length
+    ? `<div class="module-purchase-modal__labels">${module.purchaseLabels
+        .map((item) => `<span class="module-purchase-modal__label">${escapeHtml(item)}</span>`)
+        .join("")}</div>`
+    : "";
+  const description = module?.purchaseDescription
+    ? `<p class="module-purchase-modal__description">${escapeHtml(module.purchaseDescription)}</p>`
+    : "";
+  const features = Array.isArray(module?.purchaseFeatures) && module.purchaseFeatures.length
+    ? `<ul class="module-purchase-modal__list">${module.purchaseFeatures
+        .map((item) => `<li>${escapeHtml(item)}</li>`)
+        .join("")}</ul>`
+    : "";
+
+  return `
+    <div class="module-purchase-modal">
+      ${image}
+      ${labels}
+      ${description}
+      ${features}
+    </div>
+  `;
 }
 
 function formatTime(seconds) {
@@ -448,6 +494,7 @@ export default function LexiconPage() {
 
   const [isVideosLoading, setIsVideosLoading] = useState(false);
   const [videos, setVideos] = useState([]);
+  const [activeModuleKey, setActiveModuleKey] = useState(null);
   const [selectedVideoId, setSelectedVideoId] = useState(null);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -497,30 +544,103 @@ export default function LexiconPage() {
       const normalized = list.map(normalizeVideo);
 
       setVideos(normalized);
-
-      if (normalized.length > 0 && selectedVideoId === null) {
-        setSelectedVideoId(normalized[0].id);
-      }
     } finally {
       setIsVideosLoading(false);
     }
-  }, [selectedVideoId]);
+  }, []);
 
   const effectiveSidebarCollapsed = isMobileView ? !isMobileSidebarOpen : isSidebarCollapsed;
 
   const groupedVideos = useMemo(() => {
     const groups = [
-      { key: "science", label: "Science", videos: [] },
-      { key: "vlog", label: "Vlog", videos: [] },
+      {
+        key: SCIENCE_SEASON_MODULE.id,
+        label: SCIENCE_SEASON_MODULE.title,
+        description: SCIENCE_SEASON_MODULE.subtitle,
+        module: SCIENCE_SEASON_MODULE,
+        videos: [],
+      },
+      {
+        key: VLOG_SEASON_MODULE.id,
+        label: VLOG_SEASON_MODULE.title,
+        description: VLOG_SEASON_MODULE.subtitle,
+        module: VLOG_SEASON_MODULE,
+        videos: [],
+      },
     ];
 
     for (const video of videos) {
-      const targetGroup = video.moduleKey === "vlog" ? groups[1] : groups[0];
+      const targetGroup = video.moduleKey === VLOG_SEASON_MODULE.id ? groups[1] : groups[0];
       targetGroup.videos.push(video);
+    }
+
+    for (const group of groups) {
+      const hasLockedVideos = group.videos.some((video) => video.isLocked);
+
+      group.videos.sort((left, right) => {
+        if (hasLockedVideos) {
+          const leftLocked = Boolean(left.isLocked);
+          const rightLocked = Boolean(right.isLocked);
+          if (leftLocked !== rightLocked) {
+            return leftLocked ? 1 : -1;
+          }
+        }
+
+        const leftId = Number(left.id);
+        const rightId = Number(right.id);
+        if (Number.isFinite(leftId) && Number.isFinite(rightId) && leftId !== rightId) {
+          return leftId - rightId;
+        }
+
+        return String(left.id).localeCompare(String(right.id));
+      });
     }
 
     return groups.filter((group) => group.videos.length > 0);
   }, [videos]);
+
+  const moduleChoices = useMemo(() => {
+    return groupedVideos.map((group) => ({
+      key: group.key,
+      label: group.label,
+      description: group.description,
+      videoCount: group.videos.length,
+      lockedCount: group.videos.filter((video) => video.isLocked).length,
+    }));
+  }, [groupedVideos]);
+
+  const activeModuleVideos = useMemo(() => {
+    if (!activeModuleKey) {
+      return [];
+    }
+    const activeGroup = groupedVideos.find((group) => group.key === activeModuleKey);
+    return activeGroup ? activeGroup.videos : [];
+  }, [activeModuleKey, groupedVideos]);
+
+  const activeModuleConfig = useMemo(() => {
+    const activeGroup = groupedVideos.find((group) => group.key === activeModuleKey);
+    return activeGroup?.module || null;
+  }, [activeModuleKey, groupedVideos]);
+
+  useEffect(() => {
+    if (!activeModuleKey) {
+      if (selectedVideoId !== null) {
+        setSelectedVideoId(null);
+      }
+      return;
+    }
+
+    const selectedVideo = activeModuleVideos.find((video) => video.id === selectedVideoId) || null;
+    if (selectedVideo && !selectedVideo.isLocked) {
+      return;
+    }
+
+    const firstUnlockedVideo = activeModuleVideos.find((video) => !video.isLocked) || null;
+    const nextVideoId = firstUnlockedVideo ? firstUnlockedVideo.id : null;
+    if (nextVideoId !== selectedVideoId) {
+      setSelectedVideoId(nextVideoId);
+    }
+  }, [activeModuleKey, activeModuleVideos, selectedVideoId]);
 
   useEffect(() => {
     if (!effectiveSidebarCollapsed) {
@@ -673,15 +793,79 @@ export default function LexiconPage() {
   }, []);
 
   const onSelectVideo = useCallback(
-    (videoId) => {
-      setSelectedVideoId(videoId);
+    async (video) => {
+      if (!video) {
+        return;
+      }
+
+      if (video.isLocked) {
+        const moduleConfig = activeModuleConfig || getLearningVideoModuleBySeasonNumber(video.seasonNumber);
+
+        if (isMobileView && moduleConfig?.id) {
+          navigate(`/modules/${moduleConfig.id}/preview`);
+          return;
+        }
+
+        if (moduleConfig?.id) {
+          const result = await Swal.fire({
+            title: moduleConfig?.title || "暂未解锁",
+            html: buildPurchaseModalHtml(moduleConfig),
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: "立刻购买",
+            denyButtonText: "立刻试用",
+            cancelButtonText: "稍后再看",
+            customClass: {
+              popup: "module-purchase-modal-popup",
+              title: "module-purchase-modal-title",
+              htmlContainer: "module-purchase-modal-container",
+              actions: "module-purchase-modal-actions",
+              confirmButton: "module-purchase-modal-confirm",
+              denyButton: "module-purchase-modal-confirm",
+              cancelButton: "module-purchase-modal-cancel",
+            },
+            buttonsStyling: false,
+            width: 720,
+            didOpen: () => {
+              const button = Swal.getConfirmButton();
+              if (button) {
+                button.disabled = true;
+                button.style.opacity = "0.6";
+                button.style.cursor = "not-allowed";
+                button.style.pointerEvents = "none";
+              }
+            },
+          });
+
+          if (result.isConfirmed) {
+            navigate(`/modules/${moduleConfig.id}/purchase`);
+            return;
+          }
+
+          if (result.isDenied && moduleConfig?.route) {
+            navigate(moduleConfig.route);
+          }
+        }
+        return;
+      }
+
+      setSelectedVideoId(video.id);
 
       if (isMobileView) {
         setIsMobileSidebarOpen(false);
       }
     },
-    [isMobileView]
+    [activeModuleConfig, isMobileView, navigate]
   );
+
+  const onSelectModule = useCallback((moduleKey) => {
+    setActiveModuleKey(moduleKey);
+  }, []);
+
+  const onBackToModules = useCallback(() => {
+    setActiveModuleKey(null);
+    setSelectedVideoId(null);
+  }, []);
 
   const onToggleGlobalChinese = useCallback(() => {
     setIsChineseHiddenGlobal((previous) => !previous);
@@ -1062,8 +1246,12 @@ export default function LexiconPage() {
           isLoading={isVideosLoading}
           videos={videos}
           videoGroups={groupedVideos}
+          activeModuleKey={activeModuleKey}
+          moduleChoices={moduleChoices}
           selectedVideoId={selectedVideoId}
           onSelectVideo={onSelectVideo}
+          onSelectModule={onSelectModule}
+          onBackToModules={onBackToModules}
           onToggleCollapsed={onToggleSidebar}
           onGoHome={onClickGoHome}
         />
@@ -1073,7 +1261,13 @@ export default function LexiconPage() {
         <header className="lp-header">
           <div className="lp-headerLeft">
             <div className="lp-title">词库</div>
-            {selectedVideoName ? <div className="lp-subtitle">{selectedVideoName}</div> : null}
+            {selectedVideoName ? (
+              <div className="lp-subtitle">{selectedVideoName}</div>
+            ) : activeModuleConfig ? (
+              <div className="lp-subtitle">{activeModuleConfig.title}</div>
+            ) : (
+              <div className="lp-subtitle">请选择一个模块进入对应视频词库</div>
+            )}
           </div>
 
           <div className="lp-headerActions">
@@ -1230,6 +1424,13 @@ export default function LexiconPage() {
 
         {isLoading ? <div className="lp-stateBox">Loading…</div> : null}
         {!isLoading && errorText ? <div className="lp-stateBox">Failed to load: {errorText}</div> : null}
+        {!isLoading && !errorText && !selectedVideoId ? (
+          <div className="lp-stateBox">
+            {activeModuleConfig
+              ? "当前模块里的视频尚未解锁，请点击左侧带锁视频查看购买入口。"
+              : "左侧先选择“科普季”或“Vlog季”，再进入具体视频词库。"}
+          </div>
+        ) : null}
         {!isLoading && !errorText && activeKind === "sentence" && filteredSentenceItems.length <= 0 ? (
           <div className="lp-stateBox">暂无句子</div>
         ) : null}
@@ -1237,7 +1438,7 @@ export default function LexiconPage() {
           <div className="lp-stateBox"></div>
         ) : null}
 
-        {!isLoading && !errorText ? (
+        {!isLoading && !errorText && selectedVideoId ? (
           <>
             {activeKind === "sentence" ? (
               <section className="lp-sentenceList" aria-label="Sentence cards">

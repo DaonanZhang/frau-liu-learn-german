@@ -57,3 +57,19 @@ export function CollapseIcon({ isCollapsed }) {
 		</svg>
 	);
 }
+
+export function LockIcon() {
+	return (
+		<svg className="lp-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+			<path
+				d="M7 10V8a5 5 0 1 1 10 0v2"
+				stroke="currentColor"
+				strokeWidth="2"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<rect x="5" y="10" width="14" height="10" rx="2.5" stroke="currentColor" strokeWidth="2" />
+			<path d="M12 14.25v2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+		</svg>
+	);
+}

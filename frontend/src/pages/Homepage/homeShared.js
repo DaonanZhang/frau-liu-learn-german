@@ -57,6 +57,14 @@ export const MODULES_BY_ID = {
   [VLOG_SEASON_MODULE.id]: VLOG_SEASON_MODULE,
 };
 
+export function getLearningVideoModuleBySeasonNumber(seasonNumber) {
+  const normalizedSeasonNumber = Number(seasonNumber);
+  if (normalizedSeasonNumber === 4) {
+    return VLOG_SEASON_MODULE;
+  }
+  return SCIENCE_SEASON_MODULE;
+}
+
 export function toSafeNumber(value) {
   const parsed = Number(value);
   if (Number.isFinite(parsed)) {

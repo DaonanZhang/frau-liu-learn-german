@@ -256,6 +256,7 @@ export default function VideoStudyPage() {
   const leftDifficulty = video?.difficulty ?? "";
   const leftDescription = video?.description ?? "";
   const leftCreator = video?.creator ?? "";
+  const shouldShowEmptyDescriptionFallback = Number(video?.season_number) !== 4;
   const leftVideoUrl = video?.video_url ?? "";
   const isHlsUrl = useMemo(() => isProbablyHlsUrl(leftVideoUrl), [leftVideoUrl]);
   const playerErrorText = videoErrorText || playbackErrorText;
@@ -1002,7 +1003,11 @@ export default function VideoStudyPage() {
           {!isMobile ? (
             <div className="vs-descCard">
               <div className="vs-descTitle">视频简介</div>
-              <div className="vs-descText">{loadingVideo ? "Loading…" : leftDescription || "暂无简介"}</div>
+              <div className="vs-descText">
+                {loadingVideo
+                  ? "Loading…"
+                  : leftDescription || (shouldShowEmptyDescriptionFallback ? "暂无简介" : "")}
+              </div>
               {!loadingVideo ? (
                 <div className="vs-descSource">
                   {leftCreator

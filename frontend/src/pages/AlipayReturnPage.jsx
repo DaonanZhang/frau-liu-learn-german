@@ -63,7 +63,7 @@ export default function AlipayReturnPage() {
               text: "购买的内容已经解锁。",
             });
             if (!cancelled) {
-              navigate(returnPath, { replace: true });
+              navigate("/", { replace: true });
             }
             return;
           }

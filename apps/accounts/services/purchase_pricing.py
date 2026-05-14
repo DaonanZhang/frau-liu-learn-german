@@ -9,10 +9,10 @@ from apps.accounts.models import Entitlement, PurchaseOffer
 
 UPGRADE_DISCOUNT_AMOUNT = Decimal("5.00")
 UPGRADE_DISCOUNT_LABEL = "试用用户专享"
-UPGRADE_DISCOUNT_OFFER_CODES = {
-    "science-season-lifetime",
+UPGRADE_DISCOUNT_RULES = {
+    "science-season-lifetime": {2},
+    "vlog-season-lifetime": {1},
 }
-UPGRADE_DISCOUNT_SOURCE_SEASON_NUMBERS = {2}
 
 
 @dataclass(frozen=True)
@@ -28,14 +28,15 @@ def _user_has_upgrade_discount(*, user, offer: PurchaseOffer) -> bool:
     if not user or not getattr(user, "is_authenticated", False):
         return False
 
-    if offer.code not in UPGRADE_DISCOUNT_OFFER_CODES:
+    source_season_numbers = UPGRADE_DISCOUNT_RULES.get(offer.code)
+    if not source_season_numbers:
         return False
 
     now = timezone.now()
     return Entitlement.objects.filter(
         user=user,
         module=offer.module,
-        season__season_number__in=UPGRADE_DISCOUNT_SOURCE_SEASON_NUMBERS,
+        season__season_number__in=source_season_numbers,
         status=Entitlement.Status.ACTIVE,
         starts_at__lte=now,
     ).filter(
@@ -43,7 +44,7 @@ def _user_has_upgrade_discount(*, user, offer: PurchaseOffer) -> bool:
     ).exists() or Entitlement.objects.filter(
         user=user,
         module=offer.module,
-        season__season_number__in=UPGRADE_DISCOUNT_SOURCE_SEASON_NUMBERS,
+        season__season_number__in=source_season_numbers,
         status=Entitlement.Status.ACTIVE,
         starts_at__lte=now,
         expires_at__gt=now,

@@ -11,7 +11,7 @@ UPGRADE_DISCOUNT_AMOUNT = Decimal("5.00")
 UPGRADE_DISCOUNT_LABEL = "品牌挚友专享"
 UPGRADE_DISCOUNT_RULES = {
     "science-season-lifetime": {2},
-    "vlog-season-lifetime": {1},
+    "vlog-season-lifetime": {1, 2},
 }
 
 

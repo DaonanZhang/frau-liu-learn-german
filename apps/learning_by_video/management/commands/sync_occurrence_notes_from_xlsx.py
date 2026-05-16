@@ -195,6 +195,11 @@ class Command(BaseCommand):
                 text = _s(occ.word.text if occ.word_id else "")
 
                 if not sid:
+                    current_note = occ.note or ""
+                    if current_note != "":
+                        occ.note = ""
+                        occ.save(update_fields=["note"])
+                        updated_word_notes += 1
                     unmatched_db.append(
                         f"[DB][word] video={occ.video_id} file={file_name} occ_id={occ.id} "
                         f"text={text} | reason=no subtitle external_id"
@@ -208,6 +213,11 @@ class Command(BaseCommand):
                         mr = widx.lookup(sid, mapped_text)
 
                 if mr.status != "matched":
+                    current_note = occ.note or ""
+                    if current_note != "":
+                        occ.note = ""
+                        occ.save(update_fields=["note"])
+                        updated_word_notes += 1
                     unmatched_db.append(
                         f"[DB][word] video={occ.video_id} file={file_name} occ_id={occ.id} "
                         f"ID={sid} 匹配内容={text} | reason={mr.reason}"
@@ -231,6 +241,11 @@ class Command(BaseCommand):
                 text = _s(occ.expression.text if occ.expression_id else "")
 
                 if not sid:
+                    current_note = occ.note or ""
+                    if current_note != "":
+                        occ.note = ""
+                        occ.save(update_fields=["note"])
+                        updated_expression_notes += 1
                     unmatched_db.append(
                         f"[DB][expression] video={occ.video_id} file={file_name} occ_id={occ.id} "
                         f"text={text} | reason=no subtitle external_id"
@@ -241,6 +256,15 @@ class Command(BaseCommand):
                 if mr.status != "matched":
                     rule = EXPRESSION_FALLBACK_RULES.get((occ.video_id, sid, text))
                     if rule and rule.action == "skip":
+                        current_note = occ.note or ""
+                        if current_note != "":
+                            occ.note = ""
+                            occ.save(update_fields=["note"])
+                            updated_expression_notes += 1
+                        unmatched_db.append(
+                            f"[DB][expression] video={occ.video_id} file={file_name} occ_id={occ.id} "
+                            f"ID={sid} 匹配内容={text} | reason=fallback skip"
+                        )
                         continue
                     if rule and rule.action == "map":
                         target_idx = eidx if rule.target_sheet == "expression" else widx
@@ -249,6 +273,11 @@ class Command(BaseCommand):
                             mr = NoteMatchResult(status="unmatched", reason="fallback mapping target missing")
 
                 if mr.status != "matched":
+                    current_note = occ.note or ""
+                    if current_note != "":
+                        occ.note = ""
+                        occ.save(update_fields=["note"])
+                        updated_expression_notes += 1
                     unmatched_db.append(
                         f"[DB][expression] video={occ.video_id} file={file_name} occ_id={occ.id} "
                         f"ID={sid} 匹配内容={text} | reason={mr.reason}"

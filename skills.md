@@ -42,6 +42,7 @@ Use this when you need Django shell commands for account administration in this 
 - granting one user module or season access by telephone number
 - making a user superuser or removing superuser
 - inspecting or revoking entitlements
+- checking one user's current flags and entitlement rows by telephone number
 
 ### Core References
 - `ACCOUNT_ADMIN_COMMANDS.md`

@@ -12,6 +12,7 @@ Use this skill for operational account changes in this repository.
 - Grant season-scoped entitlement to one user by telephone number.
 - Change `is_superuser`, `is_staff`, or `is_active`.
 - Inspect current user entitlements before or after a change.
+- Inspect one user's account flags and entitlement rows by telephone number.
 - Produce copy-paste-safe `manage.py shell -c` commands for operators.
 
 ## Workflow
@@ -25,6 +26,50 @@ Use this skill for operational account changes in this repository.
    - set `external_ref` to a traceable manual label
 4. Before mutating existing access, prefer checking current entitlements.
 5. If the user asks for a reusable snippet, start from the template below and fill only the requested parameters.
+
+## Template: Inspect One User Permissions
+
+Use this when the user asks to check what permissions or entitlements a telephone number currently has.
+
+```bash
+.venv/bin/python manage.py shell -c '
+from django.contrib.auth import get_user_model
+from apps.accounts.models import Entitlement
+
+TARGET_PHONE = "TARGET_PHONE"
+
+User = get_user_model()
+user = User.objects.get(telephone=TARGET_PHONE)
+
+print({
+    "id": user.id,
+    "telephone": user.telephone,
+    "country_code": user.country_code,
+    "is_staff": user.is_staff,
+    "is_superuser": user.is_superuser,
+    "is_active": user.is_active,
+})
+
+rows = list(
+    Entitlement.objects
+    .filter(user=user)
+    .select_related("module", "season")
+    .order_by("id")
+    .values(
+        "id",
+        "module__key",
+        "season__season_number",
+        "plan",
+        "status",
+        "starts_at",
+        "expires_at",
+        "external_ref",
+    )
+)
+
+print(rows)
+'
+```
 
 ## Template: Season Or Module Entitlement
 

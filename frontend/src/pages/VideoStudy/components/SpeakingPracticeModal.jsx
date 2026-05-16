@@ -36,6 +36,7 @@ export default function SpeakingPracticeModal({
   subtitleItems,
   activeSubtitleIndex,
   onSeek,
+  isMobile = false,
   noteText,
   onNoteTextChange,
   savedText,
@@ -60,6 +61,13 @@ export default function SpeakingPracticeModal({
       timeLabel: formatTime(item.start),
     })).filter((item) => item.zh);
   }, [subtitleItems]);
+
+  const combinedSubtitleText = useMemo(() => {
+    if (!items.length) {
+      return "";
+    }
+    return items.map((item) => item.zh).join(" ");
+  }, [items]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -129,30 +137,38 @@ export default function SpeakingPracticeModal({
           <section className="vs-speakingSubtitleCard">
             <div className="vs-speakingSectionHeader">
               <div className="vs-speakingSectionTitle">中文字幕提示</div>
-              <div className="vs-speakingSectionMeta">点一句可以跳到对应位置</div>
+              {!isMobile ? (
+                <div className="vs-speakingSectionMeta">点一句可以跳到对应位置</div>
+              ) : null}
             </div>
 
-            <div className="vs-speakingSubtitleList" ref={subtitleListRef}>
-              {items.length === 0 ? (
-                <div className="vs-speakingEmpty">当前视频还没有可用的中文字幕。</div>
-              ) : (
-                items.map((item, index) => (
-                  <button
-                    key={item.id}
-                    ref={index === activeSubtitleIndex ? activeItemRef : null}
-                    type="button"
-                    className={[
-                      "vs-speakingSubtitleItem",
-                      index === activeSubtitleIndex ? "is-active" : "",
-                    ].filter(Boolean).join(" ")}
-                    onClick={() => onSeek?.(item.start, { resumeIfPaused: false })}
-                  >
-                    <span className="vs-speakingSubtitleTime">{item.timeLabel}</span>
-                    <span className="vs-speakingSubtitleText">{item.zh}</span>
-                  </button>
-                ))
-              )}
-            </div>
+            {!isMobile ? (
+              <div className="vs-speakingSubtitleList" ref={subtitleListRef}>
+                {items.length === 0 ? (
+                  <div className="vs-speakingEmpty">当前视频还没有可用的中文字幕。</div>
+                ) : (
+                  items.map((item, index) => (
+                    <button
+                      key={item.id}
+                      ref={index === activeSubtitleIndex ? activeItemRef : null}
+                      type="button"
+                      className={[
+                        "vs-speakingSubtitleItem",
+                        index === activeSubtitleIndex ? "is-active" : "",
+                      ].filter(Boolean).join(" ")}
+                      onClick={() => onSeek?.(item.start, { resumeIfPaused: false })}
+                    >
+                      <span className="vs-speakingSubtitleTime">{item.timeLabel}</span>
+                      <span className="vs-speakingSubtitleText">{item.zh}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : combinedSubtitleText ? (
+              <div className="vs-speakingSubtitleBlock">{combinedSubtitleText}</div>
+            ) : (
+              <div className="vs-speakingEmpty">当前视频还没有可用的中文字幕。</div>
+            )}
           </section>
 
           <section className="vs-speakingNoteCard">

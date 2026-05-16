@@ -1256,10 +1256,10 @@ export default function VideoStudyPage() {
         onClose={() => {
           setIsSpeakingPracticeOpen(false);
         }}
-        videoId={videoId}
         subtitleItems={subtitleItems}
         activeSubtitleIndex={activeSubtitleIndex}
         onSeek={handleSeek}
+        isMobile={isMobile}
         noteText={videoNoteText}
         onNoteTextChange={setVideoNoteText}
         savedText={savedVideoNoteText}

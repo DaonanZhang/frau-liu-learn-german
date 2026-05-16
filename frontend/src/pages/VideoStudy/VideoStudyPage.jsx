@@ -7,6 +7,7 @@ import SubtitlePanel from "./components/SubtitlePanel.jsx";
 import LexiconPanel from "./components/LexiconPanel.jsx";
 import ExercisePanel from "./components/ExercisePanel.jsx";
 import VideoNotePanel from "./components/VideoNotePanel.jsx";
+import SpeakingPracticeModal from "./components/SpeakingPracticeModal.jsx";
 import { useAuth } from "../../api/auth/useAuth.js";
 import useBodyScrollLock from "../../hooks/useBodyScrollLock";
 
@@ -126,10 +127,12 @@ export default function VideoStudyPage() {
   const [isMobile, setIsMobile] = useState(false);
 
   const [isExerciseOpen, setIsExerciseOpen] = useState(false);
+  const [isSpeakingPracticeOpen, setIsSpeakingPracticeOpen] = useState(false);
   const [openVideoNotePanel, setOpenVideoNotePanel] = useState(null);
   const [lexiconFocusRequest, setLexiconFocusRequest] = useState(null);
   const [panelShape, setPanelShape] = useState("normal");
-  useBodyScrollLock(isMobile && (isLexiconOpen || isExerciseOpen));
+  useBodyScrollLock(isSpeakingPracticeOpen || (isMobile && (isLexiconOpen || isExerciseOpen)));
+  const autoOpenedSpeakingPracticeRef = useRef("");
 
   const handleVideoNoteOpenRequestReady = useCallback((openFn) => {
     setOpenVideoNotePanel(() => openFn);
@@ -256,6 +259,7 @@ export default function VideoStudyPage() {
   const leftDifficulty = video?.difficulty ?? "";
   const leftDescription = video?.description ?? "";
   const leftCreator = video?.creator ?? "";
+  const isVlogSeason = Number(video?.season_number) === 4;
   const shouldShowEmptyDescriptionFallback = Number(video?.season_number) !== 4;
   const leftVideoUrl = video?.video_url ?? "";
   const isHlsUrl = useMemo(() => isProbablyHlsUrl(leftVideoUrl), [leftVideoUrl]);
@@ -765,6 +769,25 @@ export default function VideoStudyPage() {
     }
   }
 
+  function openSpeakingPractice() {
+    pauseVideoIfPlaying();
+    setIsSpeakingPracticeOpen(true);
+  }
+
+  useEffect(() => {
+    if (!isVlogSeason || !videoId || loadingVideo || videoErrorText) {
+      return;
+    }
+
+    const normalizedVideoId = String(videoId);
+    if (autoOpenedSpeakingPracticeRef.current === normalizedVideoId) {
+      return;
+    }
+
+    autoOpenedSpeakingPracticeRef.current = normalizedVideoId;
+    openSpeakingPractice();
+  }, [isVlogSeason, videoId, loadingVideo, videoErrorText]);
+
   function handleLexiconFocusRequest(nextFocus) {
     if (!nextFocus || !nextFocus.key || !nextFocus.kind) {
       return;
@@ -1037,12 +1060,37 @@ export default function VideoStudyPage() {
               >
                 {isExerciseOpen ? "跟读模式" : "练习模式"}
               </button>
+
+              {isVlogSeason ? (
+                <button
+                  type="button"
+                  className="vs-speakingBtn ui-tooltip"
+                  data-tooltip="看中文字幕，试着自己组织德语句子"
+                  onClick={openSpeakingPractice}
+                  disabled={loadingVideo || !videoId}
+                >
+                  开口练习
+                </button>
+              ) : null}
+
+              {isVlogSeason ? (
+                <button
+                  type="button"
+                  className="vs-noteShortcutBtn"
+                  onClick={() => {
+                    openVideoNotePanel?.();
+                  }}
+                  disabled={loadingVideo || !videoId}
+                >
+                  学习笔记
+                </button>
+              ) : null}
             </div>
           ) : null}
 
           <VideoNotePanel
             videoId={videoId}
-            showTrigger={!isMobile}
+            showTrigger={!isMobile && !isVlogSeason}
             onOpenRequestReady={handleVideoNoteOpenRequestReady}
           />
         </section>
@@ -1080,6 +1128,9 @@ export default function VideoStudyPage() {
             onOpenVideoNotes={() => {
               openVideoNotePanel?.();
             }}
+            showSpeakingPracticeAction={isVlogSeason}
+            onOpenSpeakingPractice={openSpeakingPractice}
+            showVideoNotesAction={isVlogSeason}
           />
         ) : null}
 
@@ -1133,6 +1184,17 @@ export default function VideoStudyPage() {
           <span className="vs-mobileFabLabel">题目</span>
         </button>
       ) : null}
+
+      <SpeakingPracticeModal
+        isOpen={isSpeakingPracticeOpen}
+        onClose={() => {
+          setIsSpeakingPracticeOpen(false);
+        }}
+        videoId={videoId}
+        subtitleItems={subtitleItems}
+        activeSubtitleIndex={activeSubtitleIndex}
+        onSeek={handleSeek}
+      />
     </div>
   );
 }

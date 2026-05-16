@@ -152,6 +152,7 @@ class Command(BaseCommand):
         unresolved_xlsx: list[str] = []
         unmatched_db: list[str] = []
         xlsx_leftovers: list[str] = []
+        unmapped_video_occurrences: list[str] = []
 
         for xlsx_path in xlsx_files:
             try:
@@ -188,6 +189,15 @@ class Command(BaseCommand):
             for occ in VideoWordOccurrence.objects.select_related("subtitle", "word").all():
                 bundle = video_map.get(occ.video_id)
                 if bundle is None:
+                    current_note = occ.note or ""
+                    if current_note != "":
+                        occ.note = ""
+                        occ.save(update_fields=["note"])
+                        updated_word_notes += 1
+                    unmapped_video_occurrences.append(
+                        f"[DB][word] video={occ.video_id} occ_id={occ.id} "
+                        f"text={_s(occ.word.text if occ.word_id else '')} | reason=no mapped xlsx for video"
+                    )
                     continue
 
                 file_name, widx, _ = bundle
@@ -234,6 +244,15 @@ class Command(BaseCommand):
             for occ in VideoExpressionOccurrence.objects.select_related("subtitle", "expression").all():
                 bundle = video_map.get(occ.video_id)
                 if bundle is None:
+                    current_note = occ.note or ""
+                    if current_note != "":
+                        occ.note = ""
+                        occ.save(update_fields=["note"])
+                        updated_expression_notes += 1
+                    unmapped_video_occurrences.append(
+                        f"[DB][expression] video={occ.video_id} occ_id={occ.id} "
+                        f"text={_s(occ.expression.text if occ.expression_id else '')} | reason=no mapped xlsx for video"
+                    )
                     continue
 
                 file_name, widx, eidx = bundle
@@ -322,6 +341,13 @@ class Command(BaseCommand):
             self.stdout.write("none")
         else:
             for line in unmatched_db:
+                self.stdout.write(line)
+
+        self.stdout.write("\n=== DB occurrences cleared due to missing video xlsx ===")
+        if not unmapped_video_occurrences:
+            self.stdout.write("none")
+        else:
+            for line in unmapped_video_occurrences:
                 self.stdout.write(line)
 
         self.stdout.write("\n=== xlsx rows without DB match ===")

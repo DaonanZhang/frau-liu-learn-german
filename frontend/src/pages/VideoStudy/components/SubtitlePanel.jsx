@@ -166,6 +166,9 @@ export default function SubtitlePanel({
   onPanelShapeChange,
   isMobile,
   onOpenVideoNotes,
+  showSpeakingPracticeAction = false,
+  onOpenSpeakingPractice,
+  showVideoNotesAction = false,
 }) {
   const [subtitles, setSubtitles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1328,6 +1331,40 @@ export default function SubtitlePanel({
               </span>
               <span className="vs-mobileBtnLabel">循环</span>
             </button>
+
+            {showSpeakingPracticeAction ? (
+              <button
+                type="button"
+                className="vs-mobileBtn vs-mobileBarItem vs-mobileBtn--practice"
+                onClick={() => {
+                  onOpenSpeakingPractice?.();
+                }}
+                title="看中文字幕，试着自己组织德语句子"
+                aria-label="打开开口练习"
+              >
+                <span className="vs-mobileBtnIcon" aria-hidden="true">
+                  口
+                </span>
+                <span className="vs-mobileBtnLabel">开口</span>
+              </button>
+            ) : null}
+
+            {showVideoNotesAction ? (
+              <button
+                type="button"
+                className="vs-mobileBtn vs-mobileBarItem vs-mobileBtn--notes"
+                onClick={() => {
+                  onOpenVideoNotes?.();
+                }}
+                title="打开学习笔记"
+                aria-label="打开学习笔记"
+              >
+                <span className="vs-mobileBtnIcon" aria-hidden="true">
+                  记
+                </span>
+                <span className="vs-mobileBtnLabel">笔记</span>
+              </button>
+            ) : null}
 
             <button
               type="button"

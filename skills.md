@@ -34,3 +34,19 @@ Use this when importing a new batch of learning videos into `learning_by_video` 
 - HLS files generated in video resource folder.
 - XLSX moved by import flow to processed folder on success.
 - DB rows receive backfilled `video_url` and `cover_letter_url` when missing.
+
+## Skill: account-admin-ops
+
+### Trigger
+Use this when you need Django shell commands for account administration in this project, especially:
+- granting one user module or season access by telephone number
+- making a user superuser or removing superuser
+- inspecting or revoking entitlements
+
+### Core References
+- `ACCOUNT_ADMIN_COMMANDS.md`
+- `.codex/skills/account-admin-ops/SKILL.md`
+
+### Primary Template
+- Start from the reusable `manage.py shell -c` entitlement template in `ACCOUNT_ADMIN_COMMANDS.md`.
+- For permanent access, use `Entitlement.Plan.LIFETIME` and `expires_at=None`.

@@ -293,7 +293,7 @@ export default function ModuleCheckoutPage() {
                           <div className="module-checkout-page__price-caption">当前支付金额</div>
                           {hasDiscount ? (
                             <div className="module-checkout-page__offer-badge module-checkout-page__offer-badge--inline">
-                              {offer.discount_label || "试用用户专享"}
+                              {offer.discount_label || "品牌挚友专享"}
                             </div>
                           ) : null}
                           <div className="module-checkout-page__price-block">

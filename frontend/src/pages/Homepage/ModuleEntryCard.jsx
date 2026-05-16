@@ -120,7 +120,7 @@ function buildCheckoutModalHtml(module, offers) {
       : "";
     const hasDiscount = Boolean(offer?.is_discounted_for_user) && Number(offer?.discount_amount) > 0;
     const discountBadgeHtml = hasDiscount
-      ? `<div class="module-checkout-modal__discount-badge">${escapeHtml(offer?.discount_label || "试用用户专享")}</div>`
+      ? `<div class="module-checkout-modal__discount-badge">${escapeHtml(offer?.discount_label || "品牌挚友专享")}</div>`
       : "";
     const discountNoteHtml = hasDiscount
       ? `<div class="module-checkout-modal__discount-note">已减 ¥${escapeHtml(formatPromoPrice(offer?.discount_amount))}</div>`

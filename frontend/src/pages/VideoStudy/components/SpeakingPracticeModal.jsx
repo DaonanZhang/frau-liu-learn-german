@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchUserVideoNote, saveUserVideoNote } from "../../../api/learning_by_video/video_notes.js";
+import { useEffect, useMemo, useRef } from "react";
 
 function formatUpdatedAt(value) {
   if (!value) {
@@ -34,17 +33,18 @@ function formatTime(seconds) {
 export default function SpeakingPracticeModal({
   isOpen,
   onClose,
-  videoId,
   subtitleItems,
   activeSubtitleIndex,
   onSeek,
+  noteText,
+  onNoteTextChange,
+  savedText,
+  updatedAt,
+  loading,
+  saving,
+  errorText,
+  onSave,
 }) {
-  const [noteText, setNoteText] = useState("");
-  const [savedText, setSavedText] = useState("");
-  const [updatedAt, setUpdatedAt] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [errorText, setErrorText] = useState("");
   const activeItemRef = useRef(null);
   const subtitleListRef = useRef(null);
 
@@ -79,44 +79,6 @@ export default function SpeakingPracticeModal({
   }, [isOpen, onClose]);
 
   useEffect(() => {
-    if (!isOpen || !videoId) {
-      return;
-    }
-
-    let aborted = false;
-
-    async function loadNote() {
-      try {
-        setLoading(true);
-        setErrorText("");
-        const data = await fetchUserVideoNote(videoId);
-        if (aborted) {
-          return;
-        }
-        const nextText = String(data?.note_markdown || "");
-        setNoteText(nextText);
-        setSavedText(nextText);
-        setUpdatedAt(String(data?.updated_at || ""));
-      } catch (error) {
-        if (aborted) {
-          return;
-        }
-        setErrorText(error?.data?.detail || error?.message || "加载笔记失败");
-      } finally {
-        if (!aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadNote();
-
-    return () => {
-      aborted = true;
-    };
-  }, [isOpen, videoId]);
-
-  useEffect(() => {
     if (!isOpen) {
       return;
     }
@@ -132,26 +94,6 @@ export default function SpeakingPracticeModal({
   }, [isOpen, activeSubtitleIndex]);
 
   const isDirty = noteText !== savedText;
-
-  async function handleSave() {
-    if (!videoId || saving) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setErrorText("");
-      const data = await saveUserVideoNote(videoId, noteText);
-      const nextText = String(data?.note_markdown || "");
-      setNoteText(nextText);
-      setSavedText(nextText);
-      setUpdatedAt(String(data?.updated_at || ""));
-    } catch (error) {
-      setErrorText(error?.data?.detail || error?.message || "保存笔记失败");
-    } finally {
-      setSaving(false);
-    }
-  }
 
   if (!isOpen) {
     return null;
@@ -221,7 +163,9 @@ export default function SpeakingPracticeModal({
                   type="button"
                   className="vs-speakingSaveBtn"
                   disabled={!isDirty || saving || loading}
-                  onClick={handleSave}
+                  onClick={() => {
+                    onSave?.();
+                  }}
                 >
                   {saving ? "保存中..." : "保存笔记"}
                 </button>
@@ -239,7 +183,7 @@ export default function SpeakingPracticeModal({
               <textarea
                 className="vs-speakingTextarea"
                 value={noteText}
-                onChange={(event) => setNoteText(event.target.value)}
+                onChange={(event) => onNoteTextChange?.(event.target.value)}
                 placeholder={"试着先用自己的德语写一句。\n也可以记下不会说的地方，再回到字幕和词句里核对。"}
                 spellCheck={false}
               />

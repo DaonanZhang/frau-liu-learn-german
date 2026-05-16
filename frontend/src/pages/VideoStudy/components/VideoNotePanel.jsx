@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { fetchUserVideoNote, saveUserVideoNote } from "../../../api/learning_by_video/video_notes.js";
 import "./VideoNotePanel.css";
 
 function formatUpdatedAt(value) {
@@ -21,52 +20,19 @@ function formatUpdatedAt(value) {
   });
 }
 
-export default function VideoNotePanel({ videoId, showTrigger = true, onOpenRequestReady }) {
+export default function VideoNotePanel({
+  showTrigger = true,
+  onOpenRequestReady,
+  noteText,
+  onNoteTextChange,
+  savedText,
+  updatedAt,
+  loading,
+  saving,
+  errorText,
+  onSave,
+}) {
   const [isOpen, setIsOpen] = useState(false);
-  const [noteText, setNoteText] = useState("");
-  const [savedText, setSavedText] = useState("");
-  const [updatedAt, setUpdatedAt] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [errorText, setErrorText] = useState("");
-
-  useEffect(() => {
-    if (!videoId) {
-      return;
-    }
-
-    let aborted = false;
-
-    async function loadNote() {
-      try {
-        setLoading(true);
-        setErrorText("");
-        const data = await fetchUserVideoNote(videoId);
-        if (aborted) {
-          return;
-        }
-        const nextText = String(data?.note_markdown || "");
-        setNoteText(nextText);
-        setSavedText(nextText);
-        setUpdatedAt(String(data?.updated_at || ""));
-      } catch (error) {
-        if (aborted) {
-          return;
-        }
-        setErrorText(error?.data?.detail || error?.message || "加载笔记失败");
-      } finally {
-        if (!aborted) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadNote();
-
-    return () => {
-      aborted = true;
-    };
-  }, [videoId]);
 
   useEffect(() => {
     if (!onOpenRequestReady) {
@@ -96,26 +62,6 @@ export default function VideoNotePanel({ videoId, showTrigger = true, onOpenRequ
   }, [isOpen]);
 
   const isDirty = noteText !== savedText;
-
-  async function handleSave() {
-    if (!videoId || saving) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setErrorText("");
-      const data = await saveUserVideoNote(videoId, noteText);
-      const nextText = String(data?.note_markdown || "");
-      setNoteText(nextText);
-      setSavedText(nextText);
-      setUpdatedAt(String(data?.updated_at || ""));
-    } catch (error) {
-      setErrorText(error?.data?.detail || error?.message || "保存笔记失败");
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <>
@@ -152,7 +98,9 @@ export default function VideoNotePanel({ videoId, showTrigger = true, onOpenRequ
                   type="button"
                   className="vn-saveBtn"
                   disabled={!isDirty || saving || loading}
-                  onClick={handleSave}
+                  onClick={() => {
+                    onSave?.();
+                  }}
                 >
                   {saving ? "保存中..." : "保存笔记"}
                 </button>
@@ -175,13 +123,13 @@ export default function VideoNotePanel({ videoId, showTrigger = true, onOpenRequ
             <div className="vn-editorCard">
               {loading ? <div className="vn-state">加载笔记中...</div> : null}
               {!loading ? (
-                <textarea
-                  className="vn-textarea"
-                  value={noteText}
-                  onChange={(event) => setNoteText(event.target.value)}
-                  placeholder="在这里记录你的学习笔记。"
-                  spellCheck={false}
-                />
+                  <textarea
+                    className="vn-textarea"
+                    value={noteText}
+                    onChange={(event) => onNoteTextChange?.(event.target.value)}
+                    placeholder="在这里记录你的学习笔记。"
+                    spellCheck={false}
+                  />
               ) : null}
             </div>
           </section>

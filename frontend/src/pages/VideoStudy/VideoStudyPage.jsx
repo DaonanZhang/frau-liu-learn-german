@@ -3,6 +3,7 @@ import Hls from "hls.js";
 import { useLocation, useParams, Link } from "react-router-dom";
 import "./VideoStudyPage.css";
 import { fetchVideoDetail } from "../../api/learning_by_video/videos.js";
+import { fetchUserVideoNote, saveUserVideoNote } from "../../api/learning_by_video/video_notes.js";
 import SubtitlePanel from "./components/SubtitlePanel.jsx";
 import LexiconPanel from "./components/LexiconPanel.jsx";
 import ExercisePanel from "./components/ExercisePanel.jsx";
@@ -129,6 +130,12 @@ export default function VideoStudyPage() {
   const [isExerciseOpen, setIsExerciseOpen] = useState(false);
   const [isSpeakingPracticeOpen, setIsSpeakingPracticeOpen] = useState(false);
   const [openVideoNotePanel, setOpenVideoNotePanel] = useState(null);
+  const [videoNoteText, setVideoNoteText] = useState("");
+  const [savedVideoNoteText, setSavedVideoNoteText] = useState("");
+  const [videoNoteUpdatedAt, setVideoNoteUpdatedAt] = useState("");
+  const [videoNoteLoading, setVideoNoteLoading] = useState(true);
+  const [videoNoteSaving, setVideoNoteSaving] = useState(false);
+  const [videoNoteErrorText, setVideoNoteErrorText] = useState("");
   const [lexiconFocusRequest, setLexiconFocusRequest] = useState(null);
   const [panelShape, setPanelShape] = useState("normal");
   useBodyScrollLock(isSpeakingPracticeOpen || (isMobile && (isLexiconOpen || isExerciseOpen)));
@@ -137,6 +144,53 @@ export default function VideoStudyPage() {
   const handleVideoNoteOpenRequestReady = useCallback((openFn) => {
     setOpenVideoNotePanel(() => openFn);
   }, []);
+
+  const loadVideoNote = useCallback(async (currentVideoId) => {
+    if (!currentVideoId) {
+      setVideoNoteText("");
+      setSavedVideoNoteText("");
+      setVideoNoteUpdatedAt("");
+      setVideoNoteErrorText("");
+      setVideoNoteLoading(false);
+      return;
+    }
+
+    try {
+      setVideoNoteLoading(true);
+      setVideoNoteErrorText("");
+      const data = await fetchUserVideoNote(currentVideoId);
+      const nextText = String(data?.note_markdown || "");
+      setVideoNoteText(nextText);
+      setSavedVideoNoteText(nextText);
+      setVideoNoteUpdatedAt(String(data?.updated_at || ""));
+    } catch (error) {
+      setVideoNoteErrorText(error?.data?.detail || error?.message || "加载笔记失败");
+    } finally {
+      setVideoNoteLoading(false);
+    }
+  }, []);
+
+  const saveVideoNote = useCallback(async () => {
+    if (!videoId || videoNoteSaving) {
+      return null;
+    }
+
+    try {
+      setVideoNoteSaving(true);
+      setVideoNoteErrorText("");
+      const data = await saveUserVideoNote(videoId, videoNoteText);
+      const nextText = String(data?.note_markdown || "");
+      setVideoNoteText(nextText);
+      setSavedVideoNoteText(nextText);
+      setVideoNoteUpdatedAt(String(data?.updated_at || ""));
+      return data;
+    } catch (error) {
+      setVideoNoteErrorText(error?.data?.detail || error?.message || "保存笔记失败");
+      throw error;
+    } finally {
+      setVideoNoteSaving(false);
+    }
+  }, [videoId, videoNoteSaving, videoNoteText]);
 
   const [pipOffset, setPipOffset] = useState({ x: 0, y: 0 });
   const pipDragRef = useRef({
@@ -189,6 +243,10 @@ export default function VideoStudyPage() {
       setIsLexiconOpen(false);
     }
   }, [isMobile]);
+
+  useEffect(() => {
+    loadVideoNote(videoId).catch(() => {});
+  }, [loadVideoNote, videoId]);
 
   function clampMobileFabOffset(nextX, nextY) {
     if (typeof window === "undefined") {
@@ -758,7 +816,7 @@ export default function VideoStudyPage() {
   const shouldShowSubtitlePanel = !shouldShowExercisePanel;
   const shouldShowLexiconPanel = !shouldShowExercisePanel && isLexiconOpen;
 
-  function pauseVideoIfPlaying() {
+  const pauseVideoIfPlaying = useCallback(() => {
     const videoElement = videoRef.current;
     if (!videoElement) {
       return;
@@ -767,12 +825,12 @@ export default function VideoStudyPage() {
     if (!videoElement.paused && !videoElement.ended) {
       videoElement.pause();
     }
-  }
+  }, []);
 
-  function openSpeakingPractice() {
+  const openSpeakingPractice = useCallback(() => {
     pauseVideoIfPlaying();
     setIsSpeakingPracticeOpen(true);
-  }
+  }, [pauseVideoIfPlaying]);
 
   useEffect(() => {
     if (!isVlogSeason || !videoId || loadingVideo || videoErrorText) {
@@ -786,7 +844,7 @@ export default function VideoStudyPage() {
 
     autoOpenedSpeakingPracticeRef.current = normalizedVideoId;
     openSpeakingPractice();
-  }, [isVlogSeason, videoId, loadingVideo, videoErrorText]);
+  }, [isVlogSeason, videoId, loadingVideo, videoErrorText, openSpeakingPractice]);
 
   function handleLexiconFocusRequest(nextFocus) {
     if (!nextFocus || !nextFocus.key || !nextFocus.kind) {
@@ -1092,6 +1150,14 @@ export default function VideoStudyPage() {
             videoId={videoId}
             showTrigger={!isMobile && !isVlogSeason}
             onOpenRequestReady={handleVideoNoteOpenRequestReady}
+            noteText={videoNoteText}
+            onNoteTextChange={setVideoNoteText}
+            savedText={savedVideoNoteText}
+            updatedAt={videoNoteUpdatedAt}
+            loading={videoNoteLoading}
+            saving={videoNoteSaving}
+            errorText={videoNoteErrorText}
+            onSave={saveVideoNote}
           />
         </section>
 
@@ -1194,6 +1260,14 @@ export default function VideoStudyPage() {
         subtitleItems={subtitleItems}
         activeSubtitleIndex={activeSubtitleIndex}
         onSeek={handleSeek}
+        noteText={videoNoteText}
+        onNoteTextChange={setVideoNoteText}
+        savedText={savedVideoNoteText}
+        updatedAt={videoNoteUpdatedAt}
+        loading={videoNoteLoading}
+        saving={videoNoteSaving}
+        errorText={videoNoteErrorText}
+        onSave={saveVideoNote}
       />
     </div>
   );

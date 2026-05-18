@@ -10,6 +10,7 @@ Use this skill for operational account changes in this repository.
 ## Scope
 - Grant module-wide entitlement to one user by telephone number.
 - Grant season-scoped entitlement to one user by telephone number.
+- Generate season-scoped activation codes in bulk and print them directly to terminal.
 - Change `is_superuser`, `is_staff`, or `is_active`.
 - Inspect current user entitlements before or after a change.
 - Inspect one user's account flags and entitlement rows by telephone number.
@@ -24,8 +25,14 @@ Use this skill for operational account changes in this repository.
    - use `ModuleSeason` only when season-scoped access is intended
    - use `Entitlement.Plan.LIFETIME` with `expires_at=None` for permanent access
    - set `external_ref` to a traceable manual label
-4. Before mutating existing access, prefer checking current entitlements.
-5. If the user asks for a reusable snippet, start from the template below and fill only the requested parameters.
+4. When generating activation codes:
+   - prefer a copy-paste-safe `manage.py shell -c` command over editing app code
+   - print codes directly to stdout unless the user explicitly asks for file output
+   - keep the payload season-scoped by setting `season_number` on `ActivationEntitlementItem`
+   - mention that activation codes are stored in cache/Redis and currently default to 720-day TTL
+   - avoid duplicate codes within the same batch and skip codes that already exist in Redis
+5. Before mutating existing access, prefer checking current entitlements.
+6. If the user asks for a reusable snippet, start from the template below and fill only the requested parameters.
 
 ## Template: Inspect One User Permissions
 
@@ -135,6 +142,63 @@ else:
         setattr(entitlement, key, value)
     entitlement.save(update_fields=list(payload.keys()))
     print(f"updated entitlement id={entitlement.id}")
+'
+```
+
+## Template: Batch Generate Season Activation Codes
+
+Use this when the user wants a server-side command that prints activation codes directly in the terminal.
+
+```bash
+.venv/bin/python manage.py shell -c '
+from apps.accounts.models import Module, ModuleSeason
+from apps.accounts.services.activation_codes import (
+    ActivationEntitlementItem,
+    ActivationPayload,
+    ActivationPlan,
+    generate_activation_code,
+    store_activation_code,
+    verify_activation_code,
+)
+
+MODULE_KEY = "learning_by_video"
+SEASON_NUMBER = 4
+SEASON_TITLE = "Vlog季"
+COUNT = 201
+
+module = Module.objects.get(key=MODULE_KEY)
+ModuleSeason.objects.get_or_create(
+    module=module,
+    season_number=SEASON_NUMBER,
+    defaults={"title": SEASON_TITLE},
+)
+
+payload = ActivationPayload(
+    entitlements=[
+        ActivationEntitlementItem(
+            module_key=MODULE_KEY,
+            plan=ActivationPlan.LIFETIME,
+            season_number=SEASON_NUMBER,
+        )
+    ]
+)
+
+seen = set()
+codes = []
+
+while len(codes) < COUNT:
+    code = generate_activation_code()
+    if code in seen:
+        continue
+    if verify_activation_code(code):
+        continue
+    store_activation_code(code=code, payload=payload)
+    seen.add(code)
+    codes.append(code)
+
+print(f"# module={MODULE_KEY} season={SEASON_NUMBER} count={COUNT} plan={ActivationPlan.LIFETIME}")
+for code in codes:
+    print(code)
 '
 ```
 

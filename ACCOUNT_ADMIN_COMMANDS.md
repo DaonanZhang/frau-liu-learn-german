@@ -10,6 +10,8 @@ All commands assume project root as current directory.
 - `plan="lifetime"` means permanent access and maps to `expires_at=None`.
 - Season-scoped entitlement requires both `module` and `season_number`.
 - Module-wide entitlement applies to all seasons of that module when `season=None`.
+- Activation codes are stored in cache/Redis and currently default to 720-day TTL.
+- For operator runs, prefer printing codes directly to terminal on the server instead of writing files.
 
 ## Check User By Telephone
 
@@ -162,6 +164,129 @@ else:
         setattr(entitlement, key, value)
     entitlement.save(update_fields=list(payload.keys()))
     print(f"updated entitlement id={entitlement.id}")
+'
+```
+
+## Generate Season Activation Codes In Bulk
+
+This prints codes directly to the terminal and stores them in Redis-backed cache.
+Adjust `SEASON_NUMBER`, `SEASON_TITLE`, and `COUNT` as needed.
+
+```bash
+.venv/bin/python manage.py shell -c '
+from apps.accounts.models import Module, ModuleSeason
+from apps.accounts.services.activation_codes import (
+    ActivationEntitlementItem,
+    ActivationPayload,
+    ActivationPlan,
+    generate_activation_code,
+    store_activation_code,
+    verify_activation_code,
+)
+
+MODULE_KEY = "learning_by_video"
+SEASON_NUMBER = 4
+SEASON_TITLE = "Vlog季"
+COUNT = 201
+
+module = Module.objects.get(key=MODULE_KEY)
+ModuleSeason.objects.get_or_create(
+    module=module,
+    season_number=SEASON_NUMBER,
+    defaults={"title": SEASON_TITLE},
+)
+
+payload = ActivationPayload(
+    entitlements=[
+        ActivationEntitlementItem(
+            module_key=MODULE_KEY,
+            plan=ActivationPlan.LIFETIME,
+            season_number=SEASON_NUMBER,
+        )
+    ]
+)
+
+seen = set()
+codes = []
+
+while len(codes) < COUNT:
+    code = generate_activation_code()
+    if code in seen:
+        continue
+    if verify_activation_code(code):
+        continue
+    store_activation_code(code=code, payload=payload)
+    seen.add(code)
+    codes.append(code)
+
+print(f"# module={MODULE_KEY} season={SEASON_NUMBER} count={COUNT} plan={ActivationPlan.LIFETIME}")
+for code in codes:
+    print(code)
+'
+```
+
+## Generate Season 1 And Season 4 Activation Codes In One Run
+
+This prints two labeled batches in one terminal run.
+
+```bash
+.venv/bin/python manage.py shell -c '
+from apps.accounts.models import Module, ModuleSeason
+from apps.accounts.services.activation_codes import (
+    ActivationEntitlementItem,
+    ActivationPayload,
+    ActivationPlan,
+    generate_activation_code,
+    store_activation_code,
+    verify_activation_code,
+)
+
+MODULE_KEY = "learning_by_video"
+BATCHES = [
+    {"season_number": 1, "season_title": "Season 1", "count": 201},
+    {"season_number": 4, "season_title": "Vlog季", "count": 201},
+]
+
+module = Module.objects.get(key=MODULE_KEY)
+
+for batch in BATCHES:
+    season_number = batch["season_number"]
+    season_title = batch["season_title"]
+    count = batch["count"]
+
+    ModuleSeason.objects.get_or_create(
+        module=module,
+        season_number=season_number,
+        defaults={"title": season_title},
+    )
+
+    payload = ActivationPayload(
+        entitlements=[
+            ActivationEntitlementItem(
+                module_key=MODULE_KEY,
+                plan=ActivationPlan.LIFETIME,
+                season_number=season_number,
+            )
+        ]
+    )
+
+    seen = set()
+    codes = []
+
+    while len(codes) < count:
+        code = generate_activation_code()
+        if code in seen:
+            continue
+        if verify_activation_code(code):
+            continue
+        store_activation_code(code=code, payload=payload)
+        seen.add(code)
+        codes.append(code)
+
+    print(f"# module={MODULE_KEY} season={season_number} count={count} plan={ActivationPlan.LIFETIME}")
+    for code in codes:
+        print(code)
+    print()
 '
 ```
 

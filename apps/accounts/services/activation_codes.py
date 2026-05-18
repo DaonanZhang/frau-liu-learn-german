@@ -122,7 +122,7 @@ class ActivationPayload:
 # Redis helpers
 # ============================
 
-DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 30  # 30days
+DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 720  # 720 days
 
 
 def _redis_key(code: str) -> str:

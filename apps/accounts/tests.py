@@ -13,6 +13,14 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.accounts.models import Entitlement, Module, ModuleSeason
+from apps.accounts.services.activation_codes import (
+    ActivationEntitlementItem,
+    ActivationPayload,
+    ActivationPlan,
+    store_activation_code,
+    verify_activation_code,
+)
 from apps.accounts.services.password_reset_codes import verify_password_reset_code
 
 
@@ -102,6 +110,135 @@ class PasswordResetApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 0)
+
+
+@override_settings(
+    CACHES={
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "activation-code-tests",
+        }
+    },
+)
+class ActivationCodeApiTests(APITestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        cache.clear()
+        self.module = Module.objects.create(
+            key="learning_by_video",
+            name="Learning by Video",
+            is_active=True,
+        )
+        self.season1 = ModuleSeason.objects.create(
+            module=self.module,
+            season_number=1,
+            title="Season 1",
+        )
+        self.season4 = ModuleSeason.objects.create(
+            module=self.module,
+            season_number=4,
+            title="Vlog季",
+        )
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138000",
+            country_code="+86",
+            password="pass-123456",
+            email="learner@example.com",
+        )
+
+    @staticmethod
+    def _store_code(code: str, season_number: int) -> None:
+        payload = ActivationPayload(
+            entitlements=[
+                ActivationEntitlementItem(
+                    module_key="learning_by_video",
+                    plan=ActivationPlan.LIFETIME,
+                    season_number=season_number,
+                )
+            ]
+        )
+        store_activation_code(code=code, payload=payload)
+
+    def test_verify_activation_code_endpoint_returns_payload(self) -> None:
+        self._store_code("SEASON1A", season_number=1)
+
+        response = self.client.post(
+            "/api/accounts/auth/register/verify-code/",
+            {"code": "SEASON1A"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data,
+            {
+                "entitlements": [
+                    {
+                        "module": "learning_by_video",
+                        "plan": "lifetime",
+                        "season_number": 1,
+                    }
+                ]
+            },
+        )
+
+    def test_verify_activation_code_endpoint_rejects_invalid_code(self) -> None:
+        response = self.client.post(
+            "/api/accounts/auth/register/verify-code/",
+            {"code": "MISSING01"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["detail"], "激活码无效或已过期。")
+
+    def test_apply_activation_code_creates_season_entitlement_and_consumes_code(self) -> None:
+        self._store_code("SEASON4A", season_number=4)
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            "/api/accounts/auth/activate-code/",
+            {"code": "SEASON4A"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data["entitlements"]), 1)
+        entitlement_data = response.data["entitlements"][0]
+        self.assertEqual(entitlement_data["scope"], "module:learning_by_video:season:4")
+        self.assertEqual(entitlement_data["module"]["key"], "learning_by_video")
+        self.assertEqual(entitlement_data["season"]["season_number"], 4)
+        self.assertEqual(entitlement_data["plan"], "lifetime")
+        self.assertEqual(entitlement_data["status"], "active")
+        self.assertTrue(entitlement_data["is_valid_now"])
+
+        entitlement = Entitlement.objects.get(user=self.user)
+        self.assertEqual(entitlement.module_id, self.module.id)
+        self.assertEqual(entitlement.season_id, self.season4.id)
+        self.assertEqual(entitlement.plan, Entitlement.Plan.LIFETIME)
+        self.assertEqual(entitlement.status, Entitlement.Status.ACTIVE)
+        self.assertEqual(entitlement.external_ref, "activation_code")
+        self.assertIsNone(entitlement.expires_at)
+        self.assertIsNone(verify_activation_code("SEASON4A"))
+
+    def test_apply_activation_code_is_single_use(self) -> None:
+        self._store_code("ONETIME1", season_number=1)
+        self.client.force_authenticate(user=self.user)
+
+        first = self.client.post(
+            "/api/accounts/auth/activate-code/",
+            {"code": "ONETIME1"},
+            format="json",
+        )
+        second = self.client.post(
+            "/api/accounts/auth/activate-code/",
+            {"code": "ONETIME1"},
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(second.data["detail"], "Invalid or expired activation code")
 
 
 class HomepageSettingApiTests(APITestCase):

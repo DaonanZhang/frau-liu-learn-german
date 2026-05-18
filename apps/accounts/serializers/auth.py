@@ -20,6 +20,10 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     username_field = "telephone"
     country_code = serializers.ChoiceField(choices=COUNTRY_CODE_CHOICES)
+    default_error_messages = {
+        **TokenObtainPairSerializer.default_error_messages,
+        "no_active_account": "账号或密码输入错误。",
+    }
 
     def validate(self, attrs):
         telephone = attrs.get("telephone")

@@ -19,6 +19,25 @@ function pickErrorMessage(err, fallback) {
   return fallback;
 }
 
+function normalizeLoginErrorMessage(message) {
+  const text = String(message || "").trim();
+  if (!text) {
+    return "账号或密码输入错误。";
+  }
+
+  const normalized = text.toLowerCase();
+  if (
+    normalized.includes("no active account") ||
+    normalized.includes("unable to log in") ||
+    normalized.includes("credentials") ||
+    normalized.includes("password")
+  ) {
+    return "账号或密码输入错误。";
+  }
+
+  return text;
+}
+
 /**
  * Login with telephone + password.
  * On success:
@@ -62,7 +81,7 @@ export async function login(telephone, password, countryCode) {
     await Swal.fire({
       icon: "error",
       title: "登录失败",
-      text: pickErrorMessage(err, "手机号或密码不匹配"),
+      text: normalizeLoginErrorMessage(pickErrorMessage(err, "账号或密码输入错误。")),
     });
 
     return { ok: false };

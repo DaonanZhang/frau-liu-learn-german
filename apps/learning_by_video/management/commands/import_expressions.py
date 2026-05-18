@@ -21,6 +21,7 @@ COL_TRANSLATION = "翻译"
 COL_SUBTITLE_ID = "ID"
 COL_SELECTED_TEXT = "原文选中"
 COL_SELECTED_TEXT_ALT = "内容选中"
+COL_NOTE = "附注"
 
 
 class Command(BaseCommand):
@@ -58,6 +59,8 @@ class Command(BaseCommand):
             df[COL_SELECTED_TEXT] = df[COL_SELECTED_TEXT].map(lambda x: str(x).strip())
         if COL_SELECTED_TEXT_ALT in df.columns:
             df[COL_SELECTED_TEXT_ALT] = df[COL_SELECTED_TEXT_ALT].map(lambda x: str(x).strip())
+        if COL_NOTE in df.columns:
+            df[COL_NOTE] = df[COL_NOTE].map(lambda x: str(x).strip())
 
         created_text = 0
         updated_text = 0
@@ -75,6 +78,7 @@ class Command(BaseCommand):
                 str(row.get(COL_SELECTED_TEXT, "")).strip()
                 or str(row.get(COL_SELECTED_TEXT_ALT, "")).strip()
             )
+            note = str(row.get(COL_NOTE, "")).strip()
 
             if not text or not subtitle_id_raw:
                 skipped += 1
@@ -136,7 +140,7 @@ class Command(BaseCommand):
                 "translation": translation,
                 "example": linked_sub,  # "When could this expression be used"
                 "meaning": "",          # not provided in this sheet
-                "note": "",
+                "note": note,
                 "selected_text": selected_text,
             }
 

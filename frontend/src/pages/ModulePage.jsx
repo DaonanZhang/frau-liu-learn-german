@@ -58,6 +58,21 @@ function parseTitleSequence(titleValue) {
   };
 }
 
+function parseVlogFolgeNumber(titleValue) {
+  const rawTitle = String(titleValue || "").trim();
+  if (!rawTitle) {
+    return null;
+  }
+
+  const matched = rawTitle.match(/^Folge_(\d+)$/i);
+  if (!matched) {
+    return null;
+  }
+
+  const number = Number(matched[1]);
+  return Number.isFinite(number) ? number : null;
+}
+
 function normalizeTopicMeta(rawTopics) {
   if (!Array.isArray(rawTopics)) {
     return [];
@@ -117,6 +132,10 @@ export default function ModulePage({
     }
     return [seasonNumber];
   }, [moduleConfig, seasonNumber, seasonNumbers]);
+  const isVlogSeason = useMemo(
+    () => effectiveSeasonNumbers.length === 1 && Number(effectiveSeasonNumbers[0]) === 4,
+    [effectiveSeasonNumbers]
+  );
 
   function handleOpenVideo(video) {
     const videoId = video?.id;
@@ -351,6 +370,7 @@ export default function ModulePage({
         video,
         index,
         titleInfo: parseTitleSequence(video?.title),
+        vlogFolgeNumber: parseVlogFolgeNumber(video?.title),
       }))
       .sort((left, right) => {
         const leftLocked = Boolean(left.video?.is_locked);
@@ -369,6 +389,15 @@ export default function ModulePage({
           return leftCompleted ? 1 : -1;
         }
 
+        if (isVlogSeason) {
+          const leftHasVlogNumber = Number.isFinite(left.vlogFolgeNumber);
+          const rightHasVlogNumber = Number.isFinite(right.vlogFolgeNumber);
+
+          if (leftHasVlogNumber && rightHasVlogNumber && left.vlogFolgeNumber !== right.vlogFolgeNumber) {
+            return right.vlogFolgeNumber - left.vlogFolgeNumber;
+          }
+        }
+
         const sameBaseTitle =
           Boolean(left.titleInfo.baseTitle) && left.titleInfo.baseTitle === right.titleInfo.baseTitle;
 
@@ -384,7 +413,7 @@ export default function ModulePage({
         return left.index - right.index;
       })
       .map((item) => item.video);
-  }, [videos, videoMarkById]);
+  }, [isVlogSeason, videos, videoMarkById]);
 
   const filterPanel = (
     <div className="module-filter-wrap">

@@ -236,22 +236,6 @@ export default function SpeakingPracticeModal({
           </section>
 
           <section className="vs-speakingNoteCard">
-            <div className="vs-speakingSectionHeader">
-              <div className="vs-speakingSectionTitle">你的笔记</div>
-              <div className="vs-speakingNoteActions">
-                <button
-                  type="button"
-                  className="vs-speakingSaveBtn"
-                  disabled={!isDirty || saving || loading}
-                  onClick={() => {
-                    onSave?.();
-                  }}
-                >
-                  {saving ? "保存中..." : "保存笔记"}
-                </button>
-              </div>
-            </div>
-
             {updatedAt ? (
               <div className="vs-speakingNoteMeta">上次保存：{formatUpdatedAt(updatedAt)}</div>
             ) : null}
@@ -275,6 +259,22 @@ export default function SpeakingPracticeModal({
                 spellCheck={false}
               />
             )}
+
+            <div className="vs-speakingNoteFooter">
+              <div className="vs-speakingSectionTitle">你的笔记</div>
+              <div className="vs-speakingNoteActions">
+                <button
+                  type="button"
+                  className="vs-speakingSaveBtn"
+                  disabled={!isDirty || saving || loading}
+                  onClick={() => {
+                    onSave?.();
+                  }}
+                >
+                  {saving ? "保存中..." : "保存笔记"}
+                </button>
+              </div>
+            </div>
           </section>
         </div>
       </section>

@@ -1385,9 +1385,10 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.1rem 1.2rem 1rem;
+  padding: 1.1rem 4.75rem 1rem 1.2rem;
   border-bottom: 1px solid #f3e7cd;
   background: linear-gradient(180deg, #fffaf0 0%, #fffdf9 100%);
+  position: relative;
 }
 
 .vs-speakingModalTitle {
@@ -1406,6 +1407,9 @@
 }
 
 .vs-speakingModalCloseBtn {
+  position: absolute;
+  top: 0.9rem;
+  right: 1rem;
   width: 2.75rem;
   height: 2.75rem;
   border: 1px solid #eadcc0;
@@ -1415,6 +1419,7 @@
   font-size: 1rem;
   cursor: pointer;
   flex: 0 0 auto;
+  z-index: 6;
 }
 
 .vs-speakingModalBody {
@@ -1536,13 +1541,6 @@
   position: relative;
 }
 
-.vs-speakingNoteCard .vs-speakingSectionHeader {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: #ffffff;
-}
-
 .vs-speakingSaveBtn {
   height: 2.5rem;
   padding: 0 0.95rem;
@@ -1585,6 +1583,16 @@
   font: inherit;
   line-height: 1.7;
   color: #111827;
+}
+
+.vs-speakingNoteFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem 1rem;
+  border-top: 1px solid #f6ecd7;
+  background: #ffffff;
 }
 
 .vs-speakingModal.is-noteFocused .vs-speakingTextarea {
@@ -1985,12 +1993,8 @@
   }
 
   .vs-speakingModalHeader {
-    position: sticky;
-    top: 0;
-    z-index: 4;
-    padding: calc(0.9rem + env(safe-area-inset-top, 0px)) 1rem 0.85rem;
+    padding: calc(0.9rem + env(safe-area-inset-top, 0px)) 4.9rem 0.85rem 1rem;
     background: linear-gradient(180deg, rgba(255, 250, 240, 0.98) 0%, rgba(255, 253, 249, 0.98) 100%);
-    backdrop-filter: blur(10px);
   }
 
   .vs-speakingModalIntro {
@@ -2011,6 +2015,8 @@
   .vs-speakingModalCloseBtn {
     position: sticky;
     top: calc(env(safe-area-inset-top, 0px) + 0.15rem);
+    right: auto;
+    margin-left: auto;
     z-index: 5;
     box-shadow: 0 0.45rem 1rem rgba(15, 23, 42, 0.12);
   }
@@ -2049,21 +2055,17 @@
     align-items: flex-start;
   }
 
+  .vs-speakingNoteFooter {
+    flex-direction: column;
+    align-items: flex-start;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+  }
+
   .vs-speakingNoteActions {
     width: 100%;
   }
 
   .vs-speakingSaveBtn {
     width: 100%;
-  }
-
-  .vs-speakingNoteCard .vs-speakingSectionHeader {
-    top: 0;
-    z-index: 3;
-    box-shadow: 0 1px 0 #f6ecd7;
-  }
-
-  .vs-speakingModal.is-noteFocused .vs-speakingNoteCard .vs-speakingSectionHeader {
-    position: sticky;
   }
 }

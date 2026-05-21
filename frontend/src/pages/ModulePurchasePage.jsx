@@ -1,14 +1,25 @@
 import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../api/auth/useAuth.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
+import { hasModuleAccess } from "../utils/moduleAccess.js";
 import "./ModulePurchasePage.css";
 
 export default function ModulePurchasePage() {
   const navigate = useNavigate();
   const { moduleId } = useParams();
+  const { user, loading } = useAuth();
   const module = MODULES_BY_ID[moduleId];
 
   if (!module) {
     return <Navigate to="/" replace />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  if (hasModuleAccess(user, module) && module?.route) {
+    return <Navigate to={module.route} replace />;
   }
 
   return (

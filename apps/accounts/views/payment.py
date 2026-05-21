@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 from decimal import InvalidOperation
 from uuid import uuid4
@@ -30,6 +31,8 @@ from apps.accounts.services import (
     process_pending_payment_grant_tasks_for_payment,
     process_payment_grant_task_by_id,
 )
+
+REMOTE_PAYMENT_QUERY_COOLDOWN_SECONDS = 5
 
 
 def _build_debug_merchant_order_no(*, user_id: int) -> str:
@@ -161,6 +164,22 @@ def _query_and_sync_payment_status(
     return True
 
 
+def _should_query_remote_payment_status(*, payment: AlipayWebsitePayment) -> bool:
+    if payment.status not in {
+        AlipayWebsitePayment.Status.CREATED,
+        AlipayWebsitePayment.Status.PENDING,
+    }:
+        return False
+
+    updated_at = getattr(payment, "updated_at", None)
+    if updated_at is None:
+        return True
+
+    return updated_at <= timezone.now() - timedelta(
+        seconds=REMOTE_PAYMENT_QUERY_COOLDOWN_SECONDS
+    )
+
+
 def _process_pending_payment_grant_tasks_safely(*, payment_id: int) -> None:
     try:
         process_pending_payment_grant_tasks_for_payment(payment_id=payment_id)
@@ -207,10 +226,11 @@ def _find_reusable_pending_purchase(
     for grant_task in candidates:
         payment = grant_task.payment
         if payment.status in pending_statuses:
-            try:
-                _query_and_sync_payment_status(payment=payment)
-            except (AlipayConfigurationError, AlipayGatewayError):
-                pass
+            if _should_query_remote_payment_status(payment=payment):
+                try:
+                    _query_and_sync_payment_status(payment=payment)
+                except (AlipayConfigurationError, AlipayGatewayError):
+                    pass
             payment.refresh_from_db(fields=["status", "updated_at", "paid_at", "alipay_trade_no"])
             grant_task.refresh_from_db()
 
@@ -610,10 +630,11 @@ class AlipayPaymentStatusAPIView(APIView):
             AlipayWebsitePayment.Status.CREATED,
             AlipayWebsitePayment.Status.PENDING,
         }:
-            try:
-                _query_and_sync_payment_status(payment=payment)
-            except (AlipayConfigurationError, AlipayGatewayError):
-                pass
+            if _should_query_remote_payment_status(payment=payment):
+                try:
+                    _query_and_sync_payment_status(payment=payment)
+                except (AlipayConfigurationError, AlipayGatewayError):
+                    pass
             payment.refresh_from_db(fields=["status", "updated_at", "paid_at", "alipay_trade_no"])
 
         if (

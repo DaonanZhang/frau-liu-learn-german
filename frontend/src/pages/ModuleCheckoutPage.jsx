@@ -5,45 +5,9 @@ import Swal from "sweetalert2";
 import { fetchPurchaseOffers, createAlipayPurchase, savePendingPaymentContext } from "../api/payments/alipay.js";
 import { useAuth } from "../api/auth/useAuth.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
+import { hasModuleAccess } from "../utils/moduleAccess.js";
 
 import "./ModuleCheckoutPage.css";
-
-function hasModuleAccess(user, module) {
-  if (!user || !module?.moduleKey) {
-    return false;
-  }
-
-  if (user.is_staff || user.is_superuser) {
-    return true;
-  }
-
-  const entitlements = Array.isArray(user.entitlements) ? user.entitlements : [];
-  const allowedSeasonNumbers = Array.isArray(module?.seasonNumbers)
-    ? module.seasonNumbers.map((item) => Number(item)).filter(Number.isFinite)
-    : [Number(module?.seasonNumber)].filter(Number.isFinite);
-
-  return entitlements.some((item) => {
-    if (!item?.is_valid_now) {
-      return false;
-    }
-
-    const scope = String(item.scope || "");
-    if (scope === "platform") {
-      return true;
-    }
-
-    const moduleKey = item?.module?.key;
-    if (moduleKey !== module.moduleKey) {
-      return false;
-    }
-
-    if (!item?.season) {
-      return true;
-    }
-
-    return allowedSeasonNumbers.includes(Number(item.season?.season_number));
-  });
-}
 
 function formatPromoPrice(amount) {
   const numeric = Number(amount);
@@ -72,8 +36,9 @@ function getOriginalPrice(offer) {
 export default function ModuleCheckoutPage() {
   const { moduleId } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, reloadMe } = useAuth();
+  const { user, loading, isAuthenticated, reloadMe } = useAuth();
   const module = MODULES_BY_ID[moduleId];
+  const alreadyHasAccess = useMemo(() => hasModuleAccess(user, module), [user, module]);
 
   const [offers, setOffers] = useState([]);
   const [loadingOffers, setLoadingOffers] = useState(true);
@@ -214,6 +179,14 @@ export default function ModuleCheckoutPage() {
 
   if (!module) {
     return <Navigate to="/" replace />;
+  }
+
+  if (loading) {
+    return null;
+  }
+
+  if (alreadyHasAccess && module?.route) {
+    return <Navigate to={module.route} replace />;
   }
 
   return (

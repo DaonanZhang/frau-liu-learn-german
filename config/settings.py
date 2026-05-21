@@ -208,6 +208,7 @@ ALIPAY_LOCAL_SIMULATE_SUCCESS = env.bool(
 ALIPAY_SELLER_ID = env("ALIPAY_SELLER_ID", default="")
 ALIPAY_SIGN_TYPE = env("ALIPAY_SIGN_TYPE", default="RSA2")
 ALIPAY_TIMEOUT_EXPRESS = env("ALIPAY_TIMEOUT_EXPRESS", default="15m")
+ALIPAY_API_TIMEOUT_SECONDS = env.float("ALIPAY_API_TIMEOUT_SECONDS", default=3.0)
 
 # =========================
 # Maintenance mode

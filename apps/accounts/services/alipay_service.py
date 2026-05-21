@@ -43,6 +43,7 @@ class AlipayClientConfig:
     seller_id: str
     sign_type: str
     timeout_express: str
+    api_timeout_seconds: float
 
 
 def _normalize_pem_key(value: str, *, key_type: str) -> str:
@@ -166,6 +167,10 @@ def load_alipay_client_config() -> AlipayClientConfig:
         seller_id=settings.ALIPAY_SELLER_ID.strip(),
         sign_type=settings.ALIPAY_SIGN_TYPE.strip() or "RSA2",
         timeout_express=settings.ALIPAY_TIMEOUT_EXPRESS.strip() or "15m",
+        api_timeout_seconds=max(
+            float(getattr(settings, "ALIPAY_API_TIMEOUT_SECONDS", 3.0) or 3.0),
+            1.0,
+        ),
     )
 
     missing_fields = [
@@ -297,7 +302,7 @@ class AlipayService:
         )
 
         try:
-            with urlopen(request, timeout=10) as response:
+            with urlopen(request, timeout=self.config.api_timeout_seconds) as response:
                 response_body = response.read().decode("utf-8")
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
             raise AlipayGatewayError(f"Failed to call Alipay gateway: {exc}") from exc

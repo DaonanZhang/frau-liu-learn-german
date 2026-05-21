@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function formatUpdatedAt(value) {
   if (!value) {
@@ -48,6 +48,9 @@ export default function SpeakingPracticeModal({
 }) {
   const activeItemRef = useRef(null);
   const subtitleListRef = useRef(null);
+  const textareaRef = useRef(null);
+  const [viewportHeight, setViewportHeight] = useState(null);
+  const [isNoteFocused, setIsNoteFocused] = useState(false);
 
   const items = useMemo(() => {
     if (!Array.isArray(subtitleItems)) {
@@ -101,7 +104,60 @@ export default function SpeakingPracticeModal({
     container.scrollTo({ top: nextTop, behavior: "smooth" });
   }, [isOpen, activeSubtitleIndex]);
 
+  useEffect(() => {
+    if (!isOpen || !isMobile) {
+      setViewportHeight(null);
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    if (!viewport) {
+      setViewportHeight(window.innerHeight || null);
+      return;
+    }
+
+    const syncViewportHeight = () => {
+      setViewportHeight(Math.round(viewport.height));
+    };
+
+    syncViewportHeight();
+    viewport.addEventListener("resize", syncViewportHeight);
+    viewport.addEventListener("scroll", syncViewportHeight);
+
+    return () => {
+      viewport.removeEventListener("resize", syncViewportHeight);
+      viewport.removeEventListener("scroll", syncViewportHeight);
+    };
+  }, [isMobile, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !isMobile || !isNoteFocused) {
+      return;
+    }
+
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      textarea.scrollIntoView({
+        block: "nearest",
+        inline: "nearest",
+      });
+    }, 80);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isMobile, isNoteFocused, isOpen, viewportHeight]);
+
   const isDirty = noteText !== savedText;
+  const keyboardInset = Math.max(
+    0,
+    Math.round((window.innerHeight || 0) - (viewportHeight || window.innerHeight || 0)),
+  );
+  const isKeyboardOpen = isMobile && keyboardInset > 120;
 
   if (!isOpen) {
     return null;
@@ -110,11 +166,19 @@ export default function SpeakingPracticeModal({
   return (
     <div className="vs-speakingModalOverlay" onClick={() => onClose?.()} role="presentation">
       <section
-        className="vs-speakingModal"
+        className={[
+          "vs-speakingModal",
+          isKeyboardOpen ? "is-keyboardOpen" : "",
+          isNoteFocused ? "is-noteFocused" : "",
+        ].filter(Boolean).join(" ")}
         role="dialog"
         aria-modal="true"
         aria-label="开口练习"
         onClick={(event) => event.stopPropagation()}
+        style={viewportHeight ? {
+          "--vs-speaking-viewport-height": `${viewportHeight}px`,
+          "--vs-speaking-keyboard-inset": `${keyboardInset}px`,
+        } : undefined}
       >
         <div className="vs-speakingModalHeader">
           <div>
@@ -133,7 +197,7 @@ export default function SpeakingPracticeModal({
           </button>
         </div>
 
-        <div className="vs-speakingModalBody">
+        <div className={["vs-speakingModalBody", isKeyboardOpen ? "is-keyboardOpen" : ""].filter(Boolean).join(" ")}>
           <section className="vs-speakingSubtitleCard">
             <div className="vs-speakingSectionHeader">
               <div className="vs-speakingSectionTitle">中文字幕提示</div>
@@ -197,9 +261,16 @@ export default function SpeakingPracticeModal({
               <div className="vs-speakingEmpty">加载笔记中...</div>
             ) : (
               <textarea
+                ref={textareaRef}
                 className="vs-speakingTextarea"
                 value={noteText}
                 onChange={(event) => onNoteTextChange?.(event.target.value)}
+                onFocus={() => {
+                  setIsNoteFocused(true);
+                }}
+                onBlur={() => {
+                  setIsNoteFocused(false);
+                }}
                 placeholder={"试着先用自己的德语写一句。\n也可以记下不会说的地方，再回到字幕和词句里核对。"}
                 spellCheck={false}
               />

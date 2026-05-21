@@ -1374,6 +1374,12 @@
   grid-template-rows: auto 1fr;
 }
 
+.vs-speakingModal.is-keyboardOpen {
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .vs-speakingModalHeader {
   display: flex;
   align-items: flex-start;
@@ -1417,6 +1423,10 @@
   display: grid;
   grid-template-rows: minmax(16rem, 0.95fr) minmax(16rem, 1.05fr);
   gap: 1rem;
+}
+
+.vs-speakingModalBody.is-keyboardOpen {
+  grid-template-rows: minmax(7.5rem, 0.62fr) minmax(15rem, 1.38fr);
 }
 
 .vs-speakingSubtitleCard,
@@ -1472,6 +1482,11 @@
   color: #111827;
   white-space: pre-wrap;
   -webkit-overflow-scrolling: touch;
+}
+
+.vs-speakingModal.is-keyboardOpen .vs-speakingSubtitleList,
+.vs-speakingModal.is-keyboardOpen .vs-speakingSubtitleBlock {
+  max-height: 32vh;
 }
 
 .vs-speakingSubtitleItem {
@@ -1570,6 +1585,10 @@
   font: inherit;
   line-height: 1.7;
   color: #111827;
+}
+
+.vs-speakingModal.is-noteFocused .vs-speakingTextarea {
+  padding-bottom: calc(8rem + env(safe-area-inset-bottom));
 }
 
 .vs-speakingEmpty {
@@ -1958,7 +1977,7 @@
 
   .vs-speakingModal {
     width: 100%;
-    max-height: calc(100dvh - 0.75rem);
+    max-height: calc(var(--vs-speaking-viewport-height, 100dvh) - 0.75rem);
     border-radius: 1.1rem 1.1rem 0 0;
     overflow: auto;
     overscroll-behavior: contain;
@@ -1984,6 +2003,11 @@
     grid-template-rows: minmax(13rem, 0.9fr) minmax(15rem, 1.1fr);
   }
 
+  .vs-speakingModalBody.is-keyboardOpen {
+    grid-template-rows: minmax(6.5rem, 0.44fr) minmax(16rem, 1.56fr);
+    gap: 0.75rem;
+  }
+
   .vs-speakingModalCloseBtn {
     position: sticky;
     top: calc(env(safe-area-inset-top, 0px) + 0.15rem);
@@ -2000,6 +2024,24 @@
     padding: 0.95rem 0.95rem 1rem;
     font-size: 1rem;
     line-height: 1.72;
+  }
+
+  .vs-speakingModal.is-keyboardOpen .vs-speakingSubtitleCard {
+    min-height: 0;
+  }
+
+  .vs-speakingModal.is-keyboardOpen .vs-speakingSubtitleList,
+  .vs-speakingModal.is-keyboardOpen .vs-speakingSubtitleBlock {
+    max-height: min(22vh, 10rem);
+    padding-bottom: 0.85rem;
+  }
+
+  .vs-speakingModal.is-keyboardOpen .vs-speakingNoteCard {
+    min-height: 16rem;
+  }
+
+  .vs-speakingModal.is-keyboardOpen .vs-speakingTextarea {
+    min-height: 14rem;
   }
 
   .vs-speakingSectionHeader {
@@ -2019,5 +2061,9 @@
     top: 0;
     z-index: 3;
     box-shadow: 0 1px 0 #f6ecd7;
+  }
+
+  .vs-speakingModal.is-noteFocused .vs-speakingNoteCard .vs-speakingSectionHeader {
+    position: sticky;
   }
 }

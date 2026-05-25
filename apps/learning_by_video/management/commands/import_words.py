@@ -49,7 +49,7 @@ def _parse_article(raw: str) -> str:
     return WordText.Article.NONE
 
 
-def _parse_pos_and_flags(category_raw: str) -> tuple[str, bool]:
+def _parse_pos_and_flags(category_raw: str, article_raw: str = "") -> tuple[str, bool]:
     """
     Map CSV '类别' to WordText.POS and splittable.
     Examples:
@@ -57,30 +57,49 @@ def _parse_pos_and_flags(category_raw: str) -> tuple[str, bool]:
       - "adj." -> ADJ
       - "adv." -> ADV
       - "vt." / "vi." -> VERB
+      - "vr." / "v. präp" -> VERB
+      - "präp" -> PREP
       - "vt.,trennbar" -> VERB + splittable True
+      - empty 类别 + der/die/das/pl. -> NOUN
     """
     s = (category_raw or "").strip().lower()
+    article = _parse_article(article_raw)
 
     splittable = "trennbar" in s
 
     # normalize separators
     parts = [p.strip() for p in re.split(r"[,\s]+", s) if p.strip()]
+    part_set = set(parts)
+
+    noun_markers = {"n.", "n"}
+    adj_markers = {"adj.", "adj"}
+    adv_markers = {"adv.", "adv"}
+    prep_markers = {"präp", "präp.", "praep", "praep."}
+    verb_markers = {
+        "v.", "v",
+        "vt.", "vt",
+        "vi.", "vi",
+        "vr.", "vr",
+    }
 
     # prioritize noun/adj/adv
-    if any(p == "n." or p == "n" for p in parts):
+    if noun_markers & part_set:
         return WordText.POS.NOUN, splittable
-    if any(p in {"adj.", "adj"} for p in parts):
+    if adj_markers & part_set:
         return WordText.POS.ADJ, splittable
-    if any(p in {"adv.", "adv"} for p in parts):
+    if adv_markers & part_set:
         return WordText.POS.ADV, splittable
 
-    # verbs
-    if any(p in {"v.", "v", "vt.", "vt", "vi.", "vi"} for p in parts):
+    # "v. präp" and "vr." are still verbs, not prepositions.
+    if verb_markers & part_set:
         return WordText.POS.VERB, splittable
 
-    # fallback: if contains typical verb markers
-    if "vt" in parts or "vi" in parts:
-        return WordText.POS.VERB, splittable
+    if prep_markers & part_set:
+        return WordText.POS.PREP, splittable
+
+    # Many source sheets leave 类别 blank for nouns but still fill der/die/das/pl.
+    if article != WordText.Article.NONE:
+        return WordText.POS.NOUN, splittable
 
     return WordText.POS.OTHER, splittable
 
@@ -250,7 +269,7 @@ class Command(BaseCommand):
                 )
 
             article = _parse_article(article_raw)
-            pos, splittable = _parse_pos_and_flags(category_raw)
+            pos, splittable = _parse_pos_and_flags(category_raw, article_raw)
 
             # WordText: aggregation anchor
             # We use get_or_create by its unique fields.

@@ -411,7 +411,7 @@ class Command(BaseCommand):
                     target_text = mr.used_key[1] if mr.used_key else text
 
                     article = _parse_article(article_raw)
-                    pos, splittable = _parse_pos_and_flags(category_raw)
+                    pos, splittable = _parse_pos_and_flags(category_raw, article_raw)
                     target_word, _ = WordText.objects.get_or_create(
                         language="de",
                         text=target_text,

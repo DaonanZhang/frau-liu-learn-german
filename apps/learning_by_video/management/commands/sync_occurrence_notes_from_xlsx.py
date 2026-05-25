@@ -17,6 +17,7 @@ from apps.learning_by_video.management.commands.fill_selected_from_xlsx import (
     _s,
     _sheet,
 )
+from apps.learning_by_video.management.commands.import_videos import _get_target_season
 from apps.learning_by_video.models import VideoExpressionOccurrence, VideoWordOccurrence
 
 
@@ -112,6 +113,19 @@ class Command(BaseCommand):
             default="",
             help="Optional single xlsx filename or full path under --xlsx-dir/--processed-dir.",
         )
+        parser.add_argument("--module-key", default="learning_by_video")
+        parser.add_argument(
+            "--season-number",
+            type=int,
+            action="append",
+            default=[],
+            help="Optional target season number filter. Can be repeated.",
+        )
+        parser.add_argument(
+            "--preserve-unmapped-videos",
+            action="store_true",
+            help="Do not clear existing DB notes for videos that have no mapped xlsx in the selected scope.",
+        )
 
     def _collect_files(self, xlsx_dir: Path, processed_dir: Path, file_arg: str) -> list[Path]:
         if file_arg:
@@ -142,6 +156,21 @@ class Command(BaseCommand):
         xlsx_dir: Path = options["xlsx_dir"]
         processed_dir: Path = options["processed_dir"]
         file_arg = str(options.get("file") or "").strip()
+        module_key = str(options.get("module_key") or "learning_by_video")
+        season_numbers = [int(x) for x in (options.get("season_number") or []) if int(x) > 0]
+        preserve_unmapped_videos = bool(options.get("preserve_unmapped_videos"))
+
+        target_season_ids: set[int] = set()
+        for season_number in season_numbers:
+            target_season = _get_target_season(
+                module_key=module_key,
+                season_number=season_number,
+            )
+            if target_season is None:
+                raise ValueError(
+                    f"Target season not found (module={module_key}, season_number={season_number})."
+                )
+            target_season_ids.add(int(target_season.id))
 
         xlsx_files = self._collect_files(xlsx_dir, processed_dir, file_arg)
         if not xlsx_files:
@@ -164,6 +193,8 @@ class Command(BaseCommand):
             if video is None:
                 unresolved_xlsx.append(f"{xlsx_path.name} | video not found")
                 continue
+            if target_season_ids and video.season_id not in target_season_ids:
+                continue
 
             try:
                 word_df = _sheet(xlsx_path, "word")
@@ -185,15 +216,22 @@ class Command(BaseCommand):
         updated_word_notes = 0
         updated_expression_notes = 0
 
+        word_qs = VideoWordOccurrence.objects.select_related("subtitle", "word")
+        expr_qs = VideoExpressionOccurrence.objects.select_related("subtitle", "expression")
+        if target_season_ids:
+            word_qs = word_qs.filter(video__season_id__in=target_season_ids)
+            expr_qs = expr_qs.filter(video__season_id__in=target_season_ids)
+
         with transaction.atomic():
-            for occ in VideoWordOccurrence.objects.select_related("subtitle", "word").all():
+            for occ in word_qs:
                 bundle = video_map.get(occ.video_id)
                 if bundle is None:
-                    current_note = occ.note or ""
-                    if current_note != "":
-                        occ.note = ""
-                        occ.save(update_fields=["note"])
-                        updated_word_notes += 1
+                    if not preserve_unmapped_videos:
+                        current_note = occ.note or ""
+                        if current_note != "":
+                            occ.note = ""
+                            occ.save(update_fields=["note"])
+                            updated_word_notes += 1
                     unmapped_video_occurrences.append(
                         f"[DB][word] video={occ.video_id} occ_id={occ.id} "
                         f"text={_s(occ.word.text if occ.word_id else '')} | reason=no mapped xlsx for video"
@@ -241,18 +279,19 @@ class Command(BaseCommand):
                     occ.save(update_fields=["note"])
                     updated_word_notes += 1
 
-            for occ in VideoExpressionOccurrence.objects.select_related("subtitle", "expression").all():
+            for occ in expr_qs:
                 bundle = video_map.get(occ.video_id)
                 if bundle is None:
-                    current_note = occ.note or ""
-                    if current_note != "":
-                        occ.note = ""
-                        occ.save(update_fields=["note"])
-                        updated_expression_notes += 1
+                    if not preserve_unmapped_videos:
+                        current_note = occ.note or ""
+                        if current_note != "":
+                            occ.note = ""
+                            occ.save(update_fields=["note"])
+                            updated_expression_notes += 1
                     unmapped_video_occurrences.append(
                         f"[DB][expression] video={occ.video_id} occ_id={occ.id} "
                         f"text={_s(occ.expression.text if occ.expression_id else '')} | reason=no mapped xlsx for video"
-                    )
+                        )
                     continue
 
                 file_name, widx, eidx = bundle
@@ -324,6 +363,8 @@ class Command(BaseCommand):
                 transaction.set_rollback(True)
 
         self.stdout.write(f"mode={mode}")
+        self.stdout.write(f"season filter={season_numbers or 'none'}")
+        self.stdout.write(f"preserve unmapped videos={preserve_unmapped_videos}")
         self.stdout.write(f"videos mapped from xlsx: {len(video_map)}")
         self.stdout.write(
             f"note updates planned/executed: word={updated_word_notes}, expression={updated_expression_notes}"

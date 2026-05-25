@@ -1099,16 +1099,24 @@
 }
 
 .vs-lexMeaningText {
-  font-size: 1.05rem;
+  font-size: 0.96rem;
   font-weight: 800;
   color: #111827;
 }
 
 .vs-lexMeaningMeta {
-  font-size: 0.95rem;
+  font-size: 0.84rem;
   font-weight: 800;
   color: #111827;
   opacity: 0.9;
+}
+
+.vs-lexNoteText {
+  margin-top: 0.4rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: #9ca3af;
+  overflow-wrap: anywhere;
 }
 /* Cloze mask: fully covers the matched German phrase */
 .vs-occ-mask {

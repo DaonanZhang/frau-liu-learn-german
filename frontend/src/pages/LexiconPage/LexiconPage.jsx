@@ -78,6 +78,7 @@ function useIsMobileView(maxWidth) {
  * @property {number|null} entityId
  * @property {number[]} occurrenceIds
  * @property {string|null} article
+ * @property {string} note
  */
 
 /**
@@ -171,6 +172,10 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
       existing.translation = nextEntry.translation;
     }
 
+    if (!existing.note && nextEntry.note) {
+      existing.note = nextEntry.note;
+    }
+
     if ((existing.article === null || existing.article === undefined) && nextEntry.article) {
       existing.article = nextEntry.article;
     }
@@ -227,6 +232,7 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
         subtitleIds: [],
         occurrenceIds: [],
         entityId: wordId,
+        note: normalizeText(occurrence?.note),
       },
       occurrence?.subtitle,
       occurrenceId
@@ -261,6 +267,7 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
         subtitleIds: [],
         occurrenceIds: [],
         entityId: expressionId,
+        note: normalizeText(occurrence?.note),
       },
       occurrence?.subtitle,
       occurrenceId

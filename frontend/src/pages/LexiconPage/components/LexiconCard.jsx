@@ -99,6 +99,7 @@ export default function LexiconCard({
 	}, [entry]);
 
 	const showArticle = Boolean(articleLabel) && entry?.kind === "word";
+	const noteText = String(entry?.note ?? "").trim();
 
 	const isKnownActive = knowledgeState === "known";
 	const isNotKnownActive = knowledgeState === "not_known";
@@ -162,6 +163,8 @@ export default function LexiconCard({
 					{posLabel ? <span className="lp-meaningPos">{posLabel}</span> : null}
 				</div>
 			) : null}
+
+			{noteText ? <div className="lp-noteText">{noteText}</div> : null}
 
 			{subtitleContent || subtitleTranslation ? (
 				<div className="lp-exampleCard" role="group" aria-label="Subtitle example">

@@ -108,16 +108,24 @@
 }
 
 .lp-meaningText {
-	font-size: 1.05rem;
+	font-size: 0.96rem;
 	font-weight: 800;
 	color: #111827;
 }
 
 .lp-meaningPos {
-	font-size: 0.95rem;
+	font-size: 0.84rem;
 	font-weight: 800;
 	color: #111827;
 	opacity: 0.9;
+}
+
+.lp-noteText {
+	margin-top: 0.4rem;
+	font-size: 0.84rem;
+	line-height: 1.45;
+	color: #9ca3af;
+	overflow-wrap: anywhere;
 }
 
 /* Example card uses your vs-lexSubtitleCard sizes */
@@ -130,7 +138,7 @@
 }
 
 .lp-exampleDe {
-	font-size: 0.95rem;
+	font-size: 0.88rem;
 	font-weight: 750;
 	color: #111827;
 	line-height: 1.35;
@@ -139,7 +147,7 @@
 
 .lp-exampleZh {
 	margin-top: 0.35rem;
-	font-size: 0.9rem;
+	font-size: 0.84rem;
 	color: #6b7280;
 	line-height: 1.35;
 	overflow-wrap: anywhere;

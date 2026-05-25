@@ -28,6 +28,7 @@ import { toggleVideoOccurrenceMark } from "../../../api/learning_by_video/marks_
  * @property {number|null} entityId
  * @property {number[]} occurrenceIds
  * @property {string|null} article
+ * @property {string} note
  */
 
 function normalizeText(text) {
@@ -225,6 +226,10 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
       existing.translation = nextEntry.translation;
     }
 
+    if (!existing.note && nextEntry.note) {
+      existing.note = nextEntry.note;
+    }
+
     if ((existing.article === null || existing.article === undefined) && nextEntry.article) {
       existing.article = nextEntry.article;
     }
@@ -282,6 +287,7 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
         subtitleIds: [],
         occurrenceIds: [],
         entityId: wordId,
+        note: normalizeText(occurrence?.note),
       },
       occurrence?.subtitle,
       occurrenceId
@@ -317,6 +323,7 @@ function buildLexiconEntries(wordOccurrences, expressionOccurrences) {
         subtitleIds: [],
         occurrenceIds: [],
         entityId: expressionId,
+        note: normalizeText(occurrence?.note),
       },
       occurrence?.subtitle,
       occurrenceId
@@ -1018,6 +1025,7 @@ export default function LexiconPanel({
 
               const subtitleDe = normalizeText(subtitleItem?.de);
               const subtitleZh = normalizeText(subtitleItem?.zh);
+              const noteText = normalizeText(entry?.note);
 
               return (
                 <article
@@ -1113,6 +1121,10 @@ export default function LexiconPanel({
                         </span>
                       ) : null}
                     </div>
+                  ) : null}
+
+                  {noteText && (!isMobile || isExpanded) ? (
+                    <div className="vs-lexNoteText">{noteText}</div>
                   ) : null}
 
                   {(subtitleDe || subtitleZh) && (!isMobile || isExpanded) ? (

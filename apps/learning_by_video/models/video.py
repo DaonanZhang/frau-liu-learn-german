@@ -12,6 +12,7 @@ class Video(models.Model):
 
     description = models.TextField(blank=True, default="")
     difficulty = models.CharField(max_length=32, blank=True, default="", db_index=True)
+    source = models.URLField(blank=True, default="")
 
     video_url = models.URLField(blank=True, default="")
     cover_letter_url = models.URLField(blank=True, default="")

@@ -9,7 +9,7 @@ Usage:
 One-stop pipeline (Step 0 -> Step 4):
   0) Convert MOV -> MP4 (optional, auto-skip if no MOV)
   1) Build HLS from MP4
-  2) Import XLSX into DB (videos/subtitles/exercises/expressions/words)
+  2) Import XLSX into DB (videos/subtitles/exercises/expressions/words; includes youtube -> Video.source)
   3) Backfill video_url / cover_letter_url
   4) Aggregate full German/Chinese subtitles onto Video fields
 

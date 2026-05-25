@@ -17,9 +17,9 @@ from apps.learning_by_video.models import (
 
 @admin.register(Video)
 class VideoAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "creator", "difficulty", "season", "is_published", "created_at")
+    list_display = ("id", "title", "creator", "difficulty", "source", "season", "is_published", "created_at")
     list_filter = ("difficulty", "season", "is_published")
-    search_fields = ("title", "creator")
+    search_fields = ("title", "creator", "source")
     ordering = ("-created_at",)
     filter_horizontal = ("access_seasons",)
 

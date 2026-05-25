@@ -24,6 +24,7 @@ COL_DIFFICULTY = "难度"
 COL_TAGS = "tags"
 COL_DESC = "简介"
 COL_DURATION = "时长"
+COL_SOURCE = "youtube"
 COL_COVER = "封面"
 COL_LINK = "链接"
 
@@ -175,6 +176,20 @@ def _pick_title(row: pd.Series) -> str:
     return ""
 
 
+def _get_source_value(row: pd.Series) -> str:
+    """
+    Read source URL from supported sheet headers.
+
+    Current canonical header is `youtube`, but accept a few variants to
+    reduce breakage while templates are catching up.
+    """
+    for col in ("youtube", "YouTube", "Youtube", "source", "Source"):
+        value = str(row.get(col, "")).strip()
+        if value:
+            return value
+    return ""
+
+
 def _normalize_media_key(text: str) -> str:
     """
     Normalize a title/filename to a matching key:
@@ -280,7 +295,8 @@ def _find_media_filename(title: str, file_map: dict[str, str]) -> str:
 class Command(BaseCommand):
     help = (
         "Import videos from XLSX sheet 'video description'. "
-        "Media URLs (video_url / cover_letter_url) are intentionally ignored here."
+        "Media URLs (video_url / cover_letter_url) are intentionally ignored here, "
+        "but `youtube` is imported into Video.source."
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -394,6 +410,7 @@ class Command(BaseCommand):
                     description = str(row[COL_DESC]).strip()
                     duration_seconds = _parse_duration_to_seconds(str(row[COL_DURATION]).strip())
                     tags = _parse_tags(str(row[COL_TAGS]).strip())
+                    source = _get_source_value(row)
 
                     obj, was_created = Video.objects.update_or_create(
                         title=title,
@@ -403,6 +420,7 @@ class Command(BaseCommand):
                             "description": description,
                             "duration_seconds": duration_seconds,
                             "tags": tags,
+                            "source": source,
                         },
                     )
 

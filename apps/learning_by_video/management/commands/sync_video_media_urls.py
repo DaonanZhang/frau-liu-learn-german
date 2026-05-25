@@ -124,9 +124,18 @@ def _find_filename(
     if file_map_ascii and key_ascii and key_ascii in file_map_ascii:
         return file_map_ascii[key_ascii]
 
+    def _trailing_number(value: str) -> str:
+        m = re.search(r"(\d+)$", value or "")
+        return m.group(1) if m else ""
+
+    requested_num = _trailing_number(key)
+
     best = ""
     best_len = 0
     for k, filename in file_map.items():
+        existing_num = _trailing_number(k)
+        if requested_num and existing_num and requested_num != existing_num:
+            continue
         if k in key or key in k:
             if len(k) > best_len:
                 best = filename
@@ -135,7 +144,11 @@ def _find_filename(
         return best
 
     if file_map_ascii and key_ascii:
+        requested_num_ascii = _trailing_number(key_ascii)
         for k, filename in file_map_ascii.items():
+            existing_num_ascii = _trailing_number(k)
+            if requested_num_ascii and existing_num_ascii and requested_num_ascii != existing_num_ascii:
+                continue
             if k in key_ascii or key_ascii in k:
                 if len(k) > best_len:
                     best = filename

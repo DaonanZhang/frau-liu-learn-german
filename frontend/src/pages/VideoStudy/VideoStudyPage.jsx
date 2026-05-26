@@ -98,6 +98,33 @@ function userHasSeasonAccess(user, seasonNumber) {
   });
 }
 
+function normalizeTopicTagValue(raw) {
+  if (!raw) {
+    return [];
+  }
+
+  const quoteTrim = /^["'“”‘’]+|["'“”‘’]+$/g;
+  return String(raw)
+    .split(/[,\uFF0C\u3001]/)
+    .map((part) => part.trim().replace(quoteTrim, ""))
+    .filter(Boolean);
+}
+
+function getTopicTags(video) {
+  const raw = video?.tags;
+  const collected = [];
+
+  if (Array.isArray(raw)) {
+    raw.forEach((item) => {
+      collected.push(...normalizeTopicTagValue(item));
+    });
+  } else {
+    collected.push(...normalizeTopicTagValue(raw));
+  }
+
+  return [...new Set(collected)];
+}
+
 export default function VideoStudyPage() {
   const { videoId } = useParams();
   const location = useLocation();
@@ -318,6 +345,7 @@ export default function VideoStudyPage() {
   const leftDescription = video?.description ?? "";
   const leftCreator = video?.creator ?? "";
   const isVlogSeason = Number(video?.season_number) === 4;
+  const topicTags = useMemo(() => getTopicTags(video), [video]);
   const shouldShowEmptyDescriptionFallback = Number(video?.season_number) !== 4;
   const leftVideoUrl = video?.video_url ?? "";
   const isHlsUrl = useMemo(() => isProbablyHlsUrl(leftVideoUrl), [leftVideoUrl]);
@@ -1083,12 +1111,21 @@ export default function VideoStudyPage() {
 
           {!isMobile ? (
             <div className="vs-descCard">
-              <div className="vs-descTitle">视频简介</div>
+              <div className="vs-descTitle">{isVlogSeason ? "视频内容" : "视频简介"}</div>
               <div className="vs-descText">
                 {loadingVideo
                   ? "Loading…"
                   : leftDescription || (shouldShowEmptyDescriptionFallback ? "暂无简介" : "")}
               </div>
+              {isVlogSeason && !loadingVideo && topicTags.length ? (
+                <div className="vs-topicChips" aria-label="视频话题">
+                  {topicTags.map((tag) => (
+                    <span className="vs-chip vs-chip--mint" key={`study-tag-${tag}`}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               {!loadingVideo ? (
                 <div className="vs-descSource">
                   {leftCreator

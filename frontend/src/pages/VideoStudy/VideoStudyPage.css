@@ -126,6 +126,30 @@
   line-height: 1.5;
 }
 
+.vs-topicChips {
+  margin-top: 0.7rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.vs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.22rem 0.52rem;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  border: 1px solid transparent;
+  font-weight: 600;
+}
+
+.vs-chip--mint {
+  background: #ecfdf3;
+  color: #047857;
+  border-color: #bbf7d0;
+}
+
 .vs-descSource {
   margin-top: 0.6rem;
   font-size: 0.72rem;

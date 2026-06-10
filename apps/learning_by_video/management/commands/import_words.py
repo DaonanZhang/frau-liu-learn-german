@@ -189,7 +189,6 @@ class Command(BaseCommand):
             COL_TEXT,
             COL_TRANSLATION,
             COL_ARTICLE,
-            COL_CATEGORY,
             COL_SUBTITLE_ID,
         }
         missing = required - set(df.columns)
@@ -207,6 +206,9 @@ class Command(BaseCommand):
         # Normalize columns to strings
         for col in required:
             df[col] = df[col].map(_to_str)
+        if COL_CATEGORY not in df.columns:
+            df[COL_CATEGORY] = ""
+        df[COL_CATEGORY] = df[COL_CATEGORY].map(_to_str)
         if COL_SELECTED_TEXT in df.columns:
             df[COL_SELECTED_TEXT] = df[COL_SELECTED_TEXT].map(_to_str)
         if COL_SELECTED_TEXT_ALT in df.columns:

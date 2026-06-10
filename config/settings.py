@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "apps.accounts.apps.AccountsConfig",
     "apps.learning_by_video.apps.LearningConfig",
+    "apps.exam_preparation.apps.ExamPreparationConfig",
     "apps.lexicon.apps.LexiconConfig",
     "apps.announcement.apps.AnnouncementConfig",
 ]

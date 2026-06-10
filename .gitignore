@@ -6,5 +6,6 @@ __pycache__/
 venv/
 .venv/
 /apps/learning_by_video/data/
+/apps/exam_preparation/data/imports/
 /frontend/public/resources/
 /frontend/public/manual

@@ -1,4 +1,8 @@
 export function hasModuleAccess(user, module) {
+  if (module?.isOpenAccess) {
+    return true;
+  }
+
   if (!user || !module?.moduleKey) {
     return false;
   }

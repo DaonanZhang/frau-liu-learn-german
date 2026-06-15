@@ -59,6 +59,59 @@ class ListeningAnswerOptionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
+class ListeningAnswerOptionDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ListeningAnswerOption
+        fields = [
+            "id",
+            "option_key",
+            "option_text",
+            "is_correct",
+            "explanation",
+            "sort_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ListeningQuestionDetailSerializer(serializers.ModelSerializer):
+    answer_options = ListeningAnswerOptionDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ListeningQuestion
+        fields = [
+            "id",
+            "question_number",
+            "question_type",
+            "question_text",
+            "created_at",
+            "updated_at",
+            "answer_options",
+        ]
+        read_only_fields = fields
+
+
+class ListeningExerciseDetailSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+    questions = ListeningQuestionDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ListeningExercise
+        fields = [
+            "id",
+            "exercise_base",
+            "listening_type",
+            "audio_file_identifier",
+            "audio_file_url",
+            "script",
+            "created_at",
+            "updated_at",
+            "questions",
+        ]
+        read_only_fields = fields
+
+
 class ReadingTitleMatchingExerciseSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReadingTitleMatchingExercise
@@ -78,6 +131,42 @@ class ReadingTitleMatchingOptionSerializer(serializers.ModelSerializer):
         model = ReadingTitleMatchingOption
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class ReadingTitleMatchingItemDetailSerializer(serializers.ModelSerializer):
+    correct_option = ReadingTitleMatchingOptionSerializer(read_only=True)
+
+    class Meta:
+        model = ReadingTitleMatchingItem
+        fields = [
+            "id",
+            "item_number",
+            "text",
+            "correct_option",
+            "explanation",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ReadingTitleMatchingExerciseDetailSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+    options = ReadingTitleMatchingOptionSerializer(many=True, read_only=True)
+    items = ReadingTitleMatchingItemDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ReadingTitleMatchingExercise
+        fields = [
+            "id",
+            "exercise_base",
+            "instruction",
+            "created_at",
+            "updated_at",
+            "options",
+            "items",
+        ]
+        read_only_fields = fields
 
 
 class ReadingUnderstandingExerciseSerializer(serializers.ModelSerializer):
@@ -101,6 +190,55 @@ class ReadingUnderstandingAnswerOptionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
+class ReadingUnderstandingAnswerOptionDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReadingUnderstandingAnswerOption
+        fields = [
+            "id",
+            "option_key",
+            "option_text",
+            "is_correct",
+            "explanation",
+            "sort_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ReadingUnderstandingQuestionDetailSerializer(serializers.ModelSerializer):
+    answer_options = ReadingUnderstandingAnswerOptionDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ReadingUnderstandingQuestion
+        fields = [
+            "id",
+            "question_number",
+            "question_text",
+            "created_at",
+            "updated_at",
+            "answer_options",
+        ]
+        read_only_fields = fields
+
+
+class ReadingUnderstandingExerciseDetailSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+    questions = ReadingUnderstandingQuestionDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ReadingUnderstandingExercise
+        fields = [
+            "id",
+            "exercise_base",
+            "text_markdown",
+            "created_at",
+            "updated_at",
+            "questions",
+        ]
+        read_only_fields = fields
+
+
 class ReadingAdMatchingExerciseSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReadingAdMatchingExercise
@@ -120,6 +258,57 @@ class ReadingAdMatchingAdSerializer(serializers.ModelSerializer):
         model = ReadingAdMatchingAd
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class ReadingAdMatchingAdDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReadingAdMatchingAd
+        fields = [
+            "id",
+            "ad_key",
+            "ad_text_markdown",
+            "ad_order",
+            "is_no_match_option",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ReadingAdMatchingItemDetailSerializer(serializers.ModelSerializer):
+    correct_ad = ReadingAdMatchingAdDetailSerializer(read_only=True)
+
+    class Meta:
+        model = ReadingAdMatchingItem
+        fields = [
+            "id",
+            "item_number",
+            "item_text",
+            "correct_ad",
+            "explanation",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ReadingAdMatchingExerciseDetailSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+    ads = ReadingAdMatchingAdDetailSerializer(many=True, read_only=True)
+    items = ReadingAdMatchingItemDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ReadingAdMatchingExercise
+        fields = [
+            "id",
+            "exercise_base",
+            "instruction",
+            "created_at",
+            "updated_at",
+            "ads",
+            "items",
+        ]
+        read_only_fields = fields
 
 
 class ClozeChoiceExerciseSerializer(serializers.ModelSerializer):
@@ -143,6 +332,56 @@ class ClozeChoiceOptionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
+class ClozeChoiceOptionDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClozeChoiceOption
+        fields = [
+            "id",
+            "option_key",
+            "option_text",
+            "is_correct",
+            "explanation",
+            "sort_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ClozeChoiceBlankDetailSerializer(serializers.ModelSerializer):
+    options = ClozeChoiceOptionDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ClozeChoiceBlank
+        fields = [
+            "id",
+            "blank_key",
+            "blank_number",
+            "created_at",
+            "updated_at",
+            "options",
+        ]
+        read_only_fields = fields
+
+
+class ClozeChoiceExerciseDetailSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+    blanks = ClozeChoiceBlankDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ClozeChoiceExercise
+        fields = [
+            "id",
+            "exercise_base",
+            "content_with_placeholders",
+            "original_source_text",
+            "created_at",
+            "updated_at",
+            "blanks",
+        ]
+        read_only_fields = fields
+
+
 class ClozeMatchingExerciseSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClozeMatchingExercise
@@ -157,11 +396,63 @@ class ClozeMatchingOptionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
+class ClozeMatchingOptionDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ClozeMatchingOption
+        fields = [
+            "id",
+            "option_key",
+            "option_text",
+            "option_order",
+            "is_extra",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
 class ClozeMatchingBlankAnswerSerializer(serializers.ModelSerializer):
     class Meta:
         model = ClozeMatchingBlankAnswer
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class ClozeMatchingBlankAnswerDetailSerializer(serializers.ModelSerializer):
+    correct_option = ClozeMatchingOptionDetailSerializer(read_only=True)
+
+    class Meta:
+        model = ClozeMatchingBlankAnswer
+        fields = [
+            "id",
+            "blank_key",
+            "blank_number",
+            "correct_option",
+            "explanation",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class ClozeMatchingExerciseDetailSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+    options = ClozeMatchingOptionDetailSerializer(many=True, read_only=True)
+    blank_answers = ClozeMatchingBlankAnswerDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ClozeMatchingExercise
+        fields = [
+            "id",
+            "exercise_base",
+            "content_with_placeholders",
+            "original_source_text",
+            "created_at",
+            "updated_at",
+            "options",
+            "blank_answers",
+        ]
+        read_only_fields = fields
 
 
 class WritingExerciseSerializer(serializers.ModelSerializer):
@@ -176,6 +467,41 @@ class WritingExampleTextSerializer(serializers.ModelSerializer):
         model = WritingExampleText
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class WritingExampleTextDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WritingExampleText
+        fields = [
+            "id",
+            "label",
+            "note",
+            "example_text",
+            "sort_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class WritingExerciseDetailSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+    example_texts = WritingExampleTextDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = WritingExercise
+        fields = [
+            "id",
+            "exercise_base",
+            "request_text",
+            "time_limit_minutes",
+            "words_limit",
+            "task_text",
+            "created_at",
+            "updated_at",
+            "example_texts",
+        ]
+        read_only_fields = fields
 
 
 class SpeakingGapMatchingExerciseSerializer(serializers.ModelSerializer):
@@ -204,4 +530,3 @@ class UserExerciseFavoriteSerializer(serializers.ModelSerializer):
         model = UserExerciseFavorite
         fields = "__all__"
         read_only_fields = ["id", "user", "created_at"]
-

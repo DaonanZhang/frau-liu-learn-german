@@ -12,6 +12,17 @@ import ManualPage from "./pages/ManualPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import ModulePage from "./pages/ModulePage.jsx";
 import VlogModulePage from "./pages/VlogModulePage.jsx";
+import ExamPreparationModulePage from "./pages/ExamPreparationModulePage.jsx";
+import ExamPreparationListeningPage from "./pages/ExamPreparationListeningPage.jsx";
+import ExamPreparationSprachbausteinePage from "./pages/ExamPreparationSprachbausteinePage.jsx";
+import ExamPreparationReadingPage from "./pages/ExamPreparationReadingPage.jsx";
+import ClozeChoicePage from "./pages/ClozeChoicePage.jsx";
+import ClozeMatchingPage from "./pages/ClozeMatchingPage.jsx";
+import ExamPreparationWritingPage from "./pages/ExamPreparationWritingPage.jsx";
+import ListeningExercisePage from "./pages/ListeningExercisePage.jsx";
+import ReadingTitleMatchingPage from "./pages/ReadingTitleMatchingPage.jsx";
+import ReadingUnderstandingPage from "./pages/ReadingUnderstandingPage.jsx";
+import ReadingAdMatchingPage from "./pages/ReadingAdMatchingPage.jsx";
 import ModulePurchasePage from "./pages/ModulePurchasePage.jsx";
 import ModuleCheckoutPage from "./pages/ModuleCheckoutPage.jsx";
 import AlipayReturnPage from "./pages/AlipayReturnPage.jsx";
@@ -41,6 +52,43 @@ const router = createBrowserRouter([
       { path: "/", element: <Home /> },
       { path: "/modules/science-season", element: <ModulePage /> },
       { path: "/modules/vlog-season", element: <VlogModulePage /> },
+      { path: "/modules/exam-preparation", element: <ExamPreparationModulePage /> },
+      { path: "/modules/exam-preparation/hoeren", element: <ExamPreparationListeningPage /> },
+      { path: "/modules/exam-preparation/sprachbausteine", element: <ExamPreparationSprachbausteinePage /> },
+      { path: "/modules/exam-preparation/schreiben", element: <ExamPreparationWritingPage /> },
+      { path: "/modules/exam-preparation/sprachbausteine/cloze-choice", element: <ClozeChoicePage /> },
+      { path: "/modules/exam-preparation/sprachbausteine/cloze-matching", element: <ClozeMatchingPage /> },
+      {
+        path: "/modules/exam-preparation/hoeren/short-text-prep",
+        element: (
+          <ListeningExercisePage
+            listeningType="short_text_true_false_with_prep"
+            eyebrow="LISTENING_SHORT_TEXT_PREP"
+          />
+        ),
+      },
+      {
+        path: "/modules/exam-preparation/hoeren/short-text-once",
+        element: (
+          <ListeningExercisePage
+            listeningType="short_text_true_false_once"
+            eyebrow="LISTENING_SHORT_TEXT_ONCE"
+          />
+        ),
+      },
+      {
+        path: "/modules/exam-preparation/hoeren/dialog-twice",
+        element: (
+          <ListeningExercisePage
+            listeningType="dialog_true_false_twice"
+            eyebrow="LISTENING_DIALOG_TWICE"
+          />
+        ),
+      },
+      { path: "/modules/exam-preparation/lesen", element: <ExamPreparationReadingPage /> },
+      { path: "/modules/exam-preparation/lesen/title-matching", element: <ReadingTitleMatchingPage /> },
+      { path: "/modules/exam-preparation/lesen/understanding", element: <ReadingUnderstandingPage /> },
+      { path: "/modules/exam-preparation/lesen/ad-matching", element: <ReadingAdMatchingPage /> },
       { path: "/modules/:moduleId/preview", element: <ModulePurchasePage /> },
       { path: "/modules/:moduleId/purchase", element: <ModuleCheckoutPage /> },
       { path: "/manual", element: <ManualPage /> },

@@ -4,11 +4,23 @@ from django.db import models
 
 
 class ListeningExercise(models.Model):
+    class ListeningType(models.TextChoices):
+        SHORT_TEXT_TRUE_FALSE_WITH_PREP = "short_text_true_false_with_prep", "Short texts true/false with prep time"
+        SHORT_TEXT_TRUE_FALSE_ONCE = "short_text_true_false_once", "Short texts true/false once"
+        DIALOG_TRUE_FALSE_TWICE = "dialog_true_false_twice", "Dialog true/false twice"
+
     exercise_base = models.OneToOneField(
         "exam_preparation.ExerciseBase",
         on_delete=models.CASCADE,
         related_name="listening_exercise",
         verbose_name="exercise base",
+    )
+    listening_type = models.CharField(
+        max_length=64,
+        choices=ListeningType.choices,
+        default=ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP,
+        db_index=True,
+        verbose_name="listening type",
     )
     audio_file_identifier = models.CharField(max_length=255, blank=True, default="", verbose_name="audio file identifier")
     audio_file_url = models.CharField(max_length=500, blank=True, default="", verbose_name="audio file URL")
@@ -84,4 +96,3 @@ class ListeningAnswerOption(models.Model):
 
     def __str__(self) -> str:
         return f"ListeningAnswerOption<question={self.question_id} key={self.option_key}>"
-

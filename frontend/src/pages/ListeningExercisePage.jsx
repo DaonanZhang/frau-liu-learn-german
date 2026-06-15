@@ -1,0 +1,366 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  fetchListeningExerciseDetail,
+  fetchListeningExercises,
+} from "../api/exam_preparation/listeningExercises.js";
+import "./ListeningExercisePage.css";
+
+const INSTRUCTION_BY_TYPE = {
+  short_text_true_false_with_prep:
+    "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Sie hören diese Texte nur einmal. Entscheiden Sie beim Hören, ob die Aussagen 1 - 5 richtig oder falsch sind. Lesen Sie jetzt die Aufgaben 1 - 5. Sie haben dazu 30 Sekunden Zeit.",
+  short_text_true_false_once:
+    "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
+  dialog_true_false_twice:
+    "Sie hören nun ein Gespräch. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch zweimal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
+};
+
+const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+
+export default function ListeningExercisePage({ listeningType, eyebrow = "LISTENING" }) {
+  const audioRef = useRef(null);
+  const [exercise, setExercise] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [errorText, setErrorText] = useState("");
+  const [answers, setAnswers] = useState({});
+  const [isChecked, setIsChecked] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(1);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [repeatEnabled, setRepeatEnabled] = useState(false);
+
+  useEffect(() => {
+    let aborted = false;
+
+    async function loadExercise() {
+      try {
+        setLoading(true);
+        setErrorText("");
+
+        const listData = await fetchListeningExercises(listeningType);
+        const firstExercise = Array.isArray(listData?.results) ? listData.results[0] : null;
+
+        if (!firstExercise?.id) {
+          throw new Error("No listening exercise found.");
+        }
+
+        const detail = await fetchListeningExerciseDetail(firstExercise.id);
+        if (!aborted) {
+          setExercise(detail || null);
+        }
+      } catch (error) {
+        if (!aborted) {
+          setErrorText(error?.message || "Failed to load listening exercise.");
+        }
+      } finally {
+        if (!aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadExercise();
+
+    return () => {
+      aborted = true;
+    };
+  }, [listeningType]);
+
+  useEffect(() => {
+    const audioElement = audioRef.current;
+    if (!audioElement) {
+      return undefined;
+    }
+
+    audioElement.volume = volume;
+    audioElement.playbackRate = playbackRate;
+    audioElement.loop = repeatEnabled;
+
+    function handlePlay() {
+      setIsPlaying(true);
+    }
+
+    function handlePause() {
+      setIsPlaying(false);
+    }
+
+    audioElement.addEventListener("play", handlePlay);
+    audioElement.addEventListener("pause", handlePause);
+    audioElement.addEventListener("ended", handlePause);
+
+    return () => {
+      audioElement.removeEventListener("play", handlePlay);
+      audioElement.removeEventListener("pause", handlePause);
+      audioElement.removeEventListener("ended", handlePause);
+    };
+  }, [volume, playbackRate, repeatEnabled]);
+
+  const questions = useMemo(() => {
+    return Array.isArray(exercise?.questions) ? exercise.questions : [];
+  }, [exercise]);
+
+  const answeredCount = useMemo(() => {
+    return Object.values(answers).filter(Boolean).length;
+  }, [answers]);
+
+  async function togglePlayback() {
+    const audioElement = audioRef.current;
+    if (!audioElement) {
+      return;
+    }
+
+    if (audioElement.paused) {
+      try {
+        await audioElement.play();
+      } catch (error) {
+        setErrorText(error?.message || "Audio playback failed.");
+      }
+      return;
+    }
+
+    audioElement.pause();
+  }
+
+  function restartAudio() {
+    const audioElement = audioRef.current;
+    if (!audioElement) {
+      return;
+    }
+    audioElement.currentTime = 0;
+    audioElement.play().catch((error) => {
+      setErrorText(error?.message || "Audio playback failed.");
+    });
+  }
+
+  if (loading) {
+    return (
+      <div className="listening-exercise-page">
+        <div className="listening-exercise-shell">
+          <p className="listening-exercise-loading">Loading listening exercise...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorText && !exercise) {
+    return (
+      <div className="listening-exercise-page">
+        <div className="listening-exercise-shell">
+          <p className="listening-exercise-error">{errorText}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="listening-exercise-page">
+      <div className="listening-exercise-shell">
+        <div className="listening-exercise-topbar">
+          <Link to="/modules/exam-preparation/hoeren" className="listening-exercise-topbar__back">
+            ← Zurück zu Hören
+          </Link>
+          <span className="listening-exercise-topbar__meta">
+            {exercise?.exercise_base?.level || "B1"} · {exercise?.exercise_base?.external_id || "001"}
+          </span>
+        </div>
+
+        <section className="listening-exercise-hero">
+          <p className="listening-exercise-hero__eyebrow">{eyebrow}</p>
+          <h1 className="listening-exercise-hero__title">
+            {exercise?.exercise_base?.title || "Hören Teil"}
+          </h1>
+        </section>
+
+        <section className="listening-exercise-instruction">
+          <p>{INSTRUCTION_BY_TYPE[listeningType] || INSTRUCTION_BY_TYPE.short_text_true_false_once}</p>
+        </section>
+
+        <section className="listening-exercise-audio-panel">
+          <div className="listening-exercise-audio-panel__header">
+            <div>
+              <p className="listening-exercise-audio-panel__eyebrow">Audio</p>
+              <h2 className="listening-exercise-audio-panel__title">Hören und steuern</h2>
+            </div>
+            <span className="listening-exercise-audio-panel__status">
+              {isPlaying ? "Wird abgespielt" : "Bereit"}
+            </span>
+          </div>
+
+          <audio ref={audioRef} src={exercise?.audio_file_url || ""} preload="metadata" controls />
+
+          <div className="listening-exercise-controls">
+            <button
+              type="button"
+              className="listening-exercise-control-btn"
+              onClick={togglePlayback}
+            >
+              {isPlaying ? "Pause" : "Abspielen"}
+            </button>
+            <button
+              type="button"
+              className="listening-exercise-control-btn listening-exercise-control-btn--secondary"
+              onClick={restartAudio}
+            >
+              Wieder abspielen
+            </button>
+            <label className="listening-exercise-slider">
+              <span>Lautstärke</span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={volume}
+                onChange={(event) => {
+                  setVolume(Number(event.target.value));
+                }}
+              />
+              <strong>{Math.round(volume * 100)}%</strong>
+            </label>
+            <label className="listening-exercise-select">
+              <span>Geschwindigkeit</span>
+              <select
+                value={playbackRate}
+                onChange={(event) => {
+                  setPlaybackRate(Number(event.target.value));
+                }}
+              >
+                {SPEEDS.map((speed) => (
+                  <option key={speed} value={speed}>
+                    {speed}x
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="listening-exercise-repeat">
+              <input
+                type="checkbox"
+                checked={repeatEnabled}
+                onChange={(event) => {
+                  setRepeatEnabled(event.target.checked);
+                }}
+              />
+              <span>Repeat aktivieren</span>
+            </label>
+          </div>
+        </section>
+
+        <section className="listening-exercise-questions">
+          <div className="listening-exercise-questions__header">
+            <h2>Aufgaben</h2>
+            <span>{answeredCount} / {questions.length} beantwortet</span>
+          </div>
+
+          <div className="listening-exercise-question-list">
+            {questions.map((question) => {
+              const selectedOption = (question.answer_options || []).find(
+                (option) => option.option_key === answers[question.id]
+              );
+              const correctOption = (question.answer_options || []).find((option) => option.is_correct);
+              const isQuestionCorrect = !!selectedOption?.is_correct;
+
+              return (
+                <article key={question.id} className="listening-exercise-question-card">
+                  <div className="listening-exercise-question-card__header">
+                    <h3>
+                      {question.question_number}. {question.question_text}
+                    </h3>
+                    <span className="listening-exercise-question-card__selection">
+                      {selectedOption ? `已选择 ${selectedOption.option_text}` : "未选择"}
+                    </span>
+                  </div>
+
+                  <div className="listening-exercise-option-grid">
+                    {(question.answer_options || []).map((option) => {
+                      const checked = answers[question.id] === option.option_key;
+                      const isWrongSelected = isChecked && checked && !option.is_correct;
+                      const shouldRevealCorrect = isChecked && option.is_correct;
+
+                      return (
+                        <label
+                          key={option.id}
+                          className={[
+                            "listening-exercise-option",
+                            checked && !isChecked ? "listening-exercise-option--selected" : "",
+                            shouldRevealCorrect ? "listening-exercise-option--correct" : "",
+                            isWrongSelected ? "listening-exercise-option--wrong" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          <input
+                            type="radio"
+                            name={`listening-question-${question.id}`}
+                            value={option.option_key}
+                            checked={checked}
+                            onChange={() => {
+                              if (isChecked) {
+                                setIsChecked(false);
+                              }
+                              setAnswers((previous) => ({
+                                ...previous,
+                                [question.id]: option.option_key,
+                              }));
+                            }}
+                          />
+                          <span className="listening-exercise-option__key">{option.option_text}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {isChecked ? (
+                    <div
+                      className={[
+                        "listening-exercise-feedback",
+                        isQuestionCorrect ? "listening-exercise-feedback--correct" : "listening-exercise-feedback--wrong",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <strong className="listening-exercise-feedback__title">
+                        {isQuestionCorrect ? "Richtig." : "Nicht richtig."}
+                      </strong>
+                      <p className="listening-exercise-feedback__line">
+                        Richtige Antwort: {correctOption?.option_text || "-"}
+                      </p>
+                      <p className="listening-exercise-feedback__line">
+                        Erklärung: {correctOption?.explanation || "Keine zusätzliche Erklärung."}
+                      </p>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="listening-exercise-actions">
+            <button
+              type="button"
+              className="listening-exercise-check-btn"
+              disabled={isChecked || !questions.length || answeredCount !== questions.length}
+              onClick={() => {
+                setIsChecked(true);
+              }}
+            >
+              Prüfen
+            </button>
+            {isChecked ? (
+              <button
+                type="button"
+                className="listening-exercise-reset-btn"
+                onClick={() => {
+                  setAnswers({});
+                  setIsChecked(false);
+                  setErrorText("");
+                }}
+              >
+                Wiederholen
+              </button>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}

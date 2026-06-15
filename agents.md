@@ -99,6 +99,11 @@ Practical effect:
 - Keep Step 2 source of truth in xlsx; backfill only fills missing URL fields by default.
 - Avoid forcing overwrite unless explicitly needed (`--overwrite`).
 
+## Date/Time Migration Rule
+- When a date/time API is being renamed or standardized, use the single target API consistently instead of adding backward-compatibility aliases by default.
+- For `localNow` to `local_now` migrations specifically, treat `local_now` as the only correct implementation target and update all affected call sites, tests, and comparisons to match it.
+- Do not add compatibility wrappers or aliases unless the user explicitly asks for a compatibility fix.
+
 ## Session Progress Summary
 Completed in this round:
 
@@ -143,3 +148,10 @@ After run:
 - Manual asset copy/upload remains manual by design.
 - `.m3u8` rename behavior is conservative due to possible internal segment URI dependencies.
 - If normalization causes stem collision, manual intervention is required for naming uniqueness.
+
+## Exam Preparation UI Rules
+- Every top-level skill page in the `exam_preparation` module, such as `Hören`, `Lesen`, `Sprachbausteine`, `Schreiben`, and `Sprechen`, must provide a visible back arrow/button that routes back to the main `exam-preparation` module page.
+- Every exercise page in the `exam_preparation` module must provide a `Prüfen` button.
+- After `Prüfen`, every exercise page in the `exam_preparation` module must provide a `Wiederholen` action that clears all answers and resets the page to the initial unanswered state.
+- After `Prüfen`, if the learner selected a wrong option, the correct option must still be visibly highlighted in green inside the option list.
+- Keep these behaviors consistent across all current and future `exam_preparation` exercise types.

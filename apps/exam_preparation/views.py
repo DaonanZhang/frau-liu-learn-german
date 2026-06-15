@@ -34,21 +34,27 @@ from apps.exam_preparation.models import (
 )
 from apps.exam_preparation.serializers import (
     ClozeChoiceBlankSerializer,
+    ClozeChoiceExerciseDetailSerializer,
     ClozeChoiceExerciseSerializer,
     ClozeChoiceOptionSerializer,
     ClozeMatchingBlankAnswerSerializer,
+    ClozeMatchingExerciseDetailSerializer,
     ClozeMatchingExerciseSerializer,
     ClozeMatchingOptionSerializer,
     ExerciseBaseSerializer,
     ListeningAnswerOptionSerializer,
+    ListeningExerciseDetailSerializer,
     ListeningExerciseSerializer,
     ListeningQuestionSerializer,
     ReadingAdMatchingAdSerializer,
+    ReadingAdMatchingExerciseDetailSerializer,
     ReadingAdMatchingExerciseSerializer,
     ReadingAdMatchingItemSerializer,
+    ReadingTitleMatchingExerciseDetailSerializer,
     ReadingTitleMatchingExerciseSerializer,
     ReadingTitleMatchingItemSerializer,
     ReadingTitleMatchingOptionSerializer,
+    ReadingUnderstandingExerciseDetailSerializer,
     ReadingUnderstandingAnswerOptionSerializer,
     ReadingUnderstandingExerciseSerializer,
     ReadingUnderstandingQuestionSerializer,
@@ -57,6 +63,7 @@ from apps.exam_preparation.serializers import (
     SpeakingGapOptionSerializer,
     UserExerciseFavoriteSerializer,
     WritingExampleTextSerializer,
+    WritingExerciseDetailSerializer,
     WritingExerciseSerializer,
 )
 
@@ -76,11 +83,18 @@ class ExerciseBaseViewSet(BaseExamPreparationViewSet):
 
 
 class ListeningExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = ListeningExercise.objects.select_related("exercise_base").all()
+    queryset = ListeningExercise.objects.select_related("exercise_base").prefetch_related(
+        "questions__answer_options",
+    ).all()
     serializer_class = ListeningExerciseSerializer
-    filterset_fields = ["exercise_base"]
+    filterset_fields = ["exercise_base", "listening_type"]
     search_fields = ["audio_file_identifier", "audio_file_url", "script", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "created_at", "updated_at"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return ListeningExerciseDetailSerializer
+        return super().get_serializer_class()
 
 
 class ListeningQuestionViewSet(BaseExamPreparationViewSet):
@@ -104,11 +118,19 @@ class ListeningAnswerOptionViewSet(BaseExamPreparationViewSet):
 
 
 class ReadingTitleMatchingExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = ReadingTitleMatchingExercise.objects.select_related("exercise_base").all()
+    queryset = ReadingTitleMatchingExercise.objects.select_related("exercise_base").prefetch_related(
+        "options",
+        "items__correct_option",
+    ).all()
     serializer_class = ReadingTitleMatchingExerciseSerializer
     filterset_fields = ["exercise_base"]
     search_fields = ["instruction", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "created_at", "updated_at"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return ReadingTitleMatchingExerciseDetailSerializer
+        return super().get_serializer_class()
 
 
 class ReadingTitleMatchingItemViewSet(BaseExamPreparationViewSet):
@@ -132,11 +154,18 @@ class ReadingTitleMatchingOptionViewSet(BaseExamPreparationViewSet):
 
 
 class ReadingUnderstandingExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = ReadingUnderstandingExercise.objects.select_related("exercise_base").all()
+    queryset = ReadingUnderstandingExercise.objects.select_related("exercise_base").prefetch_related(
+        "questions__answer_options",
+    ).all()
     serializer_class = ReadingUnderstandingExerciseSerializer
     filterset_fields = ["exercise_base"]
     search_fields = ["text_markdown", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "created_at", "updated_at"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return ReadingUnderstandingExerciseDetailSerializer
+        return super().get_serializer_class()
 
 
 class ReadingUnderstandingQuestionViewSet(BaseExamPreparationViewSet):
@@ -160,11 +189,19 @@ class ReadingUnderstandingAnswerOptionViewSet(BaseExamPreparationViewSet):
 
 
 class ReadingAdMatchingExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = ReadingAdMatchingExercise.objects.select_related("exercise_base").all()
+    queryset = ReadingAdMatchingExercise.objects.select_related("exercise_base").prefetch_related(
+        "ads",
+        "items__correct_ad",
+    ).all()
     serializer_class = ReadingAdMatchingExerciseSerializer
     filterset_fields = ["exercise_base"]
     search_fields = ["instruction", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "created_at", "updated_at"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return ReadingAdMatchingExerciseDetailSerializer
+        return super().get_serializer_class()
 
 
 class ReadingAdMatchingItemViewSet(BaseExamPreparationViewSet):
@@ -188,11 +225,18 @@ class ReadingAdMatchingAdViewSet(BaseExamPreparationViewSet):
 
 
 class ClozeChoiceExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = ClozeChoiceExercise.objects.select_related("exercise_base").all()
+    queryset = ClozeChoiceExercise.objects.select_related("exercise_base").prefetch_related(
+        "blanks__options",
+    ).all()
     serializer_class = ClozeChoiceExerciseSerializer
     filterset_fields = ["exercise_base"]
     search_fields = ["content_with_placeholders", "original_source_text", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "created_at", "updated_at"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return ClozeChoiceExerciseDetailSerializer
+        return super().get_serializer_class()
 
 
 class ClozeChoiceBlankViewSet(BaseExamPreparationViewSet):
@@ -212,11 +256,19 @@ class ClozeChoiceOptionViewSet(BaseExamPreparationViewSet):
 
 
 class ClozeMatchingExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = ClozeMatchingExercise.objects.select_related("exercise_base").all()
+    queryset = ClozeMatchingExercise.objects.select_related("exercise_base").prefetch_related(
+        "options",
+        "blank_answers__correct_option",
+    ).all()
     serializer_class = ClozeMatchingExerciseSerializer
     filterset_fields = ["exercise_base"]
     search_fields = ["content_with_placeholders", "original_source_text", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "created_at", "updated_at"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return ClozeMatchingExerciseDetailSerializer
+        return super().get_serializer_class()
 
 
 class ClozeMatchingOptionViewSet(BaseExamPreparationViewSet):
@@ -240,11 +292,16 @@ class ClozeMatchingBlankAnswerViewSet(BaseExamPreparationViewSet):
 
 
 class WritingExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = WritingExercise.objects.select_related("exercise_base").all()
+    queryset = WritingExercise.objects.select_related("exercise_base").prefetch_related("example_texts").all()
     serializer_class = WritingExerciseSerializer
     filterset_fields = ["exercise_base", "time_limit_minutes", "words_limit"]
     search_fields = ["request_text", "task_text", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "time_limit_minutes", "words_limit", "created_at", "updated_at"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return WritingExerciseDetailSerializer
+        return super().get_serializer_class()
 
 
 class WritingExampleTextViewSet(BaseExamPreparationViewSet):
@@ -293,5 +350,3 @@ class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
-

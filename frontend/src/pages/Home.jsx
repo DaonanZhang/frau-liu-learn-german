@@ -8,51 +8,16 @@ import useBodyScrollLock from "../hooks/useBodyScrollLock";
 import useMaxWidth from "../hooks/useMaxWidth.js";
 import HomeSidebarContent from "./Homepage/HomeSidebarContent.jsx";
 import {
+  EXAM_PREPARATION_MODULE,
   SCIENCE_SEASON_MODULE,
   VLOG_SEASON_MODULE,
   buildStats,
   toSafeNumber,
 } from "./Homepage/homeShared.js";
+import { hasModuleAccess } from "../utils/moduleAccess.js";
 
 import "./Home.css";
 import "./Homepage/ModuleEntryCard.css";
-
-function hasModuleAccess(user, module) {
-  if (!user || !module?.moduleKey) {
-    return false;
-  }
-
-  if (user.is_staff || user.is_superuser) {
-    return true;
-  }
-
-  const entitlements = Array.isArray(user.entitlements) ? user.entitlements : [];
-  const allowedSeasonNumbers = Array.isArray(module?.seasonNumbers)
-    ? module.seasonNumbers.map((item) => Number(item)).filter(Number.isFinite)
-    : [Number(module?.seasonNumber)].filter(Number.isFinite);
-
-  return entitlements.some((item) => {
-    if (!item?.is_valid_now) {
-      return false;
-    }
-
-    const scope = String(item.scope || "");
-    if (scope === "platform") {
-      return true;
-    }
-
-    const moduleKey = item?.module?.key;
-    if (moduleKey !== module.moduleKey) {
-      return false;
-    }
-
-    if (!item?.season) {
-      return true;
-    }
-
-    return allowedSeasonNumbers.includes(Number(item.season?.season_number));
-  });
-}
 
 function buildCoverCandidates(src) {
   const normalized = typeof src === "string" ? src.trim() : "";
@@ -114,12 +79,6 @@ export default function Home() {
   useBodyScrollLock(isMobileView && isMobileSidebarOpen);
 
   useEffect(() => {
-    if (!isMobileView) {
-      setIsMobileSidebarOpen(false);
-    }
-  }, [isMobileView]);
-
-  useEffect(() => {
     let aborted = false;
 
     markDailyActiveAndGetUserData()
@@ -170,7 +129,7 @@ export default function Home() {
   }, [completedVideos, activeDays]);
 
   const modules = useMemo(() => {
-    return [SCIENCE_SEASON_MODULE, VLOG_SEASON_MODULE];
+    return [SCIENCE_SEASON_MODULE, VLOG_SEASON_MODULE, EXAM_PREPARATION_MODULE];
   }, []);
 
   return (

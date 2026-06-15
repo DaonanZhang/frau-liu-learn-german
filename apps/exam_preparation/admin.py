@@ -39,7 +39,8 @@ class ExerciseBaseAdmin(admin.ModelAdmin):
 
 @admin.register(ListeningExercise)
 class ListeningExerciseAdmin(admin.ModelAdmin):
-    list_display = ("id", "exercise_base", "audio_file_identifier", "updated_at")
+    list_display = ("id", "exercise_base", "listening_type", "audio_file_identifier", "updated_at")
+    list_filter = ("listening_type",)
     search_fields = ("exercise_base__external_id", "exercise_base__title", "audio_file_identifier")
 
 
@@ -186,4 +187,3 @@ class SpeakingGapBlankAdmin(admin.ModelAdmin):
 class UserExerciseFavoriteAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "exercise", "created_at")
     search_fields = ("user__telephone", "exercise__external_id", "exercise__title")
-

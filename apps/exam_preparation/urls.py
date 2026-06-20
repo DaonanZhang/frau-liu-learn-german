@@ -28,7 +28,16 @@ from apps.exam_preparation.views import (
     SpeakingGapOptionViewSet,
     SpeakingPromptSegmentedExerciseViewSet,
     SpeakingPromptSegmentViewSet,
+    UserClozeChoiceBlankStateViewSet,
+    UserClozeMatchingBlankStateViewSet,
     UserExerciseFavoriteViewSet,
+    UserListeningQuestionStateViewSet,
+    UserReadingAdMatchingItemStateViewSet,
+    UserReadingTitleMatchingItemStateViewSet,
+    UserReadingUnderstandingQuestionStateViewSet,
+    UserSpeakingGapBlankStateViewSet,
+    UserSpeakingPromptSegmentedExerciseStateViewSet,
+    UserWritingExerciseStateViewSet,
     WritingExampleTextViewSet,
     WritingExerciseViewSet,
 )
@@ -113,6 +122,51 @@ router.register(
     basename="exam-prep-speaking-prompt-segments",
 )
 router.register(r"user-exercise-favorites", UserExerciseFavoriteViewSet, basename="exam-prep-user-exercise-favorites")
+router.register(
+    r"user-listening-question-states",
+    UserListeningQuestionStateViewSet,
+    basename="exam-prep-user-listening-question-states",
+)
+router.register(
+    r"user-reading-understanding-question-states",
+    UserReadingUnderstandingQuestionStateViewSet,
+    basename="exam-prep-user-reading-understanding-question-states",
+)
+router.register(
+    r"user-reading-title-matching-item-states",
+    UserReadingTitleMatchingItemStateViewSet,
+    basename="exam-prep-user-reading-title-matching-item-states",
+)
+router.register(
+    r"user-reading-ad-matching-item-states",
+    UserReadingAdMatchingItemStateViewSet,
+    basename="exam-prep-user-reading-ad-matching-item-states",
+)
+router.register(
+    r"user-cloze-choice-blank-states",
+    UserClozeChoiceBlankStateViewSet,
+    basename="exam-prep-user-cloze-choice-blank-states",
+)
+router.register(
+    r"user-cloze-matching-blank-states",
+    UserClozeMatchingBlankStateViewSet,
+    basename="exam-prep-user-cloze-matching-blank-states",
+)
+router.register(
+    r"user-speaking-gap-blank-states",
+    UserSpeakingGapBlankStateViewSet,
+    basename="exam-prep-user-speaking-gap-blank-states",
+)
+router.register(
+    r"user-writing-exercise-states",
+    UserWritingExerciseStateViewSet,
+    basename="exam-prep-user-writing-exercise-states",
+)
+router.register(
+    r"user-speaking-prompt-segmented-exercise-states",
+    UserSpeakingPromptSegmentedExerciseStateViewSet,
+    basename="exam-prep-user-speaking-prompt-segmented-exercise-states",
+)
 
 urlpatterns = [
     path("", include(router.urls)),

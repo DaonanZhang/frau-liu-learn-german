@@ -39,7 +39,8 @@ const SKILL_CARDS = [
     title: "Sprechen",
     subtitle: "Speaking",
     description: "口语配段落和其余口语练习会放在这里。",
-    state: "coming-soon",
+    to: "/modules/exam-preparation/sprechen",
+    cta: "进入 Sprechen",
   },
 ];
 

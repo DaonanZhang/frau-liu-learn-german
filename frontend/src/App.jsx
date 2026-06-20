@@ -14,6 +14,7 @@ import ModulePage from "./pages/ModulePage.jsx";
 import VlogModulePage from "./pages/VlogModulePage.jsx";
 import ExamPreparationModulePage from "./pages/ExamPreparationModulePage.jsx";
 import ExamPreparationListeningPage from "./pages/ExamPreparationListeningPage.jsx";
+import ExamPreparationSpeakingPage from "./pages/ExamPreparationSpeakingPage.jsx";
 import ExamPreparationSprachbausteinePage from "./pages/ExamPreparationSprachbausteinePage.jsx";
 import ExamPreparationReadingPage from "./pages/ExamPreparationReadingPage.jsx";
 import ClozeChoicePage from "./pages/ClozeChoicePage.jsx";
@@ -23,6 +24,8 @@ import ListeningExercisePage from "./pages/ListeningExercisePage.jsx";
 import ReadingTitleMatchingPage from "./pages/ReadingTitleMatchingPage.jsx";
 import ReadingUnderstandingPage from "./pages/ReadingUnderstandingPage.jsx";
 import ReadingAdMatchingPage from "./pages/ReadingAdMatchingPage.jsx";
+import SpeakingGapMatchingPage from "./pages/SpeakingGapMatchingPage.jsx";
+import SpeakingPromptSegmentedPage from "./pages/SpeakingPromptSegmentedPage.jsx";
 import ModulePurchasePage from "./pages/ModulePurchasePage.jsx";
 import ModuleCheckoutPage from "./pages/ModuleCheckoutPage.jsx";
 import AlipayReturnPage from "./pages/AlipayReturnPage.jsx";
@@ -54,6 +57,7 @@ const router = createBrowserRouter([
       { path: "/modules/vlog-season", element: <VlogModulePage /> },
       { path: "/modules/exam-preparation", element: <ExamPreparationModulePage /> },
       { path: "/modules/exam-preparation/hoeren", element: <ExamPreparationListeningPage /> },
+      { path: "/modules/exam-preparation/sprechen", element: <ExamPreparationSpeakingPage /> },
       { path: "/modules/exam-preparation/sprachbausteine", element: <ExamPreparationSprachbausteinePage /> },
       { path: "/modules/exam-preparation/schreiben", element: <ExamPreparationWritingPage /> },
       { path: "/modules/exam-preparation/sprachbausteine/cloze-choice", element: <ClozeChoicePage /> },
@@ -89,6 +93,8 @@ const router = createBrowserRouter([
       { path: "/modules/exam-preparation/lesen/title-matching", element: <ReadingTitleMatchingPage /> },
       { path: "/modules/exam-preparation/lesen/understanding", element: <ReadingUnderstandingPage /> },
       { path: "/modules/exam-preparation/lesen/ad-matching", element: <ReadingAdMatchingPage /> },
+      { path: "/modules/exam-preparation/sprechen/gap-matching", element: <SpeakingGapMatchingPage /> },
+      { path: "/modules/exam-preparation/sprechen/prompt-segmented", element: <SpeakingPromptSegmentedPage /> },
       { path: "/modules/:moduleId/preview", element: <ModulePurchasePage /> },
       { path: "/modules/:moduleId/purchase", element: <ModuleCheckoutPage /> },
       { path: "/manual", element: <ManualPage /> },

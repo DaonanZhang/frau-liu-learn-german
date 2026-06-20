@@ -30,7 +30,18 @@ from .speaking import (
     SpeakingPromptSegment,
     SpeakingPromptSegmentedExercise,
 )
-from .user_activity import UserExerciseFavorite
+from .user_activity import (
+    UserClozeChoiceBlankState,
+    UserClozeMatchingBlankState,
+    UserExerciseFavorite,
+    UserListeningQuestionState,
+    UserReadingAdMatchingItemState,
+    UserReadingTitleMatchingItemState,
+    UserReadingUnderstandingQuestionState,
+    UserSpeakingGapBlankState,
+    UserSpeakingPromptSegmentedExerciseState,
+    UserWritingExerciseState,
+)
 from .writing import WritingExampleText, WritingExercise
 
 __all__ = [
@@ -61,4 +72,13 @@ __all__ = [
     "SpeakingPromptSegmentedExercise",
     "SpeakingPromptSegment",
     "UserExerciseFavorite",
+    "UserListeningQuestionState",
+    "UserReadingUnderstandingQuestionState",
+    "UserReadingTitleMatchingItemState",
+    "UserReadingAdMatchingItemState",
+    "UserClozeChoiceBlankState",
+    "UserClozeMatchingBlankState",
+    "UserSpeakingGapBlankState",
+    "UserWritingExerciseState",
+    "UserSpeakingPromptSegmentedExerciseState",
 ]

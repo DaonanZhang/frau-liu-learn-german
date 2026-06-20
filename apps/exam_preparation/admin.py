@@ -25,7 +25,16 @@ from apps.exam_preparation.models import (
     SpeakingGapOption,
     SpeakingPromptSegment,
     SpeakingPromptSegmentedExercise,
+    UserClozeChoiceBlankState,
+    UserClozeMatchingBlankState,
     UserExerciseFavorite,
+    UserListeningQuestionState,
+    UserReadingAdMatchingItemState,
+    UserReadingTitleMatchingItemState,
+    UserReadingUnderstandingQuestionState,
+    UserSpeakingGapBlankState,
+    UserSpeakingPromptSegmentedExerciseState,
+    UserWritingExerciseState,
     WritingExampleText,
     WritingExercise,
 )
@@ -201,3 +210,66 @@ class SpeakingPromptSegmentAdmin(admin.ModelAdmin):
 class UserExerciseFavoriteAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "exercise", "created_at")
     search_fields = ("user__telephone", "exercise__external_id", "exercise__title")
+
+
+@admin.register(UserListeningQuestionState)
+class UserListeningQuestionStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "question", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_filter = ("is_favorited", "is_correct")
+    search_fields = ("user__telephone", "question__question_text", "question__listening_exercise__exercise_base__external_id")
+
+
+@admin.register(UserReadingUnderstandingQuestionState)
+class UserReadingUnderstandingQuestionStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "question", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_filter = ("is_favorited", "is_correct")
+    search_fields = ("user__telephone", "question__question_text", "question__exercise__exercise_base__external_id")
+
+
+@admin.register(UserReadingTitleMatchingItemState)
+class UserReadingTitleMatchingItemStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "item", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_filter = ("is_favorited", "is_correct")
+    search_fields = ("user__telephone", "item__text", "item__exercise__exercise_base__external_id")
+
+
+@admin.register(UserReadingAdMatchingItemState)
+class UserReadingAdMatchingItemStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "item", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_filter = ("is_favorited", "is_correct")
+    search_fields = ("user__telephone", "item__item_text", "item__exercise__exercise_base__external_id")
+
+
+@admin.register(UserClozeChoiceBlankState)
+class UserClozeChoiceBlankStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "blank", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_filter = ("is_favorited", "is_correct")
+    search_fields = ("user__telephone", "blank__blank_key", "blank__exercise__exercise_base__external_id")
+
+
+@admin.register(UserClozeMatchingBlankState)
+class UserClozeMatchingBlankStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "blank", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_filter = ("is_favorited", "is_correct")
+    search_fields = ("user__telephone", "blank__blank_key", "blank__exercise__exercise_base__external_id")
+
+
+@admin.register(UserSpeakingGapBlankState)
+class UserSpeakingGapBlankStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "blank", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_filter = ("is_favorited", "is_correct")
+    search_fields = ("user__telephone", "blank__blank_key", "blank__exercise__exercise_base__external_id")
+
+
+@admin.register(UserWritingExerciseState)
+class UserWritingExerciseStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "exercise", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_filter = ("is_favorited", "is_correct")
+    search_fields = ("user__telephone", "exercise__exercise_base__external_id", "exercise__exercise_base__title")
+
+
+@admin.register(UserSpeakingPromptSegmentedExerciseState)
+class UserSpeakingPromptSegmentedExerciseStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "exercise", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_filter = ("is_favorited", "is_correct")
+    search_fields = ("user__telephone", "exercise__exercise_base__external_id", "exercise__exercise_base__title")

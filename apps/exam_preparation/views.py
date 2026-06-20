@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from django_filters.rest_framework import DjangoFilterBackend
+from django.utils import timezone
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.viewsets import ModelViewSet
 
 from apps.exam_preparation.models import (
@@ -30,7 +33,16 @@ from apps.exam_preparation.models import (
     SpeakingGapOption,
     SpeakingPromptSegment,
     SpeakingPromptSegmentedExercise,
+    UserClozeChoiceBlankState,
+    UserClozeMatchingBlankState,
     UserExerciseFavorite,
+    UserListeningQuestionState,
+    UserReadingAdMatchingItemState,
+    UserReadingTitleMatchingItemState,
+    UserReadingUnderstandingQuestionState,
+    UserSpeakingGapBlankState,
+    UserSpeakingPromptSegmentedExerciseState,
+    UserWritingExerciseState,
     WritingExampleText,
     WritingExercise,
 )
@@ -61,12 +73,22 @@ from apps.exam_preparation.serializers import (
     ReadingUnderstandingExerciseSerializer,
     ReadingUnderstandingQuestionSerializer,
     SpeakingGapBlankSerializer,
+    SpeakingGapMatchingExerciseDetailSerializer,
     SpeakingGapMatchingExerciseSerializer,
     SpeakingGapOptionSerializer,
     SpeakingPromptSegmentedExerciseDetailSerializer,
     SpeakingPromptSegmentedExerciseSerializer,
     SpeakingPromptSegmentSerializer,
+    UserClozeChoiceBlankStateSerializer,
+    UserClozeMatchingBlankStateSerializer,
     UserExerciseFavoriteSerializer,
+    UserListeningQuestionStateSerializer,
+    UserReadingAdMatchingItemStateSerializer,
+    UserReadingTitleMatchingItemStateSerializer,
+    UserReadingUnderstandingQuestionStateSerializer,
+    UserSpeakingGapBlankStateSerializer,
+    UserSpeakingPromptSegmentedExerciseStateSerializer,
+    UserWritingExerciseStateSerializer,
     WritingExampleTextSerializer,
     WritingExerciseDetailSerializer,
     WritingExerciseSerializer,
@@ -77,6 +99,49 @@ class BaseExamPreparationViewSet(ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
     ordering = ["id"]
+
+
+class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
+    permission_classes = [IsAuthenticated]
+    state_lookup_field = ""
+    ordering = ["-updated_at", "id"]
+
+    def get_queryset(self):
+        return super().get_queryset().filter(user=self.request.user)
+
+    def _apply_answer_timestamp(self, validated_data):
+        answer_keys = {"answer_payload", "is_correct"}
+        if "last_answered_at" in validated_data:
+            return validated_data
+        if any(key in validated_data for key in answer_keys):
+            validated_data["last_answered_at"] = timezone.now()
+        return validated_data
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = self._apply_answer_timestamp(dict(serializer.validated_data))
+        lookup_field = self.state_lookup_field
+        target_object = validated_data[lookup_field]
+        defaults = {
+            key: value
+            for key, value in validated_data.items()
+            if key != lookup_field
+        }
+        instance, created = self.get_queryset().update_or_create(
+            user=request.user,
+            **{lookup_field: target_object},
+            defaults=defaults,
+        )
+        output_serializer = self.get_serializer(instance)
+        return Response(
+            output_serializer.data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+    def perform_update(self, serializer):
+        validated_data = self._apply_answer_timestamp(dict(serializer.validated_data))
+        serializer.save(**validated_data)
 
 
 class ExerciseBaseViewSet(BaseExamPreparationViewSet):
@@ -318,11 +383,19 @@ class WritingExampleTextViewSet(BaseExamPreparationViewSet):
 
 
 class SpeakingGapMatchingExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = SpeakingGapMatchingExercise.objects.select_related("exercise_base").all()
+    queryset = SpeakingGapMatchingExercise.objects.select_related("exercise_base").prefetch_related(
+        "options",
+        "blanks__correct_option",
+    ).all()
     serializer_class = SpeakingGapMatchingExerciseSerializer
     filterset_fields = ["exercise_base"]
     search_fields = ["content_with_placeholders", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "created_at", "updated_at"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return SpeakingGapMatchingExerciseDetailSerializer
+        return super().get_serializer_class()
 
 
 class SpeakingGapBlankViewSet(BaseExamPreparationViewSet):
@@ -376,3 +449,168 @@ class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class UserListeningQuestionStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserListeningQuestionState.objects.select_related(
+        "user",
+        "question",
+        "question__listening_exercise",
+        "question__listening_exercise__exercise_base",
+    ).all()
+    serializer_class = UserListeningQuestionStateSerializer
+    state_lookup_field = "question"
+    filterset_fields = ["question", "is_favorited", "is_correct"]
+    search_fields = [
+        "question__question_text",
+        "question__listening_exercise__exercise_base__external_id",
+        "question__listening_exercise__exercise_base__title",
+    ]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
+
+
+class UserReadingUnderstandingQuestionStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserReadingUnderstandingQuestionState.objects.select_related(
+        "user",
+        "question",
+        "question__exercise",
+        "question__exercise__exercise_base",
+    ).all()
+    serializer_class = UserReadingUnderstandingQuestionStateSerializer
+    state_lookup_field = "question"
+    filterset_fields = ["question", "is_favorited", "is_correct"]
+    search_fields = [
+        "question__question_text",
+        "question__exercise__exercise_base__external_id",
+        "question__exercise__exercise_base__title",
+    ]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
+
+
+class UserReadingTitleMatchingItemStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserReadingTitleMatchingItemState.objects.select_related(
+        "user",
+        "item",
+        "item__exercise",
+        "item__exercise__exercise_base",
+        "item__correct_option",
+    ).all()
+    serializer_class = UserReadingTitleMatchingItemStateSerializer
+    state_lookup_field = "item"
+    filterset_fields = ["item", "is_favorited", "is_correct"]
+    search_fields = [
+        "item__text",
+        "item__exercise__exercise_base__external_id",
+        "item__exercise__exercise_base__title",
+    ]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
+
+
+class UserReadingAdMatchingItemStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserReadingAdMatchingItemState.objects.select_related(
+        "user",
+        "item",
+        "item__exercise",
+        "item__exercise__exercise_base",
+        "item__correct_ad",
+    ).all()
+    serializer_class = UserReadingAdMatchingItemStateSerializer
+    state_lookup_field = "item"
+    filterset_fields = ["item", "is_favorited", "is_correct"]
+    search_fields = [
+        "item__item_text",
+        "item__exercise__exercise_base__external_id",
+        "item__exercise__exercise_base__title",
+    ]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
+
+
+class UserClozeChoiceBlankStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserClozeChoiceBlankState.objects.select_related(
+        "user",
+        "blank",
+        "blank__exercise",
+        "blank__exercise__exercise_base",
+    ).all()
+    serializer_class = UserClozeChoiceBlankStateSerializer
+    state_lookup_field = "blank"
+    filterset_fields = ["blank", "is_favorited", "is_correct"]
+    search_fields = [
+        "blank__blank_key",
+        "blank__exercise__exercise_base__external_id",
+        "blank__exercise__exercise_base__title",
+    ]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
+
+
+class UserClozeMatchingBlankStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserClozeMatchingBlankState.objects.select_related(
+        "user",
+        "blank",
+        "blank__exercise",
+        "blank__exercise__exercise_base",
+        "blank__correct_option",
+    ).all()
+    serializer_class = UserClozeMatchingBlankStateSerializer
+    state_lookup_field = "blank"
+    filterset_fields = ["blank", "is_favorited", "is_correct"]
+    search_fields = [
+        "blank__blank_key",
+        "blank__exercise__exercise_base__external_id",
+        "blank__exercise__exercise_base__title",
+    ]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
+
+
+class UserSpeakingGapBlankStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserSpeakingGapBlankState.objects.select_related(
+        "user",
+        "blank",
+        "blank__exercise",
+        "blank__exercise__exercise_base",
+        "blank__correct_option",
+    ).all()
+    serializer_class = UserSpeakingGapBlankStateSerializer
+    state_lookup_field = "blank"
+    filterset_fields = ["blank", "blank__exercise", "is_favorited", "is_correct"]
+    search_fields = [
+        "blank__blank_key",
+        "blank__exercise__exercise_base__external_id",
+        "blank__exercise__exercise_base__title",
+    ]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
+
+
+class UserWritingExerciseStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserWritingExerciseState.objects.select_related(
+        "user",
+        "exercise",
+        "exercise__exercise_base",
+    ).all()
+    serializer_class = UserWritingExerciseStateSerializer
+    state_lookup_field = "exercise"
+    filterset_fields = ["exercise", "is_favorited", "is_correct"]
+    search_fields = [
+        "exercise__exercise_base__external_id",
+        "exercise__exercise_base__title",
+        "exercise__request_text",
+        "exercise__task_text",
+    ]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
+
+
+class UserSpeakingPromptSegmentedExerciseStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserSpeakingPromptSegmentedExerciseState.objects.select_related(
+        "user",
+        "exercise",
+        "exercise__exercise_base",
+    ).all()
+    serializer_class = UserSpeakingPromptSegmentedExerciseStateSerializer
+    state_lookup_field = "exercise"
+    filterset_fields = ["exercise", "is_favorited", "is_correct"]
+    search_fields = [
+        "exercise__exercise_base__external_id",
+        "exercise__exercise_base__title",
+        "exercise__prompt_text",
+    ]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]

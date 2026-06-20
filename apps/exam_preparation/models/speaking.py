@@ -85,3 +85,54 @@ class SpeakingGapBlank(models.Model):
     def __str__(self) -> str:
         return f"SpeakingGapBlank<exercise={self.exercise_id} key={self.blank_key}>"
 
+
+class SpeakingPromptSegmentedExercise(models.Model):
+    exercise_base = models.OneToOneField(
+        "exam_preparation.ExerciseBase",
+        on_delete=models.CASCADE,
+        related_name="speaking_prompt_segmented_exercise",
+        verbose_name="exercise base",
+    )
+    prompt_text = models.TextField(verbose_name="prompt text")
+    segment_delimiter = models.CharField(
+        max_length=32,
+        default="<分段>",
+        verbose_name="segment delimiter",
+    )
+    example_text_raw = models.TextField(blank=True, default="", verbose_name="raw example text")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")
+
+    class Meta:
+        verbose_name = "speaking prompt segmented exercise"
+        verbose_name_plural = "speaking prompt segmented exercises"
+
+    def __str__(self) -> str:
+        return f"SpeakingPromptSegmentedExercise<{self.exercise_base}>"
+
+
+class SpeakingPromptSegment(models.Model):
+    exercise = models.ForeignKey(
+        "exam_preparation.SpeakingPromptSegmentedExercise",
+        on_delete=models.CASCADE,
+        related_name="segments",
+        verbose_name="exercise",
+    )
+    segment_order = models.PositiveIntegerField(verbose_name="segment order")
+    segment_text = models.TextField(verbose_name="segment text")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")
+
+    class Meta:
+        verbose_name = "speaking prompt segment"
+        verbose_name_plural = "speaking prompt segments"
+        ordering = ["exercise_id", "segment_order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["exercise", "segment_order"],
+                name="exam_prep_sps_segment_order_uq",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"SpeakingPromptSegment<exercise={self.exercise_id} order={self.segment_order}>"

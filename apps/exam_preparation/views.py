@@ -28,6 +28,8 @@ from apps.exam_preparation.models import (
     SpeakingGapBlank,
     SpeakingGapMatchingExercise,
     SpeakingGapOption,
+    SpeakingPromptSegment,
+    SpeakingPromptSegmentedExercise,
     UserExerciseFavorite,
     WritingExampleText,
     WritingExercise,
@@ -61,6 +63,9 @@ from apps.exam_preparation.serializers import (
     SpeakingGapBlankSerializer,
     SpeakingGapMatchingExerciseSerializer,
     SpeakingGapOptionSerializer,
+    SpeakingPromptSegmentedExerciseDetailSerializer,
+    SpeakingPromptSegmentedExerciseSerializer,
+    SpeakingPromptSegmentSerializer,
     UserExerciseFavoriteSerializer,
     WritingExampleTextSerializer,
     WritingExerciseDetailSerializer,
@@ -77,9 +82,9 @@ class BaseExamPreparationViewSet(ModelViewSet):
 class ExerciseBaseViewSet(BaseExamPreparationViewSet):
     queryset = ExerciseBase.objects.all().order_by("level", "exercise_type", "external_id", "id")
     serializer_class = ExerciseBaseSerializer
-    filterset_fields = ["level", "skill", "exercise_type", "difficulty", "is_real_exam", "creation_method"]
-    search_fields = ["external_id", "title", "title_zh", "source_name", "source_reference", "imported_from_file"]
-    ordering_fields = ["id", "level", "exercise_type", "external_id", "created_at", "updated_at"]
+    filterset_fields = ["exam_type", "level", "skill", "exercise_type", "difficulty", "is_real_exam", "creation_method"]
+    search_fields = ["exam_type", "external_id", "title", "source_name", "source_reference", "imported_from_file"]
+    ordering_fields = ["id", "exam_type", "level", "exercise_type", "external_id", "created_at", "updated_at"]
 
 
 class ListeningExerciseViewSet(BaseExamPreparationViewSet):
@@ -336,12 +341,33 @@ class SpeakingGapOptionViewSet(BaseExamPreparationViewSet):
     ordering_fields = ["id", "option_order", "created_at", "updated_at"]
 
 
+class SpeakingPromptSegmentedExerciseViewSet(BaseExamPreparationViewSet):
+    queryset = SpeakingPromptSegmentedExercise.objects.select_related("exercise_base").prefetch_related("segments").all()
+    serializer_class = SpeakingPromptSegmentedExerciseSerializer
+    filterset_fields = ["exercise_base", "segment_delimiter"]
+    search_fields = ["prompt_text", "example_text_raw", "exercise_base__external_id", "exercise_base__title"]
+    ordering_fields = ["id", "created_at", "updated_at"]
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return SpeakingPromptSegmentedExerciseDetailSerializer
+        return super().get_serializer_class()
+
+
+class SpeakingPromptSegmentViewSet(BaseExamPreparationViewSet):
+    queryset = SpeakingPromptSegment.objects.select_related("exercise", "exercise__exercise_base").all()
+    serializer_class = SpeakingPromptSegmentSerializer
+    filterset_fields = ["exercise", "segment_order"]
+    search_fields = ["segment_text", "exercise__exercise_base__external_id", "exercise__exercise_base__title"]
+    ordering_fields = ["id", "segment_order", "created_at", "updated_at"]
+
+
 class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
     queryset = UserExerciseFavorite.objects.select_related("user", "exercise").all()
     serializer_class = UserExerciseFavoriteSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ["exercise"]
-    search_fields = ["exercise__external_id", "exercise__title", "exercise__title_zh"]
+    search_fields = ["exercise__exam_type", "exercise__external_id", "exercise__title"]
     ordering_fields = ["id", "created_at"]
     ordering = ["-created_at", "id"]
 

@@ -28,6 +28,7 @@ class ExerciseBase(models.Model):
         CLOZE_MATCHING = "CLOZE_MATCHING", "Cloze matching"
         WRITING_PROMPT = "WRITING_PROMPT", "Writing prompt"
         SPEAKING_GAP_MATCHING = "SPEAKING_GAP_MATCHING", "Speaking gap matching"
+        SPEAKING_PROMPT_SEGMENTED = "SPEAKING_PROMPT_SEGMENTED", "Speaking prompt segmented"
 
     class CreationMethod(models.TextChoices):
         MANUAL = "manual", "Manual"
@@ -58,8 +59,15 @@ class ExerciseBase(models.Model):
         verbose_name="external ID",
         help_text="Human-readable exercise identifier used by editors and import files.",
     )
+    exam_type = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_index=True,
+        verbose_name="exam type",
+        help_text="Exam family or certificate type, for example Goethe-Zertifikat B1 or telc B1.",
+    )
     title = models.CharField(max_length=255, blank=True, default="", verbose_name="title")
-    title_zh = models.CharField(max_length=255, blank=True, default="", verbose_name="Chinese title")
     difficulty = models.CharField(max_length=32, blank=True, default="", verbose_name="difficulty")
     is_real_exam = models.BooleanField(default=False, db_index=True, verbose_name="is real exam")
     source_name = models.CharField(max_length=255, blank=True, default="", verbose_name="source name")
@@ -94,9 +102,9 @@ class ExerciseBase(models.Model):
         indexes = [
             models.Index(fields=["skill", "level"], name="exam_prep_base_skill_lvl_idx"),
             models.Index(fields=["exercise_type", "level"], name="exam_prep_base_type_lvl_idx"),
+            models.Index(fields=["exam_type"], name="exam_prep_base_exam_type_idx"),
             models.Index(fields=["creation_method"], name="exam_prep_base_create_idx"),
         ]
 
     def __str__(self) -> str:
         return f"{self.level}-{self.exercise_type}-{self.external_id}"
-

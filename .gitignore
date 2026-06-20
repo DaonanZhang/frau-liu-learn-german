@@ -8,4 +8,6 @@ venv/
 /apps/learning_by_video/data/
 /apps/exam_preparation/data/imports/
 /frontend/public/resources/
+/frontend/public/resources/ExamPreparation1/
 /frontend/public/manual
+.codex_tmp

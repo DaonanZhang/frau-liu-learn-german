@@ -25,6 +25,8 @@ from apps.exam_preparation.models import (
     SpeakingGapBlank,
     SpeakingGapMatchingExercise,
     SpeakingGapOption,
+    SpeakingPromptSegment,
+    SpeakingPromptSegmentedExercise,
     UserExerciseFavorite,
     WritingExampleText,
     WritingExercise,
@@ -523,6 +525,52 @@ class SpeakingGapOptionSerializer(serializers.ModelSerializer):
         model = SpeakingGapOption
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class SpeakingPromptSegmentedExerciseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpeakingPromptSegmentedExercise
+        fields = "__all__"
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class SpeakingPromptSegmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpeakingPromptSegment
+        fields = "__all__"
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class SpeakingPromptSegmentDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SpeakingPromptSegment
+        fields = [
+            "id",
+            "segment_order",
+            "segment_text",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class SpeakingPromptSegmentedExerciseDetailSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+    segments = SpeakingPromptSegmentDetailSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SpeakingPromptSegmentedExercise
+        fields = [
+            "id",
+            "exercise_base",
+            "prompt_text",
+            "segment_delimiter",
+            "example_text_raw",
+            "created_at",
+            "updated_at",
+            "segments",
+        ]
+        read_only_fields = fields
 
 
 class UserExerciseFavoriteSerializer(serializers.ModelSerializer):

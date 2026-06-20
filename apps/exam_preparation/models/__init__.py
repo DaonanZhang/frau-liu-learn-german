@@ -27,6 +27,8 @@ from .speaking import (
     SpeakingGapBlank,
     SpeakingGapMatchingExercise,
     SpeakingGapOption,
+    SpeakingPromptSegment,
+    SpeakingPromptSegmentedExercise,
 )
 from .user_activity import UserExerciseFavorite
 from .writing import WritingExampleText, WritingExercise
@@ -56,6 +58,7 @@ __all__ = [
     "SpeakingGapMatchingExercise",
     "SpeakingGapBlank",
     "SpeakingGapOption",
+    "SpeakingPromptSegmentedExercise",
+    "SpeakingPromptSegment",
     "UserExerciseFavorite",
 ]
-

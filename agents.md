@@ -155,3 +155,8 @@ After run:
 - After `Prüfen`, every exercise page in the `exam_preparation` module must provide a `Wiederholen` action that clears all answers and resets the page to the initial unanswered state.
 - After `Prüfen`, if the learner selected a wrong option, the correct option must still be visibly highlighted in green inside the option list.
 - Keep these behaviors consistent across all current and future `exam_preparation` exercise types.
+
+## Exam Preparation XLSX Rules
+- For `exam_preparation` import format, use `apps/exam_preparation/data/README.md` as the canonical XLSX contract.
+- Do not reintroduce `title_zh` in new exam-preparation import assumptions or new sheets.
+- Map all shared exercise metadata through `ExerciseBase`, including `exam_type`.

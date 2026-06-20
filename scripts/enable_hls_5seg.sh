@@ -271,6 +271,7 @@ if [[ -d "$input" ]]; then
   fi
   processed=0
   skipped=0
+  failed=0
   for f in "${files[@]}"; do
     if is_hls_init_mp4 "$f"; then
       echo "Skip (HLS init file): $f"
@@ -289,12 +290,14 @@ if [[ -d "$input" ]]; then
       if [[ "$rc" -eq 2 ]]; then
         skipped=$((skipped + 1))
       else
-        exit "$rc"
+        echo "FAILED (continuing): $f" >&2
+        failed=$((failed + 1))
       fi
     fi
   done
+  echo "HLS result: processed=${processed}, skipped=${skipped}, failed=${failed}"
   if [[ "$whitelist_enabled" -eq 1 ]]; then
-    echo "Whitelist result: processed=${processed}, skipped=${skipped}"
+    echo "Whitelist result: processed=${processed}, skipped=${skipped}, failed=${failed}"
     if [[ "$processed" -eq 0 ]]; then
       echo "No files matched whitelist." >&2
       exit 1

@@ -23,6 +23,8 @@ from apps.exam_preparation.models import (
     SpeakingGapBlank,
     SpeakingGapMatchingExercise,
     SpeakingGapOption,
+    SpeakingPromptSegment,
+    SpeakingPromptSegmentedExercise,
     UserExerciseFavorite,
     WritingExampleText,
     WritingExercise,
@@ -31,10 +33,10 @@ from apps.exam_preparation.models import (
 
 @admin.register(ExerciseBase)
 class ExerciseBaseAdmin(admin.ModelAdmin):
-    list_display = ("id", "level", "skill", "exercise_type", "external_id", "difficulty", "is_real_exam", "created_at")
-    list_filter = ("level", "skill", "exercise_type", "difficulty", "is_real_exam", "creation_method")
-    search_fields = ("external_id", "title", "title_zh", "source_name", "source_reference", "imported_from_file")
-    ordering = ("level", "exercise_type", "external_id")
+    list_display = ("id", "exam_type", "level", "skill", "exercise_type", "external_id", "difficulty", "is_real_exam", "created_at")
+    list_filter = ("exam_type", "level", "skill", "exercise_type", "difficulty", "is_real_exam", "creation_method")
+    search_fields = ("exam_type", "external_id", "title", "source_name", "source_reference", "imported_from_file")
+    ordering = ("exam_type", "level", "exercise_type", "external_id")
 
 
 @admin.register(ListeningExercise)
@@ -181,6 +183,18 @@ class SpeakingGapOptionAdmin(admin.ModelAdmin):
 class SpeakingGapBlankAdmin(admin.ModelAdmin):
     list_display = ("id", "exercise", "blank_key", "blank_number", "correct_option")
     search_fields = ("blank_key", "exercise__exercise_base__external_id")
+
+
+@admin.register(SpeakingPromptSegmentedExercise)
+class SpeakingPromptSegmentedExerciseAdmin(admin.ModelAdmin):
+    list_display = ("id", "exercise_base", "segment_delimiter", "updated_at")
+    search_fields = ("exercise_base__external_id", "exercise_base__title", "prompt_text", "example_text_raw")
+
+
+@admin.register(SpeakingPromptSegment)
+class SpeakingPromptSegmentAdmin(admin.ModelAdmin):
+    list_display = ("id", "exercise", "segment_order", "updated_at")
+    search_fields = ("segment_text", "exercise__exercise_base__external_id")
 
 
 @admin.register(UserExerciseFavorite)

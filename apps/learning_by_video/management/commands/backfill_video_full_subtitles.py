@@ -47,7 +47,6 @@ class Command(BaseCommand):
             help="Rebuild subtitle aggregate fields for all selected videos.",
         )
 
-    @transaction.atomic
     def handle(self, *args: Any, **options: Any) -> None:
         video_ids = list(options.get("video_id") or [])
         module_key = str(options.get("module_key") or "learning_by_video")
@@ -85,29 +84,42 @@ class Command(BaseCommand):
 
         updated = 0
         empty_subtitles = 0
+        failed_updates: list[str] = []
 
         for video in videos:
-            de_joined = _join_subtitle_lines(subtitle_map_de.get(video.id, []))
-            zh_joined = _join_subtitle_lines(subtitle_map_zh.get(video.id, []))
+            try:
+                with transaction.atomic():
+                    de_joined = _join_subtitle_lines(subtitle_map_de.get(video.id, []))
+                    zh_joined = _join_subtitle_lines(subtitle_map_zh.get(video.id, []))
 
-            if not de_joined and not zh_joined:
-                empty_subtitles += 1
+                    if not de_joined and not zh_joined:
+                        empty_subtitles += 1
+                        continue
+
+                    changed_fields: list[str] = []
+                    if video.full_subtitle_de != de_joined:
+                        video.full_subtitle_de = de_joined
+                        changed_fields.append("full_subtitle_de")
+                    if video.full_subtitle_zh != zh_joined:
+                        video.full_subtitle_zh = zh_joined
+                        changed_fields.append("full_subtitle_zh")
+
+                    if changed_fields:
+                        video.save(update_fields=changed_fields)
+                        updated += 1
+            except Exception as exc:
+                failed_updates.append(f"id={video.id} | {exc}")
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"FAILED SUBTITLE BACKFILL: id={video.id} rolled back and skipped. error={exc}"
+                    )
+                )
                 continue
-
-            changed_fields: list[str] = []
-            if video.full_subtitle_de != de_joined:
-                video.full_subtitle_de = de_joined
-                changed_fields.append("full_subtitle_de")
-            if video.full_subtitle_zh != zh_joined:
-                video.full_subtitle_zh = zh_joined
-                changed_fields.append("full_subtitle_zh")
-
-            if changed_fields:
-                video.save(update_fields=changed_fields)
-                updated += 1
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"OK: processed={len(videos)}, updated={updated}, skipped_no_subtitles={empty_subtitles}"
+                f"OK: processed={len(videos)}, updated={updated}, skipped_no_subtitles={empty_subtitles}, failed={len(failed_updates)}"
             )
         )
+        for item in failed_updates:
+            self.stderr.write(self.style.ERROR(item))

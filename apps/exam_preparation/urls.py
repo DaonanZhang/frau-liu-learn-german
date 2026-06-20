@@ -26,6 +26,8 @@ from apps.exam_preparation.views import (
     SpeakingGapBlankViewSet,
     SpeakingGapMatchingExerciseViewSet,
     SpeakingGapOptionViewSet,
+    SpeakingPromptSegmentedExerciseViewSet,
+    SpeakingPromptSegmentViewSet,
     UserExerciseFavoriteViewSet,
     WritingExampleTextViewSet,
     WritingExerciseViewSet,
@@ -100,9 +102,18 @@ router.register(
 )
 router.register(r"speaking-gap-blanks", SpeakingGapBlankViewSet, basename="exam-prep-speaking-gap-blanks")
 router.register(r"speaking-gap-options", SpeakingGapOptionViewSet, basename="exam-prep-speaking-gap-options")
+router.register(
+    r"speaking-prompt-segmented-exercises",
+    SpeakingPromptSegmentedExerciseViewSet,
+    basename="exam-prep-speaking-prompt-segmented-exercises",
+)
+router.register(
+    r"speaking-prompt-segments",
+    SpeakingPromptSegmentViewSet,
+    basename="exam-prep-speaking-prompt-segments",
+)
 router.register(r"user-exercise-favorites", UserExerciseFavoriteViewSet, basename="exam-prep-user-exercise-favorites")
 
 urlpatterns = [
     path("", include(router.urls)),
 ]
-

@@ -6,6 +6,8 @@ This document records the minimum operational steps required when rolling out th
 
 The `exam_preparation` module stores its database schema in Django migrations, but its future XLSX import files are expected to live on the server filesystem.
 
+The frontend also needs a runtime media folder for exam-preparation listening audio files.
+
 The import directories are runtime folders, not repository content.
 
 Because of that:
@@ -23,6 +25,10 @@ Tracked documentation:
 Ignored runtime import root:
 
 - `apps/exam_preparation/data/imports/`
+
+Ignored frontend media root:
+
+- `frontend/public/resources/ExamPreparation1/`
 
 ## Required server filesystem layout
 
@@ -58,10 +64,17 @@ apps/exam_preparation/data/imports/
 │   ├── raw/
 │   ├── processed/
 │   └── failed/
-└── speaking_gap_matching/
+├── speaking_gap_matching/
+│   ├── raw/
+│   ├── processed/
+│   └── failed/
+└── speaking_prompt_segmented/
     ├── raw/
     ├── processed/
     └── failed/
+
+frontend/public/resources/ExamPreparation1/
+└── exam_preparation_audio/
 ```
 
 ## Recommended server command
@@ -93,7 +106,11 @@ mkdir -p \
   apps/exam_preparation/data/imports/writing/failed \
   apps/exam_preparation/data/imports/speaking_gap_matching/raw \
   apps/exam_preparation/data/imports/speaking_gap_matching/processed \
-  apps/exam_preparation/data/imports/speaking_gap_matching/failed
+  apps/exam_preparation/data/imports/speaking_gap_matching/failed \
+  apps/exam_preparation/data/imports/speaking_prompt_segmented/raw \
+  apps/exam_preparation/data/imports/speaking_prompt_segmented/processed \
+  apps/exam_preparation/data/imports/speaking_prompt_segmented/failed \
+  frontend/public/resources/ExamPreparation1/exam_preparation_audio
 ```
 
 ## Rollout checklist
@@ -104,7 +121,8 @@ Before first server use of `exam_preparation`:
 2. Install or sync Python dependencies.
 3. Run Django migrations.
 4. Create the import directories listed above.
-5. Confirm the application process has permission to read and write these folders.
+5. Create `frontend/public/resources/ExamPreparation1/exam_preparation_audio` for listening audio assets.
+6. Confirm the application process has permission to read and write these folders.
 
 ## Operational rule
 
@@ -117,3 +135,5 @@ When future XLSX import logic is added:
 ## Important note
 
 If a new server environment is provisioned from scratch, creating the `exam_preparation` import directories is a required setup step. The repository alone will not create them because the runtime import tree is intentionally git-ignored.
+
+The same applies to `frontend/public/resources/ExamPreparation1/exam_preparation_audio`: it is a runtime folder and must be created manually on the server.

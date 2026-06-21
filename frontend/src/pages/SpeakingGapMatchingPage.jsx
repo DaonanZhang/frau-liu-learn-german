@@ -6,6 +6,8 @@ import {
   fetchSpeakingGapMatchingExercises,
   saveSpeakingGapBlankState,
 } from "../api/exam_preparation/speakingExercises.js";
+import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./SpeakingExercisePage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -27,6 +29,8 @@ export default function SpeakingGapMatchingPage() {
   const [saveErrorText, setSaveErrorText] = useState("");
   const [answers, setAnswers] = useState({});
   const [isChecked, setIsChecked] = useState(false);
+  const [favoritedByBlankId, setFavoritedByBlankId] = useState({});
+  const [favoritePendingByBlankId, setFavoritePendingByBlankId] = useState({});
 
   useEffect(() => {
     let aborted = false;
@@ -58,6 +62,7 @@ export default function SpeakingGapMatchingPage() {
 
         const stateResults = Array.isArray(stateData?.results) ? stateData.results : [];
         const nextAnswers = {};
+        const nextFavorited = {};
         const blanksById = Object.fromEntries(
           (Array.isArray(detail?.blanks) ? detail.blanks : []).map((blank) => [blank.id, blank])
         );
@@ -67,7 +72,11 @@ export default function SpeakingGapMatchingPage() {
           if (blankKey && selectedOptionKey) {
             nextAnswers[blankKey] = selectedOptionKey;
           }
+          if (item?.blank) {
+            nextFavorited[item.blank] = Boolean(item?.is_favorited);
+          }
         });
+        setFavoritedByBlankId(nextFavorited);
         if (Object.keys(nextAnswers).length > 0) {
           setAnswers(nextAnswers);
           setIsChecked(true);
@@ -121,6 +130,28 @@ export default function SpeakingGapMatchingPage() {
     } catch (error) {
       setSaveStateText("");
       setSaveErrorText(error?.message || "保存状态失败。");
+    }
+  }
+
+  async function toggleFavorite(blank) {
+    const nextValue = !favoritedByBlankId[blank.id];
+    setFavoritePendingByBlankId((previous) => ({ ...previous, [blank.id]: true }));
+    try {
+      const selectedOptionKey = answers[blank.blank_key] || "";
+      await saveSpeakingGapBlankState({
+        blank: blank.id,
+        is_favorited: nextValue,
+        answer_payload: {
+          selected_option_key: selectedOptionKey,
+        },
+        is_correct: selectedOptionKey === blank.correct_option?.option_key,
+      });
+      setFavoritedByBlankId((previous) => ({ ...previous, [blank.id]: nextValue }));
+    } catch (error) {
+      setSaveStateText("");
+      setSaveErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
+    } finally {
+      setFavoritePendingByBlankId((previous) => ({ ...previous, [blank.id]: false }));
     }
   }
 
@@ -252,7 +283,16 @@ export default function SpeakingGapMatchingPage() {
                     isCorrect ? "speaking-feedback-card--correct" : "speaking-feedback-card--wrong",
                   ].join(" ")}
                 >
-                  <strong>Lücke {blank.blank_number}</strong>
+                  <div className="speaking-feedback-card__header">
+                    <strong>Lücke {blank.blank_number}</strong>
+                    <ExerciseFavoriteButton
+                      isFavorited={Boolean(favoritedByBlankId[blank.id])}
+                      pending={Boolean(favoritePendingByBlankId[blank.id])}
+                      onClick={() => {
+                        toggleFavorite(blank);
+                      }}
+                    />
+                  </div>
                   <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
                   <p>Richtige Antwort: {blank.correct_option?.option_text || "-"}</p>
                   <p>Erklärung: {blank.explanation || "Keine zusätzliche Erklärung."}</p>
@@ -265,17 +305,15 @@ export default function SpeakingGapMatchingPage() {
         <section className="speaking-actions">
           <span className="speaking-actions__meta">{answeredCount} / {blanks.length} beantwortet</span>
           <div className="speaking-actions__buttons">
-            <button
-              type="button"
+            <ExamActionButton
               className="speaking-check-btn"
               disabled={isChecked || !blanks.length || answeredCount !== blanks.length}
               onClick={handleCheck}
-            >
-              Prüfen
-            </button>
+              label="Prüfen"
+              icon="check"
+            />
             {isChecked ? (
-              <button
-                type="button"
+              <ExamActionButton
                 className="speaking-reset-btn"
                 onClick={() => {
                   setAnswers({});
@@ -283,9 +321,9 @@ export default function SpeakingGapMatchingPage() {
                   setSaveStateText("");
                   setSaveErrorText("");
                 }}
-              >
-                Wiederholen
-              </button>
+                label="Wiederholen"
+                icon="rotate"
+              />
             ) : null}
           </div>
         </section>

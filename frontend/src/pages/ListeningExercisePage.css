@@ -246,6 +246,14 @@
   margin: 0;
 }
 
+.listening-exercise-feedback__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.45rem;
+}
+
 .listening-exercise-feedback__line + .listening-exercise-feedback__line {
   margin-top: 0.4rem;
 }

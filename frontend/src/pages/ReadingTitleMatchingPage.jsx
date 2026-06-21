@@ -4,6 +4,12 @@ import {
   fetchReadingTitleMatchingExerciseDetail,
   fetchReadingTitleMatchingExercises,
 } from "../api/exam_preparation/readingTitleMatching.js";
+import {
+  fetchReadingTitleMatchingItemStates,
+  saveReadingTitleMatchingItemState,
+} from "../api/exam_preparation/userExerciseStates.js";
+import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ReadingTitleMatchingPage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -15,6 +21,8 @@ export default function ReadingTitleMatchingPage() {
   const [errorText, setErrorText] = useState("");
   const [answers, setAnswers] = useState({});
   const [isChecked, setIsChecked] = useState(false);
+  const [favoritedByItemId, setFavoritedByItemId] = useState({});
+  const [favoritePendingByItemId, setFavoritePendingByItemId] = useState({});
 
   useEffect(() => {
     let aborted = false;
@@ -34,6 +42,28 @@ export default function ReadingTitleMatchingPage() {
         const detail = await fetchReadingTitleMatchingExerciseDetail(firstExercise.id);
         if (!aborted) {
           setExercise(detail || null);
+          const stateData = await fetchReadingTitleMatchingItemStates(firstExercise.id);
+          if (aborted) {
+            return;
+          }
+          const nextAnswers = {};
+          const nextFavorited = {};
+          const stateResults = Array.isArray(stateData?.results) ? stateData.results : [];
+          stateResults.forEach((stateItem) => {
+            const itemId = stateItem?.item;
+            const selectedOptionKey = stateItem?.answer_payload?.selected_option_key;
+            if (itemId && selectedOptionKey) {
+              nextAnswers[itemId] = selectedOptionKey;
+            }
+            if (itemId) {
+              nextFavorited[itemId] = Boolean(stateItem?.is_favorited);
+            }
+          });
+          setFavoritedByItemId(nextFavorited);
+          if (Object.keys(nextAnswers).length > 0) {
+            setAnswers(nextAnswers);
+            setIsChecked(true);
+          }
         }
       } catch (error) {
         if (!aborted) {
@@ -64,6 +94,26 @@ export default function ReadingTitleMatchingPage() {
   const answeredCount = useMemo(() => {
     return Object.values(answers).filter(Boolean).length;
   }, [answers]);
+
+  async function toggleFavorite(item) {
+    const nextValue = !favoritedByItemId[item.id];
+    setFavoritePendingByItemId((previous) => ({ ...previous, [item.id]: true }));
+    try {
+      await saveReadingTitleMatchingItemState({
+        item: item.id,
+        is_favorited: nextValue,
+        answer_payload: {
+          selected_option_key: answers[item.id] || "",
+        },
+        is_correct: answers[item.id] === item.correct_option?.option_key,
+      });
+      setFavoritedByItemId((previous) => ({ ...previous, [item.id]: nextValue }));
+    } catch (error) {
+      setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
+    } finally {
+      setFavoritePendingByItemId((previous) => ({ ...previous, [item.id]: false }));
+    }
+  }
 
   if (loading) {
     return (
@@ -110,116 +160,96 @@ export default function ReadingTitleMatchingPage() {
 
         <section className="reading-title-texts">
           <div className="reading-title-text-grid">
-            {items.map((item) => (
-              <article key={item.id} className="reading-title-text-card">
-                <div className="reading-title-text-card__badge">Text {item.item_number}</div>
-                <p>{item.text}</p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="reading-title-questions">
-          <div className="reading-title-question-list">
-            {items.map((item) => (
-              <article key={`question-${item.id}`} className="reading-title-question-card">
-                <div className="reading-title-question-card__header">
-                  <h3>Überschrift zu dem Text {item.item_number}</h3>
-                  <span className="reading-title-question-card__selection">
-                    {answers[item.id] ? `已选择 ${answers[item.id]}` : "未选择"}
-                  </span>
-                </div>
-
-                <div className="reading-title-option-grid">
-                  {options.map((option) => {
-                    const checked = answers[item.id] === option.option_key;
-                    const isCorrect = option.option_key === item.correct_option?.option_key;
-                    const isWrongSelected = isChecked && checked && !isCorrect;
-                    const shouldRevealCorrect = isChecked && isCorrect;
-                    return (
-                      <label
-                        key={`${item.id}-${option.id}`}
+            {items.map((item) => {
+              const selectedKey = answers[item.id] || "";
+              const isCorrect = selectedKey === item.correct_option?.option_key;
+              return (
+                <article key={item.id} className="reading-title-text-card">
+                  <div className="reading-title-text-card__topline">
+                    <div className="reading-title-text-card__badge">Text {item.item_number}</div>
+                    <div className="reading-title-inline-answer reading-title-inline-answer--inline">
+                      <select
+                        id={`reading-title-select-${item.id}`}
+                        aria-label={`Überschrift zu Text ${item.item_number}`}
                         className={[
-                          "reading-title-option",
-                          checked && !isChecked ? "reading-title-option--selected" : "",
-                          shouldRevealCorrect ? "reading-title-option--correct" : "",
-                          isWrongSelected ? "reading-title-option--wrong" : "",
-                        ]
-                          .filter(Boolean)
-                          .join(" ")}
+                          "reading-title-select",
+                          selectedKey && !isChecked ? "reading-title-select--selected" : "",
+                          isChecked && isCorrect ? "reading-title-select--correct" : "",
+                          isChecked && selectedKey && !isCorrect ? "reading-title-select--wrong" : "",
+                        ].filter(Boolean).join(" ")}
+                        value={selectedKey}
+                        onChange={(event) => {
+                          if (isChecked) {
+                            setIsChecked(false);
+                          }
+                          setAnswers((previous) => ({
+                            ...previous,
+                            [item.id]: event.target.value,
+                          }));
+                        }}
                       >
-                        <input
-                          type="radio"
-                          name={`item-${item.id}`}
-                          value={option.option_key}
-                          checked={checked}
-                          onChange={() => {
-                            if (isChecked) {
-                              setIsChecked(false);
-                            }
-                            setAnswers((previous) => ({
-                              ...previous,
-                              [item.id]: option.option_key,
-                            }));
+                        <option value="">Überschrift auswählen</option>
+                        {options.map((option) => (
+                          <option key={option.id} value={option.option_key}>
+                            {option.option_key} - {option.option_text}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <p>{item.text}</p>
+
+                  {isChecked ? (
+                    <div
+                      className={[
+                        "reading-title-feedback",
+                        isCorrect ? "reading-title-feedback--correct" : "reading-title-feedback--wrong",
+                      ].filter(Boolean).join(" ")}
+                    >
+                      <div className="reading-title-feedback__header">
+                        <strong className="reading-title-feedback__title">
+                          {isCorrect ? "Richtig" : "Falsch"}
+                        </strong>
+                        <ExerciseFavoriteButton
+                          isFavorited={Boolean(favoritedByItemId[item.id])}
+                          pending={Boolean(favoritePendingByItemId[item.id])}
+                          onClick={() => {
+                            toggleFavorite(item);
                           }}
                         />
-                        <span className="reading-title-option__key">{option.option_key}</span>
-                        <span className="reading-title-option__text">{option.option_text}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-
-                {isChecked ? (
-                  <div
-                    className={[
-                      "reading-title-feedback",
-                      answers[item.id] === item.correct_option?.option_key
-                        ? "reading-title-feedback--correct"
-                        : "reading-title-feedback--wrong",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    <strong className="reading-title-feedback__title">
-                      {answers[item.id] === item.correct_option?.option_key
-                        ? "Richtig."
-                        : "Nicht richtig."}
-                    </strong>
-                    <p className="reading-title-feedback__line">
-                      Richtige Antwort: {item.correct_option?.option_key} - {item.correct_option?.option_text}
-                    </p>
-                    <p className="reading-title-feedback__line">
-                      Erklärung: {item.explanation || "Keine zusätzliche Erklärung."}
-                    </p>
-                  </div>
-                ) : null}
-              </article>
-            ))}
+                      </div>
+                      <p className="reading-title-feedback__line">
+                        Richtige Antwort: {item.correct_option?.option_key} - {item.correct_option?.option_text}
+                      </p>
+                      <p className="reading-title-feedback__line">
+                        Erklärung: {item.explanation || "Keine zusätzliche Erklärung."}
+                      </p>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
-
           <div className="reading-title-actions">
-            <button
-              type="button"
+            <ExamActionButton
               className="reading-title-check-btn"
               disabled={isChecked || !items.length || answeredCount !== items.length}
               onClick={() => {
                 setIsChecked(true);
               }}
-            >
-              Prüfen
-            </button>
+              label="Prüfen"
+              icon="check"
+            />
             {isChecked ? (
-              <button
-                type="button"
+              <ExamActionButton
                 className="reading-title-reset-btn"
                 onClick={() => {
                   setAnswers({});
                   setIsChecked(false);
                 }}
-              >
-                Wiederholen
-              </button>
+                label="Wiederholen"
+                icon="rotate"
+              />
             ) : null}
           </div>
         </section>

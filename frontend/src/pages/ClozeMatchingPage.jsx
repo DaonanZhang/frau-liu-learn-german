@@ -4,6 +4,12 @@ import {
   fetchClozeMatchingExerciseDetail,
   fetchClozeMatchingExercises,
 } from "../api/exam_preparation/clozeExercises.js";
+import {
+  fetchClozeMatchingBlankStates,
+  saveClozeMatchingBlankState,
+} from "../api/exam_preparation/userExerciseStates.js";
+import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ClozeExercisePage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -23,6 +29,13 @@ export default function ClozeMatchingPage() {
   const [errorText, setErrorText] = useState("");
   const [answers, setAnswers] = useState({});
   const [isChecked, setIsChecked] = useState(false);
+  const [favoritedByBlankId, setFavoritedByBlankId] = useState({});
+  const [favoritePendingByBlankId, setFavoritePendingByBlankId] = useState({});
+  const [saveStateText, setSaveStateText] = useState("");
+  const [draggedOptionKey, setDraggedOptionKey] = useState("");
+  const [dragSourceBlankKey, setDragSourceBlankKey] = useState("");
+  const [activeDropBlankKey, setActiveDropBlankKey] = useState("");
+  const [isPoolDropActive, setIsPoolDropActive] = useState(false);
 
   useEffect(() => {
     let aborted = false;
@@ -31,6 +44,7 @@ export default function ClozeMatchingPage() {
       try {
         setLoading(true);
         setErrorText("");
+        setSaveStateText("");
         const listData = await fetchClozeMatchingExercises();
         const firstExercise = Array.isArray(listData?.results) ? listData.results[0] : null;
         if (!firstExercise?.id) {
@@ -39,6 +53,30 @@ export default function ClozeMatchingPage() {
         const detail = await fetchClozeMatchingExerciseDetail(firstExercise.id);
         if (!aborted) {
           setExercise(detail || null);
+          const stateData = await fetchClozeMatchingBlankStates(firstExercise.id);
+          if (aborted) {
+            return;
+          }
+          const nextAnswers = {};
+          const nextFavorited = {};
+          const stateResults = Array.isArray(stateData?.results) ? stateData.results : [];
+          stateResults.forEach((stateItem) => {
+            const blankId = stateItem?.blank;
+            const selectedOptionKey = stateItem?.answer_payload?.selected_option_key;
+            const blank = (detail?.blank_answers || []).find((item) => item.id === blankId);
+            if (blank?.blank_key && selectedOptionKey) {
+              nextAnswers[blank.blank_key] = selectedOptionKey;
+            }
+            if (blankId) {
+              nextFavorited[blankId] = Boolean(stateItem?.is_favorited);
+            }
+          });
+          setFavoritedByBlankId(nextFavorited);
+          if (Object.keys(nextAnswers).length > 0) {
+            setAnswers(nextAnswers);
+            setIsChecked(true);
+            setSaveStateText("已恢复上次 Prüfen 后的作答状态。");
+          }
         }
       } catch (error) {
         if (!aborted) {
@@ -63,8 +101,114 @@ export default function ClozeMatchingPage() {
     () => Object.fromEntries(blankAnswers.map((blank) => [blank.blank_key, blank])),
     [blankAnswers]
   );
+  const optionMap = useMemo(
+    () => Object.fromEntries(options.map((option) => [option.option_key, option])),
+    [options]
+  );
   const answeredCount = useMemo(() => Object.values(answers).filter(Boolean).length, [answers]);
   const parts = useMemo(() => renderParts(exercise?.content_with_placeholders), [exercise]);
+  const assignedOptionKeys = useMemo(
+    () => new Set(Object.values(answers).filter(Boolean)),
+    [answers]
+  );
+  const poolOptions = useMemo(
+    () => options.filter((option) => !assignedOptionKeys.has(option.option_key)),
+    [options, assignedOptionKeys]
+  );
+
+  function assignOptionToBlank(blankKey, optionKey, sourceBlankKey = "") {
+    if (!blankKey || !optionKey) {
+      return;
+    }
+    setAnswers((previous) => {
+      const nextAnswers = { ...previous };
+      const occupantBlankKey = Object.entries(nextAnswers).find(
+        ([candidateBlankKey, candidateOptionKey]) =>
+          candidateBlankKey !== blankKey && candidateOptionKey === optionKey
+      )?.[0];
+
+      if (occupantBlankKey) {
+        nextAnswers[occupantBlankKey] = "";
+      }
+
+      if (sourceBlankKey && sourceBlankKey !== blankKey) {
+        nextAnswers[sourceBlankKey] = "";
+      }
+
+      nextAnswers[blankKey] = optionKey;
+      return nextAnswers;
+    });
+  }
+
+  function clearBlankAssignment(blankKey) {
+    if (!blankKey) {
+      return;
+    }
+    setAnswers((previous) => ({
+      ...previous,
+      [blankKey]: "",
+    }));
+  }
+
+  function handleDragStart(optionKey, sourceBlankKey = "") {
+    setDraggedOptionKey(optionKey);
+    setDragSourceBlankKey(sourceBlankKey);
+    if (isChecked) {
+      setIsChecked(false);
+    }
+    setSaveStateText("");
+  }
+
+  function handleDragEnd() {
+    setDraggedOptionKey("");
+    setDragSourceBlankKey("");
+    setActiveDropBlankKey("");
+    setIsPoolDropActive(false);
+  }
+
+  async function toggleFavorite(blank) {
+    const nextValue = !favoritedByBlankId[blank.id];
+    setFavoritePendingByBlankId((previous) => ({ ...previous, [blank.id]: true }));
+    try {
+      await saveClozeMatchingBlankState({
+        blank: blank.id,
+        is_favorited: nextValue,
+        answer_payload: {
+          selected_option_key: answers[blank.blank_key] || "",
+        },
+        is_correct: blank.correct_option?.option_key === answers[blank.blank_key],
+      });
+      setFavoritedByBlankId((previous) => ({ ...previous, [blank.id]: nextValue }));
+    } catch (error) {
+      setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
+    } finally {
+      setFavoritePendingByBlankId((previous) => ({ ...previous, [blank.id]: false }));
+    }
+  }
+
+  async function handleCheck() {
+    setIsChecked(true);
+    setSaveStateText("保存状态中...");
+
+    try {
+      await Promise.all(
+        blankAnswers.map((blank) =>
+          saveClozeMatchingBlankState({
+            blank: blank.id,
+            is_favorited: Boolean(favoritedByBlankId[blank.id]),
+            answer_payload: {
+              selected_option_key: answers[blank.blank_key] || "",
+            },
+            is_correct: blank.correct_option?.option_key === answers[blank.blank_key],
+          })
+        )
+      );
+      setSaveStateText("已保存当前 Prüfen 结果。");
+    } catch (error) {
+      setErrorText(error?.message || "状态保存失败。");
+      setSaveStateText("");
+    }
+  }
 
   if (loading) {
     return <div className="cloze-page"><div className="cloze-shell"><p className="cloze-loading">Loading cloze matching exercise...</p></div></div>;
@@ -97,18 +241,50 @@ export default function ClozeMatchingPage() {
 
         <section className="cloze-pool-panel">
           <h2>Optionen</h2>
-          <div className="cloze-pool">
-            {options.map((option) => (
-              <span
+          <div
+            className={[
+              "cloze-pool",
+              isPoolDropActive ? "cloze-pool--drop-active" : "",
+            ].filter(Boolean).join(" ")}
+            onDragOver={(event) => {
+              if (!draggedOptionKey) {
+                return;
+              }
+              event.preventDefault();
+              setIsPoolDropActive(true);
+            }}
+            onDragLeave={() => {
+              setIsPoolDropActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (dragSourceBlankKey) {
+                clearBlankAssignment(dragSourceBlankKey);
+              }
+              setSaveStateText("");
+              handleDragEnd();
+            }}
+          >
+            {poolOptions.map((option) => (
+              <button
                 key={option.id}
+                type="button"
+                draggable={!isChecked}
                 className={[
                   "cloze-pool-chip",
                   option.is_extra ? "cloze-pool-chip--extra" : "",
                 ].filter(Boolean).join(" ")}
+                onDragStart={() => {
+                  handleDragStart(option.option_key, "");
+                }}
+                onDragEnd={handleDragEnd}
               >
                 {option.option_text}
-              </span>
+              </button>
             ))}
+            {!poolOptions.length ? (
+              <span className="cloze-pool__empty">Alle Optionen sind gerade in Lücken platziert.</span>
+            ) : null}
           </div>
         </section>
 
@@ -126,39 +302,76 @@ export default function ClozeMatchingPage() {
 
               return (
                 <span key={blankKey} className="cloze-blank-inline">
-                  <select
+                  <span
                     className={[
-                      "cloze-select",
+                      "cloze-drop-slot",
                       selectedKey && !isChecked ? "cloze-select--selected" : "",
                       isChecked && isCorrect ? "cloze-select--correct" : "",
                       isChecked && selectedKey && !isCorrect ? "cloze-select--wrong" : "",
+                      activeDropBlankKey === blankKey ? "cloze-drop-slot--active" : "",
                     ].filter(Boolean).join(" ")}
-                    value={selectedKey}
-                    onChange={(event) => {
-                      if (isChecked) {
-                        setIsChecked(false);
+                    onDragOver={(event) => {
+                      if (!draggedOptionKey) {
+                        return;
                       }
-                      setAnswers((previous) => ({
-                        ...previous,
-                        [blankKey]: event.target.value,
-                      }));
+                      event.preventDefault();
+                      setActiveDropBlankKey(blankKey);
+                    }}
+                    onDragLeave={() => {
+                      setActiveDropBlankKey((previous) => (previous === blankKey ? "" : previous));
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (draggedOptionKey) {
+                        assignOptionToBlank(blankKey, draggedOptionKey, dragSourceBlankKey);
+                      }
+                      setSaveStateText("");
+                      handleDragEnd();
                     }}
                   >
-                    <option value="">Lücke {blank?.blank_number || ""}</option>
-                    {options.map((option) => (
-                      <option key={option.id} value={option.option_key}>
-                        {option.option_text}
-                      </option>
-                    ))}
-                  </select>
+                    {selectedKey ? (
+                      <button
+                        type="button"
+                        draggable={!isChecked}
+                        className={[
+                          "cloze-drop-slot__chip",
+                          isChecked && isCorrect ? "cloze-drop-slot__chip--correct" : "",
+                          isChecked && selectedKey && !isCorrect ? "cloze-drop-slot__chip--wrong" : "",
+                        ].filter(Boolean).join(" ")}
+                        onDragStart={() => {
+                          handleDragStart(selectedKey, blankKey);
+                        }}
+                        onDragEnd={handleDragEnd}
+                      >
+                        {optionMap[selectedKey]?.option_text || selectedKey}
+                      </button>
+                    ) : (
+                      <span className="cloze-drop-slot__placeholder">
+                        Lücke {blank?.blank_number || ""}
+                      </span>
+                    )}
+                  </span>
                   {isChecked ? (
-                    <span
-                      className={[
-                        "cloze-inline-feedback",
-                        isCorrect ? "cloze-inline-feedback--correct" : "cloze-inline-feedback--wrong",
-                      ].join(" ")}
-                    >
-                      {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
+                    <span className="cloze-inline-feedback-row">
+                      <span
+                        className={[
+                          "cloze-inline-feedback",
+                          isCorrect
+                            ? "cloze-inline-feedback--correct"
+                            : "cloze-inline-feedback--answer",
+                        ].join(" ")}
+                      >
+                        {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
+                      </span>
+                      {blank ? (
+                        <ExerciseFavoriteButton
+                          isFavorited={Boolean(favoritedByBlankId[blank.id])}
+                          pending={Boolean(favoritePendingByBlankId[blank.id])}
+                          onClick={() => {
+                            toggleFavorite(blank);
+                          }}
+                        />
+                      ) : null}
                     </span>
                   ) : null}
                 </span>
@@ -167,54 +380,31 @@ export default function ClozeMatchingPage() {
           </div>
         </section>
 
-        {isChecked ? (
-          <section className="cloze-feedback-list">
-            {blankAnswers.map((blank) => {
-              const selectedOption = options.find((option) => option.option_key === answers[blank.blank_key]);
-              const isCorrect = blank.correct_option?.option_key === answers[blank.blank_key];
-              return (
-                <article
-                  key={blank.id}
-                  className={[
-                    "cloze-feedback-card",
-                    isCorrect ? "cloze-feedback-card--correct" : "cloze-feedback-card--wrong",
-                  ].join(" ")}
-                >
-                  <strong>Lücke {blank.blank_number}</strong>
-                  <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
-                  <p>Richtige Antwort: {blank.correct_option?.option_text || "-"}</p>
-                  <p>Erklärung: {blank.explanation || "Keine zusätzliche Erklärung."}</p>
-                </article>
-              );
-            })}
-          </section>
-        ) : null}
-
         <section className="cloze-actions">
           <span className="cloze-actions__meta">{answeredCount} / {blankAnswers.length} beantwortet</span>
           <div className="cloze-actions__buttons">
-            <button
-              type="button"
+            <ExamActionButton
               className="cloze-check-btn"
               disabled={isChecked || !blankAnswers.length || answeredCount !== blankAnswers.length}
-              onClick={() => setIsChecked(true)}
-            >
-              Prüfen
-            </button>
+              onClick={handleCheck}
+              label="Prüfen"
+              icon="check"
+            />
             {isChecked ? (
-              <button
-                type="button"
+              <ExamActionButton
                 className="cloze-reset-btn"
                 onClick={() => {
                   setAnswers({});
                   setIsChecked(false);
+                  setSaveStateText("");
                 }}
-              >
-                Wiederholen
-              </button>
+                label="Wiederholen"
+                icon="rotate"
+              />
             ) : null}
           </div>
         </section>
+        {saveStateText ? <p className="cloze-state-note">{saveStateText}</p> : null}
       </div>
     </div>
   );

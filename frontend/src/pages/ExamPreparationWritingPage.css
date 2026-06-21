@@ -145,6 +145,18 @@
   margin-bottom: 0.8rem;
 }
 
+.writing-review-card__titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.writing-review-card__titleRow h2 {
+  margin: 0;
+}
+
 .writing-textarea {
   width: 100%;
   min-height: 18rem;

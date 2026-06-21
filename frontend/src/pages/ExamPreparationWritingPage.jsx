@@ -4,6 +4,12 @@ import {
   fetchWritingExerciseDetail,
   fetchWritingExercises,
 } from "../api/exam_preparation/writingExercises.js";
+import {
+  fetchWritingExerciseStates,
+  saveWritingExerciseState,
+} from "../api/exam_preparation/userExerciseStates.js";
+import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ExamPreparationWritingPage.css";
 
 function formatTime(totalSeconds) {
@@ -27,6 +33,8 @@ export default function ExamPreparationWritingPage() {
   const [isChecked, setIsChecked] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(30 * 60);
   const [timerStarted, setTimerStarted] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favoritePending, setFavoritePending] = useState(false);
 
   useEffect(() => {
     let aborted = false;
@@ -45,6 +53,18 @@ export default function ExamPreparationWritingPage() {
           setExercise(detail || null);
           if (detail?.time_limit_minutes) {
             setRemainingSeconds(detail.time_limit_minutes * 60);
+          }
+          const stateData = await fetchWritingExerciseStates(firstExercise.id);
+          if (aborted) {
+            return;
+          }
+          const firstState = Array.isArray(stateData?.results) ? stateData.results[0] : null;
+          if (firstState) {
+            setIsFavorited(Boolean(firstState.is_favorited));
+            if (typeof firstState?.answer_payload?.text === "string") {
+              setDraftText(firstState.answer_payload.text);
+              setIsChecked(true);
+            }
           }
         }
       } catch (error) {
@@ -85,6 +105,28 @@ export default function ExamPreparationWritingPage() {
 
   const wordCount = useMemo(() => countWords(draftText), [draftText]);
   const exampleTexts = useMemo(() => (Array.isArray(exercise?.example_texts) ? exercise.example_texts : []), [exercise]);
+
+  async function toggleFavorite() {
+    if (!exercise?.id) {
+      return;
+    }
+    const nextValue = !isFavorited;
+    setFavoritePending(true);
+    try {
+      await saveWritingExerciseState({
+        exercise: exercise.id,
+        is_favorited: nextValue,
+        answer_payload: {
+          text: draftText,
+        },
+      });
+      setIsFavorited(nextValue);
+    } catch (error) {
+      setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
+    } finally {
+      setFavoritePending(false);
+    }
+  }
 
   if (loading) {
     return <div className="writing-page"><div className="writing-shell"><p className="writing-loading">Loading writing exercise...</p></div></div>;
@@ -161,7 +203,14 @@ export default function ExamPreparationWritingPage() {
         {isChecked ? (
           <section className="writing-review-grid">
             <article className="writing-review-card writing-review-card--user">
-              <h2>Ihr Text</h2>
+              <div className="writing-review-card__titleRow">
+                <h2>Ihr Text</h2>
+                <ExerciseFavoriteButton
+                  isFavorited={isFavorited}
+                  pending={favoritePending}
+                  onClick={toggleFavorite}
+                />
+              </div>
               <p>{draftText || "Kein Text eingegeben."}</p>
             </article>
 
@@ -180,19 +229,17 @@ export default function ExamPreparationWritingPage() {
         <section className="writing-actions">
           <span className="writing-actions__meta">{wordCount} / {exercise?.words_limit || 80} Wörter</span>
           <div className="writing-actions__buttons">
-            <button
-              type="button"
+            <ExamActionButton
               className="writing-check-btn"
               disabled={isChecked || !draftText.trim()}
               onClick={() => {
                 setIsChecked(true);
               }}
-            >
-              Prüfen
-            </button>
+              label="Prüfen"
+              icon="check"
+            />
             {isChecked ? (
-              <button
-                type="button"
+              <ExamActionButton
                 className="writing-reset-btn"
                 onClick={() => {
                   setDraftText("");
@@ -200,9 +247,9 @@ export default function ExamPreparationWritingPage() {
                   setTimerStarted(false);
                   setRemainingSeconds((exercise?.time_limit_minutes || 30) * 60);
                 }}
-              >
-                Wiederholen
-              </button>
+                label="Wiederholen"
+                icon="rotate"
+              />
             ) : null}
           </div>
         </section>

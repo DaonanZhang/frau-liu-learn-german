@@ -6,6 +6,8 @@ import {
   fetchSpeakingPromptSegmentedExercises,
   saveSpeakingPromptSegmentedExerciseState,
 } from "../api/exam_preparation/speakingExercises.js";
+import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./SpeakingExercisePage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -29,6 +31,8 @@ export default function SpeakingPromptSegmentedPage() {
   const [saveErrorText, setSaveErrorText] = useState("");
   const [answers, setAnswers] = useState({});
   const [isChecked, setIsChecked] = useState(false);
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favoritePending, setFavoritePending] = useState(false);
 
   useEffect(() => {
     let aborted = false;
@@ -62,6 +66,9 @@ export default function SpeakingPromptSegmentedPage() {
 
         const firstState = Array.isArray(stateData?.results) ? stateData.results[0] : null;
         const selectedOrderBySegmentId = firstState?.answer_payload?.selected_order_by_segment_id;
+        if (firstState) {
+          setIsFavorited(Boolean(firstState.is_favorited));
+        }
         if (selectedOrderBySegmentId && typeof selectedOrderBySegmentId === "object") {
           setAnswers(selectedOrderBySegmentId);
           setIsChecked(true);
@@ -119,6 +126,32 @@ export default function SpeakingPromptSegmentedPage() {
     } catch (error) {
       setSaveStateText("");
       setSaveErrorText(error?.message || "保存状态失败。");
+    }
+  }
+
+  async function toggleFavorite() {
+    if (!exercise?.id) {
+      return;
+    }
+    const nextValue = !isFavorited;
+    setFavoritePending(true);
+    try {
+      await saveSpeakingPromptSegmentedExerciseState({
+        exercise: exercise.id,
+        is_favorited: nextValue,
+        answer_payload: {
+          selected_order_by_segment_id: normalizedAnswers,
+        },
+        is_correct: segments.every(
+          (segment) => Number(normalizedAnswers[segment.id]) === Number(segment.segment_order)
+        ),
+      });
+      setIsFavorited(nextValue);
+    } catch (error) {
+      setSaveStateText("");
+      setSaveErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
+    } finally {
+      setFavoritePending(false);
     }
   }
 
@@ -244,17 +277,22 @@ export default function SpeakingPromptSegmentedPage() {
         <section className="speaking-actions">
           <span className="speaking-actions__meta">{answeredCount} / {totalCount} beantwortet</span>
           <div className="speaking-actions__buttons">
-            <button
-              type="button"
+            {isChecked ? (
+              <ExerciseFavoriteButton
+                isFavorited={isFavorited}
+                pending={favoritePending}
+                onClick={toggleFavorite}
+              />
+            ) : null}
+            <ExamActionButton
               className="speaking-check-btn"
               disabled={isChecked || !segments.length || answeredCount !== totalCount}
               onClick={handleCheck}
-            >
-              Prüfen
-            </button>
+              label="Prüfen"
+              icon="check"
+            />
             {isChecked ? (
-              <button
-                type="button"
+              <ExamActionButton
                 className="speaking-reset-btn"
                 onClick={() => {
                   setAnswers({});
@@ -263,9 +301,9 @@ export default function SpeakingPromptSegmentedPage() {
                   setSaveErrorText("");
                   setDisplaySegments(shuffleSegments(segments));
                 }}
-              >
-                Wiederholen
-              </button>
+                label="Wiederholen"
+                icon="rotate"
+              />
             ) : null}
           </div>
         </section>

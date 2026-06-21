@@ -68,7 +68,6 @@
 
 .reading-title-instruction,
 .reading-title-text-card,
-.reading-title-question-card,
 .reading-title-loading,
 .reading-title-error {
   background: #ffffff;
@@ -89,30 +88,10 @@
   line-height: 1.65;
 }
 
-.reading-title-texts,
-.reading-title-questions {
+.reading-title-texts {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.reading-title-section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.reading-title-section-head h2 {
-  margin: 0;
-  color: #111827;
-  font-size: 1.02rem;
-  font-weight: 750;
-}
-
-.reading-title-section-head span {
-  color: #6b7280;
-  font-size: 0.84rem;
 }
 
 .reading-title-text-grid {
@@ -139,10 +118,18 @@
   border-top: 1px solid #eef0f2;
 }
 
+.reading-title-text-card__topline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 0.85rem;
+}
+
 .reading-title-text-card__badge {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  margin-bottom: 0.7rem;
   padding: 0.35rem 0.62rem;
   border-radius: 999px;
   background: #eef5ff;
@@ -159,108 +146,44 @@
   line-height: 1.65;
 }
 
-.reading-title-question-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+.reading-title-inline-answer {
+  margin-top: 1rem;
 }
 
-.reading-title-question-card {
-  padding: 1rem;
+.reading-title-inline-answer--inline {
+  width: 100%;
+  min-width: 0;
+  margin-top: 0;
 }
 
-.reading-title-question-card__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.reading-title-question-card__header h3 {
-  margin: 0;
-  color: #111827;
-  font-size: 0.98rem;
-  font-weight: 750;
-}
-
-.reading-title-question-card__selection {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2rem;
-  padding: 0.3rem 0.65rem;
-  border-radius: 999px;
-  background: #f5f6f8;
-  color: #6b7280;
-  font-size: 0.8rem;
+.reading-title-select {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid #d7dce3;
+  border-radius: 0.95rem;
+  background: #fff;
+  padding: 0 0.9rem;
+  color: #2f2a25;
+  font: inherit;
   font-weight: 700;
 }
 
-.reading-title-option-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.reading-title-option {
-  display: grid;
-  grid-template-columns: auto auto 1fr;
-  align-items: center;
-  gap: 0.7rem;
-  min-height: 3.5rem;
-  padding: 0.8rem 0.9rem;
-  border-radius: 0.8rem;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
-  cursor: pointer;
-  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
-}
-
-.reading-title-option:hover {
-  border-color: rgba(37, 99, 235, 0.24);
-  box-shadow: 0 10px 18px rgba(37, 99, 235, 0.08);
-}
-
-.reading-title-option input {
-  margin: 0;
-}
-
-.reading-title-option--selected {
+.reading-title-select--selected {
   border-color: rgba(217, 119, 6, 0.5);
   background: #fff7ed;
-  box-shadow: 0 10px 18px rgba(217, 119, 6, 0.12);
+  color: #9a4210;
 }
 
-.reading-title-option--correct {
+.reading-title-select--correct {
   border-color: rgba(5, 150, 105, 0.45);
   background: #ecfdf5;
-  box-shadow: 0 10px 18px rgba(5, 150, 105, 0.12);
+  color: #17713c;
 }
 
-.reading-title-option--wrong {
+.reading-title-select--wrong {
   border-color: rgba(220, 38, 38, 0.36);
   background: #fef2f2;
-  box-shadow: 0 10px 18px rgba(220, 38, 38, 0.12);
-}
-
-.reading-title-option__key {
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 0.65rem;
-  border: 1px solid rgba(37, 99, 235, 0.16);
-  background: #ffffff;
-  color: #2563eb;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.82rem;
-  font-weight: 800;
-}
-
-.reading-title-option__text {
-  color: #111827;
-  font-size: 0.92rem;
-  line-height: 1.5;
+  color: #992626;
 }
 
 .reading-title-feedback {
@@ -285,6 +208,13 @@
   margin-bottom: 0.45rem;
   color: #111827;
   font-size: 0.92rem;
+}
+
+.reading-title-feedback__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
 }
 
 .reading-title-feedback__line {
@@ -349,9 +279,7 @@
 }
 
 @media (max-width: 990px) {
-  .reading-title-topbar,
-  .reading-title-section-head,
-  .reading-title-question-card__header {
+  .reading-title-topbar {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -361,12 +289,6 @@
     padding: 1.15rem 1rem;
   }
 
-  .reading-title-text-grid,
-  .reading-title-option-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .reading-title-question-card,
   .reading-title-instruction {
     padding: 0.95rem;
   }

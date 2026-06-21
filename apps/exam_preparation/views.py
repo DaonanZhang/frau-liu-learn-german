@@ -460,7 +460,7 @@ class UserListeningQuestionStateViewSet(BaseUserExerciseStateViewSet):
     ).all()
     serializer_class = UserListeningQuestionStateSerializer
     state_lookup_field = "question"
-    filterset_fields = ["question", "is_favorited", "is_correct"]
+    filterset_fields = ["question", "question__listening_exercise", "is_favorited", "is_correct"]
     search_fields = [
         "question__question_text",
         "question__listening_exercise__exercise_base__external_id",
@@ -478,7 +478,7 @@ class UserReadingUnderstandingQuestionStateViewSet(BaseUserExerciseStateViewSet)
     ).all()
     serializer_class = UserReadingUnderstandingQuestionStateSerializer
     state_lookup_field = "question"
-    filterset_fields = ["question", "is_favorited", "is_correct"]
+    filterset_fields = ["question", "question__exercise", "is_favorited", "is_correct"]
     search_fields = [
         "question__question_text",
         "question__exercise__exercise_base__external_id",
@@ -497,7 +497,7 @@ class UserReadingTitleMatchingItemStateViewSet(BaseUserExerciseStateViewSet):
     ).all()
     serializer_class = UserReadingTitleMatchingItemStateSerializer
     state_lookup_field = "item"
-    filterset_fields = ["item", "is_favorited", "is_correct"]
+    filterset_fields = ["item", "item__exercise", "is_favorited", "is_correct"]
     search_fields = [
         "item__text",
         "item__exercise__exercise_base__external_id",
@@ -516,7 +516,7 @@ class UserReadingAdMatchingItemStateViewSet(BaseUserExerciseStateViewSet):
     ).all()
     serializer_class = UserReadingAdMatchingItemStateSerializer
     state_lookup_field = "item"
-    filterset_fields = ["item", "is_favorited", "is_correct"]
+    filterset_fields = ["item", "item__exercise", "is_favorited", "is_correct"]
     search_fields = [
         "item__item_text",
         "item__exercise__exercise_base__external_id",
@@ -534,7 +534,7 @@ class UserClozeChoiceBlankStateViewSet(BaseUserExerciseStateViewSet):
     ).all()
     serializer_class = UserClozeChoiceBlankStateSerializer
     state_lookup_field = "blank"
-    filterset_fields = ["blank", "is_favorited", "is_correct"]
+    filterset_fields = ["blank", "blank__exercise", "is_favorited", "is_correct"]
     search_fields = [
         "blank__blank_key",
         "blank__exercise__exercise_base__external_id",
@@ -553,7 +553,7 @@ class UserClozeMatchingBlankStateViewSet(BaseUserExerciseStateViewSet):
     ).all()
     serializer_class = UserClozeMatchingBlankStateSerializer
     state_lookup_field = "blank"
-    filterset_fields = ["blank", "is_favorited", "is_correct"]
+    filterset_fields = ["blank", "blank__exercise", "is_favorited", "is_correct"]
     search_fields = [
         "blank__blank_key",
         "blank__exercise__exercise_base__external_id",

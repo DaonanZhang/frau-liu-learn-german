@@ -4,6 +4,12 @@ import {
   fetchReadingUnderstandingExerciseDetail,
   fetchReadingUnderstandingExercises,
 } from "../api/exam_preparation/readingUnderstanding.js";
+import {
+  fetchReadingUnderstandingQuestionStates,
+  saveReadingUnderstandingQuestionState,
+} from "../api/exam_preparation/userExerciseStates.js";
+import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ReadingUnderstandingPage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -15,6 +21,8 @@ export default function ReadingUnderstandingPage() {
   const [errorText, setErrorText] = useState("");
   const [answers, setAnswers] = useState({});
   const [isChecked, setIsChecked] = useState(false);
+  const [favoritedByQuestionId, setFavoritedByQuestionId] = useState({});
+  const [favoritePendingByQuestionId, setFavoritePendingByQuestionId] = useState({});
 
   useEffect(() => {
     let aborted = false;
@@ -34,6 +42,28 @@ export default function ReadingUnderstandingPage() {
         const detail = await fetchReadingUnderstandingExerciseDetail(firstExercise.id);
         if (!aborted) {
           setExercise(detail || null);
+          const stateData = await fetchReadingUnderstandingQuestionStates(firstExercise.id);
+          if (aborted) {
+            return;
+          }
+          const nextAnswers = {};
+          const nextFavorited = {};
+          const stateResults = Array.isArray(stateData?.results) ? stateData.results : [];
+          stateResults.forEach((stateItem) => {
+            const questionId = stateItem?.question;
+            const selectedOptionKey = stateItem?.answer_payload?.selected_option_key;
+            if (questionId && selectedOptionKey) {
+              nextAnswers[questionId] = selectedOptionKey;
+            }
+            if (questionId) {
+              nextFavorited[questionId] = Boolean(stateItem?.is_favorited);
+            }
+          });
+          setFavoritedByQuestionId(nextFavorited);
+          if (Object.keys(nextAnswers).length > 0) {
+            setAnswers(nextAnswers);
+            setIsChecked(true);
+          }
         }
       } catch (error) {
         if (!aborted) {
@@ -60,6 +90,30 @@ export default function ReadingUnderstandingPage() {
   const answeredCount = useMemo(() => {
     return Object.values(answers).filter(Boolean).length;
   }, [answers]);
+
+  async function toggleFavorite(question) {
+    const nextValue = !favoritedByQuestionId[question.id];
+    setFavoritePendingByQuestionId((previous) => ({ ...previous, [question.id]: true }));
+    try {
+      const selectedOptionKey = answers[question.id] || "";
+      const selectedOption = (question.answer_options || []).find(
+        (option) => option.option_key === selectedOptionKey
+      );
+      await saveReadingUnderstandingQuestionState({
+        question: question.id,
+        is_favorited: nextValue,
+        answer_payload: {
+          selected_option_key: selectedOptionKey,
+        },
+        is_correct: selectedOption ? Boolean(selectedOption.is_correct) : null,
+      });
+      setFavoritedByQuestionId((previous) => ({ ...previous, [question.id]: nextValue }));
+    } catch (error) {
+      setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
+    } finally {
+      setFavoritePendingByQuestionId((previous) => ({ ...previous, [question.id]: false }));
+    }
+  }
 
   if (loading) {
     return (
@@ -182,13 +236,22 @@ export default function ReadingUnderstandingPage() {
                       .filter(Boolean)
                       .join(" ")}
                   >
-                    <strong className="reading-understanding-feedback__title">
-                      {(question.answer_options || []).some(
-                        (option) => option.option_key === answers[question.id] && option.is_correct
-                      )
-                        ? "Richtig."
-                        : "Nicht richtig."}
-                    </strong>
+                    <div className="reading-understanding-feedback__header">
+                      <strong className="reading-understanding-feedback__title">
+                        {(question.answer_options || []).some(
+                          (option) => option.option_key === answers[question.id] && option.is_correct
+                        )
+                          ? "Richtig"
+                          : "Falsch"}
+                      </strong>
+                      <ExerciseFavoriteButton
+                        isFavorited={Boolean(favoritedByQuestionId[question.id])}
+                        pending={Boolean(favoritePendingByQuestionId[question.id])}
+                        onClick={() => {
+                          toggleFavorite(question);
+                        }}
+                      />
+                    </div>
                     <p className="reading-understanding-feedback__line">
                       Richtige Antwort:{" "}
                       {(question.answer_options || []).find((option) => option.is_correct)?.option_key} -{" "}
@@ -206,27 +269,25 @@ export default function ReadingUnderstandingPage() {
           </div>
 
           <div className="reading-understanding-actions">
-            <button
-              type="button"
+            <ExamActionButton
               className="reading-understanding-check-btn"
               disabled={isChecked || !questions.length || answeredCount !== questions.length}
               onClick={() => {
                 setIsChecked(true);
               }}
-            >
-              Prüfen
-            </button>
+              label="Prüfen"
+              icon="check"
+            />
             {isChecked ? (
-              <button
-                type="button"
+              <ExamActionButton
                 className="reading-understanding-reset-btn"
                 onClick={() => {
                   setAnswers({});
                   setIsChecked(false);
                 }}
-              >
-                Wiederholen
-              </button>
+                label="Wiederholen"
+                icon="rotate"
+              />
             ) : null}
           </div>
         </section>

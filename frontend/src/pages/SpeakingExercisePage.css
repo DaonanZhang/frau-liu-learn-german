@@ -228,6 +228,13 @@
   line-height: 1.7;
 }
 
+.speaking-feedback-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
 .speaking-actions {
   display: flex;
   align-items: center;

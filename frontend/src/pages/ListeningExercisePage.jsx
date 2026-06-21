@@ -4,6 +4,12 @@ import {
   fetchListeningExerciseDetail,
   fetchListeningExercises,
 } from "../api/exam_preparation/listeningExercises.js";
+import {
+  fetchListeningQuestionStates,
+  saveListeningQuestionState,
+} from "../api/exam_preparation/userExerciseStates.js";
+import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ListeningExercisePage.css";
 
 const INSTRUCTION_BY_TYPE = {
@@ -24,6 +30,8 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
   const [errorText, setErrorText] = useState("");
   const [answers, setAnswers] = useState({});
   const [isChecked, setIsChecked] = useState(false);
+  const [favoritedByQuestionId, setFavoritedByQuestionId] = useState({});
+  const [favoritePendingByQuestionId, setFavoritePendingByQuestionId] = useState({});
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -47,6 +55,28 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
         const detail = await fetchListeningExerciseDetail(firstExercise.id);
         if (!aborted) {
           setExercise(detail || null);
+          const stateData = await fetchListeningQuestionStates(firstExercise.id);
+          if (aborted) {
+            return;
+          }
+          const nextAnswers = {};
+          const nextFavorited = {};
+          const stateResults = Array.isArray(stateData?.results) ? stateData.results : [];
+          stateResults.forEach((stateItem) => {
+            const questionId = stateItem?.question;
+            const selectedOptionKey = stateItem?.answer_payload?.selected_option_key;
+            if (questionId && selectedOptionKey) {
+              nextAnswers[questionId] = selectedOptionKey;
+            }
+            if (questionId) {
+              nextFavorited[questionId] = Boolean(stateItem?.is_favorited);
+            }
+          });
+          setFavoritedByQuestionId(nextFavorited);
+          if (Object.keys(nextAnswers).length > 0) {
+            setAnswers(nextAnswers);
+            setIsChecked(true);
+          }
         }
       } catch (error) {
         if (!aborted) {
@@ -132,6 +162,30 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
     });
   }
 
+  async function toggleFavorite(question) {
+    const nextValue = !favoritedByQuestionId[question.id];
+    setFavoritePendingByQuestionId((previous) => ({ ...previous, [question.id]: true }));
+    try {
+      const selectedOptionKey = answers[question.id] || "";
+      const selectedOption = (question.answer_options || []).find(
+        (option) => option.option_key === selectedOptionKey
+      );
+      await saveListeningQuestionState({
+        question: question.id,
+        is_favorited: nextValue,
+        answer_payload: {
+          selected_option_key: selectedOptionKey,
+        },
+        is_correct: selectedOption ? Boolean(selectedOption.is_correct) : null,
+      });
+      setFavoritedByQuestionId((previous) => ({ ...previous, [question.id]: nextValue }));
+    } catch (error) {
+      setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
+    } finally {
+      setFavoritePendingByQuestionId((previous) => ({ ...previous, [question.id]: false }));
+    }
+  }
+
   if (loading) {
     return (
       <div className="listening-exercise-page">
@@ -186,7 +240,19 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
             </span>
           </div>
 
-          <audio ref={audioRef} src={exercise?.audio_file_url || ""} preload="metadata" controls />
+          <audio
+            ref={audioRef}
+            src={exercise?.audio_file_url || ""}
+            preload="metadata"
+            controls
+            controlsList="nodownload noremoteplayback"
+            onContextMenu={(event) => {
+              event.preventDefault();
+            }}
+            onDragStart={(event) => {
+              event.preventDefault();
+            }}
+          />
 
           <div className="listening-exercise-controls">
             <button
@@ -318,9 +384,18 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
                         .filter(Boolean)
                         .join(" ")}
                     >
-                      <strong className="listening-exercise-feedback__title">
-                        {isQuestionCorrect ? "Richtig." : "Nicht richtig."}
-                      </strong>
+                      <div className="listening-exercise-feedback__header">
+                        <strong className="listening-exercise-feedback__title">
+                          {isQuestionCorrect ? "Richtig" : "Falsch"}
+                        </strong>
+                        <ExerciseFavoriteButton
+                          isFavorited={Boolean(favoritedByQuestionId[question.id])}
+                          pending={Boolean(favoritePendingByQuestionId[question.id])}
+                          onClick={() => {
+                            toggleFavorite(question);
+                          }}
+                        />
+                      </div>
                       <p className="listening-exercise-feedback__line">
                         Richtige Antwort: {correctOption?.option_text || "-"}
                       </p>
@@ -335,28 +410,26 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
           </div>
 
           <div className="listening-exercise-actions">
-            <button
-              type="button"
+            <ExamActionButton
               className="listening-exercise-check-btn"
               disabled={isChecked || !questions.length || answeredCount !== questions.length}
               onClick={() => {
                 setIsChecked(true);
               }}
-            >
-              Prüfen
-            </button>
+              label="Prüfen"
+              icon="check"
+            />
             {isChecked ? (
-              <button
-                type="button"
+              <ExamActionButton
                 className="listening-exercise-reset-btn"
                 onClick={() => {
                   setAnswers({});
                   setIsChecked(false);
                   setErrorText("");
                 }}
-              >
-                Wiederholen
-              </button>
+                label="Wiederholen"
+                icon="rotate"
+              />
             ) : null}
           </div>
         </section>

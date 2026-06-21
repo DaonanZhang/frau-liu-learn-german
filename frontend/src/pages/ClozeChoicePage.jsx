@@ -4,6 +4,12 @@ import {
   fetchClozeChoiceExerciseDetail,
   fetchClozeChoiceExercises,
 } from "../api/exam_preparation/clozeExercises.js";
+import {
+  fetchClozeChoiceBlankStates,
+  saveClozeChoiceBlankState,
+} from "../api/exam_preparation/userExerciseStates.js";
+import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ClozeExercisePage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -23,6 +29,8 @@ export default function ClozeChoicePage() {
   const [errorText, setErrorText] = useState("");
   const [answers, setAnswers] = useState({});
   const [isChecked, setIsChecked] = useState(false);
+  const [favoritedByBlankId, setFavoritedByBlankId] = useState({});
+  const [favoritePendingByBlankId, setFavoritePendingByBlankId] = useState({});
 
   useEffect(() => {
     let aborted = false;
@@ -39,6 +47,29 @@ export default function ClozeChoicePage() {
         const detail = await fetchClozeChoiceExerciseDetail(firstExercise.id);
         if (!aborted) {
           setExercise(detail || null);
+          const stateData = await fetchClozeChoiceBlankStates(firstExercise.id);
+          if (aborted) {
+            return;
+          }
+          const nextAnswers = {};
+          const nextFavorited = {};
+          const stateResults = Array.isArray(stateData?.results) ? stateData.results : [];
+          stateResults.forEach((stateItem) => {
+            const blankId = stateItem?.blank;
+            const selectedOptionKey = stateItem?.answer_payload?.selected_option_key;
+            const blank = (detail?.blanks || []).find((item) => item.id === blankId);
+            if (blank?.blank_key && selectedOptionKey) {
+              nextAnswers[blank.blank_key] = selectedOptionKey;
+            }
+            if (blankId) {
+              nextFavorited[blankId] = Boolean(stateItem?.is_favorited);
+            }
+          });
+          setFavoritedByBlankId(nextFavorited);
+          if (Object.keys(nextAnswers).length > 0) {
+            setAnswers(nextAnswers);
+            setIsChecked(true);
+          }
         }
       } catch (error) {
         if (!aborted) {
@@ -64,6 +95,28 @@ export default function ClozeChoicePage() {
   );
   const answeredCount = useMemo(() => Object.values(answers).filter(Boolean).length, [answers]);
   const parts = useMemo(() => renderParts(exercise?.content_with_placeholders), [exercise]);
+
+  async function toggleFavorite(blank) {
+    const nextValue = !favoritedByBlankId[blank.id];
+    setFavoritePendingByBlankId((previous) => ({ ...previous, [blank.id]: true }));
+    try {
+      const selectedOptionKey = answers[blank.blank_key] || "";
+      const selectedOption = (blank.options || []).find((option) => option.option_key === selectedOptionKey);
+      await saveClozeChoiceBlankState({
+        blank: blank.id,
+        is_favorited: nextValue,
+        answer_payload: {
+          selected_option_key: selectedOptionKey,
+        },
+        is_correct: selectedOption ? Boolean(selectedOption.is_correct) : null,
+      });
+      setFavoritedByBlankId((previous) => ({ ...previous, [blank.id]: nextValue }));
+    } catch (error) {
+      setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
+    } finally {
+      setFavoritePendingByBlankId((previous) => ({ ...previous, [blank.id]: false }));
+    }
+  }
 
   if (loading) {
     return <div className="cloze-page"><div className="cloze-shell"><p className="cloze-loading">Loading cloze choice exercise...</p></div></div>;
@@ -163,7 +216,16 @@ export default function ClozeChoicePage() {
                     isCorrect ? "cloze-feedback-card--correct" : "cloze-feedback-card--wrong",
                   ].join(" ")}
                 >
-                  <strong>Lücke {blank.blank_number}</strong>
+                  <div className="cloze-feedback-card__header">
+                    <strong>Lücke {blank.blank_number}</strong>
+                    <ExerciseFavoriteButton
+                      isFavorited={Boolean(favoritedByBlankId[blank.id])}
+                      pending={Boolean(favoritePendingByBlankId[blank.id])}
+                      onClick={() => {
+                        toggleFavorite(blank);
+                      }}
+                    />
+                  </div>
                   <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
                   <p>Richtige Antwort: {correctOption?.option_text || "-"}</p>
                   <p>Erklärung: {correctOption?.explanation || "Keine zusätzliche Erklärung."}</p>
@@ -176,25 +238,23 @@ export default function ClozeChoicePage() {
         <section className="cloze-actions">
           <span className="cloze-actions__meta">{answeredCount} / {blanks.length} beantwortet</span>
           <div className="cloze-actions__buttons">
-            <button
-              type="button"
+            <ExamActionButton
               className="cloze-check-btn"
               disabled={isChecked || !blanks.length || answeredCount !== blanks.length}
               onClick={() => setIsChecked(true)}
-            >
-              Prüfen
-            </button>
+              label="Prüfen"
+              icon="check"
+            />
             {isChecked ? (
-              <button
-                type="button"
+              <ExamActionButton
                 className="cloze-reset-btn"
                 onClick={() => {
                   setAnswers({});
                   setIsChecked(false);
                 }}
-              >
-                Wiederholen
-              </button>
+                label="Wiederholen"
+                icon="rotate"
+              />
             ) : null}
           </div>
         </section>

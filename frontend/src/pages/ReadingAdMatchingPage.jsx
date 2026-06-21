@@ -4,6 +4,12 @@ import {
   fetchReadingAdMatchingExerciseDetail,
   fetchReadingAdMatchingExercises,
 } from "../api/exam_preparation/readingAdMatching.js";
+import {
+  fetchReadingAdMatchingItemStates,
+  saveReadingAdMatchingItemState,
+} from "../api/exam_preparation/userExerciseStates.js";
+import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ReadingAdMatchingPage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -15,6 +21,8 @@ export default function ReadingAdMatchingPage() {
   const [errorText, setErrorText] = useState("");
   const [answers, setAnswers] = useState({});
   const [isChecked, setIsChecked] = useState(false);
+  const [favoritedByItemId, setFavoritedByItemId] = useState({});
+  const [favoritePendingByItemId, setFavoritePendingByItemId] = useState({});
   const [activeItemIndex, setActiveItemIndex] = useState(0);
   const [activeAdPage, setActiveAdPage] = useState(0);
   const [adsPerPage, setAdsPerPage] = useState(4);
@@ -37,6 +45,28 @@ export default function ReadingAdMatchingPage() {
         const detail = await fetchReadingAdMatchingExerciseDetail(firstExercise.id);
         if (!aborted) {
           setExercise(detail || null);
+          const stateData = await fetchReadingAdMatchingItemStates(firstExercise.id);
+          if (aborted) {
+            return;
+          }
+          const nextAnswers = {};
+          const nextFavorited = {};
+          const stateResults = Array.isArray(stateData?.results) ? stateData.results : [];
+          stateResults.forEach((stateItem) => {
+            const itemId = stateItem?.item;
+            const selectedAdKey = stateItem?.answer_payload?.selected_ad_key;
+            if (itemId && selectedAdKey) {
+              nextAnswers[itemId] = selectedAdKey;
+            }
+            if (itemId) {
+              nextFavorited[itemId] = Boolean(stateItem?.is_favorited);
+            }
+          });
+          setFavoritedByItemId(nextFavorited);
+          if (Object.keys(nextAnswers).length > 0) {
+            setAnswers(nextAnswers);
+            setIsChecked(true);
+          }
         }
       } catch (error) {
         if (!aborted) {
@@ -112,6 +142,26 @@ export default function ReadingAdMatchingPage() {
   function goToAdPage(index) {
     const maxPage = Math.max(0, adPages.length - 1);
     setActiveAdPage(Math.max(0, Math.min(index, maxPage)));
+  }
+
+  async function toggleFavorite(item) {
+    const nextValue = !favoritedByItemId[item.id];
+    setFavoritePendingByItemId((previous) => ({ ...previous, [item.id]: true }));
+    try {
+      await saveReadingAdMatchingItemState({
+        item: item.id,
+        is_favorited: nextValue,
+        answer_payload: {
+          selected_ad_key: answers[item.id] || "",
+        },
+        is_correct: answers[item.id] === item.correct_ad?.ad_key,
+      });
+      setFavoritedByItemId((previous) => ({ ...previous, [item.id]: nextValue }));
+    } catch (error) {
+      setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
+    } finally {
+      setFavoritePendingByItemId((previous) => ({ ...previous, [item.id]: false }));
+    }
   }
 
   if (loading) {
@@ -335,11 +385,20 @@ export default function ReadingAdMatchingPage() {
                     .filter(Boolean)
                     .join(" ")}
                 >
-                  <strong className="reading-ad-feedback__title">
-                    {answers[currentItem.id] === currentItem.correct_ad?.ad_key
-                      ? "Richtig."
-                      : "Nicht richtig."}
-                  </strong>
+                  <div className="reading-ad-feedback__header">
+                    <strong className="reading-ad-feedback__title">
+                      {answers[currentItem.id] === currentItem.correct_ad?.ad_key
+                        ? "Richtig"
+                        : "Falsch"}
+                    </strong>
+                    <ExerciseFavoriteButton
+                      isFavorited={Boolean(favoritedByItemId[currentItem.id])}
+                      pending={Boolean(favoritePendingByItemId[currentItem.id])}
+                      onClick={() => {
+                        toggleFavorite(currentItem);
+                      }}
+                    />
+                  </div>
                   <p className="reading-ad-feedback__line">
                     Richtige Antwort: {currentItem.correct_ad?.ad_key}
                   </p>
@@ -352,19 +411,17 @@ export default function ReadingAdMatchingPage() {
           ) : null}
 
           <div className="reading-ad-actions">
-            <button
-              type="button"
+            <ExamActionButton
               className="reading-ad-check-btn"
               disabled={isChecked || !items.length || answeredCount !== items.length}
               onClick={() => {
                 setIsChecked(true);
               }}
-            >
-              Prüfen
-            </button>
+              label="Prüfen"
+              icon="check"
+            />
             {isChecked ? (
-              <button
-                type="button"
+              <ExamActionButton
                 className="reading-ad-reset-btn"
                 onClick={() => {
                   setAnswers({});
@@ -372,9 +429,9 @@ export default function ReadingAdMatchingPage() {
                   setActiveItemIndex(0);
                   setActiveAdPage(0);
                 }}
-              >
-                Wiederholen
-              </button>
+                label="Wiederholen"
+                icon="rotate"
+              />
             ) : null}
           </div>
         </section>

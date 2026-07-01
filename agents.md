@@ -109,6 +109,12 @@ Practical effect:
 - When asked for a Django shell script, management command, or ops script in this project, first confirm whether the target is local or server if the task can differ by environment.
 - For server-targeted learning video tasks, explicitly consider COS upload, server paths such as `/srv/projects/frau-liu-learn-german/...`, and keep DB URL backfill aligned with the nginx proxy path strategy unless explicitly asked otherwise.
 
+## Cross-Module Media Rule
+- COS storage is not only a learning-video concern. For any future module that introduces media files, always evaluate whether the resource should be stored in COS and whether the DB/API should continue exposing nginx-proxied `/resources/...` paths instead of direct COS URLs.
+- When designing or modifying upload, slicing, sync, or backfill scripts for new modules, verify that COS object keys stay structurally aligned with the corresponding `/resources/...` URL path, including the `resources/` prefix and subdirectory layout.
+- If a module may use a non-standard output directory outside `frontend/public/resources/...`, do not silently fall back to a default COS path assumption; explicitly review and confirm the mapping strategy first.
+- Exam preparation content must follow this same rule. In particular, listening audio files must be treated as COS-backed media and their storage path, proxy path, and future upload/backfill flow must be considered whenever the exam module is changed.
+
 ## Session Progress Summary
 Completed in this round:
 

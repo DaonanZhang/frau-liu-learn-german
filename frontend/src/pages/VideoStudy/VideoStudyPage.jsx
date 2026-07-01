@@ -344,6 +344,8 @@ export default function VideoStudyPage() {
   const leftDifficulty = video?.difficulty ?? "";
   const leftDescription = video?.description ?? "";
   const leftCreator = video?.creator ?? "";
+  const leftSource = String(video?.source ?? "").trim();
+  const hasSourceLink = /^https?:\/\//i.test(leftSource);
   const isVlogSeason = Number(video?.season_number) === 4;
   const topicTags = useMemo(() => getTopicTags(video), [video]);
   const shouldShowEmptyDescriptionFallback = Number(video?.season_number) !== 4;
@@ -1128,6 +1130,19 @@ export default function VideoStudyPage() {
               ) : null}
               {!loadingVideo ? (
                 <div className="vs-descSource">
+                  {isVlogSeason && hasSourceLink ? (
+                    <div className="vs-descSourceLinkRow">
+                      <span className="vs-descSourcePrefix">原视频：</span>
+                      <a
+                        className="vs-descSourceLink"
+                        href={leftSource}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {leftSource}
+                      </a>
+                    </div>
+                  ) : null}
                   {leftCreator
                     ? `本期视频素材来源于 YouTube 频道 ${leftCreator}。本平台仅对视频语料进行深度的教学加工，视频版权归原博主所有。`
                     : "本期视频素材来源于 YouTube。本平台仅对视频语料进行深度的教学加工，视频版权归原博主所有。"}

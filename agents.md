@@ -26,7 +26,7 @@ Default behavior:
 - Auto-skips Step 0 if no MOV files exist.
 - Auto-skips Step 2 if no XLSX files exist.
 - Backfill runs in safe mode (`--only-missing --empty-only`) to avoid overwriting existing non-empty URLs.
-- On server, `--upload-cos` uploads generated HLS assets to Tencent COS and the pipeline should backfill `video_url` with COS URLs, not local `/resources/...` URLs.
+- On server, `--upload-cos` uploads generated HLS assets to Tencent COS, but DB `video_url` should still backfill to local `/resources/...` paths so nginx can proxy them later.
 
 Alternative resource buckets:
 - `frontend/public/resources/ScienceSeason1`
@@ -73,7 +73,7 @@ Observed successful run shape for Vlog season:
 - Step 1 slices each `mp4` into `.m3u8`, `-init.mp4`, and `.m4s` files in `frontend/public/resources/VlogSeason1/learning_by_video_video`
 - Step 1 on server may additionally upload generated HLS files to COS via `scripts/enable_hls_5seg.sh --upload-cos`
 - Step 2 runs `manage.py import_xlsx_all --module-key learning_by_video --season-number 4`
-- Step 3 runs `manage.py sync_video_media_urls --mode apply --only-missing --empty-only --module-key learning_by_video --video-dir frontend/public/resources/VlogSeason1/learning_by_video_video --cover-dir frontend/public/resources/VlogSeason1/learning_by_video_cover_letters --season-number 4 --video-url-prefix https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com/resources/VlogSeason1/learning_by_video_video`
+- Step 3 runs `manage.py sync_video_media_urls --mode apply --only-missing --empty-only --module-key learning_by_video --video-dir frontend/public/resources/VlogSeason1/learning_by_video_video --cover-dir frontend/public/resources/VlogSeason1/learning_by_video_cover_letters --season-number 4`
 - Step 4 runs `manage.py backfill_video_full_subtitles --only-missing --module-key learning_by_video --season-number 4`
 
 Important operational notes from the real Vlog run:
@@ -104,10 +104,10 @@ Practical effect:
 ## Local Vs Server Rule
 - Local development and server operations must be treated as separate run targets.
 - Local workflow may continue using local resource paths for inspection and dry runs.
-- Server workflow for learning video HLS should upload generated HLS assets to COS after slicing, then backfill DB `video_url` with COS URLs.
+- Server workflow for learning video HLS should upload generated HLS assets to COS after slicing, while DB `video_url` continues to use local `/resources/...` paths for nginx proxying.
 - `scripts/push_learning_media.sh` is for syncing source files from local machine to server. It should not replace the server-side HLS-to-COS step.
 - When asked for a Django shell script, management command, or ops script in this project, first confirm whether the target is local or server if the task can differ by environment.
-- For server-targeted learning video tasks, explicitly consider COS upload, server paths such as `/srv/projects/frau-liu-learn-german/...`, and whether DB URL backfill should point to COS.
+- For server-targeted learning video tasks, explicitly consider COS upload, server paths such as `/srv/projects/frau-liu-learn-german/...`, and keep DB URL backfill aligned with the nginx proxy path strategy unless explicitly asked otherwise.
 
 ## Session Progress Summary
 Completed in this round:

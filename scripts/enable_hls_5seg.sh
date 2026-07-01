@@ -404,8 +404,6 @@ if [[ "$update_db" -eq 1 ]]; then
   rel_path="$(derive_output_relative_path "$repo_root")"
   if [[ -n "$video_url_prefix" ]]; then
     resolved_video_prefix="${video_url_prefix%/}"
-  elif [[ "$upload_cos" -eq 1 ]]; then
-    resolved_video_prefix="https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com/${rel_path%/}"
   else
     resolved_video_prefix="/${rel_path%/}"
   fi

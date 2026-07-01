@@ -50,8 +50,6 @@ EOF
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_XLSX_DIR="$ROOT_DIR/apps/learning_by_video/data/raw"
 DEFAULT_RESOURCE_PROFILE="auto"
-COS_BUCKET="frauliu-1335740446"
-COS_REGION="ap-shanghai"
 
 VIDEO_DIR=""
 COVER_DIR=""
@@ -193,19 +191,6 @@ if [[ -z "$COVER_DIR" ]]; then
   COVER_DIR="$DEFAULT_COVER_DIR"
 fi
 
-derive_cos_video_prefix() {
-  local dir="$1"
-  local dir_abs public_root rel_path
-  dir_abs="$(cd "$dir" && pwd)"
-  public_root="$ROOT_DIR/frontend/public"
-  if [[ "$dir_abs" == "$public_root"/* ]]; then
-    rel_path="${dir_abs#$public_root/}"
-    printf 'https://%s.cos.%s.myqcloud.com/%s' "$COS_BUCKET" "$COS_REGION" "${rel_path%/}"
-  else
-    printf 'https://%s.cos.%s.myqcloud.com/resources/ScienceSeason1/learning_by_video_video' "$COS_BUCKET" "$COS_REGION"
-  fi
-}
-
 run_cmd() {
   printf '+'
   for arg in "$@"; do
@@ -266,10 +251,6 @@ echo "Module/Season: $MODULE_KEY / $SEASON_NUMBER"
 echo "Resource profile: $RESOURCE_PROFILE"
 echo "Upload COS: $UPLOAD_COS"
 echo "Dry run: $DRY_RUN"
-
-if [[ "$UPLOAD_COS" -eq 1 && -z "$VIDEO_URL_PREFIX" ]]; then
-  VIDEO_URL_PREFIX="$(derive_cos_video_prefix "$VIDEO_DIR")"
-fi
 
 if [[ -n "$VIDEO_URL_PREFIX" ]]; then
   echo "Video URL prefix: $VIDEO_URL_PREFIX"

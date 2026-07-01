@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Push new learning_by_video media files to server.
+# Push new learning_by_video source media files to server.
 # - Uses rsync (faster than scp for many small files)
 # - only adds missing files on server (won't overwrite existing files)
+# - intended for source MP4 / cover placement before running the server-side HLS + COS pipeline
 #
 # Usage:
 #   bash scripts/push_learning_media.sh
@@ -93,4 +94,4 @@ rsync "${RSYNC_ARGS[@]}" -e "$RSYNC_SSH" "$LOCAL_COVER" "$REMOTE_COVER"
 echo "[2/2] Sync video files -> $REMOTE_VIDEO"
 rsync "${RSYNC_ARGS[@]}" -e "$RSYNC_SSH" "$LOCAL_VIDEO" "$REMOTE_VIDEO"
 
-echo "Done."
+echo "Done. Next step on server: run scripts/run_learning_video_pipeline.sh --skip-step0 [--upload-cos]"

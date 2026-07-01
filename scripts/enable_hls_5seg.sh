@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/enable_hls_5seg.sh [input] [output_dir] [--overwrite] [--reencode] [--update-db] [--whitelist-file FILE] [--allow NAME]
+  scripts/enable_hls_5seg.sh [input] [output_dir] [--overwrite] [--reencode] [--update-db] [--upload-cos] [--video-url-prefix URL] [--whitelist-file FILE] [--allow NAME]
 
 Input:
   - a single .mp4 file, or
@@ -21,6 +21,8 @@ Options:
   --overwrite            Overwrite existing outputs
   --reencode             Re-encode to H.264/AAC for maximum HLS compatibility
   --update-db            Update Video.video_url in DB to use .m3u8 under the resolved output prefix
+  --upload-cos           Upload generated HLS files to Tencent COS after processing
+  --video-url-prefix URL Explicit URL prefix for --update-db; auto-derived when omitted
   --whitelist-file FILE  Only process mp4 names listed in FILE (one per line, supports .mp4 or stem)
   --allow NAME           Add one whitelist item (repeatable; supports .mp4 or stem)
 EOF
@@ -31,6 +33,8 @@ output_dir=""
 overwrite=0
 reencode=0
 update_db=0
+upload_cos=0
+video_url_prefix=""
 whitelist_file=""
 allow_items=()
 
@@ -47,6 +51,18 @@ while [[ $# -gt 0 ]]; do
     --update-db)
       update_db=1
       shift
+      ;;
+    --upload-cos)
+      upload_cos=1
+      shift
+      ;;
+    --video-url-prefix)
+      video_url_prefix="${2:-}"
+      if [[ -z "$video_url_prefix" ]]; then
+        echo "--video-url-prefix requires a URL prefix" >&2
+        exit 1
+      fi
+      shift 2
       ;;
     --whitelist-file)
       whitelist_file="${2:-}"
@@ -237,6 +253,60 @@ PY
     "$output_dir/${out_base}.m3u8"
 }
 
+upload_hls_to_cos() {
+  local repo_root="$1"
+  local output_dir_abs public_root cos_prefix file filename
+  local coscmd="/srv/projects/frau-liu-learn-german/cos-venv/bin/coscmd"
+
+  if [[ ! -x "$coscmd" ]]; then
+    echo "COS upload requested, but coscmd is not executable: $coscmd" >&2
+    return 1
+  fi
+
+  output_dir_abs="$(cd "$output_dir" && pwd)"
+  public_root="$repo_root/frontend/public"
+  if [[ "$output_dir_abs" == "$public_root"/* ]]; then
+    cos_prefix="${output_dir_abs#$public_root/}"
+  else
+    cos_prefix="resources/ScienceSeason1/learning_by_video_video"
+  fi
+
+  echo "Uploading HLS files to COS: cos://$cos_prefix/"
+
+  shopt -s nullglob
+
+  # Upload fragments first, then publish the playlist last so clients do not see incomplete media.
+  for file in "$output_dir_abs"/*-init.mp4 "$output_dir_abs"/*.m4s; do
+    if [[ -f "$file" ]]; then
+      filename="$(basename "$file")"
+      echo "Uploading: $filename -> cos://$cos_prefix/"
+      "$coscmd" upload "$file" "$cos_prefix/$filename" || echo "Upload failed: $filename" >&2
+    fi
+  done
+
+  for file in "$output_dir_abs"/*.m3u8; do
+    if [[ -f "$file" ]]; then
+      filename="$(basename "$file")"
+      echo "Uploading: $filename -> cos://$cos_prefix/"
+      "$coscmd" upload "$file" "$cos_prefix/$filename" || echo "Upload failed: $filename" >&2
+    fi
+  done
+
+  echo "COS upload completed."
+}
+
+derive_output_relative_path() {
+  local repo_root="$1"
+  local output_dir_abs public_root
+  output_dir_abs="$(cd "$output_dir" && pwd)"
+  public_root="$repo_root/frontend/public"
+  if [[ "$output_dir_abs" == "$public_root"/* ]]; then
+    printf '%s' "${output_dir_abs#$public_root/}"
+  else
+    printf '%s' "resources/ScienceSeason1/learning_by_video_video"
+  fi
+}
+
 is_allowed_mp4() {
   local in="$1"
   local base key existing_key
@@ -331,27 +401,35 @@ if [[ "$update_db" -eq 1 ]]; then
     PY_BIN="${PYTHON_BIN:-python}"
   fi
 
-  public_root="$repo_root/frontend/public"
-  video_prefix="/resources/ScienceSeason1/learning_by_video_video/"
-  if [[ "$output_dir" == "$public_root"/* ]]; then
-    rel_path="${output_dir#$public_root/}"
-    video_prefix="/${rel_path%/}/"
+  rel_path="$(derive_output_relative_path "$repo_root")"
+  if [[ -n "$video_url_prefix" ]]; then
+    resolved_video_prefix="${video_url_prefix%/}"
+  elif [[ "$upload_cos" -eq 1 ]]; then
+    resolved_video_prefix="https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com/${rel_path%/}"
+  else
+    resolved_video_prefix="/${rel_path%/}"
   fi
 
   "$PY_BIN" "$repo_root/manage.py" shell -c "from urllib.parse import urlsplit,urlunsplit;import os;from django.db import transaction;from apps.learning_by_video.models import Video
 
-VIDEO_PREFIX = '$video_prefix'
+VIDEO_PREFIX = '$resolved_video_prefix'
 
 def to_m3u8(url):
-    if not url or VIDEO_PREFIX not in url:
+    if not url:
         return url
-    p=urlsplit(url)
-    path=p.path
-    base,ext=os.path.splitext(path)
-    if path.lower().endswith('.m3u8'):
+    parsed_prefix = urlsplit(VIDEO_PREFIX)
+    current = urlsplit(url)
+    current_name = os.path.basename(current.path or '')
+    stem, _ext = os.path.splitext(current_name)
+    if not stem:
         return url
-    new_path=(base if ext else path)+'.m3u8'
-    return urlunsplit((p.scheme,p.netloc,new_path,p.query,p.fragment))
+    if parsed_prefix.scheme and parsed_prefix.netloc:
+        prefix_path = '/' + parsed_prefix.path.lstrip('/')
+        new_path = prefix_path.rstrip('/') + '/' + stem + '.m3u8'
+        return urlunsplit((parsed_prefix.scheme, parsed_prefix.netloc, new_path, '', ''))
+    prefix_path = '/' + VIDEO_PREFIX.lstrip('/')
+    new_path = prefix_path.rstrip('/') + '/' + stem + '.m3u8'
+    return urlunsplit((current.scheme, current.netloc, new_path, current.query, current.fragment))
 
 with transaction.atomic():
     qs=Video.objects.all().only('id','video_url')
@@ -364,4 +442,10 @@ with transaction.atomic():
     if updates:
         Video.objects.bulk_update(updates,['video_url'])
     print(f'updated={len(updates)} total={qs.count()}')"
+fi
+
+if [[ "$upload_cos" -eq 1 ]]; then
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  repo_root="$(cd "$script_dir/.." && pwd)"
+  upload_hls_to_cos "$repo_root"
 fi

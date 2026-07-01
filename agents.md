@@ -26,6 +26,7 @@ Default behavior:
 - Auto-skips Step 0 if no MOV files exist.
 - Auto-skips Step 2 if no XLSX files exist.
 - Backfill runs in safe mode (`--only-missing --empty-only`) to avoid overwriting existing non-empty URLs.
+- On server, `--upload-cos` uploads generated HLS assets to Tencent COS and the pipeline should backfill `video_url` with COS URLs, not local `/resources/...` URLs.
 
 Alternative resource buckets:
 - `frontend/public/resources/ScienceSeason1`
@@ -37,11 +38,11 @@ Each resource bucket should contain:
 
 Server run from MP4 stage:
 
-`scripts/run_learning_video_pipeline.sh --skip-step0`
+`scripts/run_learning_video_pipeline.sh --skip-step0 --upload-cos`
 
 Dry run:
 
-`scripts/run_learning_video_pipeline.sh --skip-step0 --dry-run`
+`scripts/run_learning_video_pipeline.sh --skip-step0 --upload-cos --dry-run`
 
 ## Vlog Season Runbook
 Use this when importing or updating `Vlog season` videos, which currently maps to `season_number=4` and resource bucket `VlogSeason1`.
@@ -66,12 +67,13 @@ Dry run for Step 1 to Step 4:
 
 Actual Step 1 to Step 4 run:
 
-`scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog`
+`scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --upload-cos`
 
 Observed successful run shape for Vlog season:
 - Step 1 slices each `mp4` into `.m3u8`, `-init.mp4`, and `.m4s` files in `frontend/public/resources/VlogSeason1/learning_by_video_video`
+- Step 1 on server may additionally upload generated HLS files to COS via `scripts/enable_hls_5seg.sh --upload-cos`
 - Step 2 runs `manage.py import_xlsx_all --module-key learning_by_video --season-number 4`
-- Step 3 runs `manage.py sync_video_media_urls --mode apply --only-missing --empty-only --module-key learning_by_video --video-dir frontend/public/resources/VlogSeason1/learning_by_video_video --cover-dir frontend/public/resources/VlogSeason1/learning_by_video_cover_letters --season-number 4`
+- Step 3 runs `manage.py sync_video_media_urls --mode apply --only-missing --empty-only --module-key learning_by_video --video-dir frontend/public/resources/VlogSeason1/learning_by_video_video --cover-dir frontend/public/resources/VlogSeason1/learning_by_video_cover_letters --season-number 4 --video-url-prefix https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com/resources/VlogSeason1/learning_by_video_video`
 - Step 4 runs `manage.py backfill_video_full_subtitles --only-missing --module-key learning_by_video --season-number 4`
 
 Important operational notes from the real Vlog run:
@@ -98,6 +100,14 @@ Practical effect:
 - Prefer dry-run before actual execution on server.
 - Keep Step 2 source of truth in xlsx; backfill only fills missing URL fields by default.
 - Avoid forcing overwrite unless explicitly needed (`--overwrite`).
+
+## Local Vs Server Rule
+- Local development and server operations must be treated as separate run targets.
+- Local workflow may continue using local resource paths for inspection and dry runs.
+- Server workflow for learning video HLS should upload generated HLS assets to COS after slicing, then backfill DB `video_url` with COS URLs.
+- `scripts/push_learning_media.sh` is for syncing source files from local machine to server. It should not replace the server-side HLS-to-COS step.
+- When asked for a Django shell script, management command, or ops script in this project, first confirm whether the target is local or server if the task can differ by environment.
+- For server-targeted learning video tasks, explicitly consider COS upload, server paths such as `/srv/projects/frau-liu-learn-german/...`, and whether DB URL backfill should point to COS.
 
 ## Session Progress Summary
 Completed in this round:
@@ -126,13 +136,13 @@ Before run:
 
 Run:
 - Recommended first pass:
-  - `scripts/run_learning_video_pipeline.sh --skip-step0 --dry-run`
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --upload-cos --dry-run`
 - Actual run:
-  - `scripts/run_learning_video_pipeline.sh --skip-step0`
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --upload-cos`
 - Vlog season dry run:
-  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --dry-run`
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --upload-cos --dry-run`
 - Vlog season actual run:
-  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog`
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --upload-cos`
 
 After run:
 - Spot check DB rows for new videos (`video_url`, `cover_letter_url`, `season`).

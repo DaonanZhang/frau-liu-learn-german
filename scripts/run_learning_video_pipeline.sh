@@ -33,6 +33,9 @@ Options:
   --overwrite           Overwrite ffmpeg outputs when rebuilding
   --reencode            Re-encode during HLS build (enable_hls_5seg.sh --reencode)
   --keep-mov            Do NOT delete MOV source files after step 0 conversion
+  --upload-cos          Upload HLS outputs to Tencent COS after Step 1
+  --video-url-prefix U  Explicit URL prefix for Step 3 video_url backfill
+  --cover-url-prefix U  Explicit URL prefix for Step 3 cover_letter_url backfill
 
   --skip-step0          Skip MOV -> MP4
   --skip-step1          Skip HLS build
@@ -47,6 +50,8 @@ EOF
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_XLSX_DIR="$ROOT_DIR/apps/learning_by_video/data/raw"
 DEFAULT_RESOURCE_PROFILE="auto"
+COS_BUCKET="frauliu-1335740446"
+COS_REGION="ap-shanghai"
 
 VIDEO_DIR=""
 COVER_DIR=""
@@ -54,10 +59,13 @@ XLSX_DIR="$DEFAULT_XLSX_DIR"
 MODULE_KEY="learning_by_video"
 SEASON_NUMBER="1"
 RESOURCE_PROFILE="$DEFAULT_RESOURCE_PROFILE"
+VIDEO_URL_PREFIX=""
+COVER_URL_PREFIX=""
 
 OVERWRITE=0
 REENCODE=0
 DELETE_MOV=1
+UPLOAD_COS=0
 SKIP_STEP0=0
 SKIP_STEP1=0
 SKIP_STEP2=0
@@ -102,6 +110,18 @@ while [[ $# -gt 0 ]]; do
     --keep-mov)
       DELETE_MOV=0
       shift
+      ;;
+    --upload-cos)
+      UPLOAD_COS=1
+      shift
+      ;;
+    --video-url-prefix)
+      VIDEO_URL_PREFIX="${2:-}"
+      shift 2
+      ;;
+    --cover-url-prefix)
+      COVER_URL_PREFIX="${2:-}"
+      shift 2
       ;;
     --skip-step0)
       SKIP_STEP0=1
@@ -173,6 +193,19 @@ if [[ -z "$COVER_DIR" ]]; then
   COVER_DIR="$DEFAULT_COVER_DIR"
 fi
 
+derive_cos_video_prefix() {
+  local dir="$1"
+  local dir_abs public_root rel_path
+  dir_abs="$(cd "$dir" && pwd)"
+  public_root="$ROOT_DIR/frontend/public"
+  if [[ "$dir_abs" == "$public_root"/* ]]; then
+    rel_path="${dir_abs#$public_root/}"
+    printf 'https://%s.cos.%s.myqcloud.com/%s' "$COS_BUCKET" "$COS_REGION" "${rel_path%/}"
+  else
+    printf 'https://%s.cos.%s.myqcloud.com/resources/ScienceSeason1/learning_by_video_video' "$COS_BUCKET" "$COS_REGION"
+  fi
+}
+
 run_cmd() {
   printf '+'
   for arg in "$@"; do
@@ -231,7 +264,20 @@ echo "Cover dir: $COVER_DIR"
 echo "XLSX dir: $XLSX_DIR"
 echo "Module/Season: $MODULE_KEY / $SEASON_NUMBER"
 echo "Resource profile: $RESOURCE_PROFILE"
+echo "Upload COS: $UPLOAD_COS"
 echo "Dry run: $DRY_RUN"
+
+if [[ "$UPLOAD_COS" -eq 1 && -z "$VIDEO_URL_PREFIX" ]]; then
+  VIDEO_URL_PREFIX="$(derive_cos_video_prefix "$VIDEO_DIR")"
+fi
+
+if [[ -n "$VIDEO_URL_PREFIX" ]]; then
+  echo "Video URL prefix: $VIDEO_URL_PREFIX"
+fi
+
+if [[ -n "$COVER_URL_PREFIX" ]]; then
+  echo "Cover URL prefix: $COVER_URL_PREFIX"
+fi
 
 # Step 0: MOV -> MP4
 if [[ "$SKIP_STEP0" -eq 1 ]]; then
@@ -266,6 +312,9 @@ else
     fi
     if [[ "$REENCODE" -eq 1 ]]; then
       cmd+=("--reencode")
+    fi
+    if [[ "$UPLOAD_COS" -eq 1 ]]; then
+      cmd+=("--upload-cos")
     fi
     run_cmd "${cmd[@]}"
   else
@@ -303,14 +352,21 @@ fi
 if [[ "$SKIP_STEP3" -eq 1 ]]; then
   echo "Step 3 skipped."
 else
-  run_cmd "${MANAGE_RUNNER[@]}" sync_video_media_urls \
+  cmd=("${MANAGE_RUNNER[@]}" sync_video_media_urls \
     --mode apply \
     --only-missing \
     --empty-only \
     --module-key "$MODULE_KEY" \
     --video-dir "$VIDEO_DIR" \
     --cover-dir "$COVER_DIR" \
-    --season-number "$SEASON_NUMBER"
+    --season-number "$SEASON_NUMBER")
+  if [[ -n "$VIDEO_URL_PREFIX" ]]; then
+    cmd+=("--video-url-prefix" "$VIDEO_URL_PREFIX")
+  fi
+  if [[ -n "$COVER_URL_PREFIX" ]]; then
+    cmd+=("--cover-url-prefix" "$COVER_URL_PREFIX")
+  fi
+  run_cmd "${cmd[@]}"
 fi
 
 # Step 4: aggregate subtitle text

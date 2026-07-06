@@ -134,9 +134,42 @@ fi
 
 whitelist_enabled=0
 whitelist_keys=()
+upload_stems=()
 
 to_lower() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+normalize_hls_stem() {
+  "$PY_BIN" - "$1" <<'PY'
+import re
+import sys
+import unicodedata
+
+s = (sys.argv[1] if len(sys.argv) > 1 else "").strip()
+s = s.replace("ß", "ss").replace("ẞ", "SS")
+s = unicodedata.normalize("NFKD", s)
+s = "".join(ch for ch in s if not unicodedata.combining(ch))
+s = s.replace("?", "_").replace("#", "_").replace("%", "_")
+s = re.sub(r"\s+", "_", s)
+s = re.sub(r"[^A-Za-z0-9._-]+", "_", s)
+s = re.sub(r"_+", "_", s).strip("._")
+print(s or "media")
+PY
+}
+
+register_upload_stem() {
+  local stem="$1"
+  local existing
+  if [[ -z "$stem" ]]; then
+    return 0
+  fi
+  for existing in "${upload_stems[@]-}"; do
+    if [[ "$existing" == "$stem" ]]; then
+      return 0
+    fi
+  done
+  upload_stems+=("$stem")
 }
 
 add_whitelist_item() {
@@ -206,22 +239,7 @@ build_hls() {
   local base out_base
   base="$(basename "$in")"
   base="${base%.*}"
-  out_base="$("$PY_BIN" - "$base" <<'PY'
-import re
-import sys
-import unicodedata
-
-s = (sys.argv[1] if len(sys.argv) > 1 else "").strip()
-s = s.replace("ß", "ss").replace("ẞ", "SS")
-s = unicodedata.normalize("NFKD", s)
-s = "".join(ch for ch in s if not unicodedata.combining(ch))
-s = s.replace("?", "_").replace("#", "_").replace("%", "_")
-s = re.sub(r"\s+", "_", s)
-s = re.sub(r"[^A-Za-z0-9._-]+", "_", s)
-s = re.sub(r"_+", "_", s).strip("._")
-print(s or "media")
-PY
-)"
+  out_base="$(normalize_hls_stem "$base")"
   if [[ "$base" != "$out_base" ]]; then
     echo "Normalized HLS stem: '$base' -> '$out_base'"
   fi
@@ -255,7 +273,7 @@ PY
 
 upload_hls_to_cos() {
   local repo_root="$1"
-  local output_dir_abs public_root cos_prefix file filename
+  local output_dir_abs public_root cos_prefix file filename stem matched
   local coscmd="/srv/projects/frau-liu-learn-german/cos-venv/bin/coscmd"
 
   if [[ ! -x "$coscmd" ]]; then
@@ -275,20 +293,32 @@ upload_hls_to_cos() {
 
   shopt -s nullglob
 
-  # Upload fragments first, then publish the playlist last so clients do not see incomplete media.
-  for file in "$output_dir_abs"/*-init.mp4 "$output_dir_abs"/*.m4s; do
-    if [[ -f "$file" ]]; then
-      filename="$(basename "$file")"
-      echo "Uploading: $filename -> cos://$cos_prefix/"
-      "$coscmd" upload "$file" "$cos_prefix/$filename" || echo "Upload failed: $filename" >&2
-    fi
-  done
+  if [[ "${#upload_stems[@]}" -eq 0 ]]; then
+    echo "No selected HLS stems to upload."
+    return 0
+  fi
 
-  for file in "$output_dir_abs"/*.m3u8; do
-    if [[ -f "$file" ]]; then
-      filename="$(basename "$file")"
-      echo "Uploading: $filename -> cos://$cos_prefix/"
-      "$coscmd" upload "$file" "$cos_prefix/$filename" || echo "Upload failed: $filename" >&2
+  # Upload fragments first, then publish the playlist last so clients do not see incomplete media.
+  for stem in "${upload_stems[@]}"; do
+    matched=0
+    for file in "$output_dir_abs/${stem}-init.mp4" "$output_dir_abs/${stem}-"*.m4s; do
+      if [[ -f "$file" ]]; then
+        matched=1
+        filename="$(basename "$file")"
+        echo "Uploading: $filename -> cos://$cos_prefix/"
+        "$coscmd" upload "$file" "$cos_prefix/$filename" || echo "Upload failed: $filename" >&2
+      fi
+    done
+    for file in "$output_dir_abs/${stem}.m3u8"; do
+      if [[ -f "$file" ]]; then
+        matched=1
+        filename="$(basename "$file")"
+        echo "Uploading: $filename -> cos://$cos_prefix/"
+        "$coscmd" upload "$file" "$cos_prefix/$filename" || echo "Upload failed: $filename" >&2
+      fi
+    done
+    if [[ "$matched" -eq 0 ]]; then
+      echo "No HLS output found for selected stem: $stem" >&2
     fi
   done
 
@@ -342,6 +372,7 @@ if [[ -d "$input" ]]; then
   processed=0
   skipped=0
   for f in "${files[@]}"; do
+    file_base=""
     if is_hls_init_mp4 "$f"; then
       echo "Skip (HLS init file): $f"
       skipped=$((skipped + 1))
@@ -352,6 +383,9 @@ if [[ -d "$input" ]]; then
       skipped=$((skipped + 1))
       continue
     fi
+    file_base="$(basename "$f")"
+    file_base="${file_base%.*}"
+    register_upload_stem "$(normalize_hls_stem "$file_base")"
     if build_hls "$f"; then
       processed=$((processed + 1))
     else
@@ -379,6 +413,9 @@ else
     echo "Input file is not in whitelist: $input" >&2
     exit 1
   fi
+  single_base="$(basename "$input")"
+  single_base="${single_base%.*}"
+  register_upload_stem "$(normalize_hls_stem "$single_base")"
   if ! build_hls "$input"; then
     rc=$?
     if [[ "$rc" -ne 2 ]]; then

@@ -209,6 +209,28 @@ count_files() {
   find "$dir" -maxdepth 1 -type f -iname "$pattern" | wc -l | tr -d ' '
 }
 
+make_step1_whitelist_from_xlsx() {
+  local xlsx_dir="$1"
+  local whitelist_file="$2"
+  local found=0
+  local xlsx base
+
+  : > "$whitelist_file"
+  shopt -s nullglob
+  for xlsx in "$xlsx_dir"/*.xlsx "$xlsx_dir"/*.XLSX; do
+    if [[ -f "$xlsx" ]]; then
+      found=1
+      base="$(basename "$xlsx")"
+      base="${base%.*}"
+      printf '%s\n' "$base" >> "$whitelist_file"
+    fi
+  done
+  if [[ "$found" -eq 1 ]]; then
+    return 0
+  fi
+  return 1
+}
+
 if [[ ! -d "$VIDEO_DIR" ]]; then
   echo "Video dir not found: $VIDEO_DIR" >&2
   exit 1
@@ -285,19 +307,34 @@ if [[ "$SKIP_STEP1" -eq 1 ]]; then
   echo "Step 1 skipped."
 else
   mp4_count="$(count_files "$VIDEO_DIR" "*.mp4")"
+  xlsx_count_for_step1="$(count_files "$XLSX_DIR" "*.xlsx")"
   echo "Step 1: MP4 files found: $mp4_count"
   if [[ "$mp4_count" -gt 0 ]]; then
     cmd=("$ROOT_DIR/scripts/enable_hls_5seg.sh" "$VIDEO_DIR" "$VIDEO_DIR")
+    step1_whitelist_file=""
     if [[ "$OVERWRITE" -eq 1 ]]; then
       cmd+=("--overwrite")
     fi
     if [[ "$REENCODE" -eq 1 ]]; then
       cmd+=("--reencode")
     fi
+    if [[ "$xlsx_count_for_step1" -gt 0 ]]; then
+      step1_whitelist_file="$(mktemp)"
+      if make_step1_whitelist_from_xlsx "$XLSX_DIR" "$step1_whitelist_file"; then
+        echo "Step 1 whitelist derived from XLSX batch: $xlsx_count_for_step1 file(s)"
+        cmd+=("--whitelist-file" "$step1_whitelist_file")
+      else
+        rm -f "$step1_whitelist_file"
+        step1_whitelist_file=""
+      fi
+    fi
     if [[ "$UPLOAD_COS" -eq 1 ]]; then
       cmd+=("--upload-cos")
     fi
     run_cmd "${cmd[@]}"
+    if [[ -n "$step1_whitelist_file" ]]; then
+      rm -f "$step1_whitelist_file"
+    fi
   else
     echo "Step 1 auto-skip: no MP4 files."
   fi

@@ -13,11 +13,12 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import Entitlement, Module, ModuleSeason
+from apps.accounts.models import ActivationCodeRecord, Entitlement, Module, ModuleSeason
 from apps.accounts.services.activation_codes import (
     ActivationEntitlementItem,
     ActivationPayload,
     ActivationPlan,
+    revoke_activation_code,
     store_activation_code,
     verify_activation_code,
 )
@@ -221,6 +222,30 @@ class ActivationCodeApiTests(APITestCase):
         self.assertIsNone(entitlement.expires_at)
         self.assertIsNone(verify_activation_code("SEASON4A"))
 
+        record = ActivationCodeRecord.objects.get(code="SEASON4A")
+        self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
+        self.assertEqual(record.consumed_by_user_id, self.user.id)
+        self.assertIsNotNone(record.consumed_at)
+
+    def test_store_activation_code_creates_persistent_record(self) -> None:
+        self._store_code("TRACK001", season_number=1)
+
+        record = ActivationCodeRecord.objects.get(code="TRACK001")
+        self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
+        self.assertEqual(record.ttl_seconds, 60 * 60 * 24 * 720)
+        self.assertEqual(
+            record.payload,
+            {
+                "entitlements": [
+                    {
+                        "module": "learning_by_video",
+                        "plan": "lifetime",
+                        "season_number": 1,
+                    }
+                ]
+            },
+        )
+
     def test_apply_activation_code_is_single_use(self) -> None:
         self._store_code("ONETIME1", season_number=1)
         self.client.force_authenticate(user=self.user)
@@ -239,6 +264,16 @@ class ActivationCodeApiTests(APITestCase):
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(second.data["detail"], "Invalid or expired activation code")
+
+    def test_revoke_activation_code_marks_record_and_removes_redis_key(self) -> None:
+        self._store_code("REVOKE01", season_number=1)
+
+        revoked = revoke_activation_code("REVOKE01")
+
+        self.assertTrue(revoked)
+        self.assertIsNone(verify_activation_code("REVOKE01"))
+        record = ActivationCodeRecord.objects.get(code="REVOKE01")
+        self.assertEqual(record.status, ActivationCodeRecord.Status.REVOKED)
 
 
 class HomepageSettingApiTests(APITestCase):

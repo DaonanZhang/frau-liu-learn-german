@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.db.models import Q
 
+from apps.accounts.models.activation_code_record import ActivationCodeRecord
 from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.module import Module
 from apps.accounts.models.module_season import ModuleSeason
@@ -97,6 +98,31 @@ class EntitlementAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "module", "season", "plan", "status", "starts_at", "expires_at")
     list_filter = ("module", "season", "plan", "status")
     search_fields = ("user__telephone", "module__key", "external_ref")
+
+
+@admin.register(ActivationCodeRecord)
+class ActivationCodeRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "code",
+        "status",
+        "expires_at",
+        "consumed_at",
+        "consumed_by_user",
+        "created_at",
+    )
+    list_filter = ("status",)
+    search_fields = ("code", "consumed_by_user__telephone")
+    readonly_fields = (
+        "code",
+        "payload",
+        "ttl_seconds",
+        "expires_at",
+        "consumed_at",
+        "consumed_by_user",
+        "created_at",
+        "updated_at",
+    )
 
 
 @admin.register(PurchaseOffer)

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import random
 import string
+from datetime import timedelta
 from dataclasses import dataclass
 from typing import Any, Iterable, Optional
 
 from django.apps import apps
 from django.core.cache import cache
-from django.db import models
+from django.db import IntegrityError
+from django.utils import timezone
 
 
 # ============================
@@ -129,12 +131,35 @@ def _redis_key(code: str) -> str:
     return f"activation_code:{code}"
 
 
+def _get_record_model():
+    return apps.get_model("accounts", "ActivationCodeRecord")
+
+
+def _mark_record_expired_if_needed(code: str) -> None:
+    ActivationCodeRecord = _get_record_model()
+    now = timezone.now()
+    ActivationCodeRecord.objects.filter(
+        code=code,
+        status=ActivationCodeRecord.Status.ACTIVE,
+        expires_at__lte=now,
+    ).update(status=ActivationCodeRecord.Status.EXPIRED)
+
+
+def activation_code_exists(code: str) -> bool:
+    ActivationCodeRecord = _get_record_model()
+    return ActivationCodeRecord.objects.filter(code=code).exists()
+
+
 def generate_activation_code(length: int = 8) -> str:
     """
     Generate an activation code like: A9F3KQ2M
     """
     alphabet = string.ascii_uppercase + string.digits
-    return "".join(random.choices(alphabet, k=length))
+    for _ in range(100):
+        code = "".join(random.choices(alphabet, k=length))
+        if not activation_code_exists(code):
+            return code
+    raise RuntimeError("Failed to generate a unique activation code")
 
 
 def store_activation_code(
@@ -144,9 +169,21 @@ def store_activation_code(
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
 ) -> None:
     """
-    Validate and store activation payload into Redis.
+    Validate and store activation payload into Redis and persistence table.
     """
+    ActivationCodeRecord = _get_record_model()
     payload.validate()
+    expires_at = timezone.now() + timedelta(seconds=ttl_seconds)
+    try:
+        ActivationCodeRecord.objects.create(
+            code=code,
+            status=ActivationCodeRecord.Status.ACTIVE,
+            payload=payload.to_dict(),
+            ttl_seconds=ttl_seconds,
+            expires_at=expires_at,
+        )
+    except IntegrityError as exc:
+        raise ValueError(f"Activation code already exists: {code}") from exc
     cache.set(
         _redis_key(code),
         payload.to_dict(),
@@ -160,6 +197,7 @@ def verify_activation_code(code: str) -> Optional[ActivationPayload]:
     """
     raw = cache.get(_redis_key(code))
     if not raw:
+        _mark_record_expired_if_needed(code)
         return None
 
     try:
@@ -168,8 +206,27 @@ def verify_activation_code(code: str) -> Optional[ActivationPayload]:
         return None
 
 
-def consume_activation_code(code: str) -> None:
+def consume_activation_code(code: str, *, user=None) -> None:
     """
-    Delete activation code after successful registration.
+    Delete activation code after successful activation and persist usage metadata.
     """
+    ActivationCodeRecord = _get_record_model()
     cache.delete(_redis_key(code))
+    ActivationCodeRecord.objects.filter(code=code).update(
+        status=ActivationCodeRecord.Status.CONSUMED,
+        consumed_at=timezone.now(),
+        consumed_by_user_id=getattr(user, "id", None),
+    )
+
+
+def revoke_activation_code(code: str) -> bool:
+    """
+    Revoke an activation code and remove its Redis entry.
+    Returns True when a persisted row was updated.
+    """
+    ActivationCodeRecord = _get_record_model()
+    cache.delete(_redis_key(code))
+    updated = ActivationCodeRecord.objects.filter(code=code).exclude(
+        status=ActivationCodeRecord.Status.CONSUMED,
+    ).update(status=ActivationCodeRecord.Status.REVOKED)
+    return bool(updated)

@@ -29,5 +29,5 @@ def apply_activation_code_for_user(*, user, code: str):
             )
         )
 
-    consume_activation_code(code)
+    consume_activation_code(code, user=user)
     return created

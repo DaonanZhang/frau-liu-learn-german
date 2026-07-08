@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   fetchReadingUnderstandingExerciseDetail,
-  fetchReadingUnderstandingExercises,
 } from "../api/exam_preparation/readingUnderstanding.js";
 import {
   fetchReadingUnderstandingQuestionStates,
@@ -16,6 +15,7 @@ const FALLBACK_INSTRUCTION =
   "Lesen Sie den Text und die Aufgaben. Welche Lösung (a, b oder c) ist jeweils richtig?";
 
 export default function ReadingUnderstandingPage() {
+  const { exerciseId } = useParams();
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -32,17 +32,14 @@ export default function ReadingUnderstandingPage() {
         setLoading(true);
         setErrorText("");
 
-        const listData = await fetchReadingUnderstandingExercises();
-        const firstExercise = Array.isArray(listData?.results) ? listData.results[0] : null;
-
-        if (!firstExercise?.id) {
-          throw new Error("No reading understanding exercise found.");
+        if (!exerciseId) {
+          throw new Error("No reading understanding exercise selected.");
         }
 
-        const detail = await fetchReadingUnderstandingExerciseDetail(firstExercise.id);
+        const detail = await fetchReadingUnderstandingExerciseDetail(exerciseId);
         if (!aborted) {
           setExercise(detail || null);
-          const stateData = await fetchReadingUnderstandingQuestionStates(firstExercise.id);
+          const stateData = await fetchReadingUnderstandingQuestionStates(exerciseId);
           if (aborted) {
             return;
           }
@@ -81,11 +78,18 @@ export default function ReadingUnderstandingPage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [exerciseId]);
 
   const questions = useMemo(() => {
     return Array.isArray(exercise?.questions) ? exercise.questions : [];
   }, [exercise]);
+  const heroTitle = useMemo(() => {
+    const title = exercise?.exercise_base?.title?.trim();
+    if (title) {
+      return title;
+    }
+    return `题目 ${exercise?.exercise_base?.external_id || exerciseId || ""}`.trim();
+  }, [exercise, exerciseId]);
 
   const answeredCount = useMemo(() => {
     return Object.values(answers).filter(Boolean).length;
@@ -139,7 +143,7 @@ export default function ReadingUnderstandingPage() {
     <div className="reading-understanding-page">
       <div className="reading-understanding-shell">
         <div className="reading-understanding-topbar">
-          <Link to="/modules/exam-preparation/lesen" className="reading-understanding-topbar__back">
+          <Link to="/modules/exam-preparation/lesen/understanding" className="reading-understanding-topbar__back">
             ← Zurück zu Lesen
           </Link>
           <span className="reading-understanding-topbar__meta">
@@ -148,17 +152,36 @@ export default function ReadingUnderstandingPage() {
         </div>
 
         <section className="reading-understanding-hero">
-          <p className="reading-understanding-hero__eyebrow">READING_UNDERSTANDING</p>
-          <h1 className="reading-understanding-hero__title">
-            {exercise?.exercise_base?.title || "Lesen Teil 2"}
-          </h1>
+          <div className="reading-understanding-hero__main">
+            <h1 className="reading-understanding-hero__title">{heroTitle}</h1>
+          </div>
+          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+            <div className="reading-understanding-hero__badges">
+              {exercise?.exercise_base?.difficulty ? (
+                <span className="reading-understanding-hero__badge">
+                  难度：{exercise.exercise_base.difficulty}
+                </span>
+              ) : null}
+              {exercise?.exercise_base?.is_real_exam ? (
+                <span className="reading-understanding-hero__badge reading-understanding-hero__badge--real">
+                  真题
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="reading-understanding-instruction">
+          <div className="reading-understanding-instruction__header">
+            <span className="reading-understanding-instruction__label">Anleitung</span>
+          </div>
           <p>{FALLBACK_INSTRUCTION}</p>
         </section>
 
         <section className="reading-understanding-text">
+          <div className="reading-understanding-text__header">
+            <span className="reading-understanding-text__label">Lesetext</span>
+          </div>
           <div className="reading-understanding-text__content">
             {String(exercise?.text_markdown || "")
               .split(/\n+/)
@@ -236,7 +259,7 @@ export default function ReadingUnderstandingPage() {
                       .filter(Boolean)
                       .join(" ")}
                   >
-                    <div className="reading-understanding-feedback__header">
+                  <div className="reading-understanding-feedback__header">
                       <strong className="reading-understanding-feedback__title">
                         {(question.answer_options || []).some(
                           (option) => option.option_key === answers[question.id] && option.is_correct
@@ -269,6 +292,9 @@ export default function ReadingUnderstandingPage() {
           </div>
 
           <div className="reading-understanding-actions">
+            <span className="reading-understanding-actions__hint">
+              {answeredCount === questions.length ? "Alle Fragen sind beantwortet." : "Beantworte zuerst alle Fragen."}
+            </span>
             <ExamActionButton
               className="reading-understanding-check-btn"
               disabled={isChecked || !questions.length || answeredCount !== questions.length}

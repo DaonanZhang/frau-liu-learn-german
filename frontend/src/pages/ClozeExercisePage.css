@@ -44,19 +44,14 @@
 }
 
 .cloze-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   padding: 1.4rem 1.35rem;
   background:
     radial-gradient(circle at top right, rgba(255, 255, 255, 0.45), transparent 28%),
     linear-gradient(135deg, #efe2c9 0%, #f8f4ec 40%, #dfeaf2 100%);
-}
-
-.cloze-hero__eyebrow {
-  margin: 0 0 0.3rem;
-  color: #6b5a48;
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .cloze-hero__title {
@@ -64,6 +59,32 @@
   color: #2f2a25;
   font-size: clamp(1.9rem, 3vw, 2.6rem);
   font-weight: 800;
+}
+
+.cloze-hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.cloze-hero__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.15rem;
+  padding: 0.4rem 0.78rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(236, 240, 243, 0.96);
+  color: #5b6472;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.cloze-hero__badge--real {
+  background: rgba(207, 99, 39, 0.12);
+  border-color: rgba(207, 99, 39, 0.24);
+  color: #9a4210;
 }
 
 .cloze-instruction,
@@ -81,16 +102,43 @@
   line-height: 1.8;
 }
 
+.cloze-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.9rem;
+}
+
+.cloze-section-heading--compact {
+  justify-content: flex-end;
+  margin-bottom: 0.6rem;
+}
+
+.cloze-section-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0 0.8rem;
+  border-radius: 999px;
+  background: rgba(47, 111, 94, 0.1);
+  color: #245548;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.cloze-section-meta {
+  color: #6b7280;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
 .cloze-feedback-card__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.8rem;
-}
-
-.cloze-pool-panel h2 {
-  margin: 0 0 0.9rem;
-  color: #2f2a25;
 }
 
 .cloze-pool {
@@ -133,43 +181,93 @@
 .cloze-text {
   color: #2f2a25;
   font-size: 1.08rem;
-  line-height: 2.2;
+  line-height: 2.65;
+}
+
+.cloze-text__paragraph {
+  margin: 0;
+}
+
+.cloze-text__paragraph + .cloze-text__paragraph {
+  margin-top: 1.6rem;
 }
 
 .cloze-blank-inline {
+  position: relative;
   display: inline-flex;
   flex-direction: column;
   gap: 0.35rem;
-  margin: 0 0.35rem;
+  margin: 0.22rem 0.3rem;
   vertical-align: middle;
 }
 
-.cloze-select {
+.cloze-select-frame {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   min-width: 11rem;
   min-height: 2.9rem;
-  border-radius: 0.95rem;
+  padding: 0 2.5rem 0 0;
   border: 1px solid #d7dce3;
-  padding: 0 0.8rem;
+  border-radius: 0.95rem;
   background: #ffffff;
+}
+
+.cloze-select-frame--selected {
+  border-color: #cf6327;
+  background: rgba(207, 99, 39, 0.1);
+}
+
+.cloze-select-frame--correct {
+  border-color: #7bcf92;
+  background: #eefaf3;
+}
+
+.cloze-select-frame--wrong {
+  border-color: #e6a3a3;
+  background: #fff1f1;
+}
+
+.cloze-select-frame__caret {
+  position: absolute;
+  right: 1.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #7a838f;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.cloze-select {
+  min-width: 0;
+  width: 100%;
+  min-height: 2.9rem;
+  border: none;
+  padding: 0 2.5rem 0 0.8rem;
+  background: transparent;
   color: #2f2a25;
+  font-size: 0.98rem;
   font-weight: 700;
+  appearance: none;
+  outline: none;
+}
+
+.cloze-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  text-align: left;
 }
 
 .cloze-select--selected {
-  border-color: #cf6327;
-  background: rgba(207, 99, 39, 0.1);
   color: #9a4210;
 }
 
 .cloze-select--correct {
-  border-color: #7bcf92;
-  background: #eefaf3;
   color: #17713c;
 }
 
 .cloze-select--wrong {
-  border-color: #e6a3a3;
-  background: #fff1f1;
   color: #992626;
 }
 
@@ -310,9 +408,14 @@
 }
 
 .cloze-state-note {
-  margin: -0.25rem 0 0;
-  color: #6b7280;
+  margin: -0.1rem 0 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(223, 226, 229, 0.96);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.85);
+  color: #5b6472;
   font-size: 0.92rem;
+  line-height: 1.6;
 }
 
 @media (max-width: 990px) {
@@ -331,8 +434,16 @@
     align-items: flex-start;
   }
 
+  .cloze-hero__badges {
+    justify-content: flex-start;
+  }
+
+  .cloze-section-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .cloze-select {
-    min-width: 9rem;
     width: 100%;
   }
 
@@ -340,6 +451,11 @@
     display: flex;
     width: 100%;
     margin: 0.35rem 0;
+  }
+
+  .cloze-select-frame {
+    width: 100%;
+    min-width: 0;
   }
 
   .cloze-actions {

@@ -156,6 +156,11 @@ After run:
 - After `Prüfen`, if the learner selected a wrong option, the correct option must still be visibly highlighted in green inside the option list.
 - Keep these behaviors consistent across all current and future `exam_preparation` exercise types.
 
+## Frontend UI Responsiveness Rule
+- For every frontend UI change, always consider desktop, iPad/tablet, and mobile layouts together instead of optimizing only for desktop.
+- Do not ship a layout that looks correct on desktop but breaks, overflows, overlaps, becomes cramped, or becomes hard to operate on iPad or mobile screens.
+- When adjusting spacing, cards, grids, toolbars, buttons, or fixed/sticky areas, verify that the result remains readable and usable across common desktop, iPad/tablet, and mobile widths.
+
 ## Exam Preparation XLSX Rules
 - For `exam_preparation` import format, use `apps/exam_preparation/data/README.md` as the canonical XLSX contract.
 - Do not reintroduce `title_zh` in new exam-preparation import assumptions or new sheets.

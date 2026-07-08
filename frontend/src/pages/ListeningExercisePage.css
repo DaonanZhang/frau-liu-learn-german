@@ -28,10 +28,14 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
   padding: 0.95rem 1.1rem;
 }
 
 .listening-exercise-topbar__back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: #2f6f5e;
   text-decoration: none;
   font-weight: 700;
@@ -43,13 +47,16 @@
 }
 
 .listening-exercise-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) auto;
+  gap: 1rem;
+  align-items: center;
   padding: 1.4rem 1.35rem;
   background:
     radial-gradient(circle at top right, rgba(255, 255, 255, 0.45), transparent 28%),
     linear-gradient(135deg, #efe2c9 0%, #f8f4ec 40%, #dfeaf2 100%);
 }
 
-.listening-exercise-hero__eyebrow,
 .listening-exercise-audio-panel__eyebrow {
   margin: 0 0 0.3rem;
   color: #6b5a48;
@@ -70,11 +77,56 @@
   font-size: clamp(1.9rem, 3vw, 2.6rem);
 }
 
+.listening-exercise-hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.listening-exercise-hero__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.15rem;
+  padding: 0.4rem 0.78rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(236, 240, 243, 0.96);
+  color: #5b6472;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.listening-exercise-hero__badge--real {
+  background: rgba(207, 99, 39, 0.12);
+  border-color: rgba(207, 99, 39, 0.24);
+  color: #9a4210;
+}
+
 .listening-exercise-instruction,
 .listening-exercise-audio-panel,
 .listening-exercise-question-card,
 .listening-exercise-actions {
   padding: 1.15rem 1.1rem;
+}
+
+.listening-exercise-instruction__header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.7rem;
+}
+
+.listening-exercise-instruction__label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.95rem;
+  padding: 0.32rem 0.72rem;
+  border-radius: 999px;
+  background: #fff8ee;
+  border: 1px solid #efd8b9;
+  color: #7b5b2f;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .listening-exercise-instruction p {
@@ -106,6 +158,13 @@
   font-weight: 600;
 }
 
+.listening-exercise-audio-player {
+  padding: 0.8rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid #e7edf2;
+}
+
 .listening-exercise-audio-panel audio {
   width: 100%;
 }
@@ -117,12 +176,18 @@
   align-items: end;
 }
 
+.listening-exercise-control-label {
+  color: #2f2a25;
+  font-weight: 700;
+}
+
 .listening-exercise-control-btn,
 .listening-exercise-check-btn,
 .listening-exercise-reset-btn {
   min-height: 2.9rem;
   border: none;
   border-radius: 999px;
+  padding: 0 1.15rem;
   font-weight: 700;
   cursor: pointer;
 }
@@ -149,12 +214,27 @@
   font-size: 0.92rem;
 }
 
+.listening-exercise-slider input[type="range"] {
+  width: 100%;
+}
+
 .listening-exercise-select select {
   min-height: 2.9rem;
   border-radius: 0.95rem;
   border: 1px solid #d7dce3;
-  padding: 0 0.85rem;
+  padding: 0 3rem 0 0.85rem;
   background: #ffffff;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #7a838f 50%),
+    linear-gradient(135deg, #7a838f 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.4rem) calc(50% - 0.12rem),
+    calc(100% - 1rem) calc(50% - 0.12rem);
+  background-size: 0.48rem 0.48rem, 0.48rem 0.48rem;
+  background-repeat: no-repeat;
 }
 
 .listening-exercise-repeat {
@@ -175,6 +255,12 @@
   color: #2f2a25;
 }
 
+.listening-exercise-questions__sub {
+  margin: 0.35rem 0 0;
+  color: #6b7280;
+  font-size: 0.92rem;
+}
+
 .listening-exercise-question-list {
   display: flex;
   flex-direction: column;
@@ -186,6 +272,26 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.8rem;
   margin-top: 1rem;
+}
+
+.listening-exercise-question-card__titleWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.listening-exercise-question-card__number {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  min-height: 1.9rem;
+  padding: 0.28rem 0.66rem;
+  border-radius: 999px;
+  background: #f7f9fb;
+  border: 1px solid #e7edf2;
+  color: #5b6472;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .listening-exercise-option {
@@ -261,11 +367,66 @@
 .listening-exercise-actions {
   display: flex;
   gap: 0.8rem;
+  align-items: center;
   justify-content: flex-end;
+}
+
+.listening-exercise-actions__hint {
+  margin-right: auto;
+  color: #6b7280;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.listening-exercise-check-btn,
+.listening-exercise-reset-btn {
+  min-width: 10.5rem;
+  min-height: 3.15rem;
+  padding: 0 1.3rem;
+  border: 1px solid transparent;
+  box-shadow: 0 10px 20px rgba(38, 52, 74, 0.08);
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+.listening-exercise-check-btn {
+  background: linear-gradient(135deg, #cf6327 0%, #de7a33 100%);
+  box-shadow: 0 12px 22px rgba(207, 99, 39, 0.22);
+}
+
+.listening-exercise-reset-btn {
+  background: linear-gradient(180deg, #ffffff 0%, #f4f7fa 100%);
+  border-color: #d8e0e8;
+  color: #334155;
+}
+
+.listening-exercise-check-btn:hover:not(:disabled),
+.listening-exercise-reset-btn:hover {
+  transform: translateY(-1px);
+}
+
+.listening-exercise-check-btn:hover:not(:disabled) {
+  box-shadow: 0 16px 28px rgba(207, 99, 39, 0.28);
+}
+
+.listening-exercise-reset-btn:hover {
+  border-color: #c7d2de;
+  background: linear-gradient(180deg, #ffffff 0%, #eef3f7 100%);
+  box-shadow: 0 14px 24px rgba(148, 163, 184, 0.18);
+}
+
+.listening-exercise-check-btn:active:not(:disabled),
+.listening-exercise-reset-btn:active {
+  transform: translateY(0);
 }
 
 .listening-exercise-check-btn:disabled {
   background: #d9dde3;
+  box-shadow: none;
   cursor: not-allowed;
 }
 
@@ -285,6 +446,24 @@
     border-radius: 1rem;
   }
 
+  .listening-exercise-topbar,
+  .listening-exercise-hero,
+  .listening-exercise-audio-panel__header,
+  .listening-exercise-questions__header,
+  .listening-exercise-question-card__header,
+  .listening-exercise-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .listening-exercise-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .listening-exercise-hero__badges {
+    justify-content: flex-start;
+  }
+
   .listening-exercise-controls {
     grid-template-columns: 1fr;
   }
@@ -299,5 +478,14 @@
 
   .listening-exercise-actions {
     flex-direction: column;
+  }
+
+  .listening-exercise-actions__hint {
+    margin-right: 0;
+  }
+
+  .listening-exercise-check-btn,
+  .listening-exercise-reset-btn {
+    width: 100%;
   }
 }

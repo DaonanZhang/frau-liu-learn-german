@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   fetchSpeakingGapBlankStates,
   fetchSpeakingGapMatchingExerciseDetail,
-  fetchSpeakingGapMatchingExercises,
   saveSpeakingGapBlankState,
 } from "../api/exam_preparation/speakingExercises.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionSheet.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./SpeakingExercisePage.css";
 
@@ -22,6 +22,7 @@ function extractBlankKey(token) {
 }
 
 export default function SpeakingGapMatchingPage() {
+  const { exerciseId } = useParams();
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -31,6 +32,7 @@ export default function SpeakingGapMatchingPage() {
   const [isChecked, setIsChecked] = useState(false);
   const [favoritedByBlankId, setFavoritedByBlankId] = useState({});
   const [favoritePendingByBlankId, setFavoritePendingByBlankId] = useState({});
+  const [activeBlankKey, setActiveBlankKey] = useState("");
 
   useEffect(() => {
     let aborted = false;
@@ -42,20 +44,18 @@ export default function SpeakingGapMatchingPage() {
         setSaveStateText("");
         setSaveErrorText("");
 
-        const listData = await fetchSpeakingGapMatchingExercises();
-        const firstExercise = Array.isArray(listData?.results) ? listData.results[0] : null;
-        if (!firstExercise?.id) {
-          throw new Error("No speaking gap matching exercise found.");
+        if (!exerciseId) {
+          throw new Error("No speaking gap matching exercise selected.");
         }
 
-        const detail = await fetchSpeakingGapMatchingExerciseDetail(firstExercise.id);
+        const detail = await fetchSpeakingGapMatchingExerciseDetail(exerciseId);
         if (aborted) {
           return;
         }
 
         setExercise(detail || null);
 
-        const stateData = await fetchSpeakingGapBlankStates(firstExercise.id);
+        const stateData = await fetchSpeakingGapBlankStates(exerciseId);
         if (aborted) {
           return;
         }
@@ -97,7 +97,7 @@ export default function SpeakingGapMatchingPage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [exerciseId]);
 
   const options = useMemo(() => (Array.isArray(exercise?.options) ? exercise.options : []), [exercise]);
   const blanks = useMemo(() => (Array.isArray(exercise?.blanks) ? exercise.blanks : []), [exercise]);
@@ -105,8 +105,16 @@ export default function SpeakingGapMatchingPage() {
     () => Object.fromEntries(blanks.map((blank) => [blank.blank_key, blank])),
     [blanks]
   );
+  const heroTitle = useMemo(() => {
+    const title = exercise?.exercise_base?.title?.trim();
+    if (title) {
+      return title;
+    }
+    return `题目 ${exercise?.exercise_base?.external_id || exerciseId || ""}`.trim();
+  }, [exercise, exerciseId]);
   const parts = useMemo(() => renderParts(exercise?.content_with_placeholders), [exercise]);
   const answeredCount = useMemo(() => Object.values(answers).filter(Boolean).length, [answers]);
+  const activeBlank = activeBlankKey ? blankMap[activeBlankKey] : null;
 
   async function handleCheck() {
     setIsChecked(true);
@@ -179,7 +187,7 @@ export default function SpeakingGapMatchingPage() {
     <div className="speaking-page">
       <div className="speaking-shell">
         <div className="speaking-topbar">
-          <Link to="/modules/exam-preparation/sprechen" className="speaking-topbar__back">
+          <Link to="/modules/exam-preparation/sprechen/gap-matching" className="speaking-topbar__back">
             ← Zurück zu Sprechen
           </Link>
           <span className="speaking-topbar__meta">
@@ -188,10 +196,21 @@ export default function SpeakingGapMatchingPage() {
         </div>
 
         <section className="speaking-hero">
-          <p className="speaking-hero__eyebrow">SPEAKING_GAP_MATCHING</p>
-          <h1 className="speaking-hero__title">
-            {exercise?.exercise_base?.title || "Sprechen Teil 1"}
-          </h1>
+          <h1 className="speaking-hero__title">{heroTitle}</h1>
+          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+            <div className="speaking-hero__badges">
+              {exercise?.exercise_base?.difficulty ? (
+                <span className="speaking-hero__badge">
+                  难度：{exercise.exercise_base.difficulty}
+                </span>
+              ) : null}
+              {exercise?.exercise_base?.is_real_exam ? (
+                <span className="speaking-hero__badge speaking-hero__badge--real">
+                  真题
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="speaking-instruction">
@@ -223,15 +242,38 @@ export default function SpeakingGapMatchingPage() {
 
               return (
                 <span key={blankKey} className="speaking-blank-inline">
-                  <select
+                  <button
+                    type="button"
                     className={[
                       "speaking-select",
+                      "speaking-select-trigger",
                       selectedKey && !isChecked ? "speaking-select--selected" : "",
                       isChecked && isCorrect ? "speaking-select--correct" : "",
                       isChecked && selectedKey && !isCorrect ? "speaking-select--wrong" : "",
                     ].filter(Boolean).join(" ")}
-                    value={selectedKey}
-                    onChange={(event) => {
+                    onClick={() => {
+                      setActiveBlankKey(blankKey);
+                    }}
+                    aria-haspopup="dialog"
+                    aria-expanded={activeBlankKey === blankKey}
+                  >
+                    {selectedKey
+                      ? options.find((option) => option.option_key === selectedKey)?.option_text || selectedKey
+                      : `Lücke ${blank?.blank_number || ""}`}
+                  </button>
+                  <ExerciseOptionSheet
+                    open={activeBlankKey === blankKey}
+                    title={`Lücke ${blank?.blank_number || ""}`}
+                    subtitle="请选择当前空格的答案。"
+                    selectedValue={selectedKey}
+                    options={options.map((option) => ({
+                      value: option.option_key,
+                      label: option.option_text,
+                    }))}
+                    onClose={() => {
+                      setActiveBlankKey("");
+                    }}
+                    onSelect={(nextValue) => {
                       if (isChecked) {
                         setIsChecked(false);
                       }
@@ -239,17 +281,10 @@ export default function SpeakingGapMatchingPage() {
                       setSaveErrorText("");
                       setAnswers((previous) => ({
                         ...previous,
-                        [blankKey]: event.target.value,
+                        [blankKey]: nextValue,
                       }));
                     }}
-                  >
-                    <option value="">Lücke {blank?.blank_number || ""}</option>
-                    {options.map((option) => (
-                      <option key={option.id} value={option.option_key}>
-                        {option.option_text}
-                      </option>
-                    ))}
-                  </select>
+                  />
                   {isChecked ? (
                     <span
                       className={[
@@ -303,7 +338,6 @@ export default function SpeakingGapMatchingPage() {
         ) : null}
 
         <section className="speaking-actions">
-          <span className="speaking-actions__meta">{answeredCount} / {blanks.length} beantwortet</span>
           <div className="speaking-actions__buttons">
             <ExamActionButton
               className="speaking-check-btn"

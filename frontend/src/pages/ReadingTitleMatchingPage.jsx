@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   fetchReadingTitleMatchingExerciseDetail,
-  fetchReadingTitleMatchingExercises,
 } from "../api/exam_preparation/readingTitleMatching.js";
 import {
   fetchReadingTitleMatchingItemStates,
   saveReadingTitleMatchingItemState,
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionSheet.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ReadingTitleMatchingPage.css";
 
@@ -16,6 +16,7 @@ const FALLBACK_INSTRUCTION =
   "Lesen Sie die Überschriften und die Texte. Finden Sie für jeden Text die passende Überschrift. Sie können jede Überschrift nur einmal benutzen.";
 
 export default function ReadingTitleMatchingPage() {
+  const { exerciseId } = useParams();
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -23,6 +24,7 @@ export default function ReadingTitleMatchingPage() {
   const [isChecked, setIsChecked] = useState(false);
   const [favoritedByItemId, setFavoritedByItemId] = useState({});
   const [favoritePendingByItemId, setFavoritePendingByItemId] = useState({});
+  const [activeItemId, setActiveItemId] = useState("");
 
   useEffect(() => {
     let aborted = false;
@@ -32,17 +34,14 @@ export default function ReadingTitleMatchingPage() {
         setLoading(true);
         setErrorText("");
 
-        const listData = await fetchReadingTitleMatchingExercises();
-        const firstExercise = Array.isArray(listData?.results) ? listData.results[0] : null;
-
-        if (!firstExercise?.id) {
-          throw new Error("No reading title matching exercise found.");
+        if (!exerciseId) {
+          throw new Error("No reading title matching exercise selected.");
         }
 
-        const detail = await fetchReadingTitleMatchingExerciseDetail(firstExercise.id);
+        const detail = await fetchReadingTitleMatchingExerciseDetail(exerciseId);
         if (!aborted) {
           setExercise(detail || null);
-          const stateData = await fetchReadingTitleMatchingItemStates(firstExercise.id);
+          const stateData = await fetchReadingTitleMatchingItemStates(exerciseId);
           if (aborted) {
             return;
           }
@@ -81,7 +80,7 @@ export default function ReadingTitleMatchingPage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [exerciseId]);
 
   const options = useMemo(() => {
     return Array.isArray(exercise?.options) ? exercise.options : [];
@@ -90,10 +89,18 @@ export default function ReadingTitleMatchingPage() {
   const items = useMemo(() => {
     return Array.isArray(exercise?.items) ? exercise.items : [];
   }, [exercise]);
+  const heroTitle = useMemo(() => {
+    const title = exercise?.exercise_base?.title?.trim();
+    if (title) {
+      return title;
+    }
+    return `题目 ${exercise?.exercise_base?.external_id || exerciseId || ""}`.trim();
+  }, [exercise, exerciseId]);
 
   const answeredCount = useMemo(() => {
     return Object.values(answers).filter(Boolean).length;
   }, [answers]);
+  const activeItem = activeItemId ? items.find((item) => String(item.id) === String(activeItemId)) : null;
 
   async function toggleFavorite(item) {
     const nextValue = !favoritedByItemId[item.id];
@@ -139,7 +146,7 @@ export default function ReadingTitleMatchingPage() {
     <div className="reading-title-page">
       <div className="reading-title-shell">
         <div className="reading-title-topbar">
-          <Link to="/modules/exam-preparation/lesen" className="reading-title-topbar__back">
+          <Link to="/modules/exam-preparation/lesen/title-matching" className="reading-title-topbar__back">
             ← Zurück zu Lesen
           </Link>
           <span className="reading-title-topbar__meta">
@@ -148,13 +155,29 @@ export default function ReadingTitleMatchingPage() {
         </div>
 
         <section className="reading-title-hero">
-          <p className="reading-title-hero__eyebrow">READING_TITLE_MATCHING</p>
-          <h1 className="reading-title-hero__title">
-            {exercise?.exercise_base?.title || "Lesen Teil 1"}
-          </h1>
+          <div className="reading-title-hero__main">
+            <h1 className="reading-title-hero__title">{heroTitle}</h1>
+          </div>
+          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+            <div className="reading-title-hero__badges">
+              {exercise?.exercise_base?.difficulty ? (
+                <span className="reading-title-hero__badge">
+                  难度：{exercise.exercise_base.difficulty}
+                </span>
+              ) : null}
+              {exercise?.exercise_base?.is_real_exam ? (
+                <span className="reading-title-hero__badge reading-title-hero__badge--real">
+                  真题
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="reading-title-instruction">
+          <div className="reading-title-instruction__header">
+            <span className="reading-title-instruction__label">Anleitung</span>
+          </div>
           <p>{exercise?.instruction || FALLBACK_INSTRUCTION}</p>
         </section>
 
@@ -168,33 +191,49 @@ export default function ReadingTitleMatchingPage() {
                   <div className="reading-title-text-card__topline">
                     <div className="reading-title-text-card__badge">Text {item.item_number}</div>
                     <div className="reading-title-inline-answer reading-title-inline-answer--inline">
-                      <select
-                        id={`reading-title-select-${item.id}`}
-                        aria-label={`Überschrift zu Text ${item.item_number}`}
+                      <button
+                        type="button"
                         className={[
                           "reading-title-select",
+                          "reading-title-select-trigger",
                           selectedKey && !isChecked ? "reading-title-select--selected" : "",
                           isChecked && isCorrect ? "reading-title-select--correct" : "",
                           isChecked && selectedKey && !isCorrect ? "reading-title-select--wrong" : "",
                         ].filter(Boolean).join(" ")}
-                        value={selectedKey}
-                        onChange={(event) => {
+                        onClick={() => {
+                          setActiveItemId(String(item.id));
+                        }}
+                        aria-label={`Überschrift zu Text ${item.item_number}`}
+                        aria-haspopup="dialog"
+                        aria-expanded={String(activeItemId) === String(item.id)}
+                      >
+                        {selectedKey
+                          ? options.find((option) => option.option_key === selectedKey)?.option_text || selectedKey
+                          : "Überschrift auswählen"}
+                      </button>
+                      <ExerciseOptionSheet
+                        open={String(activeItemId) === String(item.id)}
+                        title={`Text ${item.item_number}`}
+                        subtitle="请选择最匹配的标题。"
+                        selectedValue={selectedKey}
+                        options={options.map((option) => ({
+                          value: option.option_key,
+                          label: option.option_text,
+                          meta: option.option_key,
+                        }))}
+                        onClose={() => {
+                          setActiveItemId("");
+                        }}
+                        onSelect={(nextValue) => {
                           if (isChecked) {
                             setIsChecked(false);
                           }
                           setAnswers((previous) => ({
                             ...previous,
-                            [item.id]: event.target.value,
+                            [item.id]: nextValue,
                           }));
                         }}
-                      >
-                        <option value="">Überschrift auswählen</option>
-                        {options.map((option) => (
-                          <option key={option.id} value={option.option_key}>
-                            {option.option_key} - {option.option_text}
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </div>
                   </div>
                   <p>{item.text}</p>
@@ -231,6 +270,9 @@ export default function ReadingTitleMatchingPage() {
             })}
           </div>
           <div className="reading-title-actions">
+            <span className="reading-title-actions__hint">
+              {answeredCount === items.length ? "Alle Texte sind zugeordnet." : "Ordne zuerst jeden Text einem Titel zu."}
+            </span>
             <ExamActionButton
               className="reading-title-check-btn"
               disabled={isChecked || !items.length || answeredCount !== items.length}

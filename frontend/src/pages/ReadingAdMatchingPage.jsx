@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   fetchReadingAdMatchingExerciseDetail,
-  fetchReadingAdMatchingExercises,
 } from "../api/exam_preparation/readingAdMatching.js";
 import {
   fetchReadingAdMatchingItemStates,
@@ -16,6 +15,7 @@ const FALLBACK_INSTRUCTION =
   "Lesen sie die Situationen 1-10 und die Anzeigen a-l. Finden sie für jede die passende Anzeige. Sie können jede Anzeige nur einmal benutzen. Markieren sie Ihre Lösungen für die Aufgaben 1–10 auf dem Antwortbogen. Wenn Sie zu einer Situation keine Anzeige finden, markieren Sie x.";
 
 export default function ReadingAdMatchingPage() {
+  const { exerciseId } = useParams();
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -35,17 +35,14 @@ export default function ReadingAdMatchingPage() {
         setLoading(true);
         setErrorText("");
 
-        const listData = await fetchReadingAdMatchingExercises();
-        const firstExercise = Array.isArray(listData?.results) ? listData.results[0] : null;
-
-        if (!firstExercise?.id) {
-          throw new Error("No reading ad matching exercise found.");
+        if (!exerciseId) {
+          throw new Error("No reading ad matching exercise selected.");
         }
 
-        const detail = await fetchReadingAdMatchingExerciseDetail(firstExercise.id);
+        const detail = await fetchReadingAdMatchingExerciseDetail(exerciseId);
         if (!aborted) {
           setExercise(detail || null);
-          const stateData = await fetchReadingAdMatchingItemStates(firstExercise.id);
+          const stateData = await fetchReadingAdMatchingItemStates(exerciseId);
           if (aborted) {
             return;
           }
@@ -84,7 +81,7 @@ export default function ReadingAdMatchingPage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [exerciseId]);
 
   const ads = useMemo(() => {
     return Array.isArray(exercise?.ads) ? exercise.ads : [];
@@ -93,6 +90,13 @@ export default function ReadingAdMatchingPage() {
   const items = useMemo(() => {
     return Array.isArray(exercise?.items) ? exercise.items : [];
   }, [exercise]);
+  const heroTitle = useMemo(() => {
+    const title = exercise?.exercise_base?.title?.trim();
+    if (title) {
+      return title;
+    }
+    return `题目 ${exercise?.exercise_base?.external_id || exerciseId || ""}`.trim();
+  }, [exercise, exerciseId]);
 
   const currentItem = items[activeItemIndex] || null;
 
@@ -188,7 +192,7 @@ export default function ReadingAdMatchingPage() {
     <div className="reading-ad-page">
       <div className="reading-ad-shell">
         <div className="reading-ad-topbar">
-          <Link to="/modules/exam-preparation/lesen" className="reading-ad-topbar__back">
+          <Link to="/modules/exam-preparation/lesen/ad-matching" className="reading-ad-topbar__back">
             ← Zurück zu Lesen
           </Link>
           <span className="reading-ad-topbar__meta">
@@ -197,17 +201,37 @@ export default function ReadingAdMatchingPage() {
         </div>
 
         <section className="reading-ad-hero">
-          <p className="reading-ad-hero__eyebrow">READING_AD_MATCHING</p>
-          <h1 className="reading-ad-hero__title">
-            {exercise?.exercise_base?.title || "Lesen Teil 3"}
-          </h1>
+          <div className="reading-ad-hero__main">
+            <h1 className="reading-ad-hero__title">{heroTitle}</h1>
+          </div>
+          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+            <div className="reading-ad-hero__badges">
+              {exercise?.exercise_base?.difficulty ? (
+                <span className="reading-ad-hero__badge">
+                  难度：{exercise.exercise_base.difficulty}
+                </span>
+              ) : null}
+              {exercise?.exercise_base?.is_real_exam ? (
+                <span className="reading-ad-hero__badge reading-ad-hero__badge--real">
+                  真题
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="reading-ad-instruction">
+          <div className="reading-ad-instruction__header">
+            <span className="reading-ad-instruction__label">Anleitung</span>
+          </div>
           <p>{exercise?.instruction || FALLBACK_INSTRUCTION}</p>
         </section>
 
         <section className="reading-ad-carousel-section">
+          <div className="reading-ad-carousel-section__header">
+            <h2>Anzeigen</h2>
+            <span>Seite {activeAdPage + 1} / {Math.max(1, adPages.length)}</span>
+          </div>
           <div className="reading-ad-carousel" aria-label="Anzeigen">
             {visibleAds.map((ad) => {
               const lines = String(ad.ad_text_markdown || "")
@@ -328,6 +352,12 @@ export default function ReadingAdMatchingPage() {
 
           {currentItem ? (
             <article className="reading-ad-question-card">
+              <div className="reading-ad-question-card__meta">
+                <span className="reading-ad-question-card__label">Situation</span>
+                <span className="reading-ad-question-card__progress">
+                  {activeItemIndex + 1} / {items.length}
+                </span>
+              </div>
               <h3 className="reading-ad-question-card__title">
                 <span className="reading-ad-question-card__number">{currentItem.item_number}.</span>{" "}
                 {currentItem.item_text}
@@ -411,6 +441,9 @@ export default function ReadingAdMatchingPage() {
           ) : null}
 
           <div className="reading-ad-actions">
+            <span className="reading-ad-actions__hint">
+              {answeredCount === items.length ? "Alle Situationen sind beantwortet." : "Bearbeite zuerst alle Situationen."}
+            </span>
             <ExamActionButton
               className="reading-ad-check-btn"
               disabled={isChecked || !items.length || answeredCount !== items.length}

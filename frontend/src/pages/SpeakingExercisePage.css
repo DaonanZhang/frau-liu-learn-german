@@ -45,19 +45,43 @@
   padding: 1.5rem;
 }
 
-.speaking-hero__eyebrow {
-  margin: 0 0 0.55rem;
-  color: #b56a2f;
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.speaking-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 .speaking-hero__title {
   margin: 0;
   color: #1f140c;
   font-size: clamp(1.9rem, 4vw, 3rem);
+}
+
+.speaking-hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.speaking-hero__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.15rem;
+  padding: 0.4rem 0.78rem;
+  border-radius: 999px;
+  background: #fff7ef;
+  border: 1px solid rgba(216, 197, 175, 0.95);
+  color: #7d5a42;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.speaking-hero__badge--real {
+  background: rgba(201, 95, 34, 0.12);
+  border-color: rgba(201, 95, 34, 0.24);
+  color: #9a4210;
 }
 
 .speaking-instruction,
@@ -81,6 +105,7 @@
 }
 
 .speaking-blank-inline {
+  position: relative;
   display: inline-flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -89,12 +114,30 @@
 }
 
 .speaking-select {
+  display: inline-flex;
+  align-items: center;
   min-width: 220px;
   border: 2px solid #d8c5af;
   border-radius: 14px;
   background: #fffaf4;
-  padding: 0.75rem 0.9rem;
+  padding: 0.75rem 3rem 0.75rem 0.9rem;
   font: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #8a6b55 50%),
+    linear-gradient(135deg, #8a6b55 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.45rem) calc(50% - 0.12rem),
+    calc(100% - 1.05rem) calc(50% - 0.12rem);
+  background-size: 0.48rem 0.48rem, 0.48rem 0.48rem;
+  background-repeat: no-repeat;
+}
+
+.speaking-select-trigger {
+  cursor: pointer;
+  text-align: left;
 }
 
 .speaking-select--selected {
@@ -175,6 +218,7 @@
 }
 
 .speaking-segment-card__top {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -289,9 +333,14 @@
 @media (max-width: 720px) {
   .speaking-topbar,
   .speaking-actions,
-  .speaking-segment-card__top {
+  .speaking-segment-card__top,
+  .speaking-hero {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .speaking-hero__badges {
+    justify-content: flex-start;
   }
 
   .speaking-actions__buttons {

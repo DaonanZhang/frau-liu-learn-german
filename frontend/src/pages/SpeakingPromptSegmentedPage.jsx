@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   fetchSpeakingPromptSegmentedExerciseDetail,
   fetchSpeakingPromptSegmentedExerciseStates,
-  fetchSpeakingPromptSegmentedExercises,
   saveSpeakingPromptSegmentedExerciseState,
 } from "../api/exam_preparation/speakingExercises.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionSheet.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./SpeakingExercisePage.css";
 
@@ -23,6 +23,7 @@ function shuffleSegments(items) {
 }
 
 export default function SpeakingPromptSegmentedPage() {
+  const { exerciseId } = useParams();
   const [exercise, setExercise] = useState(null);
   const [displaySegments, setDisplaySegments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +34,7 @@ export default function SpeakingPromptSegmentedPage() {
   const [isChecked, setIsChecked] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoritePending, setFavoritePending] = useState(false);
+  const [activeSegmentId, setActiveSegmentId] = useState("");
 
   useEffect(() => {
     let aborted = false;
@@ -44,13 +46,11 @@ export default function SpeakingPromptSegmentedPage() {
         setSaveStateText("");
         setSaveErrorText("");
 
-        const listData = await fetchSpeakingPromptSegmentedExercises();
-        const firstExercise = Array.isArray(listData?.results) ? listData.results[0] : null;
-        if (!firstExercise?.id) {
-          throw new Error("No speaking prompt segmented exercise found.");
+        if (!exerciseId) {
+          throw new Error("No speaking prompt segmented exercise selected.");
         }
 
-        const detail = await fetchSpeakingPromptSegmentedExerciseDetail(firstExercise.id);
+        const detail = await fetchSpeakingPromptSegmentedExerciseDetail(exerciseId);
         if (aborted) {
           return;
         }
@@ -59,7 +59,7 @@ export default function SpeakingPromptSegmentedPage() {
         setExercise(detail || null);
         setDisplaySegments(shuffleSegments(segments));
 
-        const stateData = await fetchSpeakingPromptSegmentedExerciseStates(firstExercise.id);
+        const stateData = await fetchSpeakingPromptSegmentedExerciseStates(exerciseId);
         if (aborted) {
           return;
         }
@@ -89,14 +89,24 @@ export default function SpeakingPromptSegmentedPage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [exerciseId]);
 
   const segments = useMemo(() => (Array.isArray(exercise?.segments) ? exercise.segments : []), [exercise]);
+  const heroTitle = useMemo(() => {
+    const title = exercise?.exercise_base?.title?.trim();
+    if (title) {
+      return title;
+    }
+    return `题目 ${exercise?.exercise_base?.external_id || exerciseId || ""}`.trim();
+  }, [exercise, exerciseId]);
   const answeredCount = useMemo(
     () => Object.values(answers).filter((value) => String(value || "").trim()).length,
     [answers]
   );
   const totalCount = segments.length;
+  const activeSegment = activeSegmentId
+    ? displaySegments.find((segment) => String(segment.id) === String(activeSegmentId))
+    : null;
 
   const normalizedAnswers = useMemo(() => {
     const nextAnswers = {};
@@ -179,7 +189,7 @@ export default function SpeakingPromptSegmentedPage() {
     <div className="speaking-page">
       <div className="speaking-shell">
         <div className="speaking-topbar">
-          <Link to="/modules/exam-preparation/sprechen" className="speaking-topbar__back">
+          <Link to="/modules/exam-preparation/sprechen/prompt-segmented" className="speaking-topbar__back">
             ← Zurück zu Sprechen
           </Link>
           <span className="speaking-topbar__meta">
@@ -188,10 +198,21 @@ export default function SpeakingPromptSegmentedPage() {
         </div>
 
         <section className="speaking-hero">
-          <p className="speaking-hero__eyebrow">SPEAKING_PROMPT_SEGMENTED</p>
-          <h1 className="speaking-hero__title">
-            {exercise?.exercise_base?.title || "Sprechen Teil 2"}
-          </h1>
+          <h1 className="speaking-hero__title">{heroTitle}</h1>
+          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+            <div className="speaking-hero__badges">
+              {exercise?.exercise_base?.difficulty ? (
+                <span className="speaking-hero__badge">
+                  难度：{exercise.exercise_base.difficulty}
+                </span>
+              ) : null}
+              {exercise?.exercise_base?.is_real_exam ? (
+                <span className="speaking-hero__badge speaking-hero__badge--real">
+                  真题
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="speaking-instruction">
@@ -224,15 +245,36 @@ export default function SpeakingPromptSegmentedPage() {
                 >
                   <div className="speaking-segment-card__top">
                     <span className="speaking-segment-card__label">Abschnitt</span>
-                    <select
+                    <button
+                      type="button"
                       className={[
                         "speaking-select",
+                        "speaking-select-trigger",
                         selectedOrder && !isChecked ? "speaking-select--selected" : "",
                         isChecked && isCorrect ? "speaking-select--correct" : "",
                         isChecked && selectedOrder && !isCorrect ? "speaking-select--wrong" : "",
                       ].filter(Boolean).join(" ")}
-                      value={selectedOrder}
-                      onChange={(event) => {
+                      onClick={() => {
+                        setActiveSegmentId(String(segment.id));
+                      }}
+                      aria-haspopup="dialog"
+                      aria-expanded={String(activeSegmentId) === String(segment.id)}
+                    >
+                      {selectedOrder || "Reihenfolge wählen"}
+                    </button>
+                    <ExerciseOptionSheet
+                      open={String(activeSegmentId) === String(segment.id)}
+                      title="Reihenfolge wählen"
+                      subtitle="请选择当前段落的顺序。"
+                      selectedValue={selectedOrder}
+                      options={segments.map((_, index) => ({
+                        value: String(index + 1),
+                        label: `第 ${index + 1} 位`,
+                      }))}
+                      onClose={() => {
+                        setActiveSegmentId("");
+                      }}
+                      onSelect={(nextValue) => {
                         if (isChecked) {
                           setIsChecked(false);
                         }
@@ -240,17 +282,10 @@ export default function SpeakingPromptSegmentedPage() {
                         setSaveErrorText("");
                         setAnswers((previous) => ({
                           ...previous,
-                          [segment.id]: event.target.value,
+                          [segment.id]: nextValue,
                         }));
                       }}
-                    >
-                      <option value="">Reihenfolge wählen</option>
-                      {segments.map((_, index) => (
-                        <option key={index + 1} value={index + 1}>
-                          {index + 1}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="speaking-segment-card__text">{segment.segment_text}</div>
@@ -275,7 +310,6 @@ export default function SpeakingPromptSegmentedPage() {
         </section>
 
         <section className="speaking-actions">
-          <span className="speaking-actions__meta">{answeredCount} / {totalCount} beantwortet</span>
           <div className="speaking-actions__buttons">
             {isChecked ? (
               <ExerciseFavoriteButton

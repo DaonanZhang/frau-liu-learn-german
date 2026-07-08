@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   fetchListeningExerciseDetail,
-  fetchListeningExercises,
 } from "../api/exam_preparation/listeningExercises.js";
 import {
   fetchListeningQuestionStates,
@@ -23,7 +22,12 @@ const INSTRUCTION_BY_TYPE = {
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
-export default function ListeningExercisePage({ listeningType, eyebrow = "LISTENING" }) {
+export default function ListeningExercisePage({
+  listeningType,
+  eyebrow = "LISTENING",
+  backTo = "/modules/exam-preparation/hoeren",
+}) {
+  const { exerciseId } = useParams();
   const audioRef = useRef(null);
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -45,17 +49,14 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
         setLoading(true);
         setErrorText("");
 
-        const listData = await fetchListeningExercises(listeningType);
-        const firstExercise = Array.isArray(listData?.results) ? listData.results[0] : null;
-
-        if (!firstExercise?.id) {
-          throw new Error("No listening exercise found.");
+        if (!exerciseId) {
+          throw new Error("No listening exercise selected.");
         }
 
-        const detail = await fetchListeningExerciseDetail(firstExercise.id);
+        const detail = await fetchListeningExerciseDetail(exerciseId);
         if (!aborted) {
           setExercise(detail || null);
-          const stateData = await fetchListeningQuestionStates(firstExercise.id);
+          const stateData = await fetchListeningQuestionStates(exerciseId);
           if (aborted) {
             return;
           }
@@ -94,7 +95,7 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
     return () => {
       aborted = true;
     };
-  }, [listeningType]);
+  }, [exerciseId]);
 
   useEffect(() => {
     const audioElement = audioRef.current;
@@ -128,6 +129,13 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
   const questions = useMemo(() => {
     return Array.isArray(exercise?.questions) ? exercise.questions : [];
   }, [exercise]);
+  const heroTitle = useMemo(() => {
+    const title = exercise?.exercise_base?.title?.trim();
+    if (title) {
+      return title;
+    }
+    return `题目 ${exercise?.exercise_base?.external_id || exerciseId || ""}`.trim();
+  }, [exercise, exerciseId]);
 
   const answeredCount = useMemo(() => {
     return Object.values(answers).filter(Boolean).length;
@@ -190,7 +198,7 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
     return (
       <div className="listening-exercise-page">
         <div className="listening-exercise-shell">
-          <p className="listening-exercise-loading">Loading listening exercise...</p>
+          <p className="listening-exercise-loading">Übung wird geladen...</p>
         </div>
       </div>
     );
@@ -210,7 +218,7 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
     <div className="listening-exercise-page">
       <div className="listening-exercise-shell">
         <div className="listening-exercise-topbar">
-          <Link to="/modules/exam-preparation/hoeren" className="listening-exercise-topbar__back">
+          <Link to={backTo} className="listening-exercise-topbar__back">
             ← Zurück zu Hören
           </Link>
           <span className="listening-exercise-topbar__meta">
@@ -219,13 +227,29 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
         </div>
 
         <section className="listening-exercise-hero">
-          <p className="listening-exercise-hero__eyebrow">{eyebrow}</p>
-          <h1 className="listening-exercise-hero__title">
-            {exercise?.exercise_base?.title || "Hören Teil"}
-          </h1>
+          <div className="listening-exercise-hero__main">
+            <h1 className="listening-exercise-hero__title">{heroTitle}</h1>
+          </div>
+          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+            <div className="listening-exercise-hero__badges">
+              {exercise?.exercise_base?.difficulty ? (
+                <span className="listening-exercise-hero__badge">
+                  难度：{exercise.exercise_base.difficulty}
+                </span>
+              ) : null}
+              {exercise?.exercise_base?.is_real_exam ? (
+                <span className="listening-exercise-hero__badge listening-exercise-hero__badge--real">
+                  真题
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="listening-exercise-instruction">
+          <div className="listening-exercise-instruction__header">
+            <span className="listening-exercise-instruction__label">Anleitung</span>
+          </div>
           <p>{INSTRUCTION_BY_TYPE[listeningType] || INSTRUCTION_BY_TYPE.short_text_true_false_once}</p>
         </section>
 
@@ -240,21 +264,23 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
             </span>
           </div>
 
-          <audio
-            ref={audioRef}
-            src={exercise?.audio_file_url || ""}
-            preload="metadata"
-            controls
-            controlsList="nodownload noremoteplayback"
-            onContextMenu={(event) => {
-              event.preventDefault();
-            }}
-            onDragStart={(event) => {
-              event.preventDefault();
-            }}
-          />
+          <div className="listening-exercise-audio-player">
+            <audio
+              ref={audioRef}
+              src={exercise?.audio_file_url || ""}
+              preload="metadata"
+              controls
+              controlsList="nodownload noremoteplayback"
+              onContextMenu={(event) => {
+                event.preventDefault();
+              }}
+              onDragStart={(event) => {
+                event.preventDefault();
+              }}
+            />
+          </div>
 
-          <div className="listening-exercise-controls">
+          <div className="listening-exercise-controls" aria-label="Audiosteuerung">
             <button
               type="button"
               className="listening-exercise-control-btn"
@@ -270,7 +296,7 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
               Wieder abspielen
             </button>
             <label className="listening-exercise-slider">
-              <span>Lautstärke</span>
+              <span className="listening-exercise-control-label">Lautstärke</span>
               <input
                 type="range"
                 min="0"
@@ -284,7 +310,7 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
               <strong>{Math.round(volume * 100)}%</strong>
             </label>
             <label className="listening-exercise-select">
-              <span>Geschwindigkeit</span>
+              <span className="listening-exercise-control-label">Geschwindigkeit</span>
               <select
                 value={playbackRate}
                 onChange={(event) => {
@@ -313,8 +339,12 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
 
         <section className="listening-exercise-questions">
           <div className="listening-exercise-questions__header">
-            <h2>Aufgaben</h2>
-            <span>{answeredCount} / {questions.length} beantwortet</span>
+            <div>
+              <h2>Aufgaben</h2>
+              <p className="listening-exercise-questions__sub">
+                Wähle pro Aufgabe genau eine Antwort aus.
+              </p>
+            </div>
           </div>
 
           <div className="listening-exercise-question-list">
@@ -328,11 +358,14 @@ export default function ListeningExercisePage({ listeningType, eyebrow = "LISTEN
               return (
                 <article key={question.id} className="listening-exercise-question-card">
                   <div className="listening-exercise-question-card__header">
-                    <h3>
-                      {question.question_number}. {question.question_text}
-                    </h3>
+                    <div className="listening-exercise-question-card__titleWrap">
+                      <span className="listening-exercise-question-card__number">
+                        Aufgabe {question.question_number}
+                      </span>
+                      <h3>{question.question_text}</h3>
+                    </div>
                     <span className="listening-exercise-question-card__selection">
-                      {selectedOption ? `已选择 ${selectedOption.option_text}` : "未选择"}
+                      {selectedOption ? `Ausgewählt: ${selectedOption.option_text}` : "Noch nicht gewählt"}
                     </span>
                   </div>
 

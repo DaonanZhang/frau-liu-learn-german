@@ -4,27 +4,30 @@ import "./ExamPreparationReadingPage.css";
 const READING_TYPES = [
   {
     key: "title-matching",
-    title: "READING_TITLE_MATCHING",
-    label: "Titel zuordnen",
-    description: "先读 5 段文本，再为每段文本匹配一个最合适的标题。",
+    title: "标题匹配",
+    label: "阅读段落，匹配合适标题",
+    description: "适合训练快速概括段落大意的能力。你需要抓住每一段的核心信息，再从多个标题中选出最合适的一项。",
     to: "/modules/exam-preparation/lesen/title-matching",
-    cta: "进入第一题型",
+    cta: "进入这一题型",
+    focus: "概括主旨",
   },
   {
     key: "understanding",
-    title: "READING_UNDERSTANDING",
-    label: "Leseverstehen",
-    description: "先读一段文章，再完成下面每一道 a、b、c 单选题。",
+    title: "文章理解",
+    label: "阅读文章，完成理解题",
+    description: "围绕一篇完整文章进行练习，更适合提升细节理解、语境判断和信息定位能力，帮助你更稳地完成阅读选择题。",
     to: "/modules/exam-preparation/lesen/understanding",
-    cta: "进入第二题型",
+    cta: "进入这一题型",
+    focus: "细节理解",
   },
   {
     key: "ad-matching",
-    title: "READING_AD_MATCHING",
-    label: "Anzeige zuordnen",
-    description: "阅读 10 条情况描述，再从 a-l 或 X 中找到最合适的一则 Anzeige。",
+    title: "信息匹配",
+    label: "根据需求匹配合适信息",
+    description: "通过对比条件与信息内容完成匹配，适合训练筛选关键词、判断需求重点和快速查找相关信息的能力。",
     to: "/modules/exam-preparation/lesen/ad-matching",
-    cta: "进入第三题型",
+    cta: "进入这一题型",
+    focus: "查找对应信息",
   },
 ];
 
@@ -33,7 +36,7 @@ export default function ExamPreparationReadingPage() {
     <div className="exam-reading-page">
       <div className="exam-reading-topbar">
         <Link to="/modules/exam-preparation" className="exam-reading-topbar__back">
-          ← Zurück zu Exam Preparation
+          ← 返回备考季
         </Link>
       </div>
 
@@ -42,17 +45,25 @@ export default function ExamPreparationReadingPage() {
           <p className="exam-reading-hero__eyebrow">Lesen</p>
           <h1 className="exam-reading-hero__title">阅读模块</h1>
           <p className="exam-reading-hero__copy">
-            这里先拆成三种阅读题型。当前只把第一种标题匹配题做成可联调、可浏览、可点选的页面。
+            这里提供不同方向的阅读训练。你可以根据自己的复习目标，选择练习概括主旨、理解文章细节，或者完成需求与信息之间的匹配。
           </p>
+          <div className="exam-reading-hero__tags" aria-label="阅读模块特点">
+            <span className="exam-reading-hero__tag">按题型练习</span>
+            <span className="exam-reading-hero__tag">提升阅读速度</span>
+            <span className="exam-reading-hero__tag">强化理解与判断</span>
+          </div>
         </div>
       </section>
 
-      <section className="exam-reading-type-grid">
+      <section className="exam-reading-type-grid" aria-label="阅读题型列表">
         {READING_TYPES.map((item) => {
           const content = (
             <>
               <div className="exam-reading-type__top">
-                <span className="exam-reading-type__mono">{item.title}</span>
+                <div className="exam-reading-type__meta">
+                  <span className="exam-reading-type__mono">{item.title}</span>
+                  <span className="exam-reading-type__focus">{item.focus}</span>
+                </div>
                 <h2 className="exam-reading-type__title">{item.label}</h2>
               </div>
               <p className="exam-reading-type__description">{item.description}</p>
@@ -60,7 +71,7 @@ export default function ExamPreparationReadingPage() {
                 {item.to ? (
                   <span className="exam-reading-type__cta">{item.cta}</span>
                 ) : (
-                  <span className="exam-reading-type__soon">Coming soon</span>
+                  <span className="exam-reading-type__soon">即将开放</span>
                 )}
               </div>
             </>

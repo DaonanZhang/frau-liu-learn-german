@@ -50,9 +50,20 @@ class ExerciseBaseSerializer(serializers.ModelSerializer):
 
 
 class ListeningExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
     class Meta:
         model = ListeningExercise
-        fields = "__all__"
+        fields = [
+            "id",
+            "exercise_base",
+            "listening_type",
+            "audio_file_identifier",
+            "audio_file_url",
+            "script",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -124,9 +135,17 @@ class ListeningExerciseDetailSerializer(serializers.ModelSerializer):
 
 
 class ReadingTitleMatchingExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
     class Meta:
         model = ReadingTitleMatchingExercise
-        fields = "__all__"
+        fields = [
+            "id",
+            "exercise_base",
+            "instruction",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -181,9 +200,17 @@ class ReadingTitleMatchingExerciseDetailSerializer(serializers.ModelSerializer):
 
 
 class ReadingUnderstandingExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
     class Meta:
         model = ReadingUnderstandingExercise
-        fields = "__all__"
+        fields = [
+            "id",
+            "exercise_base",
+            "text_markdown",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -251,9 +278,17 @@ class ReadingUnderstandingExerciseDetailSerializer(serializers.ModelSerializer):
 
 
 class ReadingAdMatchingExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
     class Meta:
         model = ReadingAdMatchingExercise
-        fields = "__all__"
+        fields = [
+            "id",
+            "exercise_base",
+            "instruction",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -323,9 +358,18 @@ class ReadingAdMatchingExerciseDetailSerializer(serializers.ModelSerializer):
 
 
 class ClozeChoiceExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
     class Meta:
         model = ClozeChoiceExercise
-        fields = "__all__"
+        fields = [
+            "id",
+            "exercise_base",
+            "content_with_placeholders",
+            "original_source_text",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -394,9 +438,18 @@ class ClozeChoiceExerciseDetailSerializer(serializers.ModelSerializer):
 
 
 class ClozeMatchingExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
     class Meta:
         model = ClozeMatchingExercise
-        fields = "__all__"
+        fields = [
+            "id",
+            "exercise_base",
+            "content_with_placeholders",
+            "original_source_text",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -467,9 +520,20 @@ class ClozeMatchingExerciseDetailSerializer(serializers.ModelSerializer):
 
 
 class WritingExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
     class Meta:
         model = WritingExercise
-        fields = "__all__"
+        fields = [
+            "id",
+            "exercise_base",
+            "request_text",
+            "time_limit_minutes",
+            "words_limit",
+            "task_text",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -516,9 +580,17 @@ class WritingExerciseDetailSerializer(serializers.ModelSerializer):
 
 
 class SpeakingGapMatchingExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
     class Meta:
         model = SpeakingGapMatchingExercise
-        fields = "__all__"
+        fields = [
+            "id",
+            "exercise_base",
+            "content_with_placeholders",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -588,9 +660,19 @@ class SpeakingGapMatchingExerciseDetailSerializer(serializers.ModelSerializer):
 
 
 class SpeakingPromptSegmentedExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
     class Meta:
         model = SpeakingPromptSegmentedExercise
-        fields = "__all__"
+        fields = [
+            "id",
+            "exercise_base",
+            "prompt_text",
+            "segment_delimiter",
+            "example_text_raw",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 

@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   fetchClozeMatchingExerciseDetail,
-  fetchClozeMatchingExercises,
 } from "../api/exam_preparation/clozeExercises.js";
 import {
   fetchClozeMatchingBlankStates,
@@ -19,11 +18,20 @@ function renderParts(content) {
   return String(content || "").split(/(\{\{blank_\d+\}\})/g).filter(Boolean);
 }
 
+function renderParagraphs(content) {
+  return String(content || "")
+    .split(/\n\s*\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => renderParts(paragraph));
+}
+
 function extractBlankKey(token) {
   return token.replace(/[{}]/g, "");
 }
 
 export default function ClozeMatchingPage() {
+  const { exerciseId } = useParams();
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -45,15 +53,13 @@ export default function ClozeMatchingPage() {
         setLoading(true);
         setErrorText("");
         setSaveStateText("");
-        const listData = await fetchClozeMatchingExercises();
-        const firstExercise = Array.isArray(listData?.results) ? listData.results[0] : null;
-        if (!firstExercise?.id) {
-          throw new Error("No cloze matching exercise found.");
+        if (!exerciseId) {
+          throw new Error("No cloze matching exercise selected.");
         }
-        const detail = await fetchClozeMatchingExerciseDetail(firstExercise.id);
+        const detail = await fetchClozeMatchingExerciseDetail(exerciseId);
         if (!aborted) {
           setExercise(detail || null);
-          const stateData = await fetchClozeMatchingBlankStates(firstExercise.id);
+          const stateData = await fetchClozeMatchingBlankStates(exerciseId);
           if (aborted) {
             return;
           }
@@ -75,7 +81,7 @@ export default function ClozeMatchingPage() {
           if (Object.keys(nextAnswers).length > 0) {
             setAnswers(nextAnswers);
             setIsChecked(true);
-            setSaveStateText("已恢复上次 Prüfen 后的作答状态。");
+            setSaveStateText("已恢复上次批改后的作答状态。");
           }
         }
       } catch (error) {
@@ -93,7 +99,7 @@ export default function ClozeMatchingPage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [exerciseId]);
 
   const options = useMemo(() => Array.isArray(exercise?.options) ? exercise.options : [], [exercise]);
   const blankAnswers = useMemo(() => Array.isArray(exercise?.blank_answers) ? exercise.blank_answers : [], [exercise]);
@@ -101,12 +107,19 @@ export default function ClozeMatchingPage() {
     () => Object.fromEntries(blankAnswers.map((blank) => [blank.blank_key, blank])),
     [blankAnswers]
   );
+  const heroTitle = useMemo(() => {
+    const title = exercise?.exercise_base?.title?.trim();
+    if (title) {
+      return title;
+    }
+    return `题目 ${exercise?.exercise_base?.external_id || exerciseId || ""}`.trim();
+  }, [exercise, exerciseId]);
   const optionMap = useMemo(
     () => Object.fromEntries(options.map((option) => [option.option_key, option])),
     [options]
   );
   const answeredCount = useMemo(() => Object.values(answers).filter(Boolean).length, [answers]);
-  const parts = useMemo(() => renderParts(exercise?.content_with_placeholders), [exercise]);
+  const paragraphs = useMemo(() => renderParagraphs(exercise?.content_with_placeholders), [exercise]);
   const assignedOptionKeys = useMemo(
     () => new Set(Object.values(answers).filter(Boolean)),
     [answers]
@@ -188,7 +201,7 @@ export default function ClozeMatchingPage() {
 
   async function handleCheck() {
     setIsChecked(true);
-    setSaveStateText("保存状态中...");
+    setSaveStateText("正在保存作答状态...");
 
     try {
       await Promise.all(
@@ -203,7 +216,7 @@ export default function ClozeMatchingPage() {
           })
         )
       );
-      setSaveStateText("已保存当前 Prüfen 结果。");
+      setSaveStateText("已保存本次批改结果。");
     } catch (error) {
       setErrorText(error?.message || "状态保存失败。");
       setSaveStateText("");
@@ -211,7 +224,7 @@ export default function ClozeMatchingPage() {
   }
 
   if (loading) {
-    return <div className="cloze-page"><div className="cloze-shell"><p className="cloze-loading">Loading cloze matching exercise...</p></div></div>;
+    return <div className="cloze-page"><div className="cloze-shell"><p className="cloze-loading">练习加载中...</p></div></div>;
   }
 
   if (errorText) {
@@ -222,7 +235,7 @@ export default function ClozeMatchingPage() {
     <div className="cloze-page">
       <div className="cloze-shell">
         <div className="cloze-topbar">
-          <Link to="/modules/exam-preparation/sprachbausteine" className="cloze-topbar__back">
+          <Link to="/modules/exam-preparation/sprachbausteine/cloze-matching" className="cloze-topbar__back">
             ← Zurück zu Sprachbausteine
           </Link>
           <span className="cloze-topbar__meta">
@@ -231,16 +244,33 @@ export default function ClozeMatchingPage() {
         </div>
 
         <section className="cloze-hero">
-          <p className="cloze-hero__eyebrow">CLOZE_MATCHING</p>
-          <h1 className="cloze-hero__title">{exercise?.exercise_base?.title || "Sprachbausteine Teil 2"}</h1>
+          <h1 className="cloze-hero__title">{heroTitle}</h1>
+          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+            <div className="cloze-hero__badges">
+              {exercise?.exercise_base?.difficulty ? (
+                <span className="cloze-hero__badge">
+                  难度：{exercise.exercise_base.difficulty}
+                </span>
+              ) : null}
+              {exercise?.exercise_base?.is_real_exam ? (
+                <span className="cloze-hero__badge cloze-hero__badge--real">
+                  真题
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="cloze-instruction">
+          <span className="cloze-section-label">Beschreibung</span>
           <p>{FALLBACK_INSTRUCTION}</p>
         </section>
 
         <section className="cloze-pool-panel">
-          <h2>Optionen</h2>
+          <div className="cloze-section-heading">
+            <span className="cloze-section-label">选项区</span>
+            <span className="cloze-section-meta">拖动到对应空格中</span>
+          </div>
           <div
             className={[
               "cloze-pool",
@@ -290,98 +320,101 @@ export default function ClozeMatchingPage() {
 
         <section className="cloze-text-panel">
           <div className="cloze-text">
-            {parts.map((part, index) => {
-              if (!/^\{\{blank_\d+\}\}$/.test(part)) {
-                return <span key={`${part}-${index}`}>{part}</span>;
-              }
-              const blankKey = extractBlankKey(part);
-              const blank = blankMap[blankKey];
-              const correctOption = blank?.correct_option;
-              const selectedKey = answers[blankKey] || "";
-              const isCorrect = !!correctOption && selectedKey === correctOption.option_key;
+            {paragraphs.map((parts, paragraphIndex) => (
+              <p key={`paragraph-${paragraphIndex}`} className="cloze-text__paragraph">
+                {parts.map((part, index) => {
+                  if (!/^\{\{blank_\d+\}\}$/.test(part)) {
+                    return <span key={`${paragraphIndex}-${part}-${index}`}>{part}</span>;
+                  }
+                  const blankKey = extractBlankKey(part);
+                  const blank = blankMap[blankKey];
+                  const correctOption = blank?.correct_option;
+                  const selectedKey = answers[blankKey] || "";
+                  const isCorrect = !!correctOption && selectedKey === correctOption.option_key;
 
-              return (
-                <span key={blankKey} className="cloze-blank-inline">
-                  <span
-                    className={[
-                      "cloze-drop-slot",
-                      selectedKey && !isChecked ? "cloze-select--selected" : "",
-                      isChecked && isCorrect ? "cloze-select--correct" : "",
-                      isChecked && selectedKey && !isCorrect ? "cloze-select--wrong" : "",
-                      activeDropBlankKey === blankKey ? "cloze-drop-slot--active" : "",
-                    ].filter(Boolean).join(" ")}
-                    onDragOver={(event) => {
-                      if (!draggedOptionKey) {
-                        return;
-                      }
-                      event.preventDefault();
-                      setActiveDropBlankKey(blankKey);
-                    }}
-                    onDragLeave={() => {
-                      setActiveDropBlankKey((previous) => (previous === blankKey ? "" : previous));
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      if (draggedOptionKey) {
-                        assignOptionToBlank(blankKey, draggedOptionKey, dragSourceBlankKey);
-                      }
-                      setSaveStateText("");
-                      handleDragEnd();
-                    }}
-                  >
-                    {selectedKey ? (
-                      <button
-                        type="button"
-                        draggable={!isChecked}
-                        className={[
-                          "cloze-drop-slot__chip",
-                          isChecked && isCorrect ? "cloze-drop-slot__chip--correct" : "",
-                          isChecked && selectedKey && !isCorrect ? "cloze-drop-slot__chip--wrong" : "",
-                        ].filter(Boolean).join(" ")}
-                        onDragStart={() => {
-                          handleDragStart(selectedKey, blankKey);
-                        }}
-                        onDragEnd={handleDragEnd}
-                      >
-                        {optionMap[selectedKey]?.option_text || selectedKey}
-                      </button>
-                    ) : (
-                      <span className="cloze-drop-slot__placeholder">
-                        Lücke {blank?.blank_number || ""}
-                      </span>
-                    )}
-                  </span>
-                  {isChecked ? (
-                    <span className="cloze-inline-feedback-row">
+                  return (
+                    <span key={blankKey} className="cloze-blank-inline">
                       <span
                         className={[
-                          "cloze-inline-feedback",
-                          isCorrect
-                            ? "cloze-inline-feedback--correct"
-                            : "cloze-inline-feedback--answer",
-                        ].join(" ")}
+                          "cloze-drop-slot",
+                          selectedKey && !isChecked ? "cloze-select--selected" : "",
+                          isChecked && isCorrect ? "cloze-select--correct" : "",
+                          isChecked && selectedKey && !isCorrect ? "cloze-select--wrong" : "",
+                          activeDropBlankKey === blankKey ? "cloze-drop-slot--active" : "",
+                        ].filter(Boolean).join(" ")}
+                        onDragOver={(event) => {
+                          if (!draggedOptionKey) {
+                            return;
+                          }
+                          event.preventDefault();
+                          setActiveDropBlankKey(blankKey);
+                        }}
+                        onDragLeave={() => {
+                          setActiveDropBlankKey((previous) => (previous === blankKey ? "" : previous));
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          if (draggedOptionKey) {
+                            assignOptionToBlank(blankKey, draggedOptionKey, dragSourceBlankKey);
+                          }
+                          setSaveStateText("");
+                          handleDragEnd();
+                        }}
                       >
-                        {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
+                        {selectedKey ? (
+                          <button
+                            type="button"
+                            draggable={!isChecked}
+                            className={[
+                              "cloze-drop-slot__chip",
+                              isChecked && isCorrect ? "cloze-drop-slot__chip--correct" : "",
+                              isChecked && selectedKey && !isCorrect ? "cloze-drop-slot__chip--wrong" : "",
+                            ].filter(Boolean).join(" ")}
+                            onDragStart={() => {
+                              handleDragStart(selectedKey, blankKey);
+                            }}
+                            onDragEnd={handleDragEnd}
+                          >
+                            {optionMap[selectedKey]?.option_text || selectedKey}
+                          </button>
+                        ) : (
+                          <span className="cloze-drop-slot__placeholder">
+                            Lücke {blank?.blank_number || ""}
+                          </span>
+                        )}
                       </span>
-                      {blank ? (
-                        <ExerciseFavoriteButton
-                          isFavorited={Boolean(favoritedByBlankId[blank.id])}
-                          pending={Boolean(favoritePendingByBlankId[blank.id])}
-                          onClick={() => {
-                            toggleFavorite(blank);
-                          }}
-                        />
+                      {isChecked ? (
+                        <span className="cloze-inline-feedback-row">
+                          <span
+                            className={[
+                              "cloze-inline-feedback",
+                              isCorrect
+                                ? "cloze-inline-feedback--correct"
+                                : "cloze-inline-feedback--answer",
+                            ].join(" ")}
+                          >
+                            {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
+                          </span>
+                          {blank ? (
+                            <ExerciseFavoriteButton
+                              isFavorited={Boolean(favoritedByBlankId[blank.id])}
+                              pending={Boolean(favoritePendingByBlankId[blank.id])}
+                              onClick={() => {
+                                toggleFavorite(blank);
+                              }}
+                            />
+                          ) : null}
+                        </span>
                       ) : null}
                     </span>
-                  ) : null}
-                </span>
-              );
-            })}
+                  );
+                })}
+              </p>
+            ))}
           </div>
         </section>
 
         <section className="cloze-actions">
-          <span className="cloze-actions__meta">{answeredCount} / {blankAnswers.length} beantwortet</span>
           <div className="cloze-actions__buttons">
             <ExamActionButton
               className="cloze-check-btn"

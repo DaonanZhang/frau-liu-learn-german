@@ -1,0 +1,75 @@
+.exercise-option-sheet {
+  position: absolute;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  z-index: 30;
+  width: min(28rem, calc(100vw - 2rem));
+}
+
+.exercise-option-sheet__panel {
+  width: 100%;
+  max-height: min(26rem, 60vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(223, 226, 229, 0.96);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.96), rgba(255, 255, 255, 0.99)),
+    #ffffff;
+  box-shadow: 0 24px 40px rgba(22, 29, 41, 0.18);
+}
+
+.exercise-option-sheet__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.9rem;
+  overflow-y: auto;
+}
+
+.exercise-option-sheet__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.exercise-option-sheet__option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(47, 111, 94, 0.24);
+  box-shadow: 0 14px 24px rgba(38, 52, 74, 0.08);
+}
+
+.exercise-option-sheet__option--selected {
+  border-color: rgba(207, 99, 39, 0.4);
+  background: #fff7ef;
+  box-shadow: 0 12px 22px rgba(207, 99, 39, 0.1);
+}
+
+.exercise-option-sheet__option-label {
+  color: #2f2a25;
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.exercise-option-sheet__option-meta {
+  color: #6b7280;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .exercise-option-sheet {
+    width: 100%;
+  }
+}

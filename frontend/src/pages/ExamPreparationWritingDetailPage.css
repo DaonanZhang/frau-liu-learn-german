@@ -1,0 +1,278 @@
+.writing-detail-page {
+  display: flex;
+  justify-content: center;
+}
+
+.writing-detail-shell {
+  width: min(100%, 72rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.writing-detail-topbar,
+.writing-detail-hero,
+.writing-detail-request-panel,
+.writing-detail-meta-panel,
+.writing-detail-task-card,
+.writing-detail-input-card,
+.writing-detail-actions,
+.writing-detail-review-card {
+  border: 1px solid rgba(223, 226, 229, 0.96);
+  border-radius: 1.2rem;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 247, 0.82), rgba(255, 255, 255, 0.98)),
+    #ffffff;
+  box-shadow: 0 14px 30px rgba(38, 52, 74, 0.06);
+}
+
+.writing-detail-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.95rem 1.1rem;
+}
+
+.writing-detail-topbar__back {
+  color: #2f6f5e;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.writing-detail-topbar__meta,
+.writing-detail-input-card__header span,
+.writing-detail-review-card__header span,
+.writing-detail-actions__meta {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.writing-detail-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.4rem 1.35rem;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.45), transparent 28%),
+    linear-gradient(135deg, #efe2c9 0%, #f8f4ec 40%, #dfeaf2 100%);
+}
+
+.writing-detail-hero__title {
+  margin: 0;
+  color: #2f2a25;
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  font-weight: 800;
+}
+
+.writing-detail-hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.writing-detail-hero__badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.15rem;
+  padding: 0.4rem 0.78rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(236, 240, 243, 0.96);
+  color: #5b6472;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.writing-detail-hero__badge--real {
+  background: rgba(207, 99, 39, 0.12);
+  border-color: rgba(207, 99, 39, 0.24);
+  color: #9a4210;
+}
+
+.writing-detail-request-panel,
+.writing-detail-task-card,
+.writing-detail-input-card,
+.writing-detail-actions,
+.writing-detail-review-card {
+  padding: 1.15rem 1.1rem;
+}
+
+.writing-detail-request-panel p,
+.writing-detail-task-card p,
+.writing-detail-review-card p {
+  margin: 0;
+  color: #2f2a25;
+  line-height: 1.8;
+}
+
+.writing-detail-meta-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.95rem 1.1rem;
+}
+
+.writing-detail-meta-chip,
+.writing-detail-timer-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.writing-detail-meta-chip {
+  background: rgba(47, 111, 94, 0.12);
+  border: 1px solid rgba(47, 111, 94, 0.2);
+  color: #205548;
+}
+
+.writing-detail-timer-btn {
+  border: none;
+  background: #cf6327;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.writing-detail-timer-btn:disabled {
+  background: #d9dde3;
+  cursor: not-allowed;
+}
+
+.writing-detail-workspace,
+.writing-detail-review-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 1rem;
+}
+
+.writing-detail-task-card h2,
+.writing-detail-input-card__header h2,
+.writing-detail-review-card h2 {
+  margin: 0 0 0.8rem;
+  color: #2f2a25;
+}
+
+.writing-detail-input-card__header,
+.writing-detail-review-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  margin-bottom: 0.8rem;
+}
+
+.writing-detail-review-card__titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.writing-detail-review-card__titleRow h2 {
+  margin: 0;
+}
+
+.writing-detail-textarea {
+  width: 100%;
+  min-height: 18rem;
+  border: 1px solid #d7dce3;
+  border-radius: 1rem;
+  padding: 1rem;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.7;
+}
+
+.writing-detail-review-card--user {
+  background: rgba(207, 99, 39, 0.06);
+}
+
+.writing-detail-review-card--example {
+  background: rgba(47, 111, 94, 0.06);
+}
+
+.writing-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.writing-detail-actions__buttons {
+  display: flex;
+  gap: 0.8rem;
+}
+
+.writing-detail-check-btn,
+.writing-detail-reset-btn {
+  min-height: 2.9rem;
+  border: none;
+  border-radius: 999px;
+  padding: 0 1.15rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.writing-detail-check-btn {
+  background: #cf6327;
+  color: #ffffff;
+}
+
+.writing-detail-check-btn:disabled {
+  background: #d9dde3;
+  cursor: not-allowed;
+}
+
+.writing-detail-reset-btn {
+  background: #eef2f7;
+  color: #2f2a25;
+}
+
+.writing-detail-loading,
+.writing-detail-error {
+  margin: 0;
+  padding: 1rem;
+}
+
+@media (max-width: 990px) {
+  .writing-detail-topbar,
+  .writing-detail-hero,
+  .writing-detail-request-panel,
+  .writing-detail-meta-panel,
+  .writing-detail-task-card,
+  .writing-detail-input-card,
+  .writing-detail-actions,
+  .writing-detail-review-card {
+    border-radius: 1rem;
+  }
+
+  .writing-detail-topbar,
+  .writing-detail-meta-panel,
+  .writing-detail-actions,
+  .writing-detail-workspace,
+  .writing-detail-review-grid {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .writing-detail-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .writing-detail-hero__badges {
+    justify-content: flex-start;
+  }
+
+  .writing-detail-actions__buttons {
+    flex-direction: column;
+  }
+}

@@ -20,7 +20,7 @@ function pickErrorMessage(err, fallback) {
 }
 
 const TEMPORARY_LOGIN_MAINTENANCE_MESSAGE =
-  "我们正在维修服务器，目前无法登录，预计需要 1–2 天时间。";
+  "我们正在进行为期1-2天的服务器维护，可能导致无法登录，敬请谅解。";
 
 /**
  * Login with telephone + password.

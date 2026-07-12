@@ -19,24 +19,8 @@ function pickErrorMessage(err, fallback) {
   return fallback;
 }
 
-function normalizeLoginErrorMessage(message) {
-  const text = String(message || "").trim();
-  if (!text) {
-    return "账号或密码输入错误。";
-  }
-
-  const normalized = text.toLowerCase();
-  if (
-    normalized.includes("no active account") ||
-    normalized.includes("unable to log in") ||
-    normalized.includes("credentials") ||
-    normalized.includes("password")
-  ) {
-    return "账号或密码输入错误。";
-  }
-
-  return text;
-}
+const TEMPORARY_LOGIN_MAINTENANCE_MESSAGE =
+  "我们正在维修服务器，目前无法登录，预计需要 1–2 天时间。";
 
 /**
  * Login with telephone + password.
@@ -80,8 +64,8 @@ export async function login(telephone, password, countryCode) {
 
     await Swal.fire({
       icon: "error",
-      title: "登录失败",
-      text: normalizeLoginErrorMessage(pickErrorMessage(err, "账号或密码输入错误。")),
+      title: "服务器维修中",
+      text: TEMPORARY_LOGIN_MAINTENANCE_MESSAGE,
     });
 
     return { ok: false };

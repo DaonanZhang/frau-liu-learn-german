@@ -19,8 +19,32 @@ function pickErrorMessage(err, fallback) {
   return fallback;
 }
 
-const TEMPORARY_LOGIN_MAINTENANCE_MESSAGE =
-  "我们正在进行为期1-2天的服务器维护，可能导致无法登录，敬请谅解。";
+function getLoginErrorPresentation(err) {
+  const errorCode = String(err?.data?.code || "").trim();
+  const errorMessage = pickErrorMessage(err, "");
+
+  if (
+    errorCode === "no_active_account" ||
+    errorMessage === "账号或密码输入错误。"
+  ) {
+    return {
+      title: "登录失败",
+      text: "账号或密码输入错误。",
+    };
+  }
+
+  if (errorCode === "maintenance_mode") {
+    return {
+      title: "服务器维修中",
+      text: errorMessage || "服务器正在维修，目前无法登录，请稍后再试。",
+    };
+  }
+
+  return {
+    title: "暂时无法登录",
+    text: "服务器暂时出现问题，请稍后再试。",
+  };
+}
 
 /**
  * Login with telephone + password.
@@ -61,11 +85,12 @@ export async function login(telephone, password, countryCode) {
 
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
+    const errorPresentation = getLoginErrorPresentation(err);
 
     await Swal.fire({
       icon: "error",
-      title: "服务器维修中",
-      text: TEMPORARY_LOGIN_MAINTENANCE_MESSAGE,
+      title: errorPresentation.title,
+      text: errorPresentation.text,
     });
 
     return { ok: false };

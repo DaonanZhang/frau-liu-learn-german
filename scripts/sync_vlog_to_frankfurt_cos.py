@@ -47,8 +47,8 @@ class SyncStats:
 def build_parser(repo_root: Path) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Upload local VlogSeason1 legacy files missing from the Frankfurt Tencent COS bucket. "
-            "Shanghai COS is never read or written."
+            "Upload local files missing from a selected Tencent COS bucket. The defaults synchronize "
+            "VlogSeason1 video and cover legacy files only to Frankfurt."
         )
     )
     parser.add_argument(
@@ -67,9 +67,15 @@ def build_parser(repo_root: Path) -> argparse.ArgumentParser:
             "Defaults to learning_by_video_video and learning_by_video_cover_letters."
         ),
     )
+    parser.add_argument(
+        "--scan-all",
+        action="store_true",
+        help="Scan every file below source-dir instead of the default Vlog video/cover directories",
+    )
     parser.add_argument("--bucket", default=DEFAULT_BUCKET)
     parser.add_argument("--region", default=DEFAULT_REGION)
     parser.add_argument("--domain", default=DEFAULT_DOMAIN)
+    parser.add_argument("--target-name", default="Frankfurt", help="Display label for the COS target")
     parser.add_argument(
         "--object-prefix",
         default=DEFAULT_PREFIX,
@@ -105,7 +111,7 @@ def build_parser(repo_root: Path) -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Additionally skip a missing key when its local MD5 matches a single-part ETag already "
-            "under the Frankfurt prefix. Full object-key matching is always enabled."
+            "under the selected prefix. Full object-key matching is always enabled."
         ),
     )
     parser.add_argument("--dry-run", action="store_true", help="List planned uploads without writing COS")
@@ -120,10 +126,12 @@ def validate_args(args: argparse.Namespace) -> None:
 
     if not args.source_dir.is_dir():
         raise ValueError(f"source directory not found: {args.source_dir}")
-    if args.include_dirs is None:
+    if args.scan_all:
+        args.include_dirs = None
+    elif args.include_dirs is None:
         args.include_dirs = list(DEFAULT_INCLUDE_DIRS)
     normalized_include_dirs: list[str] = []
-    for raw_dir in args.include_dirs:
+    for raw_dir in args.include_dirs or []:
         relative_dir = str(raw_dir).strip().strip("/")
         if not relative_dir or Path(relative_dir).is_absolute() or ".." in Path(relative_dir).parts:
             raise ValueError(f"invalid --include-dir path: {raw_dir}")
@@ -131,7 +139,8 @@ def validate_args(args: argparse.Namespace) -> None:
         if not local_dir.is_dir():
             raise ValueError(f"included source directory not found: {local_dir}")
         normalized_include_dirs.append(relative_dir)
-    args.include_dirs = list(dict.fromkeys(normalized_include_dirs))
+    if args.include_dirs is not None:
+        args.include_dirs = list(dict.fromkeys(normalized_include_dirs))
     if not args.object_prefix:
         raise ValueError("--object-prefix cannot be empty")
     if args.retries < 1:
@@ -399,11 +408,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         validate_args(args)
         print(f"Source: {args.source_dir}")
-        print(f"Included directories: {', '.join(args.include_dirs)}")
-        print(f"Frankfurt COS: {args.bucket} ({args.region})")
+        included_label = "all files recursively" if args.include_dirs is None else ", ".join(args.include_dirs)
+        print(f"Included directories: {included_label}")
+        print(f"{args.target_name} COS: {args.bucket} ({args.region})")
         print(f"Object prefix: {args.object_prefix}/")
         print(f"Dry run: {args.dry_run}")
-        print("Shanghai COS: untouched")
 
         client = create_client(args)
         local_files = collect_local_files(args.source_dir, args.include_dirs)
@@ -421,7 +430,7 @@ def main(argv: list[str] | None = None) -> int:
         print("Interrupted by user.", file=sys.stderr)
         return 130
     except Exception as exc:
-        print(f"ERROR: Frankfurt COS sync aborted: {exc}", file=sys.stderr)
+        print(f"ERROR: {args.target_name} COS sync aborted: {exc}", file=sys.stderr)
         return 1
 
 

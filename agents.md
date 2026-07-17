@@ -97,6 +97,18 @@ Defaults:
 - uses the Tencent COS Python SDK high-level upload with multipart resume support and five retry attempts
 - reads credentials from `~/.cos.conf`; environment credential pairs supported by the HLS uploader are also accepted
 
+### Full Resources Dual-COS Sync
+
+Use this standalone command to compare every local file below `frontend/public/resources` with both COS buckets and upload only missing objects. Object keys preserve the `resources/...` layout. A failure in one region does not prevent the other region from running.
+
+Dry run with key and single-part ETag deduplication:
+
+`scripts/run_learning_video_pipeline.sh --sync-resources-to-cos --dedupe-etag --dry-run`
+
+Actual sync:
+
+`scripts/run_learning_video_pipeline.sh --sync-resources-to-cos --dedupe-etag`
+
 Observed successful run shape for Vlog season:
 - Step 1 slices each `mp4` into `.m3u8`, `-init.mp4`, and `.m4s` files in `frontend/public/resources/VlogSeason1/learning_by_video_video`
 - Step 1 on server additionally uploads generated HLS files and recursively uploads the configured cover directory to both COS buckets via `scripts/enable_hls_5seg.sh --upload-cos --cover-dir ...`; successful uploads print the public URL for each target, and one target failing does not prevent the other target from being attempted

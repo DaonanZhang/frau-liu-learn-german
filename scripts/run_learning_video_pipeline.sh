@@ -37,7 +37,9 @@ Options:
   --sync-to-frankfurt   Standalone mode: sync missing Vlog video and cover legacy files only to Frankfurt COS
   --sync-vlog-to-frankfurt
                         Backward-compatible alias for --sync-to-frankfurt
-  --dedupe-etag         With Frankfurt sync, also skip matching single-part COS ETags
+  --sync-resources-to-cos
+                        Standalone mode: sync all frontend/public/resources files to both COS buckets
+  --dedupe-etag         With a sync command, also skip matching single-part COS ETags
   --video-url-prefix U  Explicit URL prefix for Step 3 video_url backfill
   --cover-url-prefix U  Explicit URL prefix for Step 3 cover_letter_url backfill
 
@@ -69,6 +71,7 @@ REENCODE=0
 DELETE_MOV=1
 UPLOAD_COS=0
 SYNC_VLOG_TO_FRANKFURT=0
+SYNC_RESOURCES_TO_BOTH_COS=0
 SYNC_DEDUPE_ETAG=0
 SKIP_STEP0=0
 SKIP_STEP1=0
@@ -121,6 +124,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --sync-to-frankfurt|--sync-vlog-to-frankfurt)
       SYNC_VLOG_TO_FRANKFURT=1
+      shift
+      ;;
+    --sync-resources-to-cos)
+      SYNC_RESOURCES_TO_BOTH_COS=1
       shift
       ;;
     --dedupe-etag)
@@ -217,8 +224,30 @@ run_cmd() {
   "$@"
 }
 
+if [[ "$SYNC_VLOG_TO_FRANKFURT" -eq 1 && "$SYNC_RESOURCES_TO_BOTH_COS" -eq 1 ]]; then
+  echo "Choose only one standalone sync mode." >&2
+  exit 1
+fi
+
 if [[ "$SYNC_VLOG_TO_FRANKFURT" -eq 1 ]]; then
   sync_cmd=("$ROOT_DIR/scripts/sync_vlog_to_frankfurt_cos.sh")
+  if [[ "$SYNC_DEDUPE_ETAG" -eq 1 ]]; then
+    sync_cmd+=("--dedupe-etag")
+  fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    sync_cmd+=("--dry-run")
+  fi
+  printf '+'
+  for arg in "${sync_cmd[@]}"; do
+    printf ' %q' "$arg"
+  done
+  printf '\n'
+  "${sync_cmd[@]}"
+  exit $?
+fi
+
+if [[ "$SYNC_RESOURCES_TO_BOTH_COS" -eq 1 ]]; then
+  sync_cmd=("$ROOT_DIR/scripts/sync_resources_to_both_cos.sh")
   if [[ "$SYNC_DEDUPE_ETAG" -eq 1 ]]; then
     sync_cmd+=("--dedupe-etag")
   fi

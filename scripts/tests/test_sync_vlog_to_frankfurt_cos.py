@@ -71,9 +71,11 @@ def make_args(source_dir: Path, **overrides):
     values = {
         "source_dir": source_dir,
         "include_dirs": None,
+        "scan_all": False,
         "bucket": sync_module.DEFAULT_BUCKET,
         "region": sync_module.DEFAULT_REGION,
         "domain": sync_module.DEFAULT_DOMAIN,
+        "target_name": "Frankfurt",
         "object_prefix": sync_module.DEFAULT_PREFIX,
         "config": Path("/unused"),
         "retries": 2,

@@ -69,6 +69,34 @@ Actual Step 1 to Step 4 run:
 
 `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --upload-cos`
 
+### Frankfurt Legacy Sync
+
+Use this standalone command to backfill Vlog files that exist locally but are missing from the Frankfurt COS bucket. It never reads or writes the Shanghai bucket.
+
+Dry run:
+
+`scripts/sync_vlog_to_frankfurt_cos.sh --dry-run`
+
+Equivalent one-stop command mode:
+
+`scripts/run_learning_video_pipeline.sh --sync-vlog-to-frankfurt --dry-run`
+
+Actual sync:
+
+`scripts/sync_vlog_to_frankfurt_cos.sh`
+
+Equivalent one-stop command mode:
+
+`scripts/run_learning_video_pipeline.sh --sync-vlog-to-frankfurt`
+
+Defaults:
+- recursively scans `frontend/public/resources/VlogSeason1`
+- maps local relative paths to `resources/VlogSeason1/...`
+- lists only `frauliu-eu-1335740446` in `eu-frankfurt`
+- skips keys already present in Frankfurt; optional `--dedupe-etag` also skips local MD5 values matching existing single-part ETags
+- uses the Tencent COS Python SDK high-level upload with multipart resume support and five retry attempts
+- reads credentials from `~/.cos.conf`; environment credential pairs supported by the HLS uploader are also accepted
+
 Observed successful run shape for Vlog season:
 - Step 1 slices each `mp4` into `.m3u8`, `-init.mp4`, and `.m4s` files in `frontend/public/resources/VlogSeason1/learning_by_video_video`
 - Step 1 on server may additionally upload generated HLS files to both COS buckets via `scripts/enable_hls_5seg.sh --upload-cos`; successful uploads print the public URL for each target, and one target failing does not prevent the other target from being attempted

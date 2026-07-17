@@ -34,6 +34,8 @@ Options:
   --reencode            Re-encode during HLS build (enable_hls_5seg.sh --reencode)
   --keep-mov            Do NOT delete MOV source files after step 0 conversion
   --upload-cos          Upload HLS outputs to Shanghai and Frankfurt Tencent COS after Step 1
+  --sync-vlog-to-frankfurt
+                        Standalone mode: sync missing VlogSeason1 legacy files only to Frankfurt COS
   --video-url-prefix U  Explicit URL prefix for Step 3 video_url backfill
   --cover-url-prefix U  Explicit URL prefix for Step 3 cover_letter_url backfill
 
@@ -42,7 +44,7 @@ Options:
   --skip-step2          Skip XLSX import
   --skip-step3          Skip URL backfill
   --skip-step4          Skip subtitle aggregate backfill
-  --dry-run             Print commands only (no execution)
+  --dry-run             Print pipeline commands only; Frankfurt sync scans but does not upload
   -h, --help            Show this help
 EOF
 }
@@ -64,6 +66,7 @@ OVERWRITE=0
 REENCODE=0
 DELETE_MOV=1
 UPLOAD_COS=0
+SYNC_VLOG_TO_FRANKFURT=0
 SKIP_STEP0=0
 SKIP_STEP1=0
 SKIP_STEP2=0
@@ -111,6 +114,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --upload-cos)
       UPLOAD_COS=1
+      shift
+      ;;
+    --sync-vlog-to-frankfurt)
+      SYNC_VLOG_TO_FRANKFURT=1
       shift
       ;;
     --video-url-prefix)
@@ -202,6 +209,20 @@ run_cmd() {
   fi
   "$@"
 }
+
+if [[ "$SYNC_VLOG_TO_FRANKFURT" -eq 1 ]]; then
+  sync_cmd=("$ROOT_DIR/scripts/sync_vlog_to_frankfurt_cos.sh")
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    sync_cmd+=("--dry-run")
+  fi
+  printf '+'
+  for arg in "${sync_cmd[@]}"; do
+    printf ' %q' "$arg"
+  done
+  printf '\n'
+  "${sync_cmd[@]}"
+  exit $?
+fi
 
 count_files() {
   local dir="$1"

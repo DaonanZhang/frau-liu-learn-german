@@ -33,9 +33,11 @@ Options:
   --overwrite           Overwrite ffmpeg outputs when rebuilding
   --reencode            Re-encode during HLS build (enable_hls_5seg.sh --reencode)
   --keep-mov            Do NOT delete MOV source files after step 0 conversion
-  --upload-cos          Upload HLS outputs to Shanghai and Frankfurt Tencent COS after Step 1
+  --upload-cos          Upload HLS and cover files to Shanghai and Frankfurt COS after Step 1
+  --sync-to-frankfurt   Standalone mode: sync missing Vlog video and cover legacy files only to Frankfurt COS
   --sync-vlog-to-frankfurt
-                        Standalone mode: sync missing VlogSeason1 legacy files only to Frankfurt COS
+                        Backward-compatible alias for --sync-to-frankfurt
+  --dedupe-etag         With Frankfurt sync, also skip matching single-part COS ETags
   --video-url-prefix U  Explicit URL prefix for Step 3 video_url backfill
   --cover-url-prefix U  Explicit URL prefix for Step 3 cover_letter_url backfill
 
@@ -67,6 +69,7 @@ REENCODE=0
 DELETE_MOV=1
 UPLOAD_COS=0
 SYNC_VLOG_TO_FRANKFURT=0
+SYNC_DEDUPE_ETAG=0
 SKIP_STEP0=0
 SKIP_STEP1=0
 SKIP_STEP2=0
@@ -116,8 +119,12 @@ while [[ $# -gt 0 ]]; do
       UPLOAD_COS=1
       shift
       ;;
-    --sync-vlog-to-frankfurt)
+    --sync-to-frankfurt|--sync-vlog-to-frankfurt)
       SYNC_VLOG_TO_FRANKFURT=1
+      shift
+      ;;
+    --dedupe-etag)
+      SYNC_DEDUPE_ETAG=1
       shift
       ;;
     --video-url-prefix)
@@ -212,6 +219,9 @@ run_cmd() {
 
 if [[ "$SYNC_VLOG_TO_FRANKFURT" -eq 1 ]]; then
   sync_cmd=("$ROOT_DIR/scripts/sync_vlog_to_frankfurt_cos.sh")
+  if [[ "$SYNC_DEDUPE_ETAG" -eq 1 ]]; then
+    sync_cmd+=("--dedupe-etag")
+  fi
   if [[ "$DRY_RUN" -eq 1 ]]; then
     sync_cmd+=("--dry-run")
   fi
@@ -350,7 +360,7 @@ else
       fi
     fi
     if [[ "$UPLOAD_COS" -eq 1 ]]; then
-      cmd+=("--upload-cos")
+      cmd+=("--upload-cos" "--cover-dir" "$COVER_DIR")
     fi
     run_cmd "${cmd[@]}"
     if [[ -n "$step1_whitelist_file" ]]; then

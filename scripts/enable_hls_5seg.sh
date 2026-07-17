@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/enable_hls_5seg.sh [input] [output_dir] [--overwrite] [--reencode] [--update-db] [--upload-cos] [--video-url-prefix URL] [--whitelist-file FILE] [--allow NAME]
+  scripts/enable_hls_5seg.sh [input] [output_dir] [--overwrite] [--reencode] [--update-db] [--upload-cos] [--cover-dir DIR] [--video-url-prefix URL] [--whitelist-file FILE] [--allow NAME]
 
 Input:
   - a single .mp4 file, or
@@ -23,7 +23,8 @@ Options:
   --overwrite            Overwrite existing outputs
   --reencode             Re-encode to H.264/AAC for maximum HLS compatibility
   --update-db            Update Video.video_url in DB to use .m3u8 under the resolved output prefix
-  --upload-cos           Upload generated HLS files to both Shanghai and Frankfurt Tencent COS buckets
+  --upload-cos           Upload generated HLS files and cover files to both COS buckets
+  --cover-dir DIR        Cover directory uploaded recursively with --upload-cos
   --video-url-prefix URL Explicit URL prefix for --update-db; auto-derived when omitted
   --whitelist-file FILE  Only process mp4 names listed in FILE (one per line, supports .mp4 or stem)
   --allow NAME           Add one whitelist item (repeatable; supports .mp4 or stem)
@@ -36,6 +37,7 @@ overwrite=0
 reencode=0
 update_db=0
 upload_cos=0
+cover_upload_dir=""
 video_url_prefix=""
 whitelist_file=""
 allow_items=()
@@ -57,6 +59,14 @@ while [[ $# -gt 0 ]]; do
     --upload-cos)
       upload_cos=1
       shift
+      ;;
+    --cover-dir)
+      cover_upload_dir="${2:-}"
+      if [[ -z "$cover_upload_dir" ]]; then
+        echo "--cover-dir requires a directory path" >&2
+        exit 1
+      fi
+      shift 2
       ;;
     --video-url-prefix)
       video_url_prefix="${2:-}"
@@ -276,6 +286,7 @@ build_hls() {
 upload_hls_to_cos() {
   local repo_root="$1"
   local output_dir_abs public_root cos_prefix file filename stem matched
+  local cover_dir_abs cover_prefix cover_relative cover_file_count encoded_key
   local coscmd="${COSCMD_BIN:-/srv/projects/frau-liu-learn-german/cos-venv/bin/coscmd}"
   local cos_config_path="${COS_CONFIG_PATH:-}"
   local temp_cos_config=""
@@ -381,7 +392,14 @@ upload_hls_to_cos() {
 
       echo "Uploading [$target_name]: $(basename "$local_file") -> cos://$target_bucket/$object_key"
       if "$coscmd" -c "$cos_config_path" -b "$target_bucket" -r "$target_region" upload "$local_file" "$object_key"; then
-        public_url="${target_domain%/}/${object_key#/}"
+        encoded_key="$("$PY_BIN" - "$object_key" <<'PY'
+import sys
+from urllib.parse import quote
+
+print(quote(sys.argv[1], safe="/"))
+PY
+)"
+        public_url="${target_domain%/}/${encoded_key#/}"
         echo "Uploaded [$target_name]: $public_url"
         cos_upload_successes=$((cos_upload_successes + 1))
       else
@@ -413,6 +431,32 @@ upload_hls_to_cos() {
       echo "No HLS output found for selected stem: $stem" >&2
     fi
   done
+
+  if [[ -n "$cover_upload_dir" ]]; then
+    if [[ ! -d "$cover_upload_dir" ]]; then
+      echo "Cover directory not found for COS upload: $cover_upload_dir" >&2
+      if [[ -n "$temp_cos_config" ]]; then
+        rm -f "$temp_cos_config"
+      fi
+      return 1
+    fi
+
+    cover_dir_abs="$(cd "$cover_upload_dir" && pwd)"
+    if [[ "$cover_dir_abs" == "$public_root"/* ]]; then
+      cover_prefix="${cover_dir_abs#$public_root/}"
+    else
+      cover_prefix="resources/ScienceSeason1/learning_by_video_cover_letters"
+    fi
+
+    cover_file_count=0
+    echo "Uploading cover files recursively to both Tencent COS buckets: cos://$cover_prefix/"
+    while IFS= read -r -d '' file; do
+      cover_relative="${file#$cover_dir_abs/}"
+      upload_file_to_all_cos_targets "$file" "$cover_prefix/$cover_relative"
+      cover_file_count=$((cover_file_count + 1))
+    done < <(find "$cover_dir_abs" -type f -print0)
+    echo "Cover upload scan completed: files=$cover_file_count"
+  fi
 
   if [[ -n "$temp_cos_config" ]]; then
     rm -f "$temp_cos_config"

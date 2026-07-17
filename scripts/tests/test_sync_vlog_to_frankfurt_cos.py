@@ -70,6 +70,7 @@ class FakeUploadClient:
 def make_args(source_dir: Path, **overrides):
     values = {
         "source_dir": source_dir,
+        "include_dirs": None,
         "bucket": sync_module.DEFAULT_BUCKET,
         "region": sync_module.DEFAULT_REGION,
         "domain": sync_module.DEFAULT_DOMAIN,
@@ -87,6 +88,27 @@ def make_args(source_dir: Path, **overrides):
 
 
 class SyncVlogToFrankfurtTests(unittest.TestCase):
+    def test_default_scan_is_limited_to_video_and_cover_directories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source_dir = Path(directory)
+            video = source_dir / "learning_by_video_video" / "nested" / "video.m3u8"
+            cover = source_dir / "learning_by_video_cover_letters" / "cover.png"
+            unrelated = source_dir / "unrelated" / "ignore.txt"
+            for path in (video, cover, unrelated):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(path.name, encoding="utf-8")
+
+            files = sync_module.collect_local_files(
+                source_dir,
+                list(sync_module.DEFAULT_INCLUDE_DIRS),
+            )
+
+            self.assertEqual(files, [cover, video])
+            self.assertEqual(
+                sync_module.object_key_for(video, source_dir, sync_module.DEFAULT_PREFIX),
+                "resources/VlogSeason1/learning_by_video_video/nested/video.m3u8",
+            )
+
     def test_loads_credentials_from_coscmd_config(self):
         with tempfile.TemporaryDirectory() as directory:
             config_path = Path(directory) / "cos.conf"

@@ -26,7 +26,7 @@ Default behavior:
 - Auto-skips Step 0 if no MOV files exist.
 - Auto-skips Step 2 if no XLSX files exist.
 - Backfill runs in safe mode (`--only-missing --empty-only`) to avoid overwriting existing non-empty URLs.
-- On server, `--upload-cos` uploads every generated HLS asset to both the Shanghai (`frauliu-1335740446`, `ap-shanghai`) and Frankfurt (`frauliu-eu-1335740446`, `eu-frankfurt`) Tencent COS buckets, but DB `video_url` should still backfill to local `/resources/...` paths so nginx can proxy them later.
+- On server, `--upload-cos` uploads every generated HLS asset plus all files under the resolved `learning_by_video_cover_letters` directory to both the Shanghai (`frauliu-1335740446`, `ap-shanghai`) and Frankfurt (`frauliu-eu-1335740446`, `eu-frankfurt`) Tencent COS buckets, but DB media URLs should still backfill to local `/resources/...` paths so nginx can proxy them later.
 
 Alternative resource buckets:
 - `frontend/public/resources/ScienceSeason1`
@@ -79,7 +79,7 @@ Dry run:
 
 Equivalent one-stop command mode:
 
-`scripts/run_learning_video_pipeline.sh --sync-vlog-to-frankfurt --dry-run`
+`scripts/run_learning_video_pipeline.sh --sync-to-frankfurt --dedupe-etag --dry-run`
 
 Actual sync:
 
@@ -87,10 +87,10 @@ Actual sync:
 
 Equivalent one-stop command mode:
 
-`scripts/run_learning_video_pipeline.sh --sync-vlog-to-frankfurt`
+`scripts/run_learning_video_pipeline.sh --sync-to-frankfurt --dedupe-etag`
 
 Defaults:
-- recursively scans `frontend/public/resources/VlogSeason1`
+- recursively scans only `frontend/public/resources/VlogSeason1/learning_by_video_video` and `frontend/public/resources/VlogSeason1/learning_by_video_cover_letters`
 - maps local relative paths to `resources/VlogSeason1/...`
 - lists only `frauliu-eu-1335740446` in `eu-frankfurt`
 - skips keys already present in Frankfurt; optional `--dedupe-etag` also skips local MD5 values matching existing single-part ETags
@@ -99,7 +99,7 @@ Defaults:
 
 Observed successful run shape for Vlog season:
 - Step 1 slices each `mp4` into `.m3u8`, `-init.mp4`, and `.m4s` files in `frontend/public/resources/VlogSeason1/learning_by_video_video`
-- Step 1 on server may additionally upload generated HLS files to both COS buckets via `scripts/enable_hls_5seg.sh --upload-cos`; successful uploads print the public URL for each target, and one target failing does not prevent the other target from being attempted
+- Step 1 on server additionally uploads generated HLS files and recursively uploads the configured cover directory to both COS buckets via `scripts/enable_hls_5seg.sh --upload-cos --cover-dir ...`; successful uploads print the public URL for each target, and one target failing does not prevent the other target from being attempted
 - Step 2 runs `manage.py import_xlsx_all --module-key learning_by_video --season-number 4`
 - Step 3 runs `manage.py sync_video_media_urls --mode apply --only-missing --empty-only --module-key learning_by_video --video-dir frontend/public/resources/VlogSeason1/learning_by_video_video --cover-dir frontend/public/resources/VlogSeason1/learning_by_video_cover_letters --season-number 4`
 - Step 4 runs `manage.py backfill_video_full_subtitles --only-missing --module-key learning_by_video --season-number 4`
@@ -132,7 +132,7 @@ Practical effect:
 ## Local Vs Server Rule
 - Local development and server operations must be treated as separate run targets.
 - Local workflow may continue using local resource paths for inspection and dry runs.
-- Server workflow for learning video HLS should upload generated HLS assets to both configured COS buckets after slicing, while DB `video_url` continues to use local `/resources/...` paths for nginx proxying.
+- Server workflow should upload generated HLS assets and cover letters to both configured COS buckets after slicing, while DB media URLs continue to use local `/resources/...` paths for nginx proxying.
 - `scripts/push_learning_media.sh` is for syncing source files from local machine to server. It should not replace the server-side HLS-to-COS step.
 - When asked for a Django shell script, management command, or ops script in this project, first confirm whether the target is local or server if the task can differ by environment.
 - For server-targeted learning video tasks, explicitly consider COS upload, server paths such as `/srv/projects/frau-liu-learn-german/...`, and keep DB URL backfill aligned with the nginx proxy path strategy unless explicitly asked otherwise.

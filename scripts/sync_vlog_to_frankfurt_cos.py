@@ -18,6 +18,10 @@ DEFAULT_BUCKET = "frauliu-eu-1335740446"
 DEFAULT_REGION = "eu-frankfurt"
 DEFAULT_DOMAIN = "https://frauliu-eu-1335740446.cos.eu-frankfurt.myqcloud.com"
 DEFAULT_PREFIX = "resources/VlogSeason1"
+DEFAULT_INCLUDE_DIRS = (
+    "learning_by_video_video",
+    "learning_by_video_cover_letters",
+)
 
 
 @dataclass(frozen=True)
@@ -51,7 +55,17 @@ def build_parser(repo_root: Path) -> argparse.ArgumentParser:
         "--source-dir",
         type=Path,
         default=repo_root / "frontend/public/resources/VlogSeason1",
-        help="Local vlog directory to scan recursively (default: frontend/public/resources/VlogSeason1)",
+        help="Local VlogSeason1 root (default: frontend/public/resources/VlogSeason1)",
+    )
+    parser.add_argument(
+        "--include-dir",
+        action="append",
+        dest="include_dirs",
+        metavar="RELATIVE_DIR",
+        help=(
+            "Directory below source-dir to scan recursively; repeat to select multiple directories. "
+            "Defaults to learning_by_video_video and learning_by_video_cover_letters."
+        ),
     )
     parser.add_argument("--bucket", default=DEFAULT_BUCKET)
     parser.add_argument("--region", default=DEFAULT_REGION)
@@ -106,6 +120,18 @@ def validate_args(args: argparse.Namespace) -> None:
 
     if not args.source_dir.is_dir():
         raise ValueError(f"source directory not found: {args.source_dir}")
+    if args.include_dirs is None:
+        args.include_dirs = list(DEFAULT_INCLUDE_DIRS)
+    normalized_include_dirs: list[str] = []
+    for raw_dir in args.include_dirs:
+        relative_dir = str(raw_dir).strip().strip("/")
+        if not relative_dir or Path(relative_dir).is_absolute() or ".." in Path(relative_dir).parts:
+            raise ValueError(f"invalid --include-dir path: {raw_dir}")
+        local_dir = args.source_dir / relative_dir
+        if not local_dir.is_dir():
+            raise ValueError(f"included source directory not found: {local_dir}")
+        normalized_include_dirs.append(relative_dir)
+    args.include_dirs = list(dict.fromkeys(normalized_include_dirs))
     if not args.object_prefix:
         raise ValueError("--object-prefix cannot be empty")
     if args.retries < 1:
@@ -165,9 +191,19 @@ def create_client(args: argparse.Namespace) -> Any:
     return CosS3Client(config)
 
 
-def collect_local_files(source_dir: Path) -> list[Path]:
+def collect_local_files(source_dir: Path, include_dirs: list[str] | None = None) -> list[Path]:
+    scan_roots = (
+        [source_dir / relative_dir for relative_dir in include_dirs]
+        if include_dirs is not None
+        else [source_dir]
+    )
     return sorted(
-        (path for path in source_dir.rglob("*") if path.is_file() and not path.is_symlink()),
+        (
+            path
+            for scan_root in scan_roots
+            for path in scan_root.rglob("*")
+            if path.is_file() and not path.is_symlink()
+        ),
         key=lambda path: path.relative_to(source_dir).as_posix(),
     )
 
@@ -363,13 +399,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         validate_args(args)
         print(f"Source: {args.source_dir}")
+        print(f"Included directories: {', '.join(args.include_dirs)}")
         print(f"Frankfurt COS: {args.bucket} ({args.region})")
         print(f"Object prefix: {args.object_prefix}/")
         print(f"Dry run: {args.dry_run}")
         print("Shanghai COS: untouched")
 
         client = create_client(args)
-        local_files = collect_local_files(args.source_dir)
+        local_files = collect_local_files(args.source_dir, args.include_dirs)
         print(f"Local scan complete: {len(local_files)} file(s)")
         remote_objects = list_remote_objects(client, args.bucket, args.object_prefix)
         print(f"Remote scan complete: {len(remote_objects)} file(s)")

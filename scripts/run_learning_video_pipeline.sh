@@ -33,7 +33,7 @@ Options:
   --overwrite           Overwrite ffmpeg outputs when rebuilding
   --reencode            Re-encode during HLS build (enable_hls_5seg.sh --reencode)
   --keep-mov            Do NOT delete MOV source files after step 0 conversion
-  --upload-cos          Upload HLS outputs to Tencent COS after Step 1
+  --upload-cos          Upload HLS outputs to Shanghai and Frankfurt Tencent COS after Step 1
   --video-url-prefix U  Explicit URL prefix for Step 3 video_url backfill
   --cover-url-prefix U  Explicit URL prefix for Step 3 cover_letter_url backfill
 

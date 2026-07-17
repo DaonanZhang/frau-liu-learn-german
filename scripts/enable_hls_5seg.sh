@@ -16,12 +16,14 @@ Behavior:
   - Creates an HLS playlist (.m3u8)
   - Splits each video into ~5 segments (fMP4)
   - HLS output filenames are normalized to ASCII-safe stems
+  - COS credentials default to ~/.cos.conf (override with COS_CONFIG_PATH), or use
+    COS_SECRET_ID/COS_SECRET_KEY or TENCENTCLOUD_SECRET_ID/TENCENTCLOUD_SECRET_KEY
 
 Options:
   --overwrite            Overwrite existing outputs
   --reencode             Re-encode to H.264/AAC for maximum HLS compatibility
   --update-db            Update Video.video_url in DB to use .m3u8 under the resolved output prefix
-  --upload-cos           Upload generated HLS files to Tencent COS after processing
+  --upload-cos           Upload generated HLS files to both Shanghai and Frankfurt Tencent COS buckets
   --video-url-prefix URL Explicit URL prefix for --update-db; auto-derived when omitted
   --whitelist-file FILE  Only process mp4 names listed in FILE (one per line, supports .mp4 or stem)
   --allow NAME           Add one whitelist item (repeatable; supports .mp4 or stem)
@@ -191,7 +193,7 @@ add_whitelist_item() {
     return 0
   fi
   existing=0
-  for existing_key in "${whitelist_keys[@]}"; do
+  for existing_key in "${whitelist_keys[@]-}"; do
     if [[ "$existing_key" == "$key" ]]; then
       existing=1
       break
@@ -274,10 +276,73 @@ build_hls() {
 upload_hls_to_cos() {
   local repo_root="$1"
   local output_dir_abs public_root cos_prefix file filename stem matched
-  local coscmd="/srv/projects/frau-liu-learn-german/cos-venv/bin/coscmd"
+  local coscmd="${COSCMD_BIN:-/srv/projects/frau-liu-learn-german/cos-venv/bin/coscmd}"
+  local cos_config_path="${COS_CONFIG_PATH:-}"
+  local temp_cos_config=""
+  local secret_id="${COS_SECRET_ID:-${TENCENTCLOUD_SECRET_ID:-}}"
+  local secret_key="${COS_SECRET_KEY:-${TENCENTCLOUD_SECRET_KEY:-}}"
+
+  local cos_target_names=("Shanghai" "Frankfurt")
+  local cos_target_buckets=(
+    "${COS_SHANGHAI_BUCKET:-frauliu-1335740446}"
+    "${COS_FRANKFURT_BUCKET:-frauliu-eu-1335740446}"
+  )
+  local cos_target_regions=(
+    "${COS_SHANGHAI_REGION:-ap-shanghai}"
+    "${COS_FRANKFURT_REGION:-eu-frankfurt}"
+  )
+  local cos_target_domains=(
+    "${COS_SHANGHAI_DOMAIN:-https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com}"
+    "${COS_FRANKFURT_DOMAIN:-https://frauliu-eu-1335740446.cos.eu-frankfurt.myqcloud.com}"
+  )
+  local cos_upload_successes=0
+  local cos_upload_failures=0
 
   if [[ ! -x "$coscmd" ]]; then
-    echo "COS upload requested, but coscmd is not executable: $coscmd" >&2
+    if command -v coscmd >/dev/null 2>&1; then
+      coscmd="$(command -v coscmd)"
+    else
+      echo "COS upload requested, but coscmd is not executable: $coscmd" >&2
+      return 1
+    fi
+  fi
+
+  if [[ -n "$secret_id" || -n "$secret_key" ]]; then
+    if [[ -z "$secret_id" || -z "$secret_key" ]]; then
+      echo "COS credentials are incomplete: set both COS_SECRET_ID/COS_SECRET_KEY or TENCENTCLOUD_SECRET_ID/TENCENTCLOUD_SECRET_KEY." >&2
+      return 1
+    fi
+    temp_cos_config="$(mktemp)"
+    chmod 600 "$temp_cos_config"
+    {
+      printf '[common]\n'
+      printf 'secret_id = %s\n' "$secret_id"
+      printf 'secret_key = %s\n' "$secret_key"
+      printf 'bucket = %s\n' "${cos_target_buckets[0]}"
+      printf 'region = %s\n' "${cos_target_regions[0]}"
+      printf 'max_thread = 5\n'
+      printf 'part_size = 1\n'
+      printf 'retry = 5\n'
+      printf 'timeout = 60\n'
+      printf 'schema = https\n'
+      printf 'verify = md5\n'
+      printf 'anonymous = False\n'
+    } > "$temp_cos_config"
+    cos_config_path="$temp_cos_config"
+    echo "COS credentials loaded from environment variables."
+  elif [[ -z "$cos_config_path" ]]; then
+    if [[ -z "${HOME:-}" ]]; then
+      echo "COS upload requested, but HOME is unset and COS_CONFIG_PATH was not provided." >&2
+      return 1
+    fi
+    cos_config_path="$HOME/.cos.conf"
+  fi
+
+  if [[ ! -f "$cos_config_path" ]]; then
+    echo "COS upload requested, but config file was not found: $cos_config_path" >&2
+    if [[ -n "$temp_cos_config" ]]; then
+      rm -f "$temp_cos_config"
+    fi
     return 1
   fi
 
@@ -289,14 +354,43 @@ upload_hls_to_cos() {
     cos_prefix="resources/ScienceSeason1/learning_by_video_video"
   fi
 
-  echo "Uploading HLS files to COS: cos://$cos_prefix/"
+  echo "Uploading HLS files to both Tencent COS buckets: cos://$cos_prefix/"
+  echo "  Shanghai: ${cos_target_buckets[0]} (${cos_target_regions[0]})"
+  echo "  Frankfurt: ${cos_target_buckets[1]} (${cos_target_regions[1]})"
 
   shopt -s nullglob
 
   if [[ "${#upload_stems[@]}" -eq 0 ]]; then
     echo "No selected HLS stems to upload."
+    if [[ -n "$temp_cos_config" ]]; then
+      rm -f "$temp_cos_config"
+    fi
     return 0
   fi
+
+  upload_file_to_all_cos_targets() {
+    local local_file="$1"
+    local object_key="$2"
+    local target_index target_name target_bucket target_region target_domain public_url upload_rc
+
+    for ((target_index = 0; target_index < ${#cos_target_names[@]}; target_index++)); do
+      target_name="${cos_target_names[$target_index]}"
+      target_bucket="${cos_target_buckets[$target_index]}"
+      target_region="${cos_target_regions[$target_index]}"
+      target_domain="${cos_target_domains[$target_index]}"
+
+      echo "Uploading [$target_name]: $(basename "$local_file") -> cos://$target_bucket/$object_key"
+      if "$coscmd" -c "$cos_config_path" -b "$target_bucket" -r "$target_region" upload "$local_file" "$object_key"; then
+        public_url="${target_domain%/}/${object_key#/}"
+        echo "Uploaded [$target_name]: $public_url"
+        cos_upload_successes=$((cos_upload_successes + 1))
+      else
+        upload_rc=$?
+        echo "COS upload failed [$target_name]: file=$local_file bucket=$target_bucket region=$target_region key=$object_key exit=$upload_rc" >&2
+        cos_upload_failures=$((cos_upload_failures + 1))
+      fi
+    done
+  }
 
   # Upload fragments first, then publish the playlist last so clients do not see incomplete media.
   for stem in "${upload_stems[@]}"; do
@@ -305,16 +399,14 @@ upload_hls_to_cos() {
       if [[ -f "$file" ]]; then
         matched=1
         filename="$(basename "$file")"
-        echo "Uploading: $filename -> cos://$cos_prefix/"
-        "$coscmd" upload "$file" "$cos_prefix/$filename" || echo "Upload failed: $filename" >&2
+        upload_file_to_all_cos_targets "$file" "$cos_prefix/$filename"
       fi
     done
     for file in "$output_dir_abs/${stem}.m3u8"; do
       if [[ -f "$file" ]]; then
         matched=1
         filename="$(basename "$file")"
-        echo "Uploading: $filename -> cos://$cos_prefix/"
-        "$coscmd" upload "$file" "$cos_prefix/$filename" || echo "Upload failed: $filename" >&2
+        upload_file_to_all_cos_targets "$file" "$cos_prefix/$filename"
       fi
     done
     if [[ "$matched" -eq 0 ]]; then
@@ -322,7 +414,16 @@ upload_hls_to_cos() {
     fi
   done
 
-  echo "COS upload completed."
+  if [[ -n "$temp_cos_config" ]]; then
+    rm -f "$temp_cos_config"
+  fi
+
+  echo "COS dual-upload summary: successful=$cos_upload_successes, failed=$cos_upload_failures"
+  if [[ "$cos_upload_failures" -gt 0 ]]; then
+    echo "COS dual upload completed with errors. Each target was attempted independently; see error lines above." >&2
+  else
+    echo "COS dual upload completed successfully for Shanghai and Frankfurt."
+  fi
 }
 
 derive_output_relative_path() {
@@ -370,6 +471,7 @@ if [[ -d "$input" ]]; then
     exit 1
   fi
   processed=0
+  selected=0
   skipped=0
   for f in "${files[@]}"; do
     file_base=""
@@ -383,6 +485,7 @@ if [[ -d "$input" ]]; then
       skipped=$((skipped + 1))
       continue
     fi
+    selected=$((selected + 1))
     file_base="$(basename "$f")"
     file_base="${file_base%.*}"
     register_upload_stem "$(normalize_hls_stem "$file_base")"
@@ -398,8 +501,8 @@ if [[ -d "$input" ]]; then
     fi
   done
   if [[ "$whitelist_enabled" -eq 1 ]]; then
-    echo "Whitelist result: processed=${processed}, skipped=${skipped}"
-    if [[ "$processed" -eq 0 ]]; then
+    echo "Whitelist result: selected=${selected}, processed=${processed}, skipped=${skipped}"
+    if [[ "$selected" -eq 0 ]]; then
       echo "No files matched whitelist." >&2
       exit 1
     fi

@@ -33,8 +33,6 @@ const COPY = {
     microphoneError: "无法打开麦克风，请检查设备或浏览器权限。",
     recordingError: "录音失败，请重新尝试。",
     eyebrow: "跟读练习",
-    title: "请朗读上方的正确答案",
-    privacy: "录音只保留在当前浏览器页面中，不会上传到服务器。",
     start: "开始录音",
     stop: "停止录音",
     running: "正在录音…",
@@ -44,6 +42,7 @@ const COPY = {
 
 export default function SpeakingPracticeRecorder({ language = "de" }) {
   const copy = COPY[language] || COPY.de;
+  const isChinese = language === "zh";
   const mountedRef = useRef(true);
   const recorderRef = useRef(null);
   const streamRef = useRef(null);
@@ -142,11 +141,20 @@ export default function SpeakingPracticeRecorder({ language = "de" }) {
   }
 
   return (
-    <section className="speaking-recorder" aria-labelledby="speaking-recorder-title">
+    <section
+      className={isChinese ? "speaking-recorder speaking-recorder--zh" : "speaking-recorder"}
+      aria-labelledby="speaking-recorder-label"
+    >
       <div className="speaking-recorder__copy">
-        <span className="speaking-recorder__eyebrow">{copy.eyebrow}</span>
-        <h2 id="speaking-recorder-title">{copy.title}</h2>
-        <p>{copy.privacy}</p>
+        <span id="speaking-recorder-label" className="speaking-recorder__eyebrow">
+          {copy.eyebrow}
+        </span>
+        {!isChinese ? (
+          <>
+            <h2>{copy.title}</h2>
+            <p>{copy.privacy}</p>
+          </>
+        ) : null}
       </div>
       <div className="speaking-recorder__controls">
         <button

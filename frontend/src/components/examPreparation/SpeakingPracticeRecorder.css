@@ -29,6 +29,13 @@
   text-transform: uppercase;
 }
 
+.speaking-recorder--zh .speaking-recorder__eyebrow {
+  color: #2f2015;
+  font-size: 1.18rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .speaking-recorder__controls {
   display: flex;
   align-items: center;

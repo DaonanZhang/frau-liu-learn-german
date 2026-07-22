@@ -108,6 +108,12 @@
   line-height: 1.8;
 }
 
+.writing-detail-request-panel h2 {
+  margin: 0 0 0.65rem;
+  color: #2f2a25;
+  font-size: 1.15rem;
+}
+
 .writing-detail-meta-panel {
   display: flex;
   justify-content: space-between;
@@ -179,6 +185,17 @@
   margin: 0;
 }
 
+.writing-detail-review-card__exampleHeading {
+  min-width: 0;
+}
+
+.writing-detail-review-card__exampleHeading span {
+  display: block;
+  margin-top: 0.35rem;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
 .writing-detail-textarea {
   width: 100%;
   min-height: 18rem;
@@ -241,6 +258,114 @@
   padding: 1rem;
 }
 
+.writing-detail-guide-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(31, 41, 55, 0.72);
+  backdrop-filter: grayscale(0.75);
+}
+
+.writing-detail-guide-target {
+  position: relative;
+  z-index: 1002;
+  outline: 4px solid #f59e0b;
+  outline-offset: 4px;
+  box-shadow:
+    0 0 0 8px rgba(245, 158, 11, 0.22),
+    0 18px 40px rgba(17, 24, 39, 0.28);
+  scroll-margin-block: 8rem;
+}
+
+.writing-detail-guide-card {
+  position: fixed;
+  left: 50%;
+  bottom: 2rem;
+  z-index: 1004;
+  width: min(25rem, calc(100vw - 2rem));
+  padding: 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 1rem;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(17, 24, 39, 0.34);
+  color: #2f2a25;
+  transform: translateX(-50%);
+}
+
+.writing-detail-guide-card:focus {
+  outline: none;
+}
+
+.writing-detail-guide-card__topline,
+.writing-detail-guide-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.writing-detail-guide-card__topline span {
+  color: #9a4210;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.writing-detail-guide-card__skip {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.writing-detail-guide-card h2 {
+  margin: 0.9rem 0 0.45rem;
+  font-size: 1.25rem;
+}
+
+.writing-detail-guide-card > p {
+  margin: 0;
+  color: #4b5563;
+  line-height: 1.65;
+}
+
+.writing-detail-guide-card__error {
+  margin-top: 0.65rem !important;
+  color: #b91c1c !important;
+  font-size: 0.86rem;
+}
+
+.writing-detail-guide-card__actions {
+  margin-top: 1rem;
+}
+
+.writing-detail-guide-card__back,
+.writing-detail-guide-card__next {
+  min-height: 2.65rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.writing-detail-guide-card__back {
+  border: 1px solid #d7dce3;
+  background: #ffffff;
+  color: #4b5563;
+}
+
+.writing-detail-guide-card__next {
+  border: none;
+  background: #cf6327;
+  color: #ffffff;
+}
+
+.writing-detail-guide-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 @media (max-width: 990px) {
   .writing-detail-topbar,
   .writing-detail-hero,
@@ -274,5 +399,37 @@
 
   .writing-detail-actions__buttons {
     flex-direction: column;
+  }
+
+  .writing-detail-review-card__titleRow {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .writing-detail-review-card__titleRow {
+    gap: 0.6rem;
+  }
+
+  .writing-detail-guide-card {
+    bottom: 0.75rem;
+    width: calc(100vw - 1rem);
+    max-height: min(21rem, calc(100vh - 1.5rem));
+    padding: 0.95rem;
+    overflow-y: auto;
+  }
+
+  .writing-detail-guide-target {
+    scroll-margin-top: 1rem;
+    scroll-margin-bottom: 17rem;
+  }
+
+  .writing-detail-guide-card__actions {
+    align-items: stretch;
+  }
+
+  .writing-detail-guide-card__back,
+  .writing-detail-guide-card__next {
+    flex: 1;
   }
 }

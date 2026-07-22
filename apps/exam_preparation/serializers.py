@@ -36,6 +36,7 @@ from apps.exam_preparation.models import (
     UserReadingUnderstandingQuestionState,
     UserSpeakingGapBlankState,
     UserSpeakingPromptSegmentedExerciseState,
+    UserWritingExampleTextState,
     UserWritingExerciseState,
     WritingExampleText,
     WritingExercise,
@@ -588,6 +589,7 @@ class SpeakingGapMatchingExerciseSerializer(serializers.ModelSerializer):
             "id",
             "exercise_base",
             "content_with_placeholders",
+            "original_source_text",
             "created_at",
             "updated_at",
         ]
@@ -615,8 +617,9 @@ class SpeakingGapOptionDetailSerializer(serializers.ModelSerializer):
             "id",
             "option_key",
             "option_text",
-            "option_order",
-            "is_extra",
+            "is_correct",
+            "explanation",
+            "sort_order",
             "created_at",
             "updated_at",
         ]
@@ -624,7 +627,7 @@ class SpeakingGapOptionDetailSerializer(serializers.ModelSerializer):
 
 
 class SpeakingGapBlankDetailSerializer(serializers.ModelSerializer):
-    correct_option = SpeakingGapOptionDetailSerializer(read_only=True)
+    options = SpeakingGapOptionDetailSerializer(many=True, read_only=True)
 
     class Meta:
         model = SpeakingGapBlank
@@ -632,17 +635,15 @@ class SpeakingGapBlankDetailSerializer(serializers.ModelSerializer):
             "id",
             "blank_key",
             "blank_number",
-            "correct_option",
-            "explanation",
             "created_at",
             "updated_at",
+            "options",
         ]
         read_only_fields = fields
 
 
 class SpeakingGapMatchingExerciseDetailSerializer(serializers.ModelSerializer):
     exercise_base = ExerciseBaseSerializer(read_only=True)
-    options = SpeakingGapOptionDetailSerializer(many=True, read_only=True)
     blanks = SpeakingGapBlankDetailSerializer(many=True, read_only=True)
 
     class Meta:
@@ -651,9 +652,9 @@ class SpeakingGapMatchingExerciseDetailSerializer(serializers.ModelSerializer):
             "id",
             "exercise_base",
             "content_with_placeholders",
+            "original_source_text",
             "created_at",
             "updated_at",
-            "options",
             "blanks",
         ]
         read_only_fields = fields
@@ -774,6 +775,13 @@ class UserSpeakingGapBlankStateSerializer(serializers.ModelSerializer):
 class UserWritingExerciseStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserWritingExerciseState
+        fields = "__all__"
+        read_only_fields = ["id", "user", "created_at", "updated_at"]
+
+
+class UserWritingExampleTextStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserWritingExampleTextState
         fields = "__all__"
         read_only_fields = ["id", "user", "created_at", "updated_at"]
 

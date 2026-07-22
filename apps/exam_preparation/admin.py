@@ -34,6 +34,7 @@ from apps.exam_preparation.models import (
     UserReadingUnderstandingQuestionState,
     UserSpeakingGapBlankState,
     UserSpeakingPromptSegmentedExerciseState,
+    UserWritingExampleTextState,
     UserWritingExerciseState,
     WritingExampleText,
     WritingExercise,
@@ -183,14 +184,14 @@ class SpeakingGapMatchingExerciseAdmin(admin.ModelAdmin):
 
 @admin.register(SpeakingGapOption)
 class SpeakingGapOptionAdmin(admin.ModelAdmin):
-    list_display = ("id", "exercise", "option_key", "is_extra", "option_order")
-    list_filter = ("is_extra",)
-    search_fields = ("option_text", "exercise__exercise_base__external_id")
+    list_display = ("id", "blank", "option_key", "is_correct", "sort_order")
+    list_filter = ("is_correct",)
+    search_fields = ("option_text", "blank__exercise__exercise_base__external_id")
 
 
 @admin.register(SpeakingGapBlank)
 class SpeakingGapBlankAdmin(admin.ModelAdmin):
-    list_display = ("id", "exercise", "blank_key", "blank_number", "correct_option")
+    list_display = ("id", "exercise", "blank_key", "blank_number")
     search_fields = ("blank_key", "exercise__exercise_base__external_id")
 
 
@@ -266,6 +267,17 @@ class UserWritingExerciseStateAdmin(admin.ModelAdmin):
     list_display = ("id", "user", "exercise", "is_favorited", "is_correct", "last_answered_at", "updated_at")
     list_filter = ("is_favorited", "is_correct")
     search_fields = ("user__telephone", "exercise__exercise_base__external_id", "exercise__exercise_base__title")
+
+
+@admin.register(UserWritingExampleTextState)
+class UserWritingExampleTextStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "example_text", "is_favorited", "updated_at")
+    list_filter = ("is_favorited",)
+    search_fields = (
+        "user__telephone",
+        "example_text__label",
+        "example_text__writing_exercise__exercise_base__external_id",
+    )
 
 
 @admin.register(UserSpeakingPromptSegmentedExerciseState)

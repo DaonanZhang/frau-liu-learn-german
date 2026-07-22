@@ -205,6 +205,29 @@
   border-radius: 20px;
   background: #fffaf4;
   padding: 1rem;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.speaking-segment-card--draggable {
+  cursor: grab;
+}
+
+.speaking-segment-card--draggable:active {
+  cursor: grabbing;
+}
+
+.speaking-segment-card--dragging {
+  opacity: 0.45;
+  transform: scale(0.99);
+}
+
+.speaking-segment-card--drag-over {
+  border-color: #c95f22;
+  box-shadow: 0 0 0 4px rgba(201, 95, 34, 0.14);
 }
 
 .speaking-segment-card--correct {
@@ -226,15 +249,169 @@
   margin-bottom: 0.75rem;
 }
 
+.speaking-segment-card__top--sortable {
+  justify-content: flex-start;
+}
+
+.speaking-segment-card__position {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 999px;
+  background: #c95f22;
+  color: #ffffff;
+  font-weight: 800;
+}
+
 .speaking-segment-card__label {
+  margin-right: auto;
   color: #8a6b55;
   font-size: 0.88rem;
   font-weight: 700;
 }
 
+.speaking-segment-card__drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: 1px solid #d8c5af;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #75401f;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.speaking-segment-card__drag-handle svg {
+  fill: currentColor;
+}
+
+.speaking-segment-card__drag-handle:disabled {
+  cursor: default;
+  opacity: 0.52;
+}
+
 .speaking-segment-card__text {
   color: #342519;
   line-height: 1.75;
+}
+
+.speaking-order-feedback {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid transparent;
+  border-radius: 18px;
+}
+
+.speaking-order-feedback--correct {
+  border-color: rgba(45, 163, 106, 0.35);
+  background: #eefaf3;
+}
+
+.speaking-order-feedback--wrong {
+  border-color: rgba(211, 79, 79, 0.32);
+  background: #fff0f0;
+}
+
+.speaking-order-feedback__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.speaking-order-feedback strong {
+  display: block;
+  color: #25170e;
+  font-size: 1.05rem;
+}
+
+.speaking-order-feedback p {
+  margin-top: 0.35rem;
+}
+
+.speaking-correct-article {
+  margin-top: 1rem;
+  padding: 1.1rem;
+  border: 1px solid rgba(45, 163, 106, 0.3);
+  border-radius: 20px;
+  background: #f5fbf7;
+}
+
+.speaking-correct-article__header h2 {
+  margin: 0;
+  color: #1d5138;
+  font-size: 1.1rem;
+}
+
+.speaking-correct-article__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.speaking-correct-article__segments {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.speaking-correct-article__segment {
+  display: grid;
+  grid-template-columns: 2.1rem minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.9rem;
+  border: 1px solid rgba(45, 163, 106, 0.22);
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.speaking-correct-article__segment > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 999px;
+  background: #2da36a;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.speaking-correct-article__segment p {
+  margin: 0;
+  color: #342519;
+  line-height: 1.75;
+}
+
+.speaking-segment-drag-preview {
+  position: fixed;
+  z-index: 1000;
+  width: min(24rem, calc(100vw - 2rem));
+  max-height: 8rem;
+  padding: 0.8rem;
+  overflow: hidden;
+  border: 1px solid rgba(201, 95, 34, 0.45);
+  border-radius: 16px;
+  background: #fffaf4;
+  box-shadow: 0 18px 38px rgba(51, 35, 16, 0.24);
+  color: #342519;
+  line-height: 1.55;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 0.8rem));
 }
 
 .speaking-state {
@@ -352,5 +529,24 @@
   .speaking-reset-btn,
   .speaking-select {
     width: 100%;
+  }
+
+  .speaking-segment-card__top--sortable {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .speaking-order-feedback__header {
+    align-items: flex-start;
+  }
+
+  .speaking-correct-article__segment {
+    grid-template-columns: 1.9rem minmax(0, 1fr);
+    padding: 0.8rem;
+  }
+
+  .speaking-correct-article__segment > span {
+    width: 1.9rem;
+    height: 1.9rem;
   }
 }

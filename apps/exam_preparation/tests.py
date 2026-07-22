@@ -1,0 +1,189 @@
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+
+from apps.exam_preparation.models import (
+    ExerciseBase,
+    SpeakingGapBlank,
+    SpeakingGapMatchingExercise,
+    SpeakingGapOption,
+    WritingExampleText,
+    WritingExercise,
+)
+
+
+class WritingExampleTextFavoriteApiTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138001",
+            password="test-password",
+        )
+        self.other_user = get_user_model().objects.create_user(
+            telephone="13800138002",
+            password="test-password",
+        )
+        self.exercise_base = ExerciseBase.objects.create(
+            exam_type="telc B1",
+            level=ExerciseBase.Level.B1,
+            skill=ExerciseBase.Skill.WRITING,
+            exercise_type=ExerciseBase.ExerciseType.WRITING_PROMPT,
+            external_id="SCHREIBEN-TEIL-1-001",
+            title="Eine Einladung absagen",
+        )
+        self.exercise = WritingExercise.objects.create(
+            exercise_base=self.exercise_base,
+            request_text="Schreiben Sie eine E-Mail.",
+            task_text="Entschuldigen Sie sich und nennen Sie einen Grund.",
+        )
+        self.example_one = WritingExampleText.objects.create(
+            writing_exercise=self.exercise,
+            label="Beispieltext 1",
+            note="Formell",
+            example_text="Sehr geehrte Frau Müller, leider kann ich nicht kommen.",
+            sort_order=0,
+        )
+        self.example_two = WritingExampleText.objects.create(
+            writing_exercise=self.exercise,
+            label="Beispieltext 2",
+            example_text="Liebe Anna, vielen Dank für deine Einladung.",
+            sort_order=1,
+        )
+        self.state_url = reverse("exam-prep-user-writing-example-text-states-list")
+        self.favorite_questions_url = reverse("exam-prep-favorite-questions-list")
+
+    def test_examples_can_be_favorited_independently_and_listed(self):
+        self.client.force_authenticate(self.user)
+
+        for example in (self.example_one, self.example_two):
+            response = self.client.post(
+                self.state_url,
+                {"example_text": example.pk, "is_favorited": True},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        response = self.client.get(self.favorite_questions_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(
+            {item["target_id"] for item in response.data["results"]},
+            {self.example_one.pk, self.example_two.pk},
+        )
+        self.assertTrue(all(item["state_type"] == "writing_example_text" for item in response.data["results"]))
+        self.assertTrue(all(item["skill"] == ExerciseBase.Skill.WRITING for item in response.data["results"]))
+
+    def test_unfavorite_updates_one_example_without_affecting_the_other(self):
+        self.client.force_authenticate(self.user)
+        for example in (self.example_one, self.example_two):
+            self.client.post(
+                self.state_url,
+                {"example_text": example.pk, "is_favorited": True},
+                format="json",
+            )
+
+        response = self.client.post(
+            self.state_url,
+            {"example_text": self.example_one.pk, "is_favorited": False},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        response = self.client.get(self.favorite_questions_url)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["target_id"], self.example_two.pk)
+
+    def test_state_list_is_scoped_to_the_current_user(self):
+        self.client.force_authenticate(self.other_user)
+        self.client.post(
+            self.state_url,
+            {"example_text": self.example_one.pk, "is_favorited": True},
+            format="json",
+        )
+
+        self.client.force_authenticate(self.user)
+        response = self.client.get(
+            self.state_url,
+            {"example_text__writing_exercise": self.exercise.pk},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        states = response.data.get("results", []) if isinstance(response.data, dict) else response.data
+        self.assertEqual(states, [])
+
+
+class SpeakingGapChoiceApiTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138003",
+            password="test-password",
+        )
+        exercise_base = ExerciseBase.objects.create(
+            exam_type="telc B1",
+            level=ExerciseBase.Level.B1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_GAP_MATCHING,
+            external_id="SPRECHEN-TEIL-1-TEST",
+            title="Ein Ausflug",
+        )
+        self.exercise = SpeakingGapMatchingExercise.objects.create(
+            exercise_base=exercise_base,
+            content_with_placeholders="Gestern {{blank_1}} ich im Park.",
+            original_source_text="Sprachbausteine Teil 1 sample",
+        )
+        self.blank = SpeakingGapBlank.objects.create(
+            exercise=self.exercise,
+            blank_key="blank_1",
+            blank_number=1,
+        )
+        SpeakingGapOption.objects.create(
+            blank=self.blank,
+            option_key="A",
+            option_text="war",
+            is_correct=True,
+            explanation="Gestern requires the past tense here.",
+            sort_order=0,
+        )
+        SpeakingGapOption.objects.create(
+            blank=self.blank,
+            option_key="B",
+            option_text="bin",
+            is_correct=False,
+            sort_order=1,
+        )
+
+    def test_detail_exposes_options_per_blank_like_cloze_choice(self):
+        response = self.client.get(
+            reverse(
+                "exam-prep-speaking-gap-matching-exercises-detail",
+                args=[self.exercise.pk],
+            )
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn("options", response.data)
+        self.assertEqual(response.data["blanks"][0]["blank_key"], "blank_1")
+        self.assertEqual(
+            [(option["option_text"], option["is_correct"]) for option in response.data["blanks"][0]["options"]],
+            [("war", True), ("bin", False)],
+        )
+
+    def test_blank_answer_and_favorite_use_the_per_blank_options(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.post(
+            reverse("exam-prep-user-speaking-gap-blank-states-list"),
+            {
+                "blank": self.blank.pk,
+                "is_favorited": True,
+                "answer_payload": {"selected_option_key": "A"},
+                "is_correct": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        favorites_response = self.client.get(reverse("exam-prep-favorite-questions-list"))
+        self.assertEqual(favorites_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(favorites_response.data["count"], 1)
+        self.assertIn("war", favorites_response.data["results"][0]["context_text"])

@@ -100,7 +100,6 @@ export default function ReadingTitleMatchingPage() {
   const answeredCount = useMemo(() => {
     return Object.values(answers).filter(Boolean).length;
   }, [answers]);
-  const activeItem = activeItemId ? items.find((item) => String(item.id) === String(activeItemId)) : null;
 
   async function toggleFavorite(item) {
     const nextValue = !favoritedByItemId[item.id];

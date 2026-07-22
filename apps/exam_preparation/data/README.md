@@ -595,19 +595,9 @@ Example shape:
 
 Current database fit:
 
-- this no longer matches the current speaking database perfectly
-- the current DB still models speaking as shared option pool plus blank-to-option mapping
-
-Importer conclusion:
-
-- importer can still normalize this XLSX into the current speaking DB
-- but it must synthesize a shared option pool from the per-blank options
-- if the same option text repeats across blanks, importer must decide whether to deduplicate or keep separate generated options
-
-Recommended architectural conclusion:
-
-- if speaking is now definitively non-shared like `ClozeChoice`, the current speaking DB should be reconsidered later
-- for now, the XLSX contract can move first and importer can do normalization
+- `SpeakingGapBlank` owns its candidate `SpeakingGapOption` rows
+- every option stores `is_correct`, `explanation`, and `sort_order`
+- this matches `ClozeChoice` directly; no shared-option normalization is required
 
 ### 5.2 Speaking Prompt With Segmented Model Text
 
@@ -716,6 +706,7 @@ What already fits well:
 - reading title matching
 - cloze choice
 - cloze matching
+- speaking gap matching
 - writing
 
 What is still structurally correct in DB but needs importer normalization:
@@ -724,10 +715,6 @@ What is still structurally correct in DB but needs importer normalization:
   - XLSX is flat
   - DB is normalized
   - importer should deduplicate ad texts into a shared ad pool
-- speaking
-  - XLSX is now per-blank options
-  - DB is still shared option pool
-  - importer must normalize per-blank options into shared speaking options
 
 What requires a new concrete database model:
 

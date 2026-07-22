@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   fetchClozeMatchingExerciseDetail,
@@ -30,6 +30,15 @@ function extractBlankKey(token) {
   return token.replace(/[{}]/g, "");
 }
 
+function findPointerDropTarget(clientX, clientY) {
+  const target = document.elementFromPoint(clientX, clientY);
+  const blankElement = target?.closest("[data-cloze-blank-key]");
+  return {
+    blankKey: blankElement?.dataset.clozeBlankKey || "",
+    isPool: Boolean(target?.closest("[data-cloze-pool]")),
+  };
+}
+
 export default function ClozeMatchingPage() {
   const { exerciseId } = useParams();
   const [exercise, setExercise] = useState(null);
@@ -44,6 +53,8 @@ export default function ClozeMatchingPage() {
   const [dragSourceBlankKey, setDragSourceBlankKey] = useState("");
   const [activeDropBlankKey, setActiveDropBlankKey] = useState("");
   const [isPoolDropActive, setIsPoolDropActive] = useState(false);
+  const [touchDragPosition, setTouchDragPosition] = useState(null);
+  const touchDragRef = useRef(null);
 
   useEffect(() => {
     let aborted = false;
@@ -177,6 +188,61 @@ export default function ClozeMatchingPage() {
     setDragSourceBlankKey("");
     setActiveDropBlankKey("");
     setIsPoolDropActive(false);
+    setTouchDragPosition(null);
+  }
+
+  function handlePointerDragStart(event, optionKey, sourceBlankKey = "") {
+    if (event.pointerType === "mouse" || isChecked) {
+      return;
+    }
+    event.preventDefault();
+    touchDragRef.current = {
+      pointerId: event.pointerId,
+      optionKey,
+      sourceBlankKey,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setTouchDragPosition({ x: event.clientX, y: event.clientY });
+    handleDragStart(optionKey, sourceBlankKey);
+  }
+
+  function handlePointerDragMove(event) {
+    const touchDrag = touchDragRef.current;
+    if (!touchDrag || touchDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    setTouchDragPosition({ x: event.clientX, y: event.clientY });
+    const dropTarget = findPointerDropTarget(event.clientX, event.clientY);
+    setActiveDropBlankKey(dropTarget.blankKey);
+    setIsPoolDropActive(dropTarget.isPool && Boolean(touchDrag.sourceBlankKey));
+  }
+
+  function handlePointerDragEnd(event, cancelled = false) {
+    const touchDrag = touchDragRef.current;
+    if (!touchDrag || touchDrag.pointerId !== event.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    if (!cancelled) {
+      const dropTarget = findPointerDropTarget(event.clientX, event.clientY);
+      if (dropTarget.blankKey) {
+        assignOptionToBlank(
+          dropTarget.blankKey,
+          touchDrag.optionKey,
+          touchDrag.sourceBlankKey
+        );
+        setSaveStateText("");
+      } else if (dropTarget.isPool && touchDrag.sourceBlankKey) {
+        clearBlankAssignment(touchDrag.sourceBlankKey);
+        setSaveStateText("");
+      }
+    }
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    touchDragRef.current = null;
+    handleDragEnd();
   }
 
   async function toggleFavorite(blank) {
@@ -272,6 +338,7 @@ export default function ClozeMatchingPage() {
             <span className="cloze-section-meta">拖动到对应空格中</span>
           </div>
           <div
+            data-cloze-pool
             className={[
               "cloze-pool",
               isPoolDropActive ? "cloze-pool--drop-active" : "",
@@ -308,6 +375,14 @@ export default function ClozeMatchingPage() {
                   handleDragStart(option.option_key, "");
                 }}
                 onDragEnd={handleDragEnd}
+                onPointerDown={(event) => {
+                  handlePointerDragStart(event, option.option_key, "");
+                }}
+                onPointerMove={handlePointerDragMove}
+                onPointerUp={handlePointerDragEnd}
+                onPointerCancel={(event) => {
+                  handlePointerDragEnd(event, true);
+                }}
               >
                 {option.option_text}
               </button>
@@ -335,6 +410,7 @@ export default function ClozeMatchingPage() {
                   return (
                     <span key={blankKey} className="cloze-blank-inline">
                       <span
+                        data-cloze-blank-key={blankKey}
                         className={[
                           "cloze-drop-slot",
                           selectedKey && !isChecked ? "cloze-select--selected" : "",
@@ -374,6 +450,14 @@ export default function ClozeMatchingPage() {
                               handleDragStart(selectedKey, blankKey);
                             }}
                             onDragEnd={handleDragEnd}
+                            onPointerDown={(event) => {
+                              handlePointerDragStart(event, selectedKey, blankKey);
+                            }}
+                            onPointerMove={handlePointerDragMove}
+                            onPointerUp={handlePointerDragEnd}
+                            onPointerCancel={(event) => {
+                              handlePointerDragEnd(event, true);
+                            }}
                           >
                             {optionMap[selectedKey]?.option_text || selectedKey}
                           </button>
@@ -413,6 +497,16 @@ export default function ClozeMatchingPage() {
             ))}
           </div>
         </section>
+
+        {touchDragPosition && draggedOptionKey ? (
+          <div
+            className="cloze-touch-drag-preview"
+            style={{ left: touchDragPosition.x, top: touchDragPosition.y }}
+            aria-hidden="true"
+          >
+            {optionMap[draggedOptionKey]?.option_text || draggedOptionKey}
+          </div>
+        ) : null}
 
         <section className="cloze-actions">
           <div className="cloze-actions__buttons">

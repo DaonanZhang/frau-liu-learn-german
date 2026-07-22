@@ -20,7 +20,11 @@ export function fetchMyProfile() {
 /**
  * Update current user profile.
  *
- * @param {{ username?: string, email?: string | null }} payload
+ * @param {{
+ *   username?: string,
+ *   email?: string | null,
+ *   has_seen_schreiben_guide?: boolean,
+ * }} payload
  * @returns {Promise<{
  *   id: number,
  *   telephone: string,

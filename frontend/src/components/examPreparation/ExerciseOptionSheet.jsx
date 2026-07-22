@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import "./ExerciseOptionSheet.css";
 
 export default function ExerciseOptionSheet({
@@ -11,6 +12,44 @@ export default function ExerciseOptionSheet({
   onSelect,
 }) {
   const panelRef = useRef(null);
+  const anchorRef = useRef(null);
+  const [position, setPosition] = useState(null);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    function updatePosition() {
+      const anchor = anchorRef.current?.parentElement;
+      if (!anchor) {
+        return;
+      }
+      const rect = anchor.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const margin = viewportWidth <= 720 ? 8 : 16;
+      const sheetWidth = Math.min(448, viewportWidth - margin * 2);
+      const estimatedHeight = Math.min(options.length * 80 + 28, 416, viewportHeight * 0.6);
+      const spaceBelow = viewportHeight - rect.bottom - margin;
+      const top = spaceBelow >= estimatedHeight
+        ? rect.bottom + 9
+        : Math.max(margin, rect.top - estimatedHeight - 9);
+      const left = Math.min(
+        Math.max(rect.left, margin),
+        viewportWidth - sheetWidth - margin
+      );
+      setPosition({ top, left });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open, options.length]);
 
   useEffect(() => {
     if (!open) {
@@ -43,8 +82,14 @@ export default function ExerciseOptionSheet({
     return null;
   }
 
-  return (
-    <div className="exercise-option-sheet" role="dialog" aria-label={title}>
+  const sheet = (
+    <div
+      className="exercise-option-sheet"
+      role="dialog"
+      aria-label={title}
+      aria-description={subtitle || undefined}
+      style={position || undefined}
+    >
       <div ref={panelRef} className="exercise-option-sheet__panel">
         <div className="exercise-option-sheet__list">
           {options.map((option) => (
@@ -69,5 +114,12 @@ export default function ExerciseOptionSheet({
         </div>
       </div>
     </div>
+  );
+
+  return (
+    <>
+      <span ref={anchorRef} className="exercise-option-sheet__anchor" aria-hidden="true" />
+      {typeof document !== "undefined" ? createPortal(sheet, document.body) : null}
+    </>
   );
 }

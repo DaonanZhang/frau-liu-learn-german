@@ -11,6 +11,7 @@ class SpeakingGapMatchingExercise(models.Model):
         verbose_name="exercise base",
     )
     content_with_placeholders = models.TextField(verbose_name="content with placeholders")
+    original_source_text = models.TextField(blank=True, default="", verbose_name="original source text")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")
 
@@ -20,32 +21,33 @@ class SpeakingGapMatchingExercise(models.Model):
 
 
 class SpeakingGapOption(models.Model):
-    exercise = models.ForeignKey(
-        "exam_preparation.SpeakingGapMatchingExercise",
+    blank = models.ForeignKey(
+        "exam_preparation.SpeakingGapBlank",
         on_delete=models.CASCADE,
         related_name="options",
-        verbose_name="exercise",
+        verbose_name="blank",
     )
     option_key = models.CharField(max_length=16, verbose_name="option key")
     option_text = models.TextField(verbose_name="option text")
-    option_order = models.PositiveIntegerField(default=0, verbose_name="option order")
-    is_extra = models.BooleanField(default=False, db_index=True, verbose_name="is extra")
+    is_correct = models.BooleanField(default=False, db_index=True, verbose_name="is correct")
+    explanation = models.TextField(blank=True, default="", verbose_name="explanation")
+    sort_order = models.PositiveIntegerField(default=0, verbose_name="sort order")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")
 
     class Meta:
         verbose_name = "speaking gap option"
         verbose_name_plural = "speaking gap options"
-        ordering = ["exercise_id", "option_order", "id"]
+        ordering = ["blank_id", "sort_order", "id"]
         constraints = [
             models.UniqueConstraint(
-                fields=["exercise", "option_key"],
+                fields=["blank", "option_key"],
                 name="exam_prep_sg_opt_key_uq",
             )
         ]
 
     def __str__(self) -> str:
-        return f"SpeakingGapOption<exercise={self.exercise_id} key={self.option_key}>"
+        return f"SpeakingGapOption<blank={self.blank_id} key={self.option_key}>"
 
 
 class SpeakingGapBlank(models.Model):
@@ -57,13 +59,6 @@ class SpeakingGapBlank(models.Model):
     )
     blank_key = models.CharField(max_length=64, verbose_name="blank key")
     blank_number = models.PositiveIntegerField(verbose_name="blank number")
-    correct_option = models.ForeignKey(
-        "exam_preparation.SpeakingGapOption",
-        on_delete=models.PROTECT,
-        related_name="blanks",
-        verbose_name="correct option",
-    )
-    explanation = models.TextField(blank=True, default="", verbose_name="explanation")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")
 

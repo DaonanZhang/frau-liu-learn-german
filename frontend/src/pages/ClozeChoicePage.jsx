@@ -110,7 +110,6 @@ export default function ClozeChoicePage() {
   }, [exercise, exerciseId]);
   const answeredCount = useMemo(() => Object.values(answers).filter(Boolean).length, [answers]);
   const paragraphs = useMemo(() => renderParagraphs(exercise?.content_with_placeholders), [exercise]);
-  const activeBlank = activeBlankKey ? blankMap[activeBlankKey] : null;
 
   async function toggleFavorite(blank) {
     const nextValue = !favoritedByBlankId[blank.id];

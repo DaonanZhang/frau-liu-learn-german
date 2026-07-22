@@ -388,8 +388,7 @@ class WritingExampleTextViewSet(BaseExamPreparationViewSet):
 
 class SpeakingGapMatchingExerciseViewSet(BaseExamPreparationViewSet):
     queryset = SpeakingGapMatchingExercise.objects.select_related("exercise_base").prefetch_related(
-        "options",
-        "blanks__correct_option",
+        "blanks__options",
     ).all()
     serializer_class = SpeakingGapMatchingExerciseSerializer
     filterset_fields = ["exercise_base"]
@@ -403,19 +402,19 @@ class SpeakingGapMatchingExerciseViewSet(BaseExamPreparationViewSet):
 
 
 class SpeakingGapBlankViewSet(BaseExamPreparationViewSet):
-    queryset = SpeakingGapBlank.objects.select_related("exercise", "exercise__exercise_base", "correct_option").all()
+    queryset = SpeakingGapBlank.objects.select_related("exercise", "exercise__exercise_base").prefetch_related("options").all()
     serializer_class = SpeakingGapBlankSerializer
-    filterset_fields = ["exercise", "blank_key", "blank_number", "correct_option"]
-    search_fields = ["blank_key", "explanation", "exercise__exercise_base__external_id", "exercise__exercise_base__title"]
+    filterset_fields = ["exercise", "blank_key", "blank_number"]
+    search_fields = ["blank_key", "exercise__exercise_base__external_id", "exercise__exercise_base__title"]
     ordering_fields = ["id", "blank_number", "created_at", "updated_at"]
 
 
 class SpeakingGapOptionViewSet(BaseExamPreparationViewSet):
-    queryset = SpeakingGapOption.objects.select_related("exercise", "exercise__exercise_base").all()
+    queryset = SpeakingGapOption.objects.select_related("blank", "blank__exercise", "blank__exercise__exercise_base").all()
     serializer_class = SpeakingGapOptionSerializer
-    filterset_fields = ["exercise", "option_key", "is_extra"]
-    search_fields = ["option_text", "exercise__exercise_base__external_id", "exercise__exercise_base__title"]
-    ordering_fields = ["id", "option_order", "created_at", "updated_at"]
+    filterset_fields = ["blank", "option_key", "is_correct"]
+    search_fields = ["option_text", "blank__exercise__exercise_base__external_id", "blank__exercise__exercise_base__title"]
+    ordering_fields = ["id", "sort_order", "created_at", "updated_at"]
 
 
 class SpeakingPromptSegmentedExerciseViewSet(BaseExamPreparationViewSet):
@@ -696,7 +695,7 @@ class FavoriteQuestionViewSet(ViewSet):
             is_favorited=True,
         ).select_related(
             "blank__exercise__exercise_base",
-        ).prefetch_related("blank__exercise__options")
+        ).prefetch_related("blank__options")
         for state in speaking_gap_states:
             blank = state.blank
             exercise = blank.exercise
@@ -716,7 +715,7 @@ class FavoriteQuestionViewSet(ViewSet):
                     blank.blank_key,
                     blank.blank_number,
                 ),
-                context_text=self._option_summary(exercise.options.all()),
+                context_text=self._option_summary(blank.options.all()),
             )
             items.append(payload)
 
@@ -910,7 +909,6 @@ class UserSpeakingGapBlankStateViewSet(BaseUserExerciseStateViewSet):
         "blank",
         "blank__exercise",
         "blank__exercise__exercise_base",
-        "blank__correct_option",
     ).all()
     serializer_class = UserSpeakingGapBlankStateSerializer
     state_lookup_field = "blank"

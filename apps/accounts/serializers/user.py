@@ -28,6 +28,7 @@ class UserMeReadSerializer(serializers.ModelSerializer):
             "email",
             "is_staff",
             "is_superuser",
+            "has_seen_schreiben_guide",
             "has_platform_wide_access",
             "user_data",
             "entitlements",
@@ -60,6 +61,7 @@ class UserMeWriteSerializer(serializers.ModelSerializer):
             "invalid": "邮箱格式错误。",
         },
     )
+    has_seen_schreiben_guide = serializers.BooleanField(required=False)
 
     def validate_username(self, value: str | None) -> str | None:
         if value is None:
@@ -86,4 +88,5 @@ class UserMeWriteSerializer(serializers.ModelSerializer):
         fields = (
             "username",
             "email",
+            "has_seen_schreiben_guide",
         )

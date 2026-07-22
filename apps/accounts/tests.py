@@ -24,6 +24,35 @@ from apps.accounts.services.activation_codes import (
 from apps.accounts.services.password_reset_codes import verify_password_reset_code
 
 
+class UserGuideStateApiTests(APITestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138009",
+            country_code="+86",
+            password="pass-123456",
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def test_me_returns_unseen_schreiben_guide_by_default(self) -> None:
+        response = self.client.get("/api/accounts/users/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["has_seen_schreiben_guide"])
+
+    def test_me_can_mark_schreiben_guide_as_seen(self) -> None:
+        response = self.client.patch(
+            "/api/accounts/users/me/",
+            {"has_seen_schreiben_guide": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["has_seen_schreiben_guide"])
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.has_seen_schreiben_guide)
+
+
 @override_settings(
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
     EMAIL_ENABLED=True,

@@ -11,6 +11,7 @@ from apps.exam_preparation.views import (
     ClozeMatchingExerciseViewSet,
     ClozeMatchingOptionViewSet,
     ExerciseBaseViewSet,
+    FavoriteQuestionViewSet,
     ListeningAnswerOptionViewSet,
     ListeningExerciseViewSet,
     ListeningQuestionViewSet,
@@ -37,6 +38,7 @@ from apps.exam_preparation.views import (
     UserReadingUnderstandingQuestionStateViewSet,
     UserSpeakingGapBlankStateViewSet,
     UserSpeakingPromptSegmentedExerciseStateViewSet,
+    UserWritingExampleTextStateViewSet,
     UserWritingExerciseStateViewSet,
     WritingExampleTextViewSet,
     WritingExerciseViewSet,
@@ -122,6 +124,7 @@ router.register(
     basename="exam-prep-speaking-prompt-segments",
 )
 router.register(r"user-exercise-favorites", UserExerciseFavoriteViewSet, basename="exam-prep-user-exercise-favorites")
+router.register(r"favorite-questions", FavoriteQuestionViewSet, basename="exam-prep-favorite-questions")
 router.register(
     r"user-listening-question-states",
     UserListeningQuestionStateViewSet,
@@ -161,6 +164,11 @@ router.register(
     r"user-writing-exercise-states",
     UserWritingExerciseStateViewSet,
     basename="exam-prep-user-writing-exercise-states",
+)
+router.register(
+    r"user-writing-example-text-states",
+    UserWritingExampleTextStateViewSet,
+    basename="exam-prep-user-writing-example-text-states",
 )
 router.register(
     r"user-speaking-prompt-segmented-exercise-states",

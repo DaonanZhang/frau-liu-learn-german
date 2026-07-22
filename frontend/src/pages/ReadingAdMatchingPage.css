@@ -138,10 +138,11 @@
   line-height: 1.7;
 }
 
-.reading-ad-carousel-section {
+.reading-ad-workspace {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-width: 0;
 }
 
 .reading-ad-carousel-section__header {
@@ -169,6 +170,13 @@
   align-items: stretch;
 }
 
+.reading-ad-sticky-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
 .reading-ad-card {
   min-height: 19rem;
   padding: 1.35rem 1.45rem;
@@ -177,6 +185,28 @@
   background: #ffffff;
   box-shadow: 0 12px 24px rgba(17, 24, 39, 0.06);
   min-width: 0;
+}
+
+.reading-ad-card--selected {
+  border-color: #9ca3af;
+  background: #f3f4f6;
+  box-shadow:
+    0 0 0 4px rgba(107, 114, 128, 0.12),
+    0 12px 24px rgba(17, 24, 39, 0.08);
+}
+
+.reading-ad-card__selected-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.8rem;
+  margin-bottom: 0.75rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: #6b7280;
+  color: #ffffff;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .reading-ad-card__line {
@@ -381,13 +411,37 @@
   color: #111827;
   font-size: 1.15rem;
   font-weight: 500;
-  text-transform: lowercase;
+  text-transform: uppercase;
+}
+
+.reading-ad-option--used {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.reading-ad-option--used .reading-ad-option__circle {
+  border-color: #9ca3af;
+  background: #e5e7eb;
+}
+
+.reading-ad-option--used .reading-ad-option__key {
+  color: #6b7280;
 }
 
 .reading-ad-option--selected {
   border-color: rgba(217, 119, 6, 0.5);
   background: #fff7ed;
   box-shadow: 0 10px 18px rgba(217, 119, 6, 0.12);
+}
+
+.reading-ad-option--selected .reading-ad-option__circle {
+  border-color: rgba(217, 119, 6, 0.58);
+  background: #ffffff;
+}
+
+.reading-ad-option--selected .reading-ad-option__key {
+  color: #111827;
 }
 
 .reading-ad-option--correct {
@@ -577,6 +631,25 @@
 }
 
 @media (max-width: 700px) {
+  html:has(.reading-ad-page),
+  body:has(.reading-ad-page),
+  .app-layout:has(.reading-ad-page) {
+    overflow-x: clip;
+  }
+
+  .reading-ad-page {
+    overflow-x: clip;
+  }
+
+  .reading-ad-sticky-stack {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding: 0.5rem 0;
+    background: #f5f6f8;
+    box-shadow: 0 12px 18px -16px rgba(17, 24, 39, 0.45);
+  }
+
   .reading-ad-carousel {
     grid-template-columns: 1fr;
   }

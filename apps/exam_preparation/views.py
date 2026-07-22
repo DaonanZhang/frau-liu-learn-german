@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import re
+
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ModelViewSet, ViewSet
 
 from apps.exam_preparation.models import (
     ClozeChoiceBlank,
@@ -42,6 +44,7 @@ from apps.exam_preparation.models import (
     UserReadingUnderstandingQuestionState,
     UserSpeakingGapBlankState,
     UserSpeakingPromptSegmentedExerciseState,
+    UserWritingExampleTextState,
     UserWritingExerciseState,
     WritingExampleText,
     WritingExercise,
@@ -88,6 +91,7 @@ from apps.exam_preparation.serializers import (
     UserReadingUnderstandingQuestionStateSerializer,
     UserSpeakingGapBlankStateSerializer,
     UserSpeakingPromptSegmentedExerciseStateSerializer,
+    UserWritingExampleTextStateSerializer,
     UserWritingExerciseStateSerializer,
     WritingExampleTextSerializer,
     WritingExerciseDetailSerializer,
@@ -451,6 +455,344 @@ class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
         serializer.save(user=self.request.user)
 
 
+class FavoriteQuestionViewSet(ViewSet):
+    """Return every favorited exam-preparation item in one normalized list."""
+
+    permission_classes = [IsAuthenticated]
+
+    @staticmethod
+    def _preview_text(value, limit=700):
+        text = str(value or "")
+        return text if len(text) <= limit else f"{text[:limit].rstrip()}…"
+
+    @staticmethod
+    def _option_summary(options, limit=6):
+        texts = [str(option.option_text or "").strip() for option in options]
+        texts = [text for text in texts if text]
+        if not texts:
+            return ""
+        visible = texts[:limit]
+        suffix = " …" if len(texts) > limit else ""
+        return f"可选项：{' · '.join(visible)}{suffix}"
+
+    @staticmethod
+    def _blank_excerpt(content, blank_key, blank_number, limit=420):
+        marker = f"【第 {blank_number} 空】"
+        normalized_target = str(blank_key or "").strip().lower()
+
+        def replace_placeholder(match):
+            placeholder_key = match.group(1).strip().lower()
+            return marker if placeholder_key == normalized_target else "____"
+
+        rendered = re.sub(r"\{\{\s*([^{}]+?)\s*\}\}", replace_placeholder, str(content or ""))
+        rendered = re.sub(r"\s+", " ", rendered).strip()
+        if not rendered:
+            return marker
+        if marker not in rendered:
+            return f"{marker} · {FavoriteQuestionViewSet._preview_text(rendered, limit)}"
+        if len(rendered) <= limit:
+            return rendered
+
+        marker_index = rendered.index(marker)
+        half_window = max(80, (limit - len(marker)) // 2)
+        start = max(0, marker_index - half_window)
+        end = min(len(rendered), marker_index + len(marker) + half_window)
+        excerpt = rendered[start:end].strip()
+        if start > 0:
+            excerpt = f"…{excerpt}"
+        if end < len(rendered):
+            excerpt = f"{excerpt}…"
+        return excerpt
+
+    @staticmethod
+    def _base_payload(state, exercise_base, *, state_type, target_field, target_id, exercise_id, href):
+        return {
+            "id": f"{state_type}:{state.pk}",
+            "state_type": state_type,
+            "state_id": state.pk,
+            "target_field": target_field,
+            "target_id": target_id,
+            "exercise_id": exercise_id,
+            "exercise_base_id": exercise_base.pk,
+            "exercise_type": exercise_base.exercise_type,
+            "skill": exercise_base.skill,
+            "level": exercise_base.level,
+            "exam_type": exercise_base.exam_type,
+            "external_id": exercise_base.external_id,
+            "title": exercise_base.title,
+            "is_real_exam": exercise_base.is_real_exam,
+            "difficulty": exercise_base.difficulty,
+            "href": href,
+            "updated_at": state.updated_at,
+        }
+
+    def list(self, request):
+        user = request.user
+        items = []
+
+        listening_states = UserListeningQuestionState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related(
+            "question__listening_exercise__exercise_base",
+        ).prefetch_related("question__answer_options")
+        listening_routes = {
+            "short_text_true_false_with_prep": "short-text-prep",
+            "short_text_true_false_once": "short-text-once",
+            "dialog_true_false_twice": "dialog-twice",
+        }
+        for state in listening_states:
+            question = state.question
+            exercise = question.listening_exercise
+            exercise_base = exercise.exercise_base
+            route = listening_routes.get(exercise.listening_type, "short-text-prep")
+            payload = self._base_payload(
+                state,
+                exercise_base,
+                state_type="listening_question",
+                target_field="question",
+                target_id=question.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/hoeren/{route}/{exercise.pk}",
+            )
+            payload.update(
+                question_label=f"听力选择 · 第 {question.question_number} 题",
+                question_text=question.question_text,
+                context_text=self._option_summary(question.answer_options.all()),
+            )
+            items.append(payload)
+
+        reading_understanding_states = UserReadingUnderstandingQuestionState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related(
+            "question__exercise__exercise_base",
+        ).prefetch_related("question__answer_options")
+        for state in reading_understanding_states:
+            question = state.question
+            exercise = question.exercise
+            payload = self._base_payload(
+                state,
+                exercise.exercise_base,
+                state_type="reading_understanding_question",
+                target_field="question",
+                target_id=question.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/lesen/understanding/{exercise.pk}",
+            )
+            payload.update(
+                question_label=f"阅读理解 · 第 {question.question_number} 题",
+                question_text=question.question_text,
+                context_text=self._option_summary(question.answer_options.all()),
+            )
+            items.append(payload)
+
+        reading_title_states = UserReadingTitleMatchingItemState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related("item__exercise__exercise_base")
+        for state in reading_title_states:
+            item = state.item
+            exercise = item.exercise
+            payload = self._base_payload(
+                state,
+                exercise.exercise_base,
+                state_type="reading_title_matching_item",
+                target_field="item",
+                target_id=item.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/lesen/title-matching/{exercise.pk}",
+            )
+            payload.update(
+                question_label=f"标题匹配 · 第 {item.item_number} 段",
+                question_text=item.text,
+                context_text="为这段文字选择最合适的标题。",
+            )
+            items.append(payload)
+
+        reading_ad_states = UserReadingAdMatchingItemState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related("item__exercise__exercise_base")
+        for state in reading_ad_states:
+            item = state.item
+            exercise = item.exercise
+            payload = self._base_payload(
+                state,
+                exercise.exercise_base,
+                state_type="reading_ad_matching_item",
+                target_field="item",
+                target_id=item.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/lesen/ad-matching/{exercise.pk}",
+            )
+            payload.update(
+                question_label=f"广告匹配 · 情境 {item.item_number}",
+                question_text=item.item_text,
+                context_text="为这个人物情境寻找最合适的广告。",
+            )
+            items.append(payload)
+
+        cloze_choice_states = UserClozeChoiceBlankState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related(
+            "blank__exercise__exercise_base",
+        ).prefetch_related("blank__options")
+        for state in cloze_choice_states:
+            blank = state.blank
+            exercise = blank.exercise
+            payload = self._base_payload(
+                state,
+                exercise.exercise_base,
+                state_type="cloze_choice_blank",
+                target_field="blank",
+                target_id=blank.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/sprachbausteine/cloze-choice/{exercise.pk}",
+            )
+            payload.update(
+                question_label=f"单选完形 · 第 {blank.blank_number} 空",
+                question_text=self._blank_excerpt(
+                    exercise.content_with_placeholders,
+                    blank.blank_key,
+                    blank.blank_number,
+                ),
+                context_text=self._option_summary(blank.options.all()),
+            )
+            items.append(payload)
+
+        cloze_matching_states = UserClozeMatchingBlankState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related(
+            "blank__exercise__exercise_base",
+        ).prefetch_related("blank__exercise__options")
+        for state in cloze_matching_states:
+            blank = state.blank
+            exercise = blank.exercise
+            payload = self._base_payload(
+                state,
+                exercise.exercise_base,
+                state_type="cloze_matching_blank",
+                target_field="blank",
+                target_id=blank.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/sprachbausteine/cloze-matching/{exercise.pk}",
+            )
+            payload.update(
+                question_label=f"选项池完形 · 第 {blank.blank_number} 空",
+                question_text=self._blank_excerpt(
+                    exercise.content_with_placeholders,
+                    blank.blank_key,
+                    blank.blank_number,
+                ),
+                context_text=self._option_summary(exercise.options.all()),
+            )
+            items.append(payload)
+
+        speaking_gap_states = UserSpeakingGapBlankState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related(
+            "blank__exercise__exercise_base",
+        ).prefetch_related("blank__exercise__options")
+        for state in speaking_gap_states:
+            blank = state.blank
+            exercise = blank.exercise
+            payload = self._base_payload(
+                state,
+                exercise.exercise_base,
+                state_type="speaking_gap_blank",
+                target_field="blank",
+                target_id=blank.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/sprechen/gap-matching/{exercise.pk}",
+            )
+            payload.update(
+                question_label=f"口语填空 · 第 {blank.blank_number} 空",
+                question_text=self._blank_excerpt(
+                    exercise.content_with_placeholders,
+                    blank.blank_key,
+                    blank.blank_number,
+                ),
+                context_text=self._option_summary(exercise.options.all()),
+            )
+            items.append(payload)
+
+        writing_states = UserWritingExerciseState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related("exercise__exercise_base")
+        for state in writing_states:
+            exercise = state.exercise
+            payload = self._base_payload(
+                state,
+                exercise.exercise_base,
+                state_type="writing_exercise",
+                target_field="exercise",
+                target_id=exercise.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/schreiben/{exercise.pk}",
+            )
+            payload.update(
+                question_label="写作题",
+                question_text=exercise.request_text or exercise.task_text,
+                context_text=self._preview_text(exercise.task_text),
+            )
+            items.append(payload)
+
+        writing_example_states = UserWritingExampleTextState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related(
+            "example_text__writing_exercise__exercise_base",
+        )
+        for state in writing_example_states:
+            example = state.example_text
+            exercise = example.writing_exercise
+            payload = self._base_payload(
+                state,
+                exercise.exercise_base,
+                state_type="writing_example_text",
+                target_field="example_text",
+                target_id=example.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/schreiben/{exercise.pk}",
+            )
+            payload.update(
+                question_label=example.label or f"Beispieltext {example.sort_order + 1}",
+                question_text=self._preview_text(example.example_text),
+                context_text=self._preview_text(example.note),
+            )
+            items.append(payload)
+
+        speaking_prompt_states = UserSpeakingPromptSegmentedExerciseState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related("exercise__exercise_base")
+        for state in speaking_prompt_states:
+            exercise = state.exercise
+            payload = self._base_payload(
+                state,
+                exercise.exercise_base,
+                state_type="speaking_prompt_segmented_exercise",
+                target_field="exercise",
+                target_id=exercise.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/sprechen/prompt-segmented/{exercise.pk}",
+            )
+            payload.update(
+                question_label="口语表达 · 段落排序",
+                question_text=exercise.prompt_text,
+                context_text="根据主题整理示例段落的正确顺序。",
+            )
+            items.append(payload)
+
+        items.sort(key=lambda item: item["updated_at"], reverse=True)
+        return Response({"count": len(items), "results": items})
+
+
 class UserListeningQuestionStateViewSet(BaseUserExerciseStateViewSet):
     queryset = UserListeningQuestionState.objects.select_related(
         "user",
@@ -597,6 +939,25 @@ class UserWritingExerciseStateViewSet(BaseUserExerciseStateViewSet):
         "exercise__task_text",
     ]
     ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
+
+
+class UserWritingExampleTextStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserWritingExampleTextState.objects.select_related(
+        "user",
+        "example_text",
+        "example_text__writing_exercise",
+        "example_text__writing_exercise__exercise_base",
+    ).all()
+    serializer_class = UserWritingExampleTextStateSerializer
+    state_lookup_field = "example_text"
+    filterset_fields = ["example_text", "example_text__writing_exercise", "is_favorited"]
+    search_fields = [
+        "example_text__label",
+        "example_text__example_text",
+        "example_text__writing_exercise__exercise_base__external_id",
+        "example_text__writing_exercise__exercise_base__title",
+    ]
+    ordering_fields = ["id", "created_at", "updated_at"]
 
 
 class UserSpeakingPromptSegmentedExerciseStateViewSet(BaseUserExerciseStateViewSet):

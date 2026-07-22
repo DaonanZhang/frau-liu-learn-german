@@ -40,6 +40,7 @@ from .user_activity import (
     UserReadingUnderstandingQuestionState,
     UserSpeakingGapBlankState,
     UserSpeakingPromptSegmentedExerciseState,
+    UserWritingExampleTextState,
     UserWritingExerciseState,
 )
 from .writing import WritingExampleText, WritingExercise
@@ -79,6 +80,7 @@ __all__ = [
     "UserClozeChoiceBlankState",
     "UserClozeMatchingBlankState",
     "UserSpeakingGapBlankState",
+    "UserWritingExampleTextState",
     "UserWritingExerciseState",
     "UserSpeakingPromptSegmentedExerciseState",
 ]

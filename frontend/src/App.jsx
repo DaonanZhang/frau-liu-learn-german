@@ -10,6 +10,7 @@ import LexiconPage from "./pages/LexiconPage/LexiconPage.jsx";
 import LearningRecordPage from "./pages/RecordPage/LearningRecordPage.jsx";
 import ManualPage from "./pages/ManualPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
+import FavoriteQuestionsPage from "./pages/FavoriteQuestionsPage.jsx";
 import ModulePage from "./pages/ModulePage.jsx";
 import VlogModulePage from "./pages/VlogModulePage.jsx";
 import ExamPreparationModulePage from "./pages/ExamPreparationModulePage.jsx";
@@ -300,6 +301,7 @@ const router = createBrowserRouter([
       { path: "/manual", element: <ManualPage /> },
       { path: "/videos/:videoId", element: <VideoStudyPage /> },
       { path: "/lexicon", element: <LexiconPage /> },
+      { path: "/favorite-questions", element: <FavoriteQuestionsPage /> },
       { path: "/learning-records", element: <LearningRecordPage /> },
       { path: "/profile", element: <ProfilePage /> },
     ],

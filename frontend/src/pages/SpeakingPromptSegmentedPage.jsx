@@ -199,11 +199,11 @@ export default function SpeakingPromptSegmentedPage() {
 
         <section className="speaking-hero">
           <h1 className="speaking-hero__title">{heroTitle}</h1>
-          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="speaking-hero__badges">
-              {exercise?.exercise_base?.difficulty ? (
+              {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="speaking-hero__badge">
-                  难度：{exercise.exercise_base.difficulty}
+                  难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
                 </span>
               ) : null}
               {exercise?.exercise_base?.is_real_exam ? (

@@ -172,6 +172,14 @@
   color: #9a4210;
 }
 
+.exercise-selection-card__badge--exam-type {
+  background: rgba(47, 111, 94, 0.11);
+  border: 1px solid rgba(47, 111, 94, 0.22);
+  color: #245849;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .exercise-selection-card__title {
   margin: 0;
   color: #2d2925;

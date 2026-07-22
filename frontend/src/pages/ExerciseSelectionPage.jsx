@@ -80,6 +80,7 @@ export default function ExerciseSelectionPage({
             const cardTitle =
               exercise?.exercise_base?.title?.trim() || `Übung ${index + 1}`;
             const isRealExam = Boolean(exercise?.exercise_base?.is_real_exam);
+            const examType = exercise?.exercise_base?.exam_type?.trim();
 
             return (
               <Link
@@ -91,6 +92,14 @@ export default function ExerciseSelectionPage({
                   <div className="exercise-selection-card__meta">
                     <div className="exercise-selection-card__meta-left">
                       <span className="exercise-selection-card__chip">{cardLabel}</span>
+                      {examType ? (
+                        <span
+                          className="exercise-selection-card__badge exercise-selection-card__badge--exam-type"
+                          title="Prüfungsformat"
+                        >
+                          {examType}
+                        </span>
+                      ) : null}
                       {isRealExam ? (
                         <span className="exercise-selection-card__badge exercise-selection-card__badge--real">
                           真题

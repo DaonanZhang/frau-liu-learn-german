@@ -54,7 +54,8 @@ Current shared fields:
 Important notes:
 
 - `title_zh` no longer exists and must not appear in new import assumptions.
-- `exam_type` now stores values such as `telc` or `Daf`.
+- Every exercise must have a non-empty `exam_type`, because each concrete exercise card displays it as an exam-format badge.
+- `exam_type` stores values such as `telc` or `Daf`; an import with a blank `考试类型` value must fail instead of creating an unlabelled exercise.
 - `external_id` is the editor-facing ID inside one exercise type.
 - source file naming is separate from the exercise's own `external_id`.
 
@@ -741,7 +742,7 @@ What needs a small XLSX adjustment to fully match the current DB:
 
 What should be standardized for all importers:
 
-- `exam_type` always maps to `ExerciseBase.exam_type`
+- `exam_type` always maps to `ExerciseBase.exam_type` and is required for every exercise
 - `原标题` or `标题` always maps to `ExerciseBase.title`
 - `是否真题` always maps to `ExerciseBase.is_real_exam`
 - `ID` always maps to `ExerciseBase.external_id`

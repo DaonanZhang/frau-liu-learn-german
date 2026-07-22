@@ -1,0 +1,138 @@
+:root {
+  /*
+   * Single control for text inside every exam-preparation detail question.
+   * Increase/decrease this value as needed. Use 0rem to restore the base sizes.
+   */
+  --exam-detail-font-increase: 0.15rem;
+}
+
+/* Keep every detail exercise's Anleitung text at full black contrast. */
+.listening-exercise-instruction p,
+.reading-title-instruction p,
+.reading-understanding-instruction p,
+.reading-ad-instruction p,
+.cloze-instruction p,
+.speaking-instruction p {
+  color: #111827;
+}
+
+/* Listening: question text, answers and revealed feedback. */
+.listening-exercise-question-card {
+  font-size: calc(1rem + var(--exam-detail-font-increase));
+}
+
+.listening-exercise-feedback p {
+  font-size: calc(0.92rem + var(--exam-detail-font-increase));
+}
+
+/* Reading: title matching. */
+.reading-title-text-grid {
+  font-size: calc(1rem + var(--exam-detail-font-increase));
+}
+
+.reading-title-text-card p {
+  font-size: calc(0.94rem + var(--exam-detail-font-increase));
+}
+
+.reading-title-feedback__title {
+  font-size: calc(0.92rem + var(--exam-detail-font-increase));
+}
+
+.reading-title-feedback__line {
+  font-size: calc(0.9rem + var(--exam-detail-font-increase));
+}
+
+/* Reading: article comprehension. */
+.reading-understanding-text__content p {
+  font-size: calc(0.95rem + var(--exam-detail-font-increase));
+}
+
+.reading-understanding-question-card {
+  font-size: calc(1rem + var(--exam-detail-font-increase));
+}
+
+.reading-understanding-question-card__header h3 {
+  font-size: calc(0.98rem + var(--exam-detail-font-increase));
+}
+
+.reading-understanding-option__text,
+.reading-understanding-feedback__title {
+  font-size: calc(0.92rem + var(--exam-detail-font-increase));
+}
+
+.reading-understanding-feedback__line {
+  font-size: calc(0.9rem + var(--exam-detail-font-increase));
+}
+
+/* Reading: advertisement matching. */
+.reading-ad-carousel,
+.reading-ad-question-card {
+  font-size: calc(1rem + var(--exam-detail-font-increase));
+}
+
+.reading-ad-card__line {
+  font-size: calc(0.95rem + var(--exam-detail-font-increase));
+}
+
+.reading-ad-card__line--heading {
+  font-size: calc(1.02rem + var(--exam-detail-font-increase));
+}
+
+.reading-ad-question-card__title {
+  font-size: calc(clamp(1.2rem, 2vw, 1.6rem) + var(--exam-detail-font-increase));
+}
+
+.reading-ad-option__key {
+  font-size: calc(1.15rem + var(--exam-detail-font-increase));
+}
+
+.reading-ad-feedback__title {
+  font-size: calc(0.92rem + var(--exam-detail-font-increase));
+}
+
+.reading-ad-feedback__line {
+  font-size: calc(0.9rem + var(--exam-detail-font-increase));
+}
+
+/* Sprachbausteine: source text, answer pool, blanks and feedback. */
+.cloze-pool-panel,
+.cloze-text-panel,
+.cloze-feedback-list {
+  font-size: calc(1rem + var(--exam-detail-font-increase));
+}
+
+.cloze-text {
+  font-size: calc(1.08rem + var(--exam-detail-font-increase));
+}
+
+.cloze-select {
+  font-size: calc(0.98rem + var(--exam-detail-font-increase));
+}
+
+/* Writing: request, task, editor content and review texts. */
+.writing-detail-request-panel,
+.writing-detail-task-card,
+.writing-detail-input-card,
+.writing-detail-review-card {
+  font-size: calc(1rem + var(--exam-detail-font-increase));
+}
+
+/* Speaking: prompts, source content, options, segments and feedback. */
+.speaking-panel,
+.speaking-feedback-list {
+  font-size: calc(1rem + var(--exam-detail-font-increase));
+}
+
+.speaking-content {
+  font-size: calc(1.04rem + var(--exam-detail-font-increase));
+}
+
+.speaking-prompt-block h2,
+.speaking-segment-panel__header h2 {
+  font-size: calc(1.1rem + var(--exam-detail-font-increase));
+}
+
+/* The shared answer picker is used by multiple detail question types. */
+.exercise-option-sheet__option-label {
+  font-size: calc(0.96rem + var(--exam-detail-font-increase));
+}

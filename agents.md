@@ -99,6 +99,9 @@ Practical effect:
 - Keep Step 2 source of truth in xlsx; backfill only fills missing URL fields by default.
 - Avoid forcing overwrite unless explicitly needed (`--overwrite`).
 
+## Browser Verification Rule
+- 除非用户显式要求使用浏览器打开并验证，否则不应打开浏览器或执行类似的浏览器验证操作。
+
 ## Date/Time Migration Rule
 - When a date/time API is being renamed or standardized, use the single target API consistently instead of adding backward-compatibility aliases by default.
 - For `localNow` to `local_now` migrations specifically, treat `local_now` as the only correct implementation target and update all affected call sites, tests, and comparisons to match it.
@@ -165,3 +168,5 @@ After run:
 - For `exam_preparation` import format, use `apps/exam_preparation/data/README.md` as the canonical XLSX contract.
 - Do not reintroduce `title_zh` in new exam-preparation import assumptions or new sheets.
 - Map all shared exercise metadata through `ExerciseBase`, including `exam_type`.
+- Every concrete exam-preparation exercise must have a non-empty `ExerciseBase.exam_type`, and every exercise card must display it as an exam-format badge independently of the `is_real_exam` / `真题` badge.
+- All exam-preparation import paths must reject rows whose `考试类型` / `exam_type` value is empty; do not silently create exercises without an exam-format badge.

@@ -104,6 +104,10 @@ export default function ReadingAdMatchingPage() {
     return Object.values(answers).filter(Boolean).length;
   }, [answers]);
 
+  const selectedAdKeys = useMemo(() => {
+    return new Set(Object.values(answers).filter(Boolean));
+  }, [answers]);
+
   useEffect(() => {
     function syncAdsPerPage() {
       if (window.innerWidth <= 700) {
@@ -204,11 +208,11 @@ export default function ReadingAdMatchingPage() {
           <div className="reading-ad-hero__main">
             <h1 className="reading-ad-hero__title">{heroTitle}</h1>
           </div>
-          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="reading-ad-hero__badges">
-              {exercise?.exercise_base?.difficulty ? (
+              {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="reading-ad-hero__badge">
-                  难度：{exercise.exercise_base.difficulty}
+                  难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
                 </span>
               ) : null}
               {exercise?.exercise_base?.is_real_exam ? (
@@ -227,81 +231,94 @@ export default function ReadingAdMatchingPage() {
           <p>{exercise?.instruction || FALLBACK_INSTRUCTION}</p>
         </section>
 
-        <section className="reading-ad-carousel-section">
+        <section className="reading-ad-workspace">
           <div className="reading-ad-carousel-section__header">
             <h2>Anzeigen</h2>
             <span>Seite {activeAdPage + 1} / {Math.max(1, adPages.length)}</span>
           </div>
-          <div className="reading-ad-carousel" aria-label="Anzeigen">
-            {visibleAds.map((ad) => {
-              const lines = String(ad.ad_text_markdown || "")
-                .split("\n")
-                .filter(Boolean);
-              return (
-                <article key={ad.id} className="reading-ad-card">
-                  {lines.map((line, index) => (
-                    <p
-                      key={index}
-                      className={[
-                        "reading-ad-card__line",
-                        index === 0 ? "reading-ad-card__line--heading" : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      {line}
-                    </p>
-                  ))}
-                </article>
-              );
-            })}
-          </div>
-
-          <div className="reading-ad-carousel-controls">
-            <button
-              type="button"
-              className="reading-ad-carousel-controls__arrow"
-              onClick={() => {
-                goToAdPage(activeAdPage - 1);
-              }}
-              disabled={activeAdPage <= 0}
-            >
-              ‹
-            </button>
-
-            <div className="reading-ad-carousel-controls__dots">
-              {adPages.map((pageAds, index) => (
-                <button
-                  key={pageAds.map((item) => item.id).join("-")}
-                  type="button"
-                  className={[
-                    "reading-ad-carousel-controls__dot",
-                    index === activeAdPage ? "is-active" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  aria-label={`Anzeige page ${index + 1}`}
-                  onClick={() => {
-                    goToAdPage(index);
-                  }}
-                />
-              ))}
+          <div className="reading-ad-sticky-stack">
+            <div className="reading-ad-carousel" aria-label="Anzeigen">
+              {visibleAds.map((ad) => {
+                const lines = String(ad.ad_text_markdown || "")
+                  .split("\n")
+                  .filter(Boolean);
+                const isSelected = selectedAdKeys.has(ad.ad_key);
+                return (
+                  <article
+                    key={ad.id}
+                    className={[
+                      "reading-ad-card",
+                      isSelected ? "reading-ad-card--selected" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                  >
+                    {isSelected ? (
+                      <span className="reading-ad-card__selected-badge">Ausgewählt</span>
+                    ) : null}
+                    {lines.map((line, index) => (
+                      <p
+                        key={index}
+                        className={[
+                          "reading-ad-card__line",
+                          index === 0 ? "reading-ad-card__line--heading" : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        {line}
+                      </p>
+                    ))}
+                  </article>
+                );
+              })}
             </div>
 
-            <button
-              type="button"
-              className="reading-ad-carousel-controls__arrow"
-              onClick={() => {
-                goToAdPage(activeAdPage + 1);
-              }}
-              disabled={activeAdPage >= adPages.length - 1}
-            >
-              ›
-            </button>
-          </div>
-        </section>
+            <div className="reading-ad-carousel-controls">
+              <button
+                type="button"
+                className="reading-ad-carousel-controls__arrow"
+                onClick={() => {
+                  goToAdPage(activeAdPage - 1);
+                }}
+                disabled={activeAdPage <= 0}
+              >
+                ‹
+              </button>
 
-        <section className="reading-ad-question-section">
+              <div className="reading-ad-carousel-controls__dots">
+                {adPages.map((pageAds, index) => (
+                  <button
+                    key={pageAds.map((item) => item.id).join("-")}
+                    type="button"
+                    className={[
+                      "reading-ad-carousel-controls__dot",
+                      index === activeAdPage ? "is-active" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    aria-label={`Anzeige page ${index + 1}`}
+                    onClick={() => {
+                      goToAdPage(index);
+                    }}
+                  />
+                ))}
+              </div>
+
+              <button
+                type="button"
+                className="reading-ad-carousel-controls__arrow"
+                onClick={() => {
+                  goToAdPage(activeAdPage + 1);
+                }}
+                disabled={activeAdPage >= adPages.length - 1}
+              >
+                ›
+              </button>
+            </div>
+          </div>
+
+          <section className="reading-ad-question-section">
           <div className="reading-ad-pagination">
             <button
               type="button"
@@ -366,6 +383,7 @@ export default function ReadingAdMatchingPage() {
               <div className="reading-ad-option-grid">
                 {ads.map((ad) => {
                   const checked = answers[currentItem.id] === ad.ad_key;
+                  const isUsed = selectedAdKeys.has(ad.ad_key);
                   const isCorrect = ad.ad_key === currentItem.correct_ad?.ad_key;
                   const isWrongSelected = isChecked && checked && !isCorrect;
                   const shouldRevealCorrect = isChecked && isCorrect;
@@ -375,6 +393,7 @@ export default function ReadingAdMatchingPage() {
                       key={ad.id}
                       className={[
                         "reading-ad-option",
+                        isUsed ? "reading-ad-option--used" : "",
                         checked && !isChecked ? "reading-ad-option--selected" : "",
                         shouldRevealCorrect ? "reading-ad-option--correct" : "",
                         isWrongSelected ? "reading-ad-option--wrong" : "",
@@ -398,7 +417,9 @@ export default function ReadingAdMatchingPage() {
                         }}
                       />
                       <span className="reading-ad-option__circle" />
-                      <span className="reading-ad-option__key">{ad.ad_key}</span>
+                      <span className="reading-ad-option__key">
+                        {String(ad.ad_key || "").toLocaleUpperCase()}
+                      </span>
                     </label>
                   );
                 })}
@@ -430,7 +451,8 @@ export default function ReadingAdMatchingPage() {
                     />
                   </div>
                   <p className="reading-ad-feedback__line">
-                    Richtige Antwort: {currentItem.correct_ad?.ad_key}
+                    Richtige Antwort:{" "}
+                    {String(currentItem.correct_ad?.ad_key || "").toLocaleUpperCase()}
                   </p>
                   <p className="reading-ad-feedback__line">
                     Erklärung: {currentItem.explanation || "Keine zusätzliche Erklärung."}
@@ -467,6 +489,7 @@ export default function ReadingAdMatchingPage() {
               />
             ) : null}
           </div>
+          </section>
         </section>
       </div>
     </div>

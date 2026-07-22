@@ -259,6 +259,32 @@ class UserWritingExerciseState(BaseUserExerciseState):
         ]
 
 
+class UserWritingExampleTextState(BaseUserExerciseState):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="exam_preparation_writing_example_text_states",
+        verbose_name="user",
+    )
+    example_text = models.ForeignKey(
+        "exam_preparation.WritingExampleText",
+        on_delete=models.CASCADE,
+        related_name="user_states",
+        verbose_name="writing example text",
+    )
+
+    class Meta:
+        verbose_name = "user writing example text state"
+        verbose_name_plural = "user writing example text states"
+        ordering = ["-updated_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "example_text"],
+                name="exam_prep_user_write_example_state_uq",
+            )
+        ]
+
+
 class UserSpeakingPromptSegmentedExerciseState(BaseUserExerciseState):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

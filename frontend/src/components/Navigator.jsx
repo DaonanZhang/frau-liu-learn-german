@@ -26,12 +26,14 @@ export default function Navigator() {
   const isManualActive = pathname.startsWith("/manual");
   const isLearningRecordsActive = pathname.startsWith("/learning-records");
   const isLexiconActive = pathname.startsWith("/lexicon");
+  const isFavoriteQuestionsActive = pathname.startsWith("/favorite-questions");
   const isProfileActive = pathname.startsWith("/profile");
 
   const titleText = isMobileView ? "符号刘" : "符号刘的德语素材库";
   const manualText = isMobileView ? "手册" : "操作手册";
   const learningRecordsText = isMobileView ? "记录" : "学习记录";
   const lexiconText = isMobileView ? "卡片" : "德语卡片";
+  const favoriteQuestionsText = isMobileView ? "收藏题" : "收藏题目";
   const redeemText = isMobileView ? "兑换" : "兑换码";
 
   return (
@@ -95,6 +97,18 @@ export default function Navigator() {
             }}
           >
             {lexiconText}
+          </button>
+
+          <button
+            className={["nav-btn", isFavoriteQuestionsActive ? "nav-btn--active" : ""]
+              .filter(Boolean)
+              .join(" ")}
+            type="button"
+            onClick={() => {
+              navigate("/favorite-questions");
+            }}
+          >
+            {favoriteQuestionsText}
           </button>
 
           <div className="nav-user">

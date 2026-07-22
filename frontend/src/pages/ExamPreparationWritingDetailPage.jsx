@@ -5,6 +5,8 @@ import {
 } from "../api/exam_preparation/writingExercises.js";
 import {
   fetchWritingExerciseStates,
+  fetchWritingExampleTextStates,
+  saveWritingExampleTextState,
   saveWritingExerciseState,
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
@@ -35,6 +37,8 @@ export default function ExamPreparationWritingDetailPage() {
   const [timerStarted, setTimerStarted] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoritePending, setFavoritePending] = useState(false);
+  const [exampleFavoriteById, setExampleFavoriteById] = useState({});
+  const [exampleFavoritePendingById, setExampleFavoritePendingById] = useState({});
 
   useEffect(() => {
     let aborted = false;
@@ -61,6 +65,16 @@ export default function ExamPreparationWritingDetailPage() {
               setIsChecked(true);
             }
           }
+          const exampleStateData = await fetchWritingExampleTextStates(exerciseId);
+          if (aborted) {
+            return;
+          }
+          const favoriteMap = {};
+          const exampleStates = Array.isArray(exampleStateData?.results) ? exampleStateData.results : [];
+          exampleStates.forEach((state) => {
+            favoriteMap[state.example_text] = Boolean(state.is_favorited);
+          });
+          setExampleFavoriteById(favoriteMap);
         }
       } catch (error) {
         if (!aborted) {
@@ -133,6 +147,23 @@ export default function ExamPreparationWritingDetailPage() {
     }
   }
 
+  async function toggleExampleFavorite(exampleId) {
+    const nextValue = !exampleFavoriteById[exampleId];
+    setExampleFavoritePendingById((previous) => ({ ...previous, [exampleId]: true }));
+    setErrorText("");
+    try {
+      await saveWritingExampleTextState({
+        example_text: exampleId,
+        is_favorited: nextValue,
+      });
+      setExampleFavoriteById((previous) => ({ ...previous, [exampleId]: nextValue }));
+    } catch (error) {
+      setErrorText(error?.message || "Beispieltext 收藏状态保存失败。");
+    } finally {
+      setExampleFavoritePendingById((previous) => ({ ...previous, [exampleId]: false }));
+    }
+  }
+
   if (loading) {
     return <div className="writing-detail-page"><div className="writing-detail-shell"><p className="writing-detail-loading">写作题目加载中...</p></div></div>;
   }
@@ -155,11 +186,11 @@ export default function ExamPreparationWritingDetailPage() {
 
         <section className="writing-detail-hero">
           <h1 className="writing-detail-hero__title">{heroTitle}</h1>
-          {exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="writing-detail-hero__badges">
-              {exercise?.exercise_base?.difficulty ? (
+              {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="writing-detail-hero__badge">
-                  难度：{exercise.exercise_base.difficulty}
+                  难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
                 </span>
               ) : null}
               {exercise?.exercise_base?.is_real_exam ? (
@@ -234,9 +265,17 @@ export default function ExamPreparationWritingDetailPage() {
 
             {exampleTexts.map((example) => (
               <article key={example.id} className="writing-detail-review-card writing-detail-review-card--example">
-                <div className="writing-detail-review-card__header">
-                  <h2>{example.label || "示例答案"}</h2>
-                  {example.note ? <span>{example.note}</span> : null}
+                <div className="writing-detail-review-card__titleRow">
+                  <div className="writing-detail-review-card__exampleHeading">
+                    <h2>{example.label || "Beispieltext"}</h2>
+                    {example.note ? <span>{example.note}</span> : null}
+                  </div>
+                  <ExerciseFavoriteButton
+                    isFavorited={Boolean(exampleFavoriteById[example.id])}
+                    pending={Boolean(exampleFavoritePendingById[example.id])}
+                    onClick={() => toggleExampleFavorite(example.id)}
+                    label="收藏 Beispieltext"
+                  />
                 </div>
                 <p>{example.example_text}</p>
               </article>

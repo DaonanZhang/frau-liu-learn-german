@@ -157,6 +157,12 @@ def upsert_base(
 ) -> ExerciseBase:
     if not external_id:
         raise ImportErrorWithContext("Missing external exercise ID.")
+    exam_type = clean_text(exam_type)
+    if not exam_type:
+        raise ImportErrorWithContext(
+            f"Missing exam type for exercise {external_id!r}; "
+            "the XLSX field '考试类型' is required."
+        )
     base, _ = ExerciseBase.objects.update_or_create(
         level=level,
         exercise_type=exercise_type,

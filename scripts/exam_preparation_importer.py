@@ -95,6 +95,39 @@ def clean_text(value) -> str:
     return str(value).strip()
 
 
+def normalize_link_id(value) -> str:
+    text = clean_text(value)
+    if re.fullmatch(r"[+-]?\d+(?:\.0+)?", text):
+        return str(int(text.split(".", 1)[0]))
+    return text
+
+
+def external_id_from_filename(xlsx_path: Path, workbook_external_id) -> str:
+    workbook_id = normalize_link_id(workbook_external_id)
+    if not workbook_id:
+        raise ImportErrorWithContext(f"{xlsx_path.name}: missing workbook exercise ID")
+    match = re.search(r"_(\d+)$", xlsx_path.stem)
+    if not match:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: filename must end with a numeric exercise ID"
+        )
+    filename_id = normalize_link_id(match.group(1))
+    if filename_id != workbook_id:
+        log(
+            f"ID OVERRIDE: {xlsx_path.name} workbook_id={workbook_id} "
+            f"filename_id={filename_id}"
+        )
+    return filename_id
+
+
+def require_one_exercise_per_file(xlsx_path: Path, exercise_count: int) -> None:
+    if exercise_count != 1:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: expected exactly one exercise per workbook; "
+            f"found {exercise_count}"
+        )
+
+
 def infer_level_from_filename(path: Path) -> str:
     match = re.match(r"^([a-z0-9]+)_", path.name.lower())
     if not match:
@@ -195,13 +228,15 @@ def import_listening(xlsx_path: Path) -> int:
     )
 
     meta_by_id = {clean_text(row["音频文件_ID"]): row for row in iter_records(meta_df)}
+    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
     exercise_rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in iter_records(exercise_df):
-        exercise_rows_by_id[clean_text(row["exercise_id"])].append(row)
+        exercise_rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
 
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
-    for external_id, meta in meta_by_id.items():
+    for workbook_external_id, meta in meta_by_id.items():
+        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
         base = upsert_base(
             level=level,
             skill=ExerciseBase.Skill.LISTENING,
@@ -225,7 +260,7 @@ def import_listening(xlsx_path: Path) -> int:
         )
         exercise.questions.all().delete()
         grouped_questions: dict[int, list[dict[str, str]]] = defaultdict(list)
-        for row in exercise_rows_by_id.get(external_id, []):
+        for row in exercise_rows_by_id.get(normalize_link_id(workbook_external_id), []):
             grouped_questions[parse_int(row["question_id"], "question_id")].append(row)
         for question_number in sorted(grouped_questions):
             rows = grouped_questions[question_number]
@@ -258,16 +293,18 @@ def import_reading_title_matching(xlsx_path: Path) -> int:
     require_columns(question_bank_df, ["exercise_id", "question_bank"], "question_bank")
 
     meta_by_id = {clean_text(row["ID"]): row for row in iter_records(meta_df)}
+    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
     item_rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in iter_records(exercise_df):
-        item_rows_by_id[clean_text(row["exercise_id"])].append(row)
+        item_rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
     option_rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in iter_records(question_bank_df):
-        option_rows_by_id[clean_text(row["exercise_id"])].append(row)
+        option_rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
 
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
-    for external_id, meta in meta_by_id.items():
+    for workbook_external_id, meta in meta_by_id.items():
+        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
         base = upsert_base(
             level=level,
             skill=ExerciseBase.Skill.READING,
@@ -285,8 +322,9 @@ def import_reading_title_matching(xlsx_path: Path) -> int:
         exercise.items.all().delete()
         exercise.options.all().delete()
 
+        link_id = normalize_link_id(workbook_external_id)
         option_map: dict[str, ReadingTitleMatchingOption] = {}
-        for index, row in enumerate(option_rows_by_id.get(external_id, [])):
+        for index, row in enumerate(option_rows_by_id.get(link_id, [])):
             option = ReadingTitleMatchingOption.objects.create(
                 exercise=exercise,
                 option_key=option_key_from_index(index),
@@ -295,7 +333,7 @@ def import_reading_title_matching(xlsx_path: Path) -> int:
             )
             option_map[option.option_text] = option
 
-        for index, row in enumerate(item_rows_by_id.get(external_id, []), start=1):
+        for index, row in enumerate(item_rows_by_id.get(link_id, []), start=1):
             title_text = clean_text(row["Title"])
             if title_text not in option_map:
                 raise ImportErrorWithContext(
@@ -320,13 +358,15 @@ def import_reading_understanding(xlsx_path: Path) -> int:
     require_columns(exercise_df, ["exercise_id", "question_id", "question", "answer", "is_correct", "explanation"], "exercise")
 
     meta_by_id = {clean_text(row["ID"]): row for row in iter_records(meta_df)}
+    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
     rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in iter_records(exercise_df):
-        rows_by_id[clean_text(row["exercise_id"])].append(row)
+        rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
 
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
-    for external_id, meta in meta_by_id.items():
+    for workbook_external_id, meta in meta_by_id.items():
+        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
         base = upsert_base(
             level=level,
             skill=ExerciseBase.Skill.READING,
@@ -344,7 +384,7 @@ def import_reading_understanding(xlsx_path: Path) -> int:
         exercise.questions.all().delete()
 
         grouped_questions: dict[int, list[dict[str, str]]] = defaultdict(list)
-        for row in rows_by_id.get(external_id, []):
+        for row in rows_by_id.get(normalize_link_id(workbook_external_id), []):
             grouped_questions[parse_int(row["question_id"], "question_id")].append(row)
         for question_number in sorted(grouped_questions):
             rows = grouped_questions[question_number]
@@ -381,13 +421,19 @@ def import_reading_ad_matching(xlsx_path: Path) -> int:
     require_columns(exercise_df, ["exercise_id", "situation", "Ad"], "exercise")
 
     meta_by_id = {clean_text(row["ID"]): row for row in iter_records(meta_df)}
+    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
     rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in iter_records(exercise_df):
-        rows_by_id[clean_text(row["exercise_id"])].append(row)
+        situation_text = clean_text(row["situation"])
+        ad_text = clean_text(row["Ad"])
+        if not situation_text and not ad_text:
+            continue
+        rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
 
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
-    for external_id, meta in meta_by_id.items():
+    for workbook_external_id, meta in meta_by_id.items():
+        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
         base = upsert_base(
             level=level,
             skill=ExerciseBase.Skill.READING,
@@ -405,9 +451,10 @@ def import_reading_ad_matching(xlsx_path: Path) -> int:
         exercise.items.all().delete()
         exercise.ads.all().delete()
 
+        linked_rows = rows_by_id.get(normalize_link_id(workbook_external_id), [])
         ad_by_text: dict[str, ReadingAdMatchingAd] = {}
         ad_counter = 0
-        for row in rows_by_id.get(external_id, []):
+        for row in linked_rows:
             ad_text = clean_text(row["Ad"])
             if not ad_text:
                 raise ImportErrorWithContext(f"{xlsx_path.name}: empty Ad for exercise {external_id}")
@@ -423,11 +470,16 @@ def import_reading_ad_matching(xlsx_path: Path) -> int:
                     ad_order=999 if is_x else ad_counter,
                     is_no_match_option=is_x,
                 )
-        for index, row in enumerate(rows_by_id.get(external_id, []), start=1):
+        item_number = 0
+        for row in linked_rows:
+            situation_text = clean_text(row["situation"])
+            if not situation_text:
+                continue
+            item_number += 1
             ReadingAdMatchingItem.objects.create(
                 exercise=exercise,
-                item_number=index,
-                item_text=clean_text(row["situation"]),
+                item_number=item_number,
+                item_text=situation_text,
                 correct_ad=ad_by_text[clean_text(row["Ad"])],
                 explanation="",
             )
@@ -443,13 +495,15 @@ def import_cloze_choice(xlsx_path: Path) -> int:
     require_columns(exercise_df, ["exercise_id", "blank_key", "blank_number", "Option", "is_correct", "explanation"], "exercise")
 
     meta_by_id = {clean_text(row["ID"]): row for row in iter_records(meta_df)}
+    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
     rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in iter_records(exercise_df):
-        rows_by_id[clean_text(row["exercise_id"])].append(row)
+        rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
 
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
-    for external_id, meta in meta_by_id.items():
+    for workbook_external_id, meta in meta_by_id.items():
+        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
         base = upsert_base(
             level=level,
             skill=ExerciseBase.Skill.SPRACHBAUSTEIN,
@@ -471,7 +525,7 @@ def import_cloze_choice(xlsx_path: Path) -> int:
         exercise.blanks.all().delete()
 
         grouped_blanks: dict[tuple[str, int], list[dict[str, str]]] = defaultdict(list)
-        for row in rows_by_id.get(external_id, []):
+        for row in rows_by_id.get(normalize_link_id(workbook_external_id), []):
             key = (clean_text(row["blank_key"]), parse_int(row["blank_number"], "blank_number"))
             grouped_blanks[key].append(row)
         for index, (key, rows) in enumerate(sorted(grouped_blanks.items(), key=lambda item: item[0][1]), start=1):
@@ -508,19 +562,21 @@ def import_cloze_matching(xlsx_path: Path) -> int:
     answer_df = get_sheet(xlsx, "answer")
     require_columns(meta_df, ["ID", "标题", "内容", "考试类型", "原题"], "meta")
     require_columns(options_df, ["exercise_id", "option_key", "option_text"], "options")
-    require_columns(answer_df, ["exercise_id", "blank_key", "blank_number", "correct_option_key", "explanation"], "answer")
+    require_columns(answer_df, ["exercise_id", "blank_key", "blank_number", "correct_option_text", "explanation"], "answer")
 
     meta_by_id = {clean_text(row["ID"]): row for row in iter_records(meta_df)}
+    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
     option_rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in iter_records(options_df):
-        option_rows_by_id[clean_text(row["exercise_id"])].append(row)
+        option_rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
     answer_rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in iter_records(answer_df):
-        answer_rows_by_id[clean_text(row["exercise_id"])].append(row)
+        answer_rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
 
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
-    for external_id, meta in meta_by_id.items():
+    for workbook_external_id, meta in meta_by_id.items():
+        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
         base = upsert_base(
             level=level,
             skill=ExerciseBase.Skill.SPRACHBAUSTEIN,
@@ -542,28 +598,37 @@ def import_cloze_matching(xlsx_path: Path) -> int:
         exercise.blank_answers.all().delete()
         exercise.options.all().delete()
 
-        options_by_key: dict[str, ClozeMatchingOption] = {}
-        referenced_keys = {clean_text(row["correct_option_key"]) for row in answer_rows_by_id.get(external_id, [])}
-        for index, row in enumerate(option_rows_by_id.get(external_id, []), start=1):
+        link_id = normalize_link_id(workbook_external_id)
+        options_by_text: dict[str, ClozeMatchingOption] = {}
+        referenced_texts = {clean_text(row["correct_option_text"]) for row in answer_rows_by_id.get(link_id, [])}
+        for index, row in enumerate(option_rows_by_id.get(link_id, []), start=1):
             option_key = clean_text(row["option_key"])
-            options_by_key[option_key] = ClozeMatchingOption.objects.create(
+            option_text = clean_text(row["option_text"])
+            if option_text in options_by_text:
+                raise ImportErrorWithContext(
+                    f"{xlsx_path.name}: duplicate option text {option_text!r} "
+                    f"for cloze matching exercise {external_id}"
+                )
+            option = ClozeMatchingOption.objects.create(
                 exercise=exercise,
                 option_key=option_key,
-                option_text=clean_text(row["option_text"]),
+                option_text=option_text,
                 option_order=parse_int(row["option_order"], "option_order") if clean_text(row.get("option_order")) else index,
-                is_extra=parse_bool(row["is_extra"]) if clean_text(row.get("is_extra")) else option_key not in referenced_keys,
+                is_extra=parse_bool(row["is_extra"]) if clean_text(row.get("is_extra")) else option_text not in referenced_texts,
             )
-        for row in answer_rows_by_id.get(external_id, []):
-            correct_option_key = clean_text(row["correct_option_key"])
-            if correct_option_key not in options_by_key:
+            options_by_text[option_text] = option
+        for row in answer_rows_by_id.get(link_id, []):
+            correct_option_text = clean_text(row["correct_option_text"])
+            if correct_option_text not in options_by_text:
                 raise ImportErrorWithContext(
-                    f"{xlsx_path.name}: missing option {correct_option_key!r} for cloze matching exercise {external_id}"
+                    f"{xlsx_path.name}: missing option text {correct_option_text!r} "
+                    f"for cloze matching exercise {external_id}"
                 )
             ClozeMatchingBlankAnswer.objects.create(
                 exercise=exercise,
                 blank_key=clean_text(row["blank_key"]),
                 blank_number=parse_int(row["blank_number"], "blank_number"),
-                correct_option=options_by_key[correct_option_key],
+                correct_option=options_by_text[correct_option_text],
                 explanation=clean_text(row["explanation"]),
             )
         imported_count += 1
@@ -580,8 +645,10 @@ def import_writing(xlsx_path: Path) -> int:
     )
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
-    for row in iter_records(exercise_df):
-        external_id = clean_text(row["ID"])
+    exercise_rows = list(iter_records(exercise_df))
+    require_one_exercise_per_file(xlsx_path, len(exercise_rows))
+    for row in exercise_rows:
+        external_id = external_id_from_filename(xlsx_path, row["ID"])
         base = upsert_base(
             level=level,
             skill=ExerciseBase.Skill.WRITING,
@@ -623,13 +690,15 @@ def import_speaking_gap_matching(xlsx_path: Path) -> int:
     require_columns(exercise_df, ["exercise_id", "blank_key", "blank_number", "Option", "is_correct", "explanation"], "exercise")
 
     meta_by_id = {clean_text(row["ID"]): row for row in iter_records(meta_df)}
+    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
     rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
     for row in iter_records(exercise_df):
-        rows_by_id[clean_text(row["exercise_id"])].append(row)
+        rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
 
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
-    for external_id, meta in meta_by_id.items():
+    for workbook_external_id, meta in meta_by_id.items():
+        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
         base = upsert_base(
             level=level,
             skill=ExerciseBase.Skill.SPEAKING,
@@ -648,7 +717,7 @@ def import_speaking_gap_matching(xlsx_path: Path) -> int:
         exercise.options.all().delete()
 
         grouped_blanks: dict[tuple[str, int], list[dict[str, str]]] = defaultdict(list)
-        for row in rows_by_id.get(external_id, []):
+        for row in rows_by_id.get(normalize_link_id(workbook_external_id), []):
             key = (clean_text(row["blank_key"]), parse_int(row["blank_number"], "blank_number"))
             grouped_blanks[key].append(row)
 
@@ -696,13 +765,15 @@ def import_speaking_prompt_segmented(xlsx_path: Path) -> int:
     require_columns(example_df, ["exercise_id", "example_text"], "example")
 
     meta_by_id = {clean_text(row["ID"]): row for row in iter_records(meta_df)}
-    example_by_id = {clean_text(row["exercise_id"]): row for row in iter_records(example_df)}
+    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
+    example_by_id = {normalize_link_id(row["exercise_id"]): row for row in iter_records(example_df)}
 
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
-    for external_id, meta in meta_by_id.items():
+    for workbook_external_id, meta in meta_by_id.items():
+        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
         delimiter = clean_text(meta.get("分段符号")) or "<分段>"
-        example_row = example_by_id.get(external_id, {})
+        example_row = example_by_id.get(normalize_link_id(workbook_external_id), {})
         example_text = clean_text(example_row.get("example_text"))
         base = upsert_base(
             level=level,
@@ -806,7 +877,13 @@ def collect_files(base_dir: Path, file_arg: str) -> list[Path]:
         if not candidate.is_absolute():
             candidate = base_dir / file_arg
         return [candidate]
-    return sorted(path for path in base_dir.glob("*.xlsx") if not path.name.endswith("_example.xlsx"))
+    return sorted(
+        path
+        for path in base_dir.iterdir()
+        if path.is_file()
+        and path.suffix.lower() in {".xlsx", ".xlsm"}
+        and not path.stem.lower().endswith("_example")
+    )
 
 
 def import_kind(
@@ -827,7 +904,7 @@ def import_kind(
     files = collect_files(source_dir, file_arg)
     if not files:
         source_label = "failed" if retry_failed else "raw"
-        log(f"No xlsx files found for kind={kind} in {source_label}/.")
+        log(f"No xlsx/xlsm files found for kind={kind} in {source_label}/.")
         return 0
 
     ok = 0
@@ -858,7 +935,7 @@ def import_kind(
 
 def build_parser(kind: str | None = None) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Import exam_preparation xlsx files into the current database.",
+        description="Import exam_preparation xlsx/xlsm files into the current database.",
     )
     parser.add_argument(
         "--kind",
@@ -869,7 +946,7 @@ def build_parser(kind: str | None = None) -> argparse.ArgumentParser:
     parser.add_argument(
         "--file",
         default="",
-        help="Optional single xlsx filename or full path. If omitted, scans the kind raw directory.",
+        help="Optional single xlsx/xlsm filename or full path. If omitted, scans the kind raw directory.",
     )
     parser.add_argument(
         "--no-move",

@@ -20,7 +20,7 @@ Because of that:
 
 Tracked documentation:
 
-- `apps/exam_preparation/data/README.md`
+- `local-docs/exam-preparation-xlsx-contract.md`
 
 Ignored runtime import root:
 

@@ -17,7 +17,7 @@ Use this skill for operational account changes in this repository.
 - Produce copy-paste-safe `manage.py shell -c` commands for operators.
 
 ## Workflow
-1. Read [ACCOUNT_ADMIN_COMMANDS.md](../../../ACCOUNT_ADMIN_COMMANDS.md) first.
+1. Read [account-admin-commands.md](../../../local-docs/account-admin-commands.md) first.
 2. Prefer producing a command instead of editing application code.
 3. When granting access:
    - resolve the user by `telephone`

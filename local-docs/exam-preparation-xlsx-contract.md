@@ -81,6 +81,14 @@ Examples:
 The filename identifies the import batch/update file.
 It is not the same thing as the per-exercise `ID` inside the sheet.
 
+Both `.xlsx` and `.xlsm` are supported. Only worksheet data is read; VBA
+macros are not executed. Every workbook must contain exactly one exercise and
+its filename must end in that exercise's numeric ID. The normalized filename
+suffix is the canonical database `external_id`. Internal numeric relationship
+IDs still link by numeric equivalence, so `012`, `12`, and `12.0` match. If an
+internal ID differs from the filename suffix, the importer uses the internal ID
+to read child sheets but stores the filename suffix and logs `ID OVERRIDE`.
+
 ## 1. Listening
 
 Suggested filename:
@@ -345,6 +353,16 @@ Conclusion:
   - distinct `ReadingAdMatchingAd` rows deduplicated by ad text per exercise
   - `ReadingAdMatchingItem` rows pointing to the correct deduplicated ad
 
+Row behavior:
+
+- every non-empty `Ad` contributes to the shared ad option pool
+- only rows with a non-empty `situation` create a `ReadingAdMatchingItem`
+- a row with an empty `situation` and a non-empty `Ad` is an extra/distractor ad
+- a row with a non-empty `situation` and an empty `Ad` must fail the workbook import
+- fully empty data rows are ignored
+- `X` is not empty: it is the valid special “no advertisement matches” option
+- when a non-empty `situation` has `Ad = X`, that item's correct answer is `X`
+
 Special handling:
 
 - if `Ad = X`, importer should map it to one special `ReadingAdMatchingAd` with:
@@ -476,13 +494,13 @@ Columns:
 - `exercise_id`
 - `blank_key`
 - `blank_number`
-- `correct_option_key`
+- `correct_option_text`
 - `explanation`
 
 Mapping:
 
 - each row -> one `ClozeMatchingBlankAnswer`
-- `correct_option_key` resolves to `ClozeMatchingOption.option_key`
+- `correct_option_text` resolves to the matching `ClozeMatchingOption.option_text`
 - `explanation` -> `ClozeMatchingBlankAnswer.explanation`
 
 ## 4. Writing
@@ -740,6 +758,7 @@ What should be standardized for all importers:
 
 - infer `level` from the filename prefix such as `b1`
 - keep `external_id` exactly as provided in the sheet
+- compare numeric cross-sheet IDs by numeric value, so values such as `012`, `12`, and `12.0` link to each other
 - generate missing option keys when the sheet does not provide them
 - generate item order or blank order from row order when the sheet omits explicit numbering
 - store original file name in `imported_from_file`

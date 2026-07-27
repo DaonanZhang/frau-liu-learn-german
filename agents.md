@@ -165,8 +165,65 @@ After run:
 - When adjusting spacing, cards, grids, toolbars, buttons, or fixed/sticky areas, verify that the result remains readable and usable across common desktop, iPad/tablet, and mobile widths.
 
 ## Exam Preparation XLSX Rules
-- For `exam_preparation` import format, use `apps/exam_preparation/data/README.md` as the canonical XLSX contract.
+- For routing staged exam-preparation workbooks from the repository-level `tmp/`
+  directory into the appropriate `apps/exam_preparation/data/imports/*/raw/`
+  directory, follow `local-docs/exam-preparation-tmp-to-imports.md`.
+- Before importing routed exam-preparation workbooks, follow the static
+  preflight in `local-docs/exam-preparation-import-preflight.md`.
+- For `exam_preparation` import format, use
+  `local-docs/exam-preparation-xlsx-contract.md` as the canonical XLSX contract.
 - Do not reintroduce `title_zh` in new exam-preparation import assumptions or new sheets.
 - Map all shared exercise metadata through `ExerciseBase`, including `exam_type`.
 - Every concrete exam-preparation exercise must have a non-empty `ExerciseBase.exam_type`, and every exercise card must display it as an exam-format badge independently of the `is_real_exam` / `真题` badge.
 - All exam-preparation import paths must reject rows whose `考试类型` / `exam_type` value is empty; do not silently create exercises without an exam-format badge.
+- Before a batch import, verify that
+  `(level, exercise_type, numerically normalized meta ID)` is unique across all
+  candidate workbooks. A duplicate ID causes the later file to replace the
+  earlier exercise through `update_or_create`, even when every individual file
+  imports successfully.
+
+## Project Documentation Index
+
+Repository-maintained documentation lives in `local-docs/`. Keep this
+`agents.md` file at the repository root because it is the project instruction
+entry point. Keep `.codex/skills/**/SKILL.md` files in place because their
+locations are part of the skill-loading contract.
+
+- Project overview: `local-docs/project-readme.md`
+- Frontend overview: `local-docs/frontend-readme.md`
+- Account administration: `local-docs/account-admin-commands.md`
+- Learning-video import skill summary:
+  `local-docs/learning-video-import-skill-summary.md`
+- Video subtitle backfill record:
+  `local-docs/video-full-subtitle-backfill-local-run.md`
+- Server post-pull checklist: `local-docs/server-post-pull-checklist.md`
+- Exam-preparation server deployment:
+  `local-docs/exam-preparation-server-deployment.md`
+- Exam-preparation XLSX contract:
+  `local-docs/exam-preparation-xlsx-contract.md`
+- Exam-preparation tmp routing:
+  `local-docs/exam-preparation-tmp-to-imports.md`
+- Exam-preparation preflight and execution:
+  `local-docs/exam-preparation-import-preflight.md`
+
+## Destructive Database Safety Rule
+
+- A request to clear data must be interpreted at the narrowest explicitly
+  named module, model, or table scope. Never interpret it as permission to
+  drop, truncate, or clear the entire project database.
+- Before deleting the entire database, state the exact database and impact and
+  obtain explicit confirmation from the user at least twice in separate
+  messages. Do not delete the entire database if either confirmation is
+  missing or ambiguous.
+- Clearing `exam_preparation` data means deleting `ExerciseBase` records and
+  their app-level cascades only; it must not delete user accounts, orders, or
+  data owned by other Django apps.
+
+## Long-Running Task Watchdog
+
+- If a command, import, migration, test, or other task runs for more than five
+  minutes without completing, actively check whether it is stuck. Poll its
+  output and diagnose likely database, file I/O, permission, network, prompt,
+  or deadlock causes; interrupt it when continued waiting is not justified.
+- During long-running work, keep the user informed at least once per minute as
+  required by the collaboration rules; do not leave a silent command running.

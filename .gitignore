@@ -11,3 +11,5 @@ venv/
 /frontend/public/resources/ExamPreparation1/
 /frontend/public/manual
 .codex_tmp
+
+tmp

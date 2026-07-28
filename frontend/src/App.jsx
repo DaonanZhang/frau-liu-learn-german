@@ -218,6 +218,9 @@ const router = createBrowserRouter([
             tags={["Hauptaussage erkennen", "Titel zuordnen", "Lesetraining"]}
             fetchExercises={fetchReadingTitleMatchingExercises}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/lesen/title-matching/${exercise.id}`}
+            buildCardTitle={(exercise, index) =>
+              `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
+            }
             cardLabel="Leseübung"
             cardDescription="Öffne diese Aufgabe und finde für jeden Text die passende Überschrift."
           />
@@ -254,6 +257,9 @@ const router = createBrowserRouter([
             tags={["Situationen vergleichen", "Passende Anzeige finden", "Informationen abgleichen"]}
             fetchExercises={fetchReadingAdMatchingExercises}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/lesen/ad-matching/${exercise.id}`}
+            buildCardTitle={(exercise, index) =>
+              `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
+            }
             cardLabel="Leseübung"
             cardDescription="Öffne diese Aufgabe und ordne die Situationen den passenden Anzeigen zu."
           />

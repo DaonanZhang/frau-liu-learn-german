@@ -11,6 +11,7 @@ export default function ExerciseSelectionPage({
   tags = [],
   fetchExercises,
   buildExerciseHref,
+  buildCardTitle,
   cardLabel = "Übung",
   cardDescription = "Öffne diese Aufgabe und beginne direkt mit dem Training.",
   cardCta = "Übung öffnen",
@@ -78,7 +79,9 @@ export default function ExerciseSelectionPage({
         <section className="exercise-selection-grid" aria-label="Aufgabenliste">
           {exercises.map((exercise, index) => {
             const cardTitle =
-              exercise?.exercise_base?.title?.trim() || `Übung ${index + 1}`;
+              buildCardTitle?.(exercise, index) ||
+              exercise?.exercise_base?.title?.trim() ||
+              `Übung ${index + 1}`;
             const isRealExam = Boolean(exercise?.exercise_base?.is_real_exam);
             const examType = exercise?.exercise_base?.exam_type?.trim();
 

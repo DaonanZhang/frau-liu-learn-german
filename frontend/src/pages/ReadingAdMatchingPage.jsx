@@ -91,11 +91,7 @@ export default function ReadingAdMatchingPage() {
     return Array.isArray(exercise?.items) ? exercise.items : [];
   }, [exercise]);
   const heroTitle = useMemo(() => {
-    const title = exercise?.exercise_base?.title?.trim();
-    if (title) {
-      return title;
-    }
-    return `题目 ${exercise?.exercise_base?.external_id || exerciseId || ""}`.trim();
+    return `Übung ${exercise?.exercise_base?.external_id || exercise?.id || exerciseId || ""}`.trim();
   }, [exercise, exerciseId]);
 
   const currentItem = items[activeItemIndex] || null;

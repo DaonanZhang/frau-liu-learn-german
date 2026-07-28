@@ -9,6 +9,7 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
 import "./ClozeExercisePage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -497,6 +498,32 @@ export default function ClozeMatchingPage() {
             ))}
           </div>
         </section>
+
+        {isChecked ? (
+          <section className="cloze-feedback-list">
+            {blankAnswers.map((blank) => {
+              const selectedKey = answers[blank.blank_key] || "";
+              const selectedOption = optionMap[selectedKey];
+              const correctOption = blank.correct_option;
+              const isCorrect = selectedKey === correctOption?.option_key;
+
+              return (
+                <article
+                  key={blank.id}
+                  className={[
+                    "cloze-feedback-card",
+                    isCorrect ? "cloze-feedback-card--correct" : "cloze-feedback-card--wrong",
+                  ].join(" ")}
+                >
+                  <strong>Lücke {blank.blank_number}</strong>
+                  <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
+                  <p>Richtige Antwort: {correctOption?.option_text || "-"}</p>
+                  <p>Erklärung: <FormattedExplanation text={blank.explanation} /></p>
+                </article>
+              );
+            })}
+          </section>
+        ) : null}
 
         {touchDragPosition && draggedOptionKey ? (
           <div

@@ -9,6 +9,7 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
 import "./ReadingUnderstandingPage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -281,9 +282,9 @@ export default function ReadingUnderstandingPage() {
                       {(question.answer_options || []).find((option) => option.is_correct)?.option_text}
                     </p>
                     <p className="reading-understanding-feedback__line">
-                      Erklärung:{" "}
-                      {(question.answer_options || []).find((option) => option.is_correct)?.explanation ||
-                        "Keine zusätzliche Erklärung."}
+                      Erklärung: <FormattedExplanation
+                        text={(question.answer_options || []).find((option) => option.is_correct)?.explanation}
+                      />
                     </p>
                   </div>
                 ) : null}

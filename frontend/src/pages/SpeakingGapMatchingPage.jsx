@@ -8,6 +8,7 @@ import {
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionSheet.jsx";
+import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
 import SpeakingPracticeRecorder from "../components/examPreparation/SpeakingPracticeRecorder.jsx";
 import "./ClozeExercisePage.css";
 
@@ -314,7 +315,7 @@ export default function SpeakingGapMatchingPage() {
                   </div>
                   <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
                   <p>Richtige Antwort: {correctOption?.option_text || "-"}</p>
-                  <p>Erklärung: {correctOption?.explanation || "Keine zusätzliche Erklärung."}</p>
+                  <p>Erklärung: <FormattedExplanation text={correctOption?.explanation} /></p>
                 </article>
               );
             })}

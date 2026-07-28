@@ -9,6 +9,7 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
 import "./ReadingAdMatchingPage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -451,7 +452,7 @@ export default function ReadingAdMatchingPage() {
                     {String(currentItem.correct_ad?.ad_key || "").toLocaleUpperCase()}
                   </p>
                   <p className="reading-ad-feedback__line">
-                    Erklärung: {currentItem.explanation || "Keine zusätzliche Erklärung."}
+                    Erklärung: <FormattedExplanation text={currentItem.explanation} />
                   </p>
                 </div>
               ) : null}

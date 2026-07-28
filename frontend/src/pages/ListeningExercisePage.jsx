@@ -9,6 +9,7 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
 import "./ListeningExercisePage.css";
 
 const INSTRUCTION_BY_TYPE = {
@@ -433,7 +434,7 @@ export default function ListeningExercisePage({
                         Richtige Antwort: {correctOption?.option_text || "-"}
                       </p>
                       <p className="listening-exercise-feedback__line">
-                        Erklärung: {correctOption?.explanation || "Keine zusätzliche Erklärung."}
+                        Erklärung: <FormattedExplanation text={correctOption?.explanation} />
                       </p>
                     </div>
                   ) : null}

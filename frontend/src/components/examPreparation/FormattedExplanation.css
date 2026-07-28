@@ -1,0 +1,13 @@
+.formatted-explanation {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.formatted-explanation__yellow {
+  padding: 0 0.12em;
+  border-radius: 0.2em;
+  background: #fff1a8;
+  color: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}

@@ -10,6 +10,7 @@ import {
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionSheet.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
 import "./ReadingTitleMatchingPage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -256,7 +257,7 @@ export default function ReadingTitleMatchingPage() {
                         Richtige Antwort: {item.correct_option?.option_key} - {item.correct_option?.option_text}
                       </p>
                       <p className="reading-title-feedback__line">
-                        Erklärung: {item.explanation || "Keine zusätzliche Erklärung."}
+                        Erklärung: <FormattedExplanation text={item.explanation} />
                       </p>
                     </div>
                   ) : null}

@@ -246,6 +246,11 @@ class UserWritingExerciseState(BaseUserExerciseState):
         related_name="user_states",
         verbose_name="exercise",
     )
+    time_spent_seconds = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="time spent seconds",
+    )
 
     class Meta:
         verbose_name = "user writing exercise state"

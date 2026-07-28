@@ -112,6 +112,28 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
         states = response.data.get("results", []) if isinstance(response.data, dict) else response.data
         self.assertEqual(states, [])
 
+    def test_writing_state_persists_time_spent_seconds(self):
+        self.client.force_authenticate(self.user)
+        state_url = reverse("exam-prep-user-writing-exercise-states-list")
+
+        response = self.client.post(
+            state_url,
+            {
+                "exercise": self.exercise.pk,
+                "answer_payload": {"text": "Meine Antwort", "is_checked": True},
+                "time_spent_seconds": 325,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["time_spent_seconds"], 325)
+
+        response = self.client.get(state_url, {"exercise": self.exercise.pk})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        states = response.data.get("results", []) if isinstance(response.data, dict) else response.data
+        self.assertEqual(states[0]["time_spent_seconds"], 325)
+
 
 class SpeakingGapChoiceApiTests(APITestCase):
     def setUp(self):

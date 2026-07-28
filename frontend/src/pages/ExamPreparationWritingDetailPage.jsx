@@ -57,6 +57,7 @@ export default function ExamPreparationWritingDetailPage() {
   const [isChecked, setIsChecked] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(30 * 60);
   const [timerStarted, setTimerStarted] = useState(false);
+  const [submittedTimeSpentSeconds, setSubmittedTimeSpentSeconds] = useState(null);
   const [isFavorited, setIsFavorited] = useState(false);
   const [favoritePending, setFavoritePending] = useState(false);
   const [exampleFavoriteById, setExampleFavoriteById] = useState({});
@@ -78,9 +79,8 @@ export default function ExamPreparationWritingDetailPage() {
         const detail = await fetchWritingExerciseDetail(exerciseId);
         if (!aborted) {
           setExercise(detail || null);
-          if (detail?.time_limit_minutes) {
-            setRemainingSeconds(detail.time_limit_minutes * 60);
-          }
+          const timeLimitSeconds = (detail?.time_limit_minutes || 30) * 60;
+          setRemainingSeconds(timeLimitSeconds);
           const stateData = await fetchWritingExerciseStates(exerciseId);
           if (aborted) {
             return;
@@ -90,7 +90,16 @@ export default function ExamPreparationWritingDetailPage() {
             setIsFavorited(Boolean(firstState.is_favorited));
             if (typeof firstState?.answer_payload?.text === "string") {
               setDraftText(firstState.answer_payload.text);
-              setIsChecked(true);
+              const restoredIsChecked = Boolean(firstState.answer_payload.is_checked);
+              setIsChecked(restoredIsChecked);
+              if (
+                restoredIsChecked
+                && Number.isInteger(firstState.time_spent_seconds)
+                && firstState.time_spent_seconds >= 0
+              ) {
+                setSubmittedTimeSpentSeconds(firstState.time_spent_seconds);
+                setRemainingSeconds(Math.max(timeLimitSeconds - firstState.time_spent_seconds, 0));
+              }
             }
           }
           const exampleStateData = await fetchWritingExampleTextStates(exerciseId);
@@ -198,6 +207,7 @@ export default function ExamPreparationWritingDetailPage() {
         is_favorited: nextValue,
         answer_payload: {
           text: draftText,
+          is_checked: isChecked,
         },
       });
       setIsFavorited(nextValue);
@@ -205,6 +215,28 @@ export default function ExamPreparationWritingDetailPage() {
       setErrorText(error?.message || "收藏状态保存失败。");
     } finally {
       setFavoritePending(false);
+    }
+  }
+
+  async function handleCheck() {
+    const timeLimitSeconds = (exercise?.time_limit_minutes || 30) * 60;
+    const timeSpentSeconds = Math.max(0, timeLimitSeconds - remainingSeconds);
+    setTimerStarted(false);
+    setSubmittedTimeSpentSeconds(timeSpentSeconds);
+    setIsChecked(true);
+
+    try {
+      await saveWritingExerciseState({
+        exercise: exercise.id,
+        is_favorited: isFavorited,
+        time_spent_seconds: timeSpentSeconds,
+        answer_payload: {
+          text: draftText,
+          is_checked: true,
+        },
+      });
+    } catch (error) {
+      setErrorText(error?.message || "Antwort konnte nicht gespeichert werden.");
     }
   }
 
@@ -314,9 +346,15 @@ export default function ExamPreparationWritingDetailPage() {
                 setTimerStarted(true);
               }
             }}
-            disabled={timerStarted || remainingSeconds <= 0}
+            disabled={isChecked || timerStarted || remainingSeconds <= 0}
           >
-            {timerStarted ? `计时中：${formatTime(remainingSeconds)}` : `开始计时：${formatTime(remainingSeconds)}`}
+            {isChecked
+              ? submittedTimeSpentSeconds === null
+                ? "计时已结束"
+                : `用时：${formatTime(submittedTimeSpentSeconds)}`
+              : timerStarted
+                ? `计时中：${formatTime(remainingSeconds)}`
+                : `开始计时：${formatTime(remainingSeconds)}`}
           </button>
         </section>
 
@@ -375,18 +413,20 @@ export default function ExamPreparationWritingDetailPage() {
               <p>{draftText || "你还没有输入内容。"}</p>
             </article>
 
-            {exampleTexts.map((example) => (
+            {exampleTexts.map((example, index) => (
               <article key={example.id} className="writing-detail-review-card writing-detail-review-card--example">
                 <div className="writing-detail-review-card__titleRow">
                   <div className="writing-detail-review-card__exampleHeading">
-                    <h2>{example.label || "Beispieltext"}</h2>
+                    <h2>
+                      {exampleTexts.length > 1 ? `Mustertext ${index + 1}` : "Mustertext"}
+                    </h2>
                     {example.note ? <span>{example.note}</span> : null}
                   </div>
                   <ExerciseFavoriteButton
                     isFavorited={Boolean(exampleFavoriteById[example.id])}
                     pending={Boolean(exampleFavoritePendingById[example.id])}
                     onClick={() => toggleExampleFavorite(example.id)}
-                    label="收藏 Beispieltext"
+                    label="收藏 Mustertext"
                   />
                 </div>
                 <p>{example.example_text}</p>
@@ -403,9 +443,7 @@ export default function ExamPreparationWritingDetailPage() {
             <ExamActionButton
               className="writing-detail-check-btn"
               disabled={isChecked || !draftText.trim()}
-              onClick={() => {
-                setIsChecked(true);
-              }}
+              onClick={handleCheck}
               label="Prüfen"
               icon="check"
             />
@@ -416,6 +454,7 @@ export default function ExamPreparationWritingDetailPage() {
                   setDraftText("");
                   setIsChecked(false);
                   setTimerStarted(false);
+                  setSubmittedTimeSpentSeconds(null);
                   setRemainingSeconds((exercise?.time_limit_minutes || 30) * 60);
                 }}
                 label="Wiederholen"

@@ -60,10 +60,9 @@ export default function ReadingTitleMatchingPage() {
             }
           });
           setFavoritedByItemId(nextFavorited);
-          if (Object.keys(nextAnswers).length > 0) {
-            setAnswers(nextAnswers);
-            setIsChecked(true);
-          }
+          const itemCount = Array.isArray(detail?.items) ? detail.items.length : 0;
+          setAnswers(nextAnswers);
+          setIsChecked(itemCount > 0 && Object.keys(nextAnswers).length === itemCount);
         }
       } catch (error) {
         if (!aborted) {
@@ -115,6 +114,27 @@ export default function ReadingTitleMatchingPage() {
       setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
     } finally {
       setFavoritePendingByItemId((previous) => ({ ...previous, [item.id]: false }));
+    }
+  }
+
+  async function handleCheck() {
+    setIsChecked(true);
+
+    try {
+      await Promise.all(
+        items.map((item) =>
+          saveReadingTitleMatchingItemState({
+            item: item.id,
+            is_favorited: Boolean(favoritedByItemId[item.id]),
+            answer_payload: {
+              selected_option_key: answers[item.id] || "",
+            },
+            is_correct: answers[item.id] === item.correct_option?.option_key,
+          })
+        )
+      );
+    } catch (error) {
+      setErrorText(error?.message || "Antworten konnten nicht gespeichert werden.");
     }
   }
 
@@ -266,15 +286,10 @@ export default function ReadingTitleMatchingPage() {
             })}
           </div>
           <div className="reading-title-actions">
-            <span className="reading-title-actions__hint">
-              {answeredCount === items.length ? "Alle Texte sind zugeordnet." : "Ordne zuerst jeden Text einem Titel zu."}
-            </span>
             <ExamActionButton
               className="reading-title-check-btn"
               disabled={isChecked || !items.length || answeredCount !== items.length}
-              onClick={() => {
-                setIsChecked(true);
-              }}
+              onClick={handleCheck}
               label="Prüfen"
               icon="check"
             />

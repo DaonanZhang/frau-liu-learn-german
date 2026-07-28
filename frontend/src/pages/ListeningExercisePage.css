@@ -151,8 +151,7 @@
 }
 
 .listening-exercise-audio-panel__status,
-.listening-exercise-questions__header span,
-.listening-exercise-question-card__selection {
+.listening-exercise-questions__header span {
   color: #6b7280;
   font-size: 0.9rem;
   font-weight: 600;
@@ -371,13 +370,6 @@
   justify-content: flex-end;
 }
 
-.listening-exercise-actions__hint {
-  margin-right: auto;
-  color: #6b7280;
-  font-size: 0.92rem;
-  font-weight: 600;
-}
-
 .listening-exercise-check-btn,
 .listening-exercise-reset-btn {
   min-width: 10.5rem;
@@ -478,10 +470,6 @@
 
   .listening-exercise-actions {
     flex-direction: column;
-  }
-
-  .listening-exercise-actions__hint {
-    margin-right: 0;
   }
 
   .listening-exercise-check-btn,

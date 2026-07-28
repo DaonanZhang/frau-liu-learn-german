@@ -264,7 +264,16 @@ class UserSpeakingGapBlankStateAdmin(admin.ModelAdmin):
 
 @admin.register(UserWritingExerciseState)
 class UserWritingExerciseStateAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "exercise", "is_favorited", "is_correct", "last_answered_at", "updated_at")
+    list_display = (
+        "id",
+        "user",
+        "exercise",
+        "time_spent_seconds",
+        "is_favorited",
+        "is_correct",
+        "last_answered_at",
+        "updated_at",
+    )
     list_filter = ("is_favorited", "is_correct")
     search_fields = ("user__telephone", "exercise__exercise_base__external_id", "exercise__exercise_base__title")
 

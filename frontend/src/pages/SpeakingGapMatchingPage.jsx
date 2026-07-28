@@ -81,10 +81,9 @@ export default function SpeakingGapMatchingPage() {
           }
         });
         setFavoritedByBlankId(nextFavorited);
-        if (Object.keys(nextAnswers).length > 0) {
-          setAnswers(nextAnswers);
-          setIsChecked(true);
-        }
+        const blankCount = Array.isArray(detail?.blanks) ? detail.blanks.length : 0;
+        setAnswers(nextAnswers);
+        setIsChecked(blankCount > 0 && Object.keys(nextAnswers).length === blankCount);
       } catch (error) {
         if (!aborted) {
           setErrorText(error?.message || "Failed to load speaking gap exercise.");

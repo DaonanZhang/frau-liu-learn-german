@@ -180,18 +180,6 @@
   font-weight: 750;
 }
 
-.reading-understanding-question-card__selection {
-  display: inline-flex;
-  align-items: center;
-  min-height: 2rem;
-  padding: 0.3rem 0.65rem;
-  border-radius: 999px;
-  background: #f5f6f8;
-  color: #6b7280;
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
 .reading-understanding-option-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -305,13 +293,6 @@
   gap: 0.75rem;
 }
 
-.reading-understanding-actions__hint {
-  margin-right: auto;
-  color: #6b7280;
-  font-size: 0.92rem;
-  font-weight: 600;
-}
-
 .reading-understanding-check-btn {
   min-width: 10.5rem;
   min-height: 3.15rem;
@@ -393,10 +374,6 @@
   .reading-understanding-actions {
     justify-content: stretch;
     flex-direction: column;
-  }
-
-  .reading-understanding-actions__hint {
-    margin-right: 0;
   }
 
   .reading-understanding-check-btn {

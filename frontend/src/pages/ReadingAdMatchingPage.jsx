@@ -15,6 +15,10 @@ import "./ReadingAdMatchingPage.css";
 const FALLBACK_INSTRUCTION =
   "Lesen sie die Situationen 1-10 und die Anzeigen a-l. Finden sie für jede die passende Anzeige. Sie können jede Anzeige nur einmal benutzen. Markieren sie Ihre Lösungen für die Aufgaben 1–10 auf dem Antwortbogen. Wenn Sie zu einer Situation keine Anzeige finden, markieren Sie x.";
 
+function isNoMatchOption(ad) {
+  return Boolean(ad?.is_no_match_option) || String(ad?.ad_key || "").trim().toLowerCase() === "x";
+}
+
 export default function ReadingAdMatchingPage() {
   const { exerciseId } = useParams();
   const [exercise, setExercise] = useState(null);
@@ -61,10 +65,9 @@ export default function ReadingAdMatchingPage() {
             }
           });
           setFavoritedByItemId(nextFavorited);
-          if (Object.keys(nextAnswers).length > 0) {
-            setAnswers(nextAnswers);
-            setIsChecked(true);
-          }
+          const itemCount = Array.isArray(detail?.items) ? detail.items.length : 0;
+          setAnswers(nextAnswers);
+          setIsChecked(itemCount > 0 && Object.keys(nextAnswers).length === itemCount);
         }
       } catch (error) {
         if (!aborted) {
@@ -169,6 +172,27 @@ export default function ReadingAdMatchingPage() {
     }
   }
 
+  async function handleCheck() {
+    setIsChecked(true);
+
+    try {
+      await Promise.all(
+        items.map((item) =>
+          saveReadingAdMatchingItemState({
+            item: item.id,
+            is_favorited: Boolean(favoritedByItemId[item.id]),
+            answer_payload: {
+              selected_ad_key: answers[item.id] || "",
+            },
+            is_correct: answers[item.id] === item.correct_ad?.ad_key,
+          })
+        )
+      );
+    } catch (error) {
+      setErrorText(error?.message || "Antworten konnten nicht gespeichert werden.");
+    }
+  }
+
   if (loading) {
     return (
       <div className="reading-ad-page">
@@ -239,7 +263,7 @@ export default function ReadingAdMatchingPage() {
                 const lines = String(ad.ad_text_markdown || "")
                   .split("\n")
                   .filter(Boolean);
-                const isSelected = selectedAdKeys.has(ad.ad_key);
+                const isSelected = !isNoMatchOption(ad) && selectedAdKeys.has(ad.ad_key);
                 return (
                   <article
                     key={ad.id}
@@ -250,9 +274,6 @@ export default function ReadingAdMatchingPage() {
                       .filter(Boolean)
                       .join(" ")}
                   >
-                    {isSelected ? (
-                      <span className="reading-ad-card__selected-badge">Ausgewählt</span>
-                    ) : null}
                     {lines.map((line, index) => (
                       <p
                         key={index}
@@ -334,6 +355,7 @@ export default function ReadingAdMatchingPage() {
                 type="button"
                 className={[
                   "reading-ad-pagination__item",
+                  answers[item.id] && !isChecked ? "is-answered" : "",
                   index === activeItemIndex ? "is-active" : "",
                   isChecked && answers[item.id] === item.correct_ad?.ad_key ? "is-correct" : "",
                   isChecked &&
@@ -380,7 +402,7 @@ export default function ReadingAdMatchingPage() {
               <div className="reading-ad-option-grid">
                 {ads.map((ad) => {
                   const checked = answers[currentItem.id] === ad.ad_key;
-                  const isUsed = selectedAdKeys.has(ad.ad_key);
+                  const isUsed = !isNoMatchOption(ad) && selectedAdKeys.has(ad.ad_key);
                   const isCorrect = ad.ad_key === currentItem.correct_ad?.ad_key;
                   const isWrongSelected = isChecked && checked && !isCorrect;
                   const shouldRevealCorrect = isChecked && isCorrect;
@@ -460,15 +482,10 @@ export default function ReadingAdMatchingPage() {
           ) : null}
 
           <div className="reading-ad-actions">
-            <span className="reading-ad-actions__hint">
-              {answeredCount === items.length ? "Alle Situationen sind beantwortet." : "Bearbeite zuerst alle Situationen."}
-            </span>
             <ExamActionButton
               className="reading-ad-check-btn"
               disabled={isChecked || !items.length || answeredCount !== items.length}
-              onClick={() => {
-                setIsChecked(true);
-              }}
+              onClick={handleCheck}
               label="Prüfen"
               icon="check"
             />

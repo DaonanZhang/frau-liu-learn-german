@@ -75,10 +75,9 @@ export default function ListeningExercisePage({
             }
           });
           setFavoritedByQuestionId(nextFavorited);
-          if (Object.keys(nextAnswers).length > 0) {
-            setAnswers(nextAnswers);
-            setIsChecked(true);
-          }
+          const questionCount = Array.isArray(detail?.questions) ? detail.questions.length : 0;
+          setAnswers(nextAnswers);
+          setIsChecked(questionCount > 0 && Object.keys(nextAnswers).length === questionCount);
         }
       } catch (error) {
         if (!aborted) {
@@ -192,6 +191,31 @@ export default function ListeningExercisePage({
       setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
     } finally {
       setFavoritePendingByQuestionId((previous) => ({ ...previous, [question.id]: false }));
+    }
+  }
+
+  async function handleCheck() {
+    setIsChecked(true);
+
+    try {
+      await Promise.all(
+        questions.map((question) => {
+          const selectedOptionKey = answers[question.id] || "";
+          const selectedOption = (question.answer_options || []).find(
+            (option) => option.option_key === selectedOptionKey
+          );
+          return saveListeningQuestionState({
+            question: question.id,
+            is_favorited: Boolean(favoritedByQuestionId[question.id]),
+            answer_payload: {
+              selected_option_key: selectedOptionKey,
+            },
+            is_correct: selectedOption ? Boolean(selectedOption.is_correct) : false,
+          });
+        })
+      );
+    } catch (error) {
+      setErrorText(error?.message || "Antworten konnten nicht gespeichert werden.");
     }
   }
 
@@ -365,9 +389,6 @@ export default function ListeningExercisePage({
                       </span>
                       <h3>{question.question_text}</h3>
                     </div>
-                    <span className="listening-exercise-question-card__selection">
-                      {selectedOption ? `Ausgewählt: ${selectedOption.option_text}` : "Noch nicht gewählt"}
-                    </span>
                   </div>
 
                   <div className="listening-exercise-option-grid">
@@ -447,9 +468,7 @@ export default function ListeningExercisePage({
             <ExamActionButton
               className="listening-exercise-check-btn"
               disabled={isChecked || !questions.length || answeredCount !== questions.length}
-              onClick={() => {
-                setIsChecked(true);
-              }}
+              onClick={handleCheck}
               label="Prüfen"
               icon="check"
             />

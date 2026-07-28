@@ -75,10 +75,9 @@ export default function ClozeChoicePage() {
             }
           });
           setFavoritedByBlankId(nextFavorited);
-          if (Object.keys(nextAnswers).length > 0) {
-            setAnswers(nextAnswers);
-            setIsChecked(true);
-          }
+          const blankCount = Array.isArray(detail?.blanks) ? detail.blanks.length : 0;
+          setAnswers(nextAnswers);
+          setIsChecked(blankCount > 0 && Object.keys(nextAnswers).length === blankCount);
         }
       } catch (error) {
         if (!aborted) {
@@ -131,6 +130,31 @@ export default function ClozeChoicePage() {
       setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
     } finally {
       setFavoritePendingByBlankId((previous) => ({ ...previous, [blank.id]: false }));
+    }
+  }
+
+  async function handleCheck() {
+    setIsChecked(true);
+
+    try {
+      await Promise.all(
+        blanks.map((blank) => {
+          const selectedOptionKey = answers[blank.blank_key] || "";
+          const selectedOption = (blank.options || []).find(
+            (option) => option.option_key === selectedOptionKey
+          );
+          return saveClozeChoiceBlankState({
+            blank: blank.id,
+            is_favorited: Boolean(favoritedByBlankId[blank.id]),
+            answer_payload: {
+              selected_option_key: selectedOptionKey,
+            },
+            is_correct: selectedOption ? Boolean(selectedOption.is_correct) : false,
+          });
+        })
+      );
+    } catch (error) {
+      setErrorText(error?.message || "Antworten konnten nicht gespeichert werden.");
     }
   }
 
@@ -303,7 +327,7 @@ export default function ClozeChoicePage() {
             <ExamActionButton
               className="cloze-check-btn"
               disabled={isChecked || !blanks.length || answeredCount !== blanks.length}
-              onClick={() => setIsChecked(true)}
+              onClick={handleCheck}
               label="Prüfen"
               icon="check"
             />

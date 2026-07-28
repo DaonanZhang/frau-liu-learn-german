@@ -90,9 +90,11 @@ export default function ClozeMatchingPage() {
             }
           });
           setFavoritedByBlankId(nextFavorited);
-          if (Object.keys(nextAnswers).length > 0) {
-            setAnswers(nextAnswers);
-            setIsChecked(true);
+          const blankCount = Array.isArray(detail?.blank_answers) ? detail.blank_answers.length : 0;
+          const hasCompleteSavedAttempt = blankCount > 0 && Object.keys(nextAnswers).length === blankCount;
+          setAnswers(nextAnswers);
+          setIsChecked(hasCompleteSavedAttempt);
+          if (hasCompleteSavedAttempt) {
             setSaveStateText("已恢复上次批改后的作答状态。");
           }
         }
@@ -469,26 +471,15 @@ export default function ClozeMatchingPage() {
                         )}
                       </span>
                       {isChecked ? (
-                        <span className="cloze-inline-feedback-row">
-                          <span
-                            className={[
-                              "cloze-inline-feedback",
-                              isCorrect
-                                ? "cloze-inline-feedback--correct"
-                                : "cloze-inline-feedback--answer",
-                            ].join(" ")}
-                          >
-                            {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
-                          </span>
-                          {blank ? (
-                            <ExerciseFavoriteButton
-                              isFavorited={Boolean(favoritedByBlankId[blank.id])}
-                              pending={Boolean(favoritePendingByBlankId[blank.id])}
-                              onClick={() => {
-                                toggleFavorite(blank);
-                              }}
-                            />
-                          ) : null}
+                        <span
+                          className={[
+                            "cloze-inline-feedback",
+                            isCorrect
+                              ? "cloze-inline-feedback--correct"
+                              : "cloze-inline-feedback--answer",
+                          ].join(" ")}
+                        >
+                          {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
                         </span>
                       ) : null}
                     </span>
@@ -515,7 +506,16 @@ export default function ClozeMatchingPage() {
                     isCorrect ? "cloze-feedback-card--correct" : "cloze-feedback-card--wrong",
                   ].join(" ")}
                 >
-                  <strong>Lücke {blank.blank_number}</strong>
+                  <div className="cloze-feedback-card__header">
+                    <strong>Lücke {blank.blank_number}</strong>
+                    <ExerciseFavoriteButton
+                      isFavorited={Boolean(favoritedByBlankId[blank.id])}
+                      pending={Boolean(favoritePendingByBlankId[blank.id])}
+                      onClick={() => {
+                        toggleFavorite(blank);
+                      }}
+                    />
+                  </div>
                   <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
                   <p>Richtige Antwort: {correctOption?.option_text || "-"}</p>
                   <p>Erklärung: <FormattedExplanation text={blank.explanation} /></p>

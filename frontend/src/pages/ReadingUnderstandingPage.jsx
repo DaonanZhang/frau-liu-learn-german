@@ -58,10 +58,9 @@ export default function ReadingUnderstandingPage() {
             }
           });
           setFavoritedByQuestionId(nextFavorited);
-          if (Object.keys(nextAnswers).length > 0) {
-            setAnswers(nextAnswers);
-            setIsChecked(true);
-          }
+          const questionCount = Array.isArray(detail?.questions) ? detail.questions.length : 0;
+          setAnswers(nextAnswers);
+          setIsChecked(questionCount > 0 && Object.keys(nextAnswers).length === questionCount);
         }
       } catch (error) {
         if (!aborted) {
@@ -117,6 +116,31 @@ export default function ReadingUnderstandingPage() {
       setErrorText(error?.message || "Favorit konnte nicht gespeichert werden.");
     } finally {
       setFavoritePendingByQuestionId((previous) => ({ ...previous, [question.id]: false }));
+    }
+  }
+
+  async function handleCheck() {
+    setIsChecked(true);
+
+    try {
+      await Promise.all(
+        questions.map((question) => {
+          const selectedOptionKey = answers[question.id] || "";
+          const selectedOption = (question.answer_options || []).find(
+            (option) => option.option_key === selectedOptionKey
+          );
+          return saveReadingUnderstandingQuestionState({
+            question: question.id,
+            is_favorited: Boolean(favoritedByQuestionId[question.id]),
+            answer_payload: {
+              selected_option_key: selectedOptionKey,
+            },
+            is_correct: selectedOption ? Boolean(selectedOption.is_correct) : false,
+          });
+        })
+      );
+    } catch (error) {
+      setErrorText(error?.message || "Antworten konnten nicht gespeichert werden.");
     }
   }
 
@@ -201,9 +225,6 @@ export default function ReadingUnderstandingPage() {
                   <h3>
                     {question.question_number}. {question.question_text}
                   </h3>
-                  <span className="reading-understanding-question-card__selection">
-                    {answers[question.id] ? `已选择 ${answers[question.id]}` : "未选择"}
-                  </span>
                 </div>
 
                 <div className="reading-understanding-option-grid">
@@ -293,15 +314,10 @@ export default function ReadingUnderstandingPage() {
           </div>
 
           <div className="reading-understanding-actions">
-            <span className="reading-understanding-actions__hint">
-              {answeredCount === questions.length ? "Alle Fragen sind beantwortet." : "Beantworte zuerst alle Fragen."}
-            </span>
             <ExamActionButton
               className="reading-understanding-check-btn"
               disabled={isChecked || !questions.length || answeredCount !== questions.length}
-              onClick={() => {
-                setIsChecked(true);
-              }}
+              onClick={handleCheck}
               label="Prüfen"
               icon="check"
             />

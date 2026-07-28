@@ -337,12 +337,6 @@
   font-weight: 700;
 }
 
-.cloze-inline-feedback-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
 .cloze-inline-feedback--correct {
   color: #17713c;
 }

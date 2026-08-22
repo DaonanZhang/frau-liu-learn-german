@@ -60,8 +60,9 @@ class PaymentGrantTask(models.Model):
         max_length=16,
         choices=[
             ("trial_7d", "Trial (7 days)"),
-            ("m1", "1 month"),
-            ("m3", "3 months"),
+            ("m1", "30 days"),
+            ("m2", "60 days"),
+            ("m3", "90 days"),
             ("m6", "6 months"),
             ("m12", "12 months"),
             ("lifetime", "Lifetime"),

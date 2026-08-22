@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.db import models
+from django.db.models import Q
 
 
 class AlipayWebsitePayment(models.Model):
@@ -59,6 +60,13 @@ class AlipayWebsitePayment(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["status", "created_at"], name="idx_alipay_status_created"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["alipay_trade_no"],
+                condition=~Q(alipay_trade_no=""),
+                name="uniq_nonblank_alipay_trade_no",
+            )
         ]
 
     def __str__(self) -> str:

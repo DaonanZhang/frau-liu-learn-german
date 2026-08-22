@@ -45,11 +45,25 @@ class PurchaseOffer(models.Model):
             models.Index(fields=["module", "is_active", "sort_order"], name="idx_offer_module_active_sort"),
             models.Index(fields=["season", "is_active"], name="idx_offer_season_active"),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(price_amount__gt=0),
+                name="purchase_offer_price_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(currency="CNY"),
+                name="purchase_offer_currency_cny",
+            ),
+        ]
 
     def clean(self) -> None:
         super().clean()
         if self.season_id and self.module_id and self.season.module_id != self.module_id:
             raise ValidationError({"season": "Selected season does not belong to the selected module."})
+        if self.price_amount <= 0:
+            raise ValidationError({"price_amount": "Price must be greater than zero."})
+        if self.currency != "CNY":
+            raise ValidationError({"currency": "Alipay purchase offers must use CNY."})
 
     def __str__(self) -> str:
         scope = self.module.key

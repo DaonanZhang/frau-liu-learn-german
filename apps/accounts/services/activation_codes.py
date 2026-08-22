@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import random
+import secrets
 import string
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterable, Optional
 
@@ -22,6 +23,7 @@ class ActivationPlan:
 
     TRIAL_7D = "trial_7d"
     M1 = "m1"
+    M2 = "m2"
     M3 = "m3"
     M6 = "m6"
     M12 = "m12"
@@ -30,6 +32,7 @@ class ActivationPlan:
     ALL = {
         TRIAL_7D,
         M1,
+        M2,
         M3,
         M6,
         M12,
@@ -126,7 +129,39 @@ DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 720  # 720 days
 
 
 def _redis_key(code: str) -> str:
-    return f"activation_code:{code}"
+    return f"activation_code:{str(code or '').strip().upper()}"
+
+
+def _redis_lock_key(code: str) -> str:
+    return f"activation_code_lock:{str(code or '').strip().upper()}"
+
+
+@contextmanager
+def activation_code_lock(code: str):
+    """Serialize redemption of one code across all application processes."""
+
+    lock_key = _redis_lock_key(code)
+    try:
+        lock = cache.lock(lock_key, timeout=60, blocking_timeout=0)
+    except AttributeError:
+        lock = None
+
+    if lock is not None:
+        acquired = lock.acquire(blocking=False)
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                lock.release()
+        return
+
+    token = secrets.token_urlsafe(16)
+    acquired = cache.add(lock_key, token, timeout=60)
+    try:
+        yield acquired
+    finally:
+        if acquired and cache.get(lock_key) == token:
+            cache.delete(lock_key)
 
 
 def generate_activation_code(length: int = 8) -> str:
@@ -134,7 +169,7 @@ def generate_activation_code(length: int = 8) -> str:
     Generate an activation code like: A9F3KQ2M
     """
     alphabet = string.ascii_uppercase + string.digits
-    return "".join(random.choices(alphabet, k=length))
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 def store_activation_code(
@@ -147,11 +182,16 @@ def store_activation_code(
     Validate and store activation payload into Redis.
     """
     payload.validate()
-    cache.set(
-        _redis_key(code),
+    normalized_code = str(code or "").strip().upper()
+    if not normalized_code:
+        raise ValueError("Activation code cannot be empty")
+    stored = cache.add(
+        _redis_key(normalized_code),
         payload.to_dict(),
         timeout=ttl_seconds,
     )
+    if not stored:
+        raise ValueError("Activation code already exists")
 
 
 def verify_activation_code(code: str) -> Optional[ActivationPayload]:

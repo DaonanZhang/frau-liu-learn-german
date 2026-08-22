@@ -3,13 +3,17 @@ from __future__ import annotations
 import shutil
 import tempfile
 import re
+from datetime import timedelta
+from io import StringIO
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -246,7 +250,7 @@ class ActivationCodeApiTests(APITestCase):
         self.assertEqual(entitlement.season_id, self.season4.id)
         self.assertEqual(entitlement.plan, Entitlement.Plan.LIFETIME)
         self.assertEqual(entitlement.status, Entitlement.Status.ACTIVE)
-        self.assertEqual(entitlement.external_ref, "activation_code")
+        self.assertTrue(entitlement.external_ref.startswith("activation_code:"))
         self.assertIsNone(entitlement.expires_at)
         self.assertIsNone(verify_activation_code("SEASON4A"))
 
@@ -268,6 +272,71 @@ class ActivationCodeApiTests(APITestCase):
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(second.data["detail"], "Invalid or expired activation code")
+
+    def test_exam_preparation_60_day_code_extends_current_access(self) -> None:
+        exam_module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        current_expiry = timezone.now() + timedelta(days=15)
+        Entitlement.objects.create(
+            user=self.user,
+            module=exam_module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+            expires_at=current_expiry,
+        )
+        store_activation_code(
+            code="EXAM60D1",
+            payload=ActivationPayload(
+                entitlements=[
+                    ActivationEntitlementItem(
+                        module_key="exam_preparation",
+                        plan=ActivationPlan.M2,
+                    )
+                ]
+            ),
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            "/api/accounts/auth/activate-code/",
+            {"code": "exam60d1"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        extension = Entitlement.objects.get(
+            user=self.user,
+            module=exam_module,
+            plan=Entitlement.Plan.MONTH_2,
+        )
+        self.assertEqual(extension.starts_at, current_expiry)
+        self.assertEqual(extension.expires_at, current_expiry + timedelta(days=60))
+
+    def test_generate_exam_preparation_codes_command_stores_requested_plan(self) -> None:
+        Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        output = StringIO()
+
+        call_command(
+            "generate_exam_preparation_codes",
+            days=90,
+            count=2,
+            stdout=output,
+        )
+
+        codes = [line for line in output.getvalue().splitlines() if not line.startswith("#")]
+        self.assertEqual(len(codes), 2)
+        self.assertNotEqual(codes[0], codes[1])
+        for code in codes:
+            payload = verify_activation_code(code)
+            self.assertIsNotNone(payload)
+            self.assertEqual(payload.entitlements[0].module_key, "exam_preparation")
+            self.assertEqual(payload.entitlements[0].plan, ActivationPlan.M3)
 
 
 class HomepageSettingApiTests(APITestCase):

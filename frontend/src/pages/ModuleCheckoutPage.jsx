@@ -33,6 +33,21 @@ function getOriginalPrice(offer) {
   return Number(offer?.price_amount);
 }
 
+function formatExpiry(value) {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) {
+    return "登录后显示预计到期时间";
+  }
+  return `预计有效至 ${new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date)}`;
+}
+
 export default function ModuleCheckoutPage() {
   const { moduleId } = useParams();
   const navigate = useNavigate();
@@ -185,10 +200,6 @@ export default function ModuleCheckoutPage() {
     return null;
   }
 
-  if (alreadyHasAccess && module?.route) {
-    return <Navigate to={module.route} replace />;
-  }
-
   return (
     <div className="module-checkout-page">
       <button
@@ -216,7 +227,9 @@ export default function ModuleCheckoutPage() {
           </div>
           <p className="module-checkout-page__description">{module.purchaseDescription}</p>
           <p className="module-checkout-page__notice">
-            支付成功后将自动开通对应模块权限。科普季与 Vlog 季权限彼此独立。
+            {alreadyHasAccess
+              ? "你当前已有有效权限，新购买的天数会从现有最晚到期时间继续顺延。"
+              : "支付成功后将自动开通对应模块权限，有效期从支付确认时刻开始计算。"}
           </p>
         </div>
       </section>
@@ -246,18 +259,23 @@ export default function ModuleCheckoutPage() {
                       <div className="module-checkout-page__offer-body">
                         <div className="module-checkout-page__offer-top">
                         <div>
-                          <h3 className="module-checkout-page__offer-title">{module.title}</h3>
-                          <p className="module-checkout-page__offer-meta">一经购买，终身有效</p>
+                          <h3 className="module-checkout-page__offer-title">{offer.title || module.title}</h3>
+                          <p className="module-checkout-page__offer-meta">
+                            {offer.access_duration_days ? `${offer.access_duration_days} 天有效` : offer.plan_label}
+                          </p>
+                          <p className="module-checkout-page__offer-expiry">
+                            {formatExpiry(offer.estimated_expires_at)}
+                          </p>
                         </div>
                       </div>
 
                         <p className="module-checkout-page__offer-description">
-                          解锁 {module.title} 全部正式学习内容、工具与后续学习体验。
+                          {offer.description || `解锁 ${module.title} 全部正式学习内容、工具与后续学习体验。`}
                         </p>
 
                         <ul className="module-checkout-page__offer-notes">
-                          <li>支付成功后将自动开通对应模块权限。</li>
-                          <li>科普季与 Vlog 季权限彼此独立。</li>
+                          <li>支付成功后自动开通或顺延对应模块权限。</li>
+                          <li>重复回调不会重复增加有效期。</li>
                         </ul>
                       </div>
 
@@ -315,7 +333,7 @@ export default function ModuleCheckoutPage() {
         ) : null}
 
       <div className="module-checkout-page__footer-row">
-        <button
+        {module?.id !== "exam-preparation" ? <button
           className="module-checkout-page__trial"
           type="button"
           onClick={() => {
@@ -325,7 +343,7 @@ export default function ModuleCheckoutPage() {
           }}
         >
           立刻试用
-        </button>
+        </button> : null}
         <button
           className="module-checkout-page__ghost"
           type="button"

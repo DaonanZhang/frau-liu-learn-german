@@ -27,7 +27,8 @@ class Command(BaseCommand):
 
         self.stdout.write("🔐 Generating activation codes...\n")
 
-        for i in range(count):
+        created = 0
+        while created < count:
             code = generate_activation_code()
 
             payload = ActivationPayload(
@@ -40,12 +41,16 @@ class Command(BaseCommand):
                 ]
             )
 
-            store_activation_code(
-                code=code,
-                payload=payload,
-            )
+            try:
+                store_activation_code(
+                    code=code,
+                    payload=payload,
+                )
+            except ValueError:
+                continue
 
-            self.stdout.write(f"✅ {i+1}. {code}")
+            created += 1
+            self.stdout.write(f"✅ {created}. {code}")
 
         self.stdout.write(
             self.style.SUCCESS(f"\n🎉 Generated {count} activation codes.")

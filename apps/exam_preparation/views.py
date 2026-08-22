@@ -5,10 +5,12 @@ import re
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ViewSet
+
+from apps.accounts.permissions import HasValidEntitlement, IsAdminOrReadOnly
 
 from apps.exam_preparation.models import (
     ClozeChoiceBlank,
@@ -100,13 +102,14 @@ from apps.exam_preparation.serializers import (
 
 
 class BaseExamPreparationViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticated, HasValidEntitlement, IsAdminOrReadOnly]
+    required_module_key = "exam_preparation"
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
     ordering = ["id"]
 
 
 class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasValidEntitlement]
     state_lookup_field = ""
     ordering = ["-updated_at", "id"]
 
@@ -441,7 +444,7 @@ class SpeakingPromptSegmentViewSet(BaseExamPreparationViewSet):
 class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
     queryset = UserExerciseFavorite.objects.select_related("user", "exercise").all()
     serializer_class = UserExerciseFavoriteSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasValidEntitlement]
     filterset_fields = ["exercise"]
     search_fields = ["exercise__exam_type", "exercise__external_id", "exercise__title"]
     ordering_fields = ["id", "created_at"]
@@ -457,7 +460,8 @@ class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
 class FavoriteQuestionViewSet(ViewSet):
     """Return every favorited exam-preparation item in one normalized list."""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasValidEntitlement]
+    required_module_key = "exam_preparation"
 
     @staticmethod
     def _preview_text(value, limit=700):

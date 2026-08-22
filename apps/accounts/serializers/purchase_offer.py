@@ -4,6 +4,8 @@ from rest_framework import serializers
 
 from apps.accounts.models.purchase_offer import PurchaseOffer
 from apps.accounts.services import get_purchase_pricing
+from apps.accounts.security.entitlement_factory import get_plan_duration_days
+from apps.accounts.services.entitlement_grant_service import estimate_entitlement_expiry
 
 
 class PurchaseOfferReadSerializer(serializers.ModelSerializer):
@@ -17,6 +19,8 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
     discount_amount = serializers.SerializerMethodField()
     discount_label = serializers.SerializerMethodField()
     is_discounted_for_user = serializers.SerializerMethodField()
+    access_duration_days = serializers.SerializerMethodField()
+    estimated_expires_at = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOffer
@@ -36,6 +40,8 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
             "discount_amount",
             "discount_label",
             "is_discounted_for_user",
+            "access_duration_days",
+            "estimated_expires_at",
             "currency",
         )
         read_only_fields = fields
@@ -67,3 +73,19 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
 
     def get_is_discounted_for_user(self, obj: PurchaseOffer) -> bool:
         return self._get_pricing(obj).is_discounted
+
+    def get_access_duration_days(self, obj: PurchaseOffer) -> int | None:
+        return get_plan_duration_days(obj.plan)
+
+    def get_estimated_expires_at(self, obj: PurchaseOffer) -> str | None:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return None
+        expires_at = estimate_entitlement_expiry(
+            user=user,
+            module=obj.module,
+            season=obj.season,
+            plan=obj.plan,
+        )
+        return expires_at.isoformat() if expires_at is not None else None

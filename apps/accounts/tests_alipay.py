@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -18,6 +19,7 @@ from apps.accounts.models import (
     PurchaseOffer,
 )
 from apps.accounts.views.payment import _apply_payment_status
+from apps.accounts.services.payment_grant_service import process_payment_grant_task_by_id
 
 
 @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=False)
@@ -170,6 +172,120 @@ class AlipayPaymentApiTests(APITestCase):
                 external_ref=f"alipay_payment:{payment.merchant_order_no}",
             ).exists()
         )
+
+    def test_paid_purchase_extends_existing_access_once(self) -> None:
+        current_expiry = timezone.now() + timedelta(days=10)
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=self.season,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+            expires_at=current_expiry,
+        )
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-extension-001",
+            subject="Science Season 1 Monthly",
+            total_amount=Decimal("29.90"),
+            status=AlipayWebsitePayment.Status.PAID,
+            paid_at=timezone.now(),
+            alipay_trade_no="202605120003",
+        )
+        grant_task = PaymentGrantTask.objects.create(
+            payment=payment,
+            offer=self.offer,
+            user=self.user,
+            module=self.module,
+            season=self.season,
+            plan=Entitlement.Plan.MONTH_1,
+        )
+
+        process_payment_grant_task_by_id(payment_grant_task_id=grant_task.id)
+        process_payment_grant_task_by_id(payment_grant_task_id=grant_task.id)
+
+        extension = Entitlement.objects.get(
+            external_ref="alipay_payment:pay-extension-001"
+        )
+        self.assertEqual(extension.starts_at, current_expiry)
+        self.assertEqual(extension.expires_at, current_expiry + timedelta(days=30))
+        self.assertEqual(
+            Entitlement.objects.filter(
+                external_ref="alipay_payment:pay-extension-001"
+            ).count(),
+            1,
+        )
+
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_active_timed_user_can_buy_extension_with_estimated_expiry(
+        self,
+        mock_get_alipay_service: Mock,
+    ) -> None:
+        mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"
+        current_expiry = timezone.now() + timedelta(days=10)
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=self.season,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+            expires_at=current_expiry,
+        )
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {"offer_code": self.offer.code},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            response.data["estimated_expires_at"],
+            (current_expiry + timedelta(days=30)).isoformat(),
+        )
+
+    @patch("apps.accounts.views.payment.process_pending_payment_grant_tasks_for_payment")
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_notify_returns_failure_when_entitlement_grant_fails(
+        self,
+        mock_get_alipay_service: Mock,
+        mock_process_grants: Mock,
+    ) -> None:
+        service = Mock()
+        service.verify_notify_signature.return_value = True
+        service.config.app_id = "test-app-id"
+        service.config.seller_id = "2088000000000000"
+        mock_get_alipay_service.return_value = service
+        mock_process_grants.side_effect = RuntimeError("grant failed")
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-notify-failure-001",
+            subject="Science Season 1 Monthly",
+            total_amount=Decimal("29.90"),
+            status=AlipayWebsitePayment.Status.PENDING,
+        )
+        PaymentGrantTask.objects.create(
+            payment=payment,
+            offer=self.offer,
+            user=self.user,
+            module=self.module,
+            season=self.season,
+            plan=Entitlement.Plan.MONTH_1,
+        )
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/notify/",
+            {
+                "out_trade_no": payment.merchant_order_no,
+                "trade_no": "202605120004",
+                "trade_status": "TRADE_SUCCESS",
+                "total_amount": "29.90",
+                "app_id": "test-app-id",
+                "seller_id": "2088000000000000",
+                "sign": "mock-signature",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def test_purchase_offers_list_marks_vlog_discount_for_season1_owner(self) -> None:
         Entitlement.objects.create(

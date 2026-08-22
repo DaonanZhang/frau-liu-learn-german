@@ -22,8 +22,9 @@ class Entitlement(models.Model):
 
     class Plan(models.TextChoices):
         TRIAL_7D = "trial_7d", "Trial (7 days)"
-        MONTH_1 = "m1", "1 month"
-        MONTH_3 = "m3", "3 months"
+        MONTH_1 = "m1", "30 days"
+        MONTH_2 = "m2", "60 days"
+        MONTH_3 = "m3", "90 days"
         MONTH_6 = "m6", "6 months"
         MONTH_12 = "m12", "12 months"
         LIFETIME = "lifetime", "Lifetime"

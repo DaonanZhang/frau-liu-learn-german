@@ -16,6 +16,11 @@ from .purchase_pricing import (
     PurchasePricing,
     get_purchase_pricing,
 )
+from .entitlement_grant_service import (
+    estimate_entitlement_expiry,
+    get_entitlement_extension_start,
+    grant_or_extend_entitlement,
+)
 
 __all__ = [
     "AlipayClientConfig",
@@ -30,4 +35,7 @@ __all__ = [
     "process_payment_grant_task_by_id",
     "PurchasePricing",
     "get_purchase_pricing",
+    "estimate_entitlement_expiry",
+    "get_entitlement_extension_start",
+    "grant_or_extend_entitlement",
 ]

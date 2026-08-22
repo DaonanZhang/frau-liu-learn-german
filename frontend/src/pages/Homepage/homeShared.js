@@ -56,21 +56,20 @@ export const EXAM_PREPARATION_MODULE = {
   id: "exam-preparation",
   route: "/modules/exam-preparation",
   moduleKey: "exam_preparation",
-  isOpenAccess: true,
   title: "备考季",
   subtitle: "听说读写分模块练习",
   description:
-    "这里将逐步上线德语考试备考模块，覆盖听力、阅读、写作和口语。当前先提供阅读题型的原型页面与联调数据。",
+    "覆盖听力、阅读、写作、口语与语法专项训练，购买有效期后即可进入全部备考内容。",
   badge: "考试专项训练",
-  stats: ["B1 起步", "分题型练习", "持续扩展"],
+  stats: ["B1 起步", "分题型练习", "30-90 天可选"],
   image: "/images/2.png",
-  purchaseLabels: ["B1 起步", "分题型练习", "持续扩展"],
+  purchaseLabels: ["30 天", "60 天", "90 天"],
   purchaseDescription:
-    "这是一个独立于视频课程的考试备考模块，后续会逐步加入更多题型、解析、错题与收藏能力。",
+    "备考季按有效天数购买。已有有效权限时，新购买的 30/60/90 天会从当前最晚到期时间继续顺延。",
   purchaseFeatures: [
-    "按考试技能拆分训练路径，先练阅读，再逐步扩展到听说写。",
+    "按考试技能拆分训练路径，覆盖听力、阅读、写作、口语和语法。",
     "每个题型单独建模，便于后续接入收藏、错题本和学习记录。",
-    "当前阶段提供前端原型与联调数据，用于快速验证页面体验。",
+    "购买或兑换成功后自动开通权限，并明确展示最终到期时间。",
   ],
 };
 

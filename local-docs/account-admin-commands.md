@@ -99,6 +99,7 @@ Replace:
 Supported `PLAN_CONST` values:
 - `Entitlement.Plan.TRIAL_7D`
 - `Entitlement.Plan.MONTH_1`
+- `Entitlement.Plan.MONTH_2`
 - `Entitlement.Plan.MONTH_3`
 - `Entitlement.Plan.MONTH_6`
 - `Entitlement.Plan.MONTH_12`
@@ -224,6 +225,20 @@ for code in codes:
     print(code)
 '
 ```
+
+## Generate Exam Preparation Timed Activation Codes
+
+These commands store module-wide `exam_preparation` codes in Redis and print
+them to stdout. Codes inherit the current 720-day Redis TTL. Redeeming a code
+extends the user's current latest expiry instead of replacing it.
+
+```bash
+.venv/bin/python manage.py generate_exam_preparation_codes --days 30 --count 10
+.venv/bin/python manage.py generate_exam_preparation_codes --days 60 --count 10
+.venv/bin/python manage.py generate_exam_preparation_codes --days 90 --count 10
+```
+
+Supported durations are exactly `30`, `60`, and `90` days.
 
 ## Generate Season 1 And Season 4 Activation Codes In One Run
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from django.db import models
 from django.utils import timezone
 from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.purchase_offer import PurchaseOffer
@@ -42,29 +41,23 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
     )
 
     @staticmethod
-    def _user_already_has_access(*, user, offer: PurchaseOffer) -> bool:
+    def _has_nonexpiring_access(*, user, offer: PurchaseOffer) -> bool:
         if not user or not getattr(user, "is_authenticated", False):
             return False
-
-        now = timezone.now()
-        active_entitlements = Entitlement.objects.filter(
+        base = Entitlement.objects.filter(
             user=user,
             status=Entitlement.Status.ACTIVE,
-            starts_at__lte=now,
-        ).filter(
-            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+            starts_at__lte=timezone.now(),
+            expires_at__isnull=True,
         )
-
-        if active_entitlements.filter(module__isnull=True, season__isnull=True).exists():
-            return True
-
-        if active_entitlements.filter(module=offer.module, season__isnull=True).exists():
-            return True
-
-        if offer.season_id and active_entitlements.filter(module=offer.module, season=offer.season).exists():
-            return True
-
-        return False
+        return (
+            base.filter(module__isnull=True, season__isnull=True).exists()
+            or base.filter(module=offer.module, season__isnull=True).exists()
+            or (
+                offer.season_id is not None
+                and base.filter(module=offer.module, season=offer.season).exists()
+            )
+        )
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         offer_code = str(attrs["offer_code"]).strip()
@@ -79,9 +72,12 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
 
         request = self.context.get("request")
         user = getattr(request, "user", None)
-        if self._user_already_has_access(user=user, offer=offer):
+        if self._has_nonexpiring_access(
+            user=user,
+            offer=offer,
+        ):
             raise serializers.ValidationError(
-                {"detail": "You already have active access to this content."}
+                {"detail": "You already have lifetime access to this content."}
             )
 
         attrs["offer"] = offer

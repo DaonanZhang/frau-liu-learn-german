@@ -146,6 +146,11 @@ export default function ModuleEntryCard({ module }) {
       return;
     }
 
+    if (offers.length > 1 && module?.id) {
+      navigate(`/modules/${module.id}/purchase`);
+      return;
+    }
+
     const [offer] = offers;
     const result = await Swal.fire({
       title: module?.title || "立刻购买",
@@ -308,9 +313,23 @@ export default function ModuleEntryCard({ module }) {
           ))}
         </div>
 
-        <div className="module-entry-card__cta">
-          <span>{canEnterModule ? "进入模块" : "立刻查看"}</span>
-          <span aria-hidden="true">→</span>
+        <div className="module-entry-card__actions">
+          <div className="module-entry-card__cta">
+            <span>{canEnterModule ? "进入模块" : "立刻查看"}</span>
+            <span aria-hidden="true">→</span>
+          </div>
+          {canEnterModule && module?.id === "exam-preparation" ? (
+            <button
+              className="module-entry-card__renew"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(`/modules/${module.id}/purchase`);
+              }}
+            >
+              延长有效期
+            </button>
+          ) : null}
         </div>
       </div>
     </article>

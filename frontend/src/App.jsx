@@ -53,6 +53,7 @@ import {
 
 import { AuthProvider } from "./api/auth";
 import { useAuth } from "./api/auth/useAuth.js";
+import ModuleAccessGate from "./components/ModuleAccessGate.jsx";
 
 function FallbackRedirect() {
   const { loading, isAuthenticated } = useAuth();
@@ -64,6 +65,23 @@ function FallbackRedirect() {
   return <Navigate to={isAuthenticated ? "/" : "/login"} replace />;
 }
 
+function protectExamPreparationRoutes(routes) {
+  return routes.map((route) => {
+    const path = String(route.path || "");
+    if (!path.startsWith("/modules/exam-preparation") && path !== "/favorite-questions") {
+      return route;
+    }
+    return {
+      ...route,
+      element: (
+        <ModuleAccessGate moduleId="exam-preparation">
+          {route.element}
+        </ModuleAccessGate>
+      ),
+    };
+  });
+}
+
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
@@ -72,7 +90,7 @@ const router = createBrowserRouter([
   { path: "/payments/alipay/return", element: <AlipayReturnPage /> },
   {
     element: <AppLayout />,
-    children: [
+    children: protectExamPreparationRoutes([
       { path: "/", element: <Home /> },
       { path: "/modules/science-season", element: <ModulePage /> },
       { path: "/modules/vlog-season", element: <VlogModulePage /> },
@@ -310,7 +328,7 @@ const router = createBrowserRouter([
       { path: "/favorite-questions", element: <FavoriteQuestionsPage /> },
       { path: "/learning-records", element: <LearningRecordPage /> },
       { path: "/profile", element: <ProfilePage /> },
-    ],
+    ]),
   },
   { path: "*", element: <FallbackRedirect /> },
 ]);

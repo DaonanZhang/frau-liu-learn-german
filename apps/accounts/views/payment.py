@@ -6,6 +6,7 @@ from decimal import InvalidOperation
 from uuid import uuid4
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
@@ -30,6 +31,7 @@ from apps.accounts.services import (
 from apps.accounts.services import (
     process_pending_payment_grant_tasks_for_payment,
     process_payment_grant_task_by_id,
+    estimate_entitlement_expiry,
 )
 
 REMOTE_PAYMENT_QUERY_COOLDOWN_SECONDS = 5
@@ -128,17 +130,18 @@ def _query_and_sync_payment_status(
 
     configured_seller_id = alipay_service.config.seller_id
     queried_seller_id = str(query_response.get("seller_id") or "").strip()
-    if configured_seller_id and queried_seller_id and queried_seller_id != configured_seller_id:
+    if queried_seller_id != configured_seller_id:
         raise AlipayGatewayError("Queried seller_id does not match configured seller_id.")
 
     queried_total_amount_raw = str(query_response.get("total_amount") or "").strip()
-    if queried_total_amount_raw:
-        try:
-            queried_total_amount = Decimal(queried_total_amount_raw)
-        except (InvalidOperation, ValueError) as exc:
-            raise AlipayGatewayError("Queried total_amount is invalid.") from exc
-        if queried_total_amount != payment.total_amount:
-            raise AlipayGatewayError("Queried total_amount does not match local payment.")
+    if not queried_total_amount_raw:
+        raise AlipayGatewayError("Queried total_amount is missing.")
+    try:
+        queried_total_amount = Decimal(queried_total_amount_raw)
+    except (InvalidOperation, ValueError) as exc:
+        raise AlipayGatewayError("Queried total_amount is invalid.") from exc
+    if queried_total_amount != payment.total_amount:
+        raise AlipayGatewayError("Queried total_amount does not match local payment.")
 
     previous_status = payment.status
     _apply_payment_status(
@@ -361,6 +364,7 @@ class CreateAlipayPurchaseAPIView(APIView):
 
     @transaction.atomic
     def post(self, request: Request) -> Response:
+        get_user_model().objects.select_for_update().only("id").get(pk=request.user.pk)
         serializer = CreateAlipayPurchaseSerializer(
             data=request.data,
             context={"request": request},
@@ -373,6 +377,26 @@ class CreateAlipayPurchaseAPIView(APIView):
         plan = str(validated_data["plan"])
         total_amount = Decimal(validated_data["total_amount"])
         requested_subject = str(validated_data.get("subject") or "")
+        estimated_expires_at = estimate_entitlement_expiry(
+            user=request.user,
+            module=module,
+            season=season,
+            plan=plan,
+        )
+        if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False) and not settings.DEBUG:
+            return Response(
+                {"detail": "Simulated payment is forbidden outside DEBUG mode."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        alipay_service = None
+        if not getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
+            try:
+                alipay_service = get_alipay_service()
+            except AlipayConfigurationError as exc:
+                return Response(
+                    {"detail": str(exc)},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
 
         season_title = None
         if season is not None:
@@ -415,6 +439,9 @@ class CreateAlipayPurchaseAPIView(APIView):
                     "module_key": module.key,
                     "season_number": season.season_number if season is not None else None,
                     "plan": plan,
+                    "estimated_expires_at": (
+                        estimated_expires_at.isoformat() if estimated_expires_at else None
+                    ),
                     "pay_url": pay_url,
                     "reused_existing_payment": True,
                 },
@@ -482,14 +509,6 @@ class CreateAlipayPurchaseAPIView(APIView):
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
         else:
-            try:
-                alipay_service = get_alipay_service()
-            except AlipayConfigurationError as exc:
-                return Response(
-                    {"detail": str(exc)},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
             pay_url = alipay_service.build_page_pay_url(payment=payment)
             payment.status = AlipayWebsitePayment.Status.PENDING
             payment.save(update_fields=["status", "updated_at"])
@@ -505,6 +524,9 @@ class CreateAlipayPurchaseAPIView(APIView):
                 "module_key": module.key,
                 "season_number": season.season_number if season is not None else None,
                 "plan": plan,
+                "estimated_expires_at": (
+                    estimated_expires_at.isoformat() if estimated_expires_at else None
+                ),
                 "pay_url": pay_url,
             },
             status=status.HTTP_201_CREATED,
@@ -549,12 +571,12 @@ class AlipayNotifyAPIView(APIView):
             return HttpResponse("failure", status=404, content_type="text/plain")
 
         notify_app_id = payload.get("app_id", "").strip()
-        if notify_app_id and notify_app_id != alipay_service.config.app_id:
+        if notify_app_id != alipay_service.config.app_id:
             return HttpResponse("failure", status=400, content_type="text/plain")
 
         configured_seller_id = alipay_service.config.seller_id
         notify_seller_id = payload.get("seller_id", "").strip()
-        if configured_seller_id and notify_seller_id != configured_seller_id:
+        if notify_seller_id != configured_seller_id:
             return HttpResponse("failure", status=400, content_type="text/plain")
 
         try:
@@ -565,7 +587,6 @@ class AlipayNotifyAPIView(APIView):
         if notify_amount != payment.total_amount:
             return HttpResponse("failure", status=400, content_type="text/plain")
 
-        previous_status = payment.status
         _apply_payment_status(
             payment=payment,
             trade_status=trade_status,
@@ -582,11 +603,11 @@ class AlipayNotifyAPIView(APIView):
             ]
         )
 
-        if (
-            payment.status == AlipayWebsitePayment.Status.PAID
-            and previous_status != AlipayWebsitePayment.Status.PAID
-        ):
-            _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
+        if payment.status == AlipayWebsitePayment.Status.PAID:
+            try:
+                process_pending_payment_grant_tasks_for_payment(payment_id=payment.id)
+            except Exception:
+                return HttpResponse("failure", status=500, content_type="text/plain")
 
         return HttpResponse("success", content_type="text/plain")
 
@@ -660,6 +681,17 @@ class AlipayPaymentStatusAPIView(APIView):
             AlipayWebsitePayment.Status.FAILED,
             AlipayWebsitePayment.Status.CLOSED,
         } or grant_status == PaymentGrantTask.Status.FAILED
+        access_expires_at = (
+            request.user.entitlements.filter(
+                module=grant_task.module,
+                season=grant_task.season,
+                status="active",
+                expires_at__gt=timezone.now(),
+            )
+            .order_by("-expires_at")
+            .values_list("expires_at", flat=True)
+            .first()
+        )
 
         return Response(
             {
@@ -674,6 +706,9 @@ class AlipayPaymentStatusAPIView(APIView):
                 "season_number": grant_task.season.season_number if grant_task.season_id else None,
                 "offer_code": grant_task.offer.code if grant_task.offer_id else "",
                 "last_error": grant_task.last_error,
+                "access_expires_at": (
+                    access_expires_at.isoformat() if access_expires_at else None
+                ),
             },
             status=status.HTTP_200_OK,
         )

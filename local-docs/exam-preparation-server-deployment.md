@@ -122,7 +122,11 @@ Before first server use of `exam_preparation`:
 3. Run Django migrations.
 4. Create the import directories listed above.
 5. Create `frontend/public/resources/ExamPreparation1/exam_preparation_audio` for listening audio assets.
-6. Confirm the application process has permission to read and write these folders.
+6. Verify the account migrations created the `exam_preparation` module and the
+   30/60/90-day Alipay offers at CNY 29.90/49.90/69.90.
+7. Confirm `ALIPAY_SELLER_ID` and `ALIPAY_NOTIFY_URL` are configured and
+   `ALIPAY_LOCAL_SIMULATE_SUCCESS=false` before enabling purchases.
+8. Confirm the application process has permission to read and write these folders.
 
 ## Operational rule
 

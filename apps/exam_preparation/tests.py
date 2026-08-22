@@ -3,6 +3,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.accounts.models import Entitlement, Module
+
 from apps.exam_preparation.models import (
     ExerciseBase,
     SpeakingGapBlank,
@@ -23,6 +25,19 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
             telephone="13800138002",
             password="test-password",
         )
+        self.module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            name="备考季",
+            is_active=True,
+        )
+        for user in (self.user, self.other_user):
+            Entitlement.objects.create(
+                user=user,
+                module=self.module,
+                season=None,
+                plan=Entitlement.Plan.MONTH_1,
+                status=Entitlement.Status.ACTIVE,
+            )
         self.exercise_base = ExerciseBase.objects.create(
             exam_type="telc B1",
             level=ExerciseBase.Level.B1,
@@ -141,6 +156,19 @@ class SpeakingGapChoiceApiTests(APITestCase):
             telephone="13800138003",
             password="test-password",
         )
+        module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            name="备考季",
+            is_active=True,
+        )
+        Entitlement.objects.create(
+            user=self.user,
+            module=module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.client.force_authenticate(self.user)
         exercise_base = ExerciseBase.objects.create(
             exam_type="telc B1",
             level=ExerciseBase.Level.B1,
@@ -192,7 +220,6 @@ class SpeakingGapChoiceApiTests(APITestCase):
         )
 
     def test_blank_answer_and_favorite_use_the_per_blank_options(self):
-        self.client.force_authenticate(self.user)
         response = self.client.post(
             reverse("exam-prep-user-speaking-gap-blank-states-list"),
             {
@@ -209,3 +236,52 @@ class SpeakingGapChoiceApiTests(APITestCase):
         self.assertEqual(favorites_response.status_code, status.HTTP_200_OK)
         self.assertEqual(favorites_response.data["count"], 1)
         self.assertIn("war", favorites_response.data["results"][0]["context_text"])
+
+
+class ExamPreparationPermissionTests(APITestCase):
+    def setUp(self):
+        self.module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            name="备考季",
+            is_active=True,
+        )
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138004",
+            password="test-password",
+        )
+        self.url = reverse("exam-prep-exercise-bases-list")
+
+    def test_anonymous_and_unentitled_users_cannot_read_exam_content(self):
+        anonymous = self.client.get(self.url)
+        self.assertEqual(anonymous.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.force_authenticate(self.user)
+        unentitled = self.client.get(self.url)
+        self.assertEqual(unentitled.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_entitled_user_can_read_but_cannot_modify_exam_content(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.client.force_authenticate(self.user)
+
+        read_response = self.client.get(self.url)
+        self.assertEqual(read_response.status_code, status.HTTP_200_OK)
+
+        write_response = self.client.post(
+            self.url,
+            {
+                "exam_type": "telc B1",
+                "level": ExerciseBase.Level.B1,
+                "skill": ExerciseBase.Skill.READING,
+                "exercise_type": ExerciseBase.ExerciseType.READING_UNDERSTANDING,
+                "external_id": "FORBIDDEN-WRITE",
+                "title": "Must not be created",
+            },
+            format="json",
+        )
+        self.assertEqual(write_response.status_code, status.HTTP_403_FORBIDDEN)

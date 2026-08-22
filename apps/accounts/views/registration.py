@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.throttling import ScopedRateThrottle
 
 from apps.accounts.security.registration import (
     verify_registration_code,
@@ -22,6 +23,8 @@ class RegisterVerifyCodeAPIView(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "activation_code_verify"
 
     def post(self, request: Request) -> Response:
         serializer = RegisterVerifyCodeSerializer(data=request.data)

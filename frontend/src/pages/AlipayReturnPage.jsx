@@ -20,6 +20,21 @@ function sleep(ms) {
   });
 }
 
+function formatExpiry(value) {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
 function buildLoadingState({
   title,
   detail,
@@ -110,7 +125,10 @@ export default function AlipayReturnPage() {
             setPageState({
               phase: "success",
               title: "支付成功",
-              detail: "权限已经开通，正在为你跳转。",
+              detail: status?.access_expires_at
+                ? `权限已顺延至 ${formatExpiry(status.access_expires_at)}，正在为你跳转。`
+                : "权限已经开通，正在为你跳转。",
+              accessExpiresAt: status?.access_expires_at || "",
               attempt: attempt + 1,
             });
             redirectTimer = window.setTimeout(() => {
@@ -204,6 +222,13 @@ export default function AlipayReturnPage() {
           <div className="alipay-return-page__meta">
             <span>订单号</span>
             <strong>{merchantOrderNo}</strong>
+          </div>
+        ) : null}
+
+        {pageState.accessExpiresAt ? (
+          <div className="alipay-return-page__meta">
+            <span>权限有效至</span>
+            <strong>{formatExpiry(pageState.accessExpiresAt)}</strong>
           </div>
         ) : null}
 

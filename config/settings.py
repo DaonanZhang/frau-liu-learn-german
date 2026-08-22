@@ -57,6 +57,10 @@ REST_FRAMEWORK = {
         "apps.accounts.authentication.MaintenanceAwareJWTAuthentication",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_RATES": {
+        "activation_code_verify": "10/min",
+        "activation_code_redeem": "5/min",
+    },
 }
 
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")

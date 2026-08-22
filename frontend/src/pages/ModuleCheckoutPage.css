@@ -180,6 +180,13 @@
   font-weight: 700;
 }
 
+.module-checkout-page__offer-expiry {
+  margin: 0.45rem 0 0;
+  color: var(--checkout-accent);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .module-checkout-page__offer-badge {
   display: inline-flex;
   align-items: center;

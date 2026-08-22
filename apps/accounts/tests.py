@@ -6,6 +6,7 @@ import re
 from datetime import timedelta
 from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core import mail
@@ -17,13 +18,15 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import Entitlement, Module, ModuleSeason
+from apps.accounts.models import ActivationCodeRecord, Entitlement, Module, ModuleSeason
+from apps.accounts.security.activation import apply_activation_code_for_user
 from apps.accounts.services.activation_codes import (
     ActivationEntitlementItem,
     ActivationPayload,
     ActivationPlan,
     store_activation_code,
     verify_activation_code,
+    activation_code_hash,
 )
 from apps.accounts.services.password_reset_codes import verify_password_reset_code
 
@@ -272,6 +275,35 @@ class ActivationCodeApiTests(APITestCase):
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(second.data["detail"], "Invalid or expired activation code")
+
+        record = ActivationCodeRecord.objects.get(code_hash=activation_code_hash("ONETIME1"))
+        self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
+        self.assertEqual(record.consumed_by_user_id, self.user.id)
+
+    def test_redeemed_code_is_rejected_even_if_redis_value_reappears(self) -> None:
+        self._store_code("LEDGER01", season_number=1)
+        payload = verify_activation_code("LEDGER01")
+        apply_activation_code_for_user(user=self.user, code="LEDGER01")
+
+        cache.set("activation_code:LEDGER01", payload.to_dict(), timeout=300)
+
+        self.assertIsNone(verify_activation_code("LEDGER01"))
+        with self.assertRaisesRegex(ValueError, "Invalid or expired"):
+            apply_activation_code_for_user(user=self.user, code="LEDGER01")
+
+    def test_failed_database_grant_does_not_consume_activation_code(self) -> None:
+        self._store_code("ROLLBACK1", season_number=1)
+
+        with patch(
+            "apps.accounts.security.activation.grant_or_extend_entitlement",
+            side_effect=ValueError("database grant failed"),
+        ):
+            with self.assertRaisesRegex(ValueError, "database grant failed"):
+                apply_activation_code_for_user(user=self.user, code="ROLLBACK1")
+
+        record = ActivationCodeRecord.objects.get(code_hash=activation_code_hash("ROLLBACK1"))
+        self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
+        self.assertIsNotNone(verify_activation_code("ROLLBACK1"))
 
     def test_exam_preparation_60_day_code_extends_current_access(self) -> None:
         exam_module, _ = Module.objects.get_or_create(

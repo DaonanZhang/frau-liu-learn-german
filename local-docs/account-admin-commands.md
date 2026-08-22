@@ -228,9 +228,11 @@ for code in codes:
 
 ## Generate Exam Preparation Timed Activation Codes
 
-These commands store module-wide `exam_preparation` codes in Redis and print
-them to stdout. Codes inherit the current 720-day Redis TTL. Redeeming a code
-extends the user's current latest expiry instead of replacing it.
+These commands store module-wide `exam_preparation` codes in Redis, create a
+database hash-only redemption ledger, and print the plaintext codes once to
+stdout. Codes inherit the current 720-day Redis TTL. Redeeming a code extends
+the user's current latest expiry instead of replacing it. A day is an exact
+24-hour access period.
 
 ```bash
 .venv/bin/python manage.py generate_exam_preparation_codes --days 30 --count 10

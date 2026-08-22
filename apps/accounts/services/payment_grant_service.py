@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 from apps.accounts.models import PaymentGrantTask
@@ -102,6 +102,7 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
                 season=payment_grant_task.season,
                 plan=payment_grant_task.plan,
                 external_ref=f"alipay_payment:{payment_grant_task.payment.merchant_order_no}",
+                reject_if_lifetime=True,
             )
 
             payment_grant_task.status = PaymentGrantTask.Status.SUCCEEDED
@@ -110,7 +111,7 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
             payment_grant_task.save(
                 update_fields=["status", "processed_at", "last_error", "updated_at"]
             )
-    except Exception as exc:
+    except (DatabaseError, ValueError) as exc:
         PaymentGrantTask.objects.filter(pk=payment_grant_task_id).update(
             status=PaymentGrantTask.Status.FAILED,
             last_error=str(exc),

@@ -17,9 +17,11 @@ from .purchase_pricing import (
     get_purchase_pricing,
 )
 from .entitlement_grant_service import (
+    ExistingLifetimeAccessError,
     estimate_entitlement_expiry,
     get_entitlement_extension_start,
     grant_or_extend_entitlement,
+    revoke_and_compact_payment_entitlement,
 )
 
 __all__ = [
@@ -36,6 +38,8 @@ __all__ = [
     "PurchasePricing",
     "get_purchase_pricing",
     "estimate_entitlement_expiry",
+    "ExistingLifetimeAccessError",
     "get_entitlement_extension_start",
     "grant_or_extend_entitlement",
+    "revoke_and_compact_payment_entitlement",
 ]

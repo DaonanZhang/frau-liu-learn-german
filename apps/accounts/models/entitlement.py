@@ -83,12 +83,6 @@ class Entitlement(models.Model):
             models.Index(fields=["module", "status"], name="idx_ent_module_status"),
             models.Index(fields=["user", "expires_at"], name="idx_ent_user_expires"),
         ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "module", "season", "plan", "starts_at"],
-                name="uniq_ent_user_scope_plan_start",
-            )
-        ]
 
     def __str__(self) -> str:
         if self.module_id is None:

@@ -127,6 +127,16 @@ Before first server use of `exam_preparation`:
 7. Confirm `ALIPAY_SELLER_ID` and `ALIPAY_NOTIFY_URL` are configured and
    `ALIPAY_LOCAL_SIMULATE_SUCCESS=false` before enabling purchases.
 8. Confirm the application process has permission to read and write these folders.
+9. Run `manage.py reconcile_alipay_payments --limit 100`, then configure one
+   periodic recovery runner: either Celery worker + Celery beat, or cron / a
+   systemd timer that runs the same management command every 15 minutes.
+   Automatic payment/grant recovery requires a scheduler, but does not require
+   Celery specifically.
+10. Confirm Redis is available. Generated activation codes are held in Redis,
+    while the database redemption ledger is the final one-time-use authority.
+11. Keep `ACTIVATION_CODE_HASH_KEY` stable and identical on every backend
+    instance. It defaults to `DJANGO_SECRET_KEY`; setting a dedicated secret is
+    recommended before the first production code is generated.
 
 ## Operational rule
 

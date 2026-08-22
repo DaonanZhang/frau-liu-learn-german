@@ -90,6 +90,13 @@ class PaymentGrantTask(models.Model):
         blank=True,
         help_text="Timestamp when the task was successfully processed.",
     )
+    idempotency_key = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Client-generated purchase intent key used to deduplicate order creation.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

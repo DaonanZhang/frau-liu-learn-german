@@ -116,6 +116,30 @@ export default function AlipayReturnPage() {
           lastKnownPaid = Boolean(status?.is_paid);
           lastKnownGranted = Boolean(status?.is_granted);
 
+          if (status?.is_refunded) {
+            clearPendingPaymentContext(merchantOrderNo);
+            await reloadMe();
+            setPageState({
+              phase: "error",
+              title: "订单已全额退款",
+              detail: "支付宝已确认退款，对应的课程权限已撤销。如状态与实际情况不一致，请联系客服并提供下方订单号。",
+              attempt: attempt + 1,
+            });
+            return;
+          }
+
+          if (status?.needs_attention) {
+            setPageState({
+              phase: "attention",
+              title: status?.is_partially_refunded ? "订单发生部分退款" : "支付已确认，权限开通异常",
+              detail: status?.is_partially_refunded
+                ? `订单已发生部分退款（¥${status?.refunded_amount || "0.00"}），权限暂不自动变更，请联系客服确认。处理编号：${status?.support_code || merchantOrderNo}`
+                : `款项已经确认到账，系统会继续自动补发权限。若稍后仍未恢复，请联系客服并提供处理编号：${status?.support_code || merchantOrderNo}`,
+              attempt: attempt + 1,
+            });
+            return;
+          }
+
           if (lastKnownPaid && lastKnownGranted) {
             clearPendingPaymentContext(merchantOrderNo);
             await reloadMe();
@@ -199,7 +223,7 @@ export default function AlipayReturnPage() {
   }, [merchantOrderNo, navigate, reloadMe, retryToken, targetPath]);
 
   const isLoading = pageState.phase === "loading";
-  const canRetry = pageState.phase === "pending" || pageState.phase === "error";
+  const canRetry = ["pending", "error", "attention"].includes(pageState.phase);
   const primaryButtonLabel = pageState.phase === "success" ? "立即进入课程" : "返回课程";
 
   return (
@@ -209,7 +233,7 @@ export default function AlipayReturnPage() {
           {isLoading ? <div className="alipay-return-page__spinner" aria-hidden="true" /> : null}
           {!isLoading ? (
             <div className="alipay-return-page__badge">
-              {pageState.phase === "success" ? "已完成" : pageState.phase === "pending" ? "处理中" : "异常"}
+              {pageState.phase === "success" ? "已完成" : pageState.phase === "pending" ? "处理中" : pageState.phase === "attention" ? "需关注" : "异常"}
             </div>
           ) : null}
         </div>

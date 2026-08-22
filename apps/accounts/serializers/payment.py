@@ -34,11 +34,7 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
     """
 
     offer_code = serializers.SlugField(max_length=64)
-    subject = serializers.CharField(
-        max_length=256,
-        required=False,
-        allow_blank=True,
-    )
+    idempotency_key = serializers.UUIDField()
 
     @staticmethod
     def _has_nonexpiring_access(*, user, offer: PurchaseOffer) -> bool:

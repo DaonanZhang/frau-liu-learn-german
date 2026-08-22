@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import textwrap
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
@@ -9,6 +10,7 @@ from typing import Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes, serialization
@@ -25,6 +27,23 @@ class AlipayConfigurationError(ValueError):
 
 class AlipayGatewayError(RuntimeError):
     """Raised when a direct Alipay gateway request fails."""
+
+
+def parse_timeout_express_seconds(value: str) -> int:
+    """Parse Alipay timeout values such as 15m, 2h, or 1d."""
+
+    match = re.fullmatch(r"([1-9][0-9]*)([mhd])", str(value or "").strip().lower())
+    if not match:
+        raise AlipayConfigurationError("ALIPAY_TIMEOUT_EXPRESS must look like 15m, 2h, or 1d.")
+    amount = int(match.group(1))
+    multiplier = {"m": 60, "h": 3600, "d": 86400}[match.group(2)]
+    return amount * multiplier
+
+
+def _alipay_request_timestamp() -> str:
+    return timezone.now().astimezone(
+        ZoneInfo(str(getattr(settings, "ALIPAY_TIME_ZONE", "Asia/Shanghai")))
+    ).strftime("%Y-%m-%d %H:%M:%S")
 
 
 @dataclass(frozen=True)
@@ -194,6 +213,12 @@ def load_alipay_client_config() -> AlipayClientConfig:
     if config.sign_type != "RSA2":
         raise AlipayConfigurationError("Only RSA2 sign_type is supported.")
 
+    parse_timeout_express_seconds(config.timeout_express)
+    try:
+        ZoneInfo(str(getattr(settings, "ALIPAY_TIME_ZONE", "Asia/Shanghai")))
+    except ZoneInfoNotFoundError as exc:
+        raise AlipayConfigurationError("ALIPAY_TIME_ZONE is invalid.") from exc
+
     return config
 
 
@@ -236,7 +261,7 @@ class AlipayService:
             "method": "alipay.trade.page.pay",
             "charset": "utf-8",
             "sign_type": self.config.sign_type,
-            "timestamp": payment.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": _alipay_request_timestamp(),
             "version": "1.0",
             "return_url": self.config.return_url,
             "biz_content": biz_content,
@@ -268,7 +293,7 @@ class AlipayService:
             "method": method,
             "charset": "utf-8",
             "sign_type": self.config.sign_type,
-            "timestamp": timezone.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": _alipay_request_timestamp(),
             "version": "1.0",
             "biz_content": dict(biz_content),
         }

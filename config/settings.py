@@ -28,6 +28,7 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 SECRET_KEY = env("DJANGO_SECRET_KEY")
+ACTIVATION_CODE_HASH_KEY = env("ACTIVATION_CODE_HASH_KEY", default=SECRET_KEY)
 
 allowed_hosts_raw = env("DJANGO_ALLOWED_HOSTS", default="")
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_raw.split(",") if host.strip()]
@@ -60,6 +61,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "activation_code_verify": "10/min",
         "activation_code_redeem": "5/min",
+        "alipay_purchase_create": "10/min",
+        "alipay_payment_status": "60/min",
     },
 }
 
@@ -214,6 +217,17 @@ ALIPAY_SELLER_ID = env("ALIPAY_SELLER_ID", default="")
 ALIPAY_SIGN_TYPE = env("ALIPAY_SIGN_TYPE", default="RSA2")
 ALIPAY_TIMEOUT_EXPRESS = env("ALIPAY_TIMEOUT_EXPRESS", default="15m")
 ALIPAY_API_TIMEOUT_SECONDS = env.float("ALIPAY_API_TIMEOUT_SECONDS", default=3.0)
+ALIPAY_TIME_ZONE = env("ALIPAY_TIME_ZONE", default="Asia/Shanghai")
+ALIPAY_RECONCILE_INTERVAL_SECONDS = env.int("ALIPAY_RECONCILE_INTERVAL_SECONDS", default=900)
+ALIPAY_RECONCILE_HISTORY_DAYS = env.int("ALIPAY_RECONCILE_HISTORY_DAYS", default=400)
+ALIPAY_NOTIFY_RETENTION_DAYS = env.int("ALIPAY_NOTIFY_RETENTION_DAYS", default=90)
+
+CELERY_BEAT_SCHEDULE = {
+    "reconcile-alipay-payments": {
+        "task": "apps.accounts.tasks.reconcile_alipay_payments",
+        "schedule": ALIPAY_RECONCILE_INTERVAL_SECONDS,
+    },
+}
 
 # =========================
 # Maintenance mode

@@ -8,6 +8,7 @@ from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.module import Module
 from apps.accounts.models.module_season import ModuleSeason
 from apps.accounts.models.purchase_offer import PurchaseOffer
+from apps.accounts.models import ActivationCodeRecord, AlipayWebsitePayment, PaymentGrantTask
 from apps.accounts.models.user_data import UserData, UserActiveDay
 
 User = get_user_model()
@@ -115,6 +116,94 @@ class PurchaseOfferAdmin(admin.ModelAdmin):
     )
     list_filter = ("module", "season", "plan", "currency", "is_active")
     search_fields = ("code", "title", "module__key", "season__title")
+
+
+@admin.register(AlipayWebsitePayment)
+class AlipayWebsitePaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "merchant_order_no",
+        "status",
+        "total_amount",
+        "refunded_amount",
+        "paid_at",
+        "expires_at",
+        "last_reconciled_at",
+    )
+    list_filter = ("status",)
+    search_fields = ("merchant_order_no", "alipay_trade_no")
+    readonly_fields = (
+        "merchant_order_no",
+        "subject",
+        "total_amount",
+        "status",
+        "alipay_trade_no",
+        "raw_notify_payload",
+        "created_at",
+        "updated_at",
+        "paid_at",
+        "expires_at",
+        "last_reconciled_at",
+        "refunded_amount",
+        "refunded_at",
+    )
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PaymentGrantTask)
+class PaymentGrantTaskAdmin(admin.ModelAdmin):
+    list_display = ("id", "payment", "user", "module", "season", "plan", "status", "attempt_count")
+    list_filter = ("status", "module", "season", "plan")
+    search_fields = ("payment__merchant_order_no", "user__telephone", "idempotency_key")
+    readonly_fields = (
+        "payment",
+        "offer",
+        "user",
+        "module",
+        "season",
+        "plan",
+        "status",
+        "attempt_count",
+        "last_error",
+        "processed_at",
+        "idempotency_key",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ActivationCodeRecord)
+class ActivationCodeRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "code_hash",
+        "status",
+        "expires_at",
+        "consumed_by_user",
+        "consumed_at",
+        "created_at",
+    )
+    list_filter = ("status",)
+    search_fields = ("code_hash", "consumed_by_user__telephone")
+    readonly_fields = (
+        "code_hash",
+        "payload",
+        "status",
+        "ttl_seconds",
+        "expires_at",
+        "consumed_by_user",
+        "consumed_at",
+        "created_at",
+        "updated_at",
+    )
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(UserData)

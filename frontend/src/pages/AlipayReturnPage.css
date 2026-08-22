@@ -55,6 +55,11 @@
   background: rgba(255, 176, 32, 0.18);
 }
 
+.alipay-return-page__status--attention .alipay-return-page__badge {
+  color: #8a4b00;
+  background: rgba(255, 153, 0, 0.16);
+}
+
 .alipay-return-page__status--error .alipay-return-page__badge {
   color: #a12626;
   background: rgba(220, 53, 69, 0.12);

@@ -1,4 +1,5 @@
-export function hasModuleAccess(user, module) {
+/** Determine whether the current entitlement snapshot grants module access at a given time. */
+export function hasModuleAccess(user, module, at = new Date()) {
   if (module?.isOpenAccess) {
     return true;
   }
@@ -17,7 +18,15 @@ export function hasModuleAccess(user, module) {
     : [Number(module?.seasonNumber)].filter(Number.isFinite);
 
   return entitlements.some((item) => {
-    if (!item?.is_valid_now) {
+    const startsAt = item?.starts_at ? new Date(item.starts_at) : null;
+    const expiresAt = item?.expires_at ? new Date(item.expires_at) : null;
+    if (item?.status !== "active") {
+      return false;
+    }
+    if (startsAt && !Number.isNaN(startsAt.getTime()) && startsAt > at) {
+      return false;
+    }
+    if (expiresAt && !Number.isNaN(expiresAt.getTime()) && expiresAt <= at) {
       return false;
     }
 

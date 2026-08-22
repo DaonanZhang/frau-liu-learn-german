@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 
 
 class AlipayWebsitePayment(models.Model):
@@ -15,6 +15,8 @@ class AlipayWebsitePayment(models.Model):
         PAID = "paid", "Paid"
         FAILED = "failed", "Failed"
         CLOSED = "closed", "Closed"
+        PARTIALLY_REFUNDED = "partially_refunded", "Partially refunded"
+        REFUNDED = "refunded", "Refunded"
 
     merchant_order_no = models.CharField(
         max_length=64,
@@ -31,7 +33,7 @@ class AlipayWebsitePayment(models.Model):
         help_text="Total payment amount in the configured merchant currency.",
     )
     status = models.CharField(
-        max_length=16,
+        max_length=24,
         choices=Status.choices,
         default=Status.CREATED,
         db_index=True,
@@ -56,6 +58,28 @@ class AlipayWebsitePayment(models.Model):
         blank=True,
         help_text="Timestamp when the payment was confirmed as paid.",
     )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Local deadline after which an unpaid checkout must not be reused.",
+    )
+    last_reconciled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last time this payment was successfully reconciled with Alipay.",
+    )
+    refunded_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Cumulative amount confirmed as refunded by Alipay.",
+    )
+    refunded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when a full refund was confirmed.",
+    )
 
     class Meta:
         indexes = [
@@ -66,7 +90,11 @@ class AlipayWebsitePayment(models.Model):
                 fields=["alipay_trade_no"],
                 condition=~Q(alipay_trade_no=""),
                 name="uniq_nonblank_alipay_trade_no",
-            )
+            ),
+            models.CheckConstraint(
+                condition=Q(refunded_amount__gte=0) & Q(refunded_amount__lte=F("total_amount")),
+                name="alipay_refund_amount_valid",
+            ),
         ]
 
     def __str__(self) -> str:

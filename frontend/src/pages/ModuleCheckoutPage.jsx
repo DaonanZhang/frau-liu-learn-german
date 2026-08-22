@@ -276,6 +276,7 @@ export default function ModuleCheckoutPage() {
                         <ul className="module-checkout-page__offer-notes">
                           <li>支付成功后自动开通或顺延对应模块权限。</li>
                           <li>重复回调不会重复增加有效期。</li>
+                          {offer.access_duration_days ? <li>有效期按连续 24 小时/天计算。</li> : null}
                         </ul>
                       </div>
 

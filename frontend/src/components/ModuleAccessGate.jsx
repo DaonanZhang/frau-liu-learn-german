@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 
 import { useAuth } from "../api/auth/useAuth.js";
@@ -8,6 +9,12 @@ import { hasModuleAccess } from "../utils/moduleAccess.js";
 export default function ModuleAccessGate({ moduleId, children }) {
   const { user, loading, isAuthenticated } = useAuth();
   const module = MODULES_BY_ID[moduleId];
+  const [accessCheckTime, setAccessCheckTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setAccessCheckTime(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   if (loading) {
     return null;
@@ -15,7 +22,7 @@ export default function ModuleAccessGate({ moduleId, children }) {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  if (!hasModuleAccess(user, module)) {
+  if (!hasModuleAccess(user, module, accessCheckTime)) {
     return <Navigate to={`/modules/${moduleId}/purchase`} replace />;
   }
   return children;

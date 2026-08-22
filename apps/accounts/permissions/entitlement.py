@@ -87,5 +87,5 @@ class HasValidEntitlement(BasePermission):
 
             return base_qs.filter(module=module, season=season).exists()
 
-        # If no season required, any season-level entitlement counts.
-        return base_qs.filter(module=module, season__isnull=False).exists()
+        # A module-wide endpoint must not be unlocked by a narrower season grant.
+        return False

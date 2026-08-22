@@ -35,11 +35,6 @@ def seed_exam_preparation_offers(apps, schema_editor):
         )
 
 
-def remove_exam_preparation_offers(apps, schema_editor):
-    PurchaseOffer = apps.get_model("accounts", "PurchaseOffer")
-    PurchaseOffer.objects.filter(code__in=[item[0] for item in OFFERS]).delete()
-
-
 class Migration(migrations.Migration):
     dependencies = [
         ("accounts", "0015_exam_preparation_timed_offers"),
@@ -48,6 +43,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(
             seed_exam_preparation_offers,
-            remove_exam_preparation_offers,
+            migrations.RunPython.noop,
         ),
     ]

@@ -26,10 +26,12 @@ export function AuthProvider({ children }) {
       setUser(me);
       setTokenPresent(true);
       return me;
-    } catch {
-      clearAuthTokens();
-      setUser(null);
-      setTokenPresent(false);
+    } catch (error) {
+      if (error?.status === 401) {
+        clearAuthTokens();
+        setUser(null);
+        setTokenPresent(false);
+      }
       return null;
     } finally {
       // keep loading as a bootstrap-only flag
@@ -44,6 +46,23 @@ export function AuthProvider({ children }) {
       reloadMe();
     }
   }, [user, hasToken, reloadMe]);
+
+  useEffect(() => {
+    function refreshVisibleSession() {
+      if (document.visibilityState === "visible" && hasToken()) {
+        reloadMe();
+      }
+    }
+
+    const timer = window.setInterval(refreshVisibleSession, 300000);
+    window.addEventListener("focus", refreshVisibleSession);
+    document.addEventListener("visibilitychange", refreshVisibleSession);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshVisibleSession);
+      document.removeEventListener("visibilitychange", refreshVisibleSession);
+    };
+  }, [hasToken, reloadMe]);
 
   const notifyLogin = useCallback(() => {
     setTokenPresent(true);

@@ -20,13 +20,18 @@ class ExerciseBase(models.Model):
         SPEAKING = "SPEAKING", "Speaking"
 
     class ExerciseType(models.TextChoices):
-        LISTENING_CHOICE = "LISTENING_CHOICE", "Listening choice"
+        LISTENING_TEIL1 = "LISTENING_TEIL1", "Listening Teil 1"
+        LISTENING_TEIL2 = "LISTENING_TEIL2", "Listening Teil 2"
+        LISTENING_TEIL3 = "LISTENING_TEIL3", "Listening Teil 3"
         READING_TITLE_MATCHING = "READING_TITLE_MATCHING", "Reading title matching"
         READING_UNDERSTANDING = "READING_UNDERSTANDING", "Reading understanding"
         READING_AD_MATCHING = "READING_AD_MATCHING", "Reading ad matching"
         CLOZE_CHOICE = "CLOZE_CHOICE", "Cloze choice"
         CLOZE_MATCHING = "CLOZE_MATCHING", "Cloze matching"
         WRITING_PROMPT = "WRITING_PROMPT", "Writing prompt"
+        SPEAKING_TEIL1 = "SPEAKING_TEIL1", "Speaking Teil 1"
+        SPEAKING_TEIL2 = "SPEAKING_TEIL2", "Speaking Teil 2"
+        SPEAKING_TEIL3 = "SPEAKING_TEIL3", "Speaking Teil 3"
         SPEAKING_GAP_MATCHING = "SPEAKING_GAP_MATCHING", "Speaking gap matching"
         SPEAKING_PROMPT_SEGMENTED = "SPEAKING_PROMPT_SEGMENTED", "Speaking prompt segmented"
 

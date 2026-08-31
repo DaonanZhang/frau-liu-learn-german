@@ -8,6 +8,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 from typing import Callable, Iterable
+from urllib.parse import quote
 
 import pandas as pd
 
@@ -45,11 +46,7 @@ from apps.exam_preparation.models import (  # noqa: E402
     ReadingUnderstandingAnswerOption,
     ReadingUnderstandingExercise,
     ReadingUnderstandingQuestion,
-    SpeakingGapBlank,
-    SpeakingGapMatchingExercise,
-    SpeakingGapOption,
-    SpeakingPromptSegment,
-    SpeakingPromptSegmentedExercise,
+    SpeakingTeilExercise,
     WritingExampleText,
     WritingExercise,
 )
@@ -60,6 +57,24 @@ ImporterFn = Callable[[Path], int]
 
 class ImportErrorWithContext(Exception):
     pass
+
+
+LISTENING_AUDIO_ROOT = REPO_ROOT / "frontend/public/resources/ExamPreparation/exam_preparation_audio"
+LISTENING_AUDIO_SUBFOLDERS = {
+    ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP: "Teil1",
+    ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE: "Teil2",
+    ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE: "Teil3",
+}
+LISTENING_TYPE_BY_TEIL = {
+    "1": ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP,
+    "2": ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE,
+    "3": ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE,
+}
+LISTENING_EXERCISE_TYPE_BY_TEIL = {
+    "1": ExerciseBase.ExerciseType.LISTENING_TEIL1,
+    "2": ExerciseBase.ExerciseType.LISTENING_TEIL2,
+    "3": ExerciseBase.ExerciseType.LISTENING_TEIL3,
+}
 
 
 def log(message: str) -> None:
@@ -73,6 +88,14 @@ def parse_bool(value) -> bool:
     if text in {"true", "1", "yes", "y", "是"}:
         return True
     if text in {"false", "0", "no", "n", "否", ""}:
+        return False
+    try:
+        numeric_value = float(text)
+    except ValueError:
+        numeric_value = None
+    if numeric_value == 1:
+        return True
+    if numeric_value == 0:
         return False
     raise ImportErrorWithContext(f"Cannot parse boolean value: {value!r}")
 
@@ -120,12 +143,84 @@ def external_id_from_filename(xlsx_path: Path, workbook_external_id) -> str:
     return filename_id
 
 
+def listening_type_from_filename(xlsx_path: Path) -> str:
+    match = re.search(r"(?:^|_)teil([123])(?:_|$)", xlsx_path.stem, re.IGNORECASE)
+    if not match:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: listening filename must include Teil1, Teil2, or Teil3"
+        )
+    return LISTENING_TYPE_BY_TEIL[match.group(1)]
+
+
+def listening_exercise_type_from_filename(xlsx_path: Path) -> str:
+    match = re.search(r"(?:^|_)teil([123])(?:_|$)", xlsx_path.stem, re.IGNORECASE)
+    if not match:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: listening filename must include Teil1, Teil2, or Teil3"
+        )
+    return LISTENING_EXERCISE_TYPE_BY_TEIL[match.group(1)]
+
+
 def require_one_exercise_per_file(xlsx_path: Path, exercise_count: int) -> None:
     if exercise_count != 1:
         raise ImportErrorWithContext(
             f"{xlsx_path.name}: expected exactly one exercise per workbook; "
             f"found {exercise_count}"
         )
+
+
+def resolve_listening_audio(
+    *,
+    xlsx_path: Path,
+    listening_type: str,
+    audio_file_id: str,
+) -> tuple[str, Path]:
+    subfolder = LISTENING_AUDIO_SUBFOLDERS.get(listening_type)
+    if not subfolder:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: unsupported listening_type={listening_type!r}; "
+            f"expected one of {sorted(LISTENING_AUDIO_SUBFOLDERS)}"
+        )
+
+    audio_file_id = clean_text(audio_file_id)
+    if not audio_file_id:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: missing 音频文件_ID required for local audio lookup"
+        )
+
+    audio_dir = LISTENING_AUDIO_ROOT / subfolder
+    audio_dir.mkdir(parents=True, exist_ok=True)
+
+    exact_stems = {f"{subfolder}_{audio_file_id}"}
+    normalized_id = normalize_link_id(audio_file_id)
+    if normalized_id:
+        exact_stems.add(f"{subfolder}_{normalized_id}")
+    filename_match = re.search(r"_(\d+)$", xlsx_path.stem)
+    if filename_match and normalized_id.isdigit():
+        exact_stems.add(f"{subfolder}_{normalized_id.zfill(len(filename_match.group(1)))}")
+
+    matches = sorted(
+        path
+        for path in audio_dir.iterdir()
+        if path.is_file() and path.stem in exact_stems
+    )
+    if not matches:
+        expected = f"{subfolder}_{audio_file_id}.*"
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: local listening audio not found: "
+            f"{audio_dir / expected}"
+        )
+    if len(matches) > 1:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: multiple local listening audio files match "
+            f"{subfolder}_{audio_file_id}: {[path.name for path in matches]}"
+        )
+
+    audio_path = matches[0]
+    audio_url = (
+        f"/resources/ExamPreparation/exam_preparation_audio/{subfolder}/{quote(audio_path.name)}"
+    )
+    return audio_url, audio_path
 
 
 def infer_level_from_filename(path: Path) -> str:
@@ -220,7 +315,16 @@ def import_listening(xlsx_path: Path) -> int:
     xlsx = pd.ExcelFile(xlsx_path, engine="openpyxl")
     meta_df = get_sheet(xlsx, "meta")
     exercise_df = get_sheet(xlsx, "exercise")
+    real_exam_column = next(
+        (column for column in ("是否真题", "什么真题") if column in meta_df.columns),
+        None,
+    )
     require_columns(meta_df, ["音频文件_ID", "音频文件网盘地址", "考试类型"], "meta")
+    if real_exam_column is None:
+        raise ImportErrorWithContext(
+            "Sheet 'meta' missing columns: ['是否真题' or '什么真题']; "
+            f"found={list(meta_df.columns)}"
+        )
     require_columns(
         exercise_df,
         ["exercise_id", "question_type", "question_id", "question", "answer", "is_correct", "Explanation"],
@@ -234,27 +338,39 @@ def import_listening(xlsx_path: Path) -> int:
         exercise_rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
 
     level = infer_level_from_filename(xlsx_path)
+    filename_listening_type = listening_type_from_filename(xlsx_path)
+    filename_exercise_type = listening_exercise_type_from_filename(xlsx_path)
     imported_count = 0
     for workbook_external_id, meta in meta_by_id.items():
         external_id = external_id_from_filename(xlsx_path, workbook_external_id)
         base = upsert_base(
             level=level,
             skill=ExerciseBase.Skill.LISTENING,
-            exercise_type=ExerciseBase.ExerciseType.LISTENING_CHOICE,
+            exercise_type=filename_exercise_type,
             external_id=external_id,
             title=clean_text(meta.get("原标题")),
             exam_type=clean_text(meta.get("考试类型")),
-            is_real_exam=bool(clean_text(meta.get("什么真题"))),
+            is_real_exam=parse_bool(meta.get(real_exam_column)),
             imported_from_file=xlsx_path.name,
-            source_reference=clean_text(meta.get("什么真题")),
         )
-        listening_type = clean_text(meta.get("listening_type")) or ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP
+        meta_listening_type = clean_text(meta.get("listening_type"))
+        if meta_listening_type and meta_listening_type != filename_listening_type:
+            raise ImportErrorWithContext(
+                f"{xlsx_path.name}: filename identifies {filename_listening_type}, "
+                f"but meta.listening_type is {meta_listening_type!r}"
+            )
+        listening_type = filename_listening_type
+        audio_url, audio_path = resolve_listening_audio(
+            xlsx_path=xlsx_path,
+            listening_type=listening_type,
+            audio_file_id=meta.get("音频文件_ID"),
+        )
         exercise, _ = ListeningExercise.objects.update_or_create(
             exercise_base=base,
             defaults={
                 "listening_type": listening_type,
-                "audio_file_identifier": external_id,
-                "audio_file_url": clean_text(meta.get("音频文件网盘地址")),
+                "audio_file_identifier": audio_path.stem,
+                "audio_file_url": audio_url,
                 "script": clean_text(meta.get("script")),
             },
         )
@@ -682,127 +798,283 @@ def import_writing(xlsx_path: Path) -> int:
     return imported_count
 
 
-def import_speaking_gap_matching(xlsx_path: Path) -> int:
+SPEAKING_TEIL_CONFIG = {
+    "1": {
+        "exercise_type": ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+        "title": "Einander kennenlernen",
+        "instruction": (
+            "Unterhalten Sie sich mit Ihrer Partnerin bzw. Ihrem Partner "
+            "über die angegebenen Themen."
+        ),
+    },
+    "2": {
+        "exercise_type": ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+        "title": "Über ein Thema sprechen",
+        "instruction": (
+            "Berichten Sie über Ihren Text, tauschen Sie Meinungen aus und "
+            "erzählen Sie von eigenen Erfahrungen."
+        ),
+    },
+    "3": {
+        "exercise_type": ExerciseBase.ExerciseType.SPEAKING_TEIL3,
+        "title": "Gemeinsam etwas planen",
+        "instruction": "Tauschen Sie Ideen aus, diskutieren Sie darüber und einigen Sie sich zum Schluss.",
+    },
+}
+
+
+def single_workbook_value(
+    xlsx_path: Path,
+    rows: list[dict[str, str]],
+    column: str,
+    *,
+    required: bool = True,
+) -> str:
+    values = {clean_text(row.get(column)) for row in rows if clean_text(row.get(column))}
+    if not values and required:
+        raise ImportErrorWithContext(f"{xlsx_path.name}: missing value for {column!r}")
+    if len(values) > 1:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: inconsistent values for {column!r}: {sorted(values)}"
+        )
+    return next(iter(values), "")
+
+
+def parse_speaking_einander_kennenlernen_workbook(xlsx_path: Path) -> dict[str, object]:
     xlsx = pd.ExcelFile(xlsx_path, engine="openpyxl")
-    meta_df = get_sheet(xlsx, "meta")
-    exercise_df = get_sheet(xlsx, "exercise")
-    require_columns(meta_df, ["ID", "标题", "内容", "考试类型", "是否真题"], "meta")
-    require_columns(exercise_df, ["exercise_id", "blank_key", "blank_number", "Option", "is_correct", "explanation"], "exercise")
-
-    meta_by_id = {clean_text(row["ID"]): row for row in iter_records(meta_df)}
-    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
-    rows_by_id: dict[str, list[dict[str, str]]] = defaultdict(list)
-    for row in iter_records(exercise_df):
-        rows_by_id[normalize_link_id(row["exercise_id"])].append(row)
-
-    level = infer_level_from_filename(xlsx_path)
-    imported_count = 0
-    for workbook_external_id, meta in meta_by_id.items():
-        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
-        base = upsert_base(
-            level=level,
-            skill=ExerciseBase.Skill.SPEAKING,
-            exercise_type=ExerciseBase.ExerciseType.SPEAKING_GAP_MATCHING,
-            external_id=external_id,
-            title=clean_text(meta.get("标题")),
-            exam_type=clean_text(meta.get("考试类型")),
-            is_real_exam=parse_bool(meta.get("是否真题")),
-            imported_from_file=xlsx_path.name,
+    if len(xlsx.sheet_names) != 1:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: Teil 1 expects one worksheet; found {xlsx.sheet_names}"
         )
-        exercise, _ = SpeakingGapMatchingExercise.objects.update_or_create(
-            exercise_base=base,
-            defaults={"content_with_placeholders": clean_text(meta.get("内容"))},
-        )
-        exercise.blanks.all().delete()
-        exercise.options.all().delete()
+    sheet_name = xlsx.sheet_names[0]
+    dialogue_df = get_sheet(xlsx, sheet_name)
+    require_columns(dialogue_df, ["ID", "Role", "内容"], sheet_name)
+    rows = [row for row in iter_records(dialogue_df) if clean_text(row.get("内容"))]
+    if not rows:
+        raise ImportErrorWithContext(f"{xlsx_path.name}: Teil 1 dialogue is empty")
 
-        grouped_blanks: dict[tuple[str, int], list[dict[str, str]]] = defaultdict(list)
-        for row in rows_by_id.get(normalize_link_id(workbook_external_id), []):
-            key = (clean_text(row["blank_key"]), parse_int(row["blank_number"], "blank_number"))
-            grouped_blanks[key].append(row)
-
-        option_counter = 1
-        for (blank_key, blank_number), rows in sorted(grouped_blanks.items(), key=lambda item: item[0][1]):
-            correct_option = None
-            correct_explanation = ""
-            for row in rows:
-                is_correct = parse_bool(row["is_correct"])
-                option = SpeakingGapOption.objects.create(
-                    exercise=exercise,
-                    option_key=f"option_{option_counter}",
-                    option_text=clean_text(row["Option"]),
-                    option_order=option_counter,
-                    is_extra=not is_correct,
-                )
-                option_counter += 1
-                if is_correct:
-                    if correct_option is not None:
-                        raise ImportErrorWithContext(
-                            f"{xlsx_path.name}: blank {blank_key} in exercise {external_id} has multiple correct options."
-                        )
-                    correct_option = option
-                    correct_explanation = clean_text(row["explanation"])
-            if correct_option is None:
-                raise ImportErrorWithContext(
-                    f"{xlsx_path.name}: blank {blank_key} in exercise {external_id} has no correct option."
-                )
-            SpeakingGapBlank.objects.create(
-                exercise=exercise,
-                blank_key=blank_key,
-                blank_number=blank_number,
-                correct_option=correct_option,
-                explanation=correct_explanation,
+    workbook_id = single_workbook_value(xlsx_path, rows, "ID")
+    dialogue = []
+    participants: list[str] = []
+    for sequence, row in enumerate(rows, start=1):
+        role = clean_text(row.get("Role"))
+        if not role:
+            raise ImportErrorWithContext(
+                f"{xlsx_path.name}: missing Role in dialogue row {sequence + 1}"
             )
-        imported_count += 1
-    return imported_count
+        dialogue.append({"sequence": sequence, "role": role, "text": row["内容"]})
+        if role in {"TN1", "TN2"} and role not in participants:
+            participants.append(role)
+
+    return {
+        "external_id": external_id_from_filename(xlsx_path, workbook_id),
+        "level": ExerciseBase.Level.B1,
+        "title": SPEAKING_TEIL_CONFIG["1"]["title"],
+        "exam_type": "telc",
+        "is_real_exam": False,
+        "instruction": SPEAKING_TEIL_CONFIG["1"]["instruction"],
+        "content": {
+            "schema_version": 1,
+            "teil": "1",
+            "topics": [
+                "Name und Herkunft",
+                "Wohnort und Familie",
+                "Deutschlernen",
+                "Beruf, Ausbildung oder Studium",
+                "Sprachen und Interessen",
+            ],
+            "participants": participants,
+            "has_examiner_prompts": any(item["role"].startswith("Prüfer") for item in dialogue),
+            "dialogue": dialogue,
+        },
+    }
 
 
-def import_speaking_prompt_segmented(xlsx_path: Path) -> int:
+def parse_tagged_dialogue(xlsx_path: Path, example_text: str) -> list[dict[str, object]]:
+    dialogue = []
+    for sequence, match in enumerate(
+        re.finditer(r"<(TN[12])>\s*(.*?)\s*</\1>", example_text, flags=re.DOTALL),
+        start=1,
+    ):
+        dialogue.append(
+            {"sequence": sequence, "role": match.group(1), "text": clean_text(match.group(2))}
+        )
+    if not dialogue:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: example_text must contain <TN1>...</TN1> and <TN2>...</TN2> turns"
+        )
+    unmatched = re.sub(r"<(TN[12])>\s*(.*?)\s*</\1>", "", example_text, flags=re.DOTALL)
+    if clean_text(unmatched):
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: example_text contains content outside TN1/TN2 tags"
+        )
+    return dialogue
+
+
+def parse_speaking_ueber_ein_thema_sprechen_workbook(xlsx_path: Path) -> dict[str, object]:
     xlsx = pd.ExcelFile(xlsx_path, engine="openpyxl")
     meta_df = get_sheet(xlsx, "meta")
     example_df = get_sheet(xlsx, "example")
-    require_columns(meta_df, ["ID", "标题", "题目", "考试类型", "是否真题", "分段符号"], "meta")
+    require_columns(
+        meta_df,
+        [
+            "ID",
+            "标题",
+            "题目",
+            "Card1_Titel",
+            "Card1_content",
+            "Card2_Titel",
+            "Card2_content",
+            "考试类型",
+            "是否真题",
+            "分段符号",
+        ],
+        "meta",
+    )
     require_columns(example_df, ["exercise_id", "example_text"], "example")
+    meta_rows = [row for row in iter_records(meta_df) if clean_text(row.get("ID"))]
+    example_rows = [row for row in iter_records(example_df) if clean_text(row.get("exercise_id"))]
+    require_one_exercise_per_file(xlsx_path, len(meta_rows))
+    require_one_exercise_per_file(xlsx_path, len(example_rows))
 
-    meta_by_id = {clean_text(row["ID"]): row for row in iter_records(meta_df)}
-    require_one_exercise_per_file(xlsx_path, len(meta_by_id))
-    example_by_id = {normalize_link_id(row["exercise_id"]): row for row in iter_records(example_df)}
+    meta = meta_rows[0]
+    example = example_rows[0]
+    workbook_id = normalize_link_id(meta["ID"])
+    if workbook_id != normalize_link_id(example["exercise_id"]):
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: meta.ID and example.exercise_id do not match"
+        )
+    example_text = clean_text(example["example_text"])
+    cards = [
+        {
+            "participant": "TN1",
+            "title": clean_text(meta["Card1_Titel"]),
+            "content": clean_text(meta["Card1_content"]),
+        },
+        {
+            "participant": "TN2",
+            "title": clean_text(meta["Card2_Titel"]),
+            "content": clean_text(meta["Card2_content"]),
+        },
+    ]
+    if any(not card["title"] or not card["content"] for card in cards):
+        raise ImportErrorWithContext(f"{xlsx_path.name}: both opinion cards must be complete")
 
-    level = infer_level_from_filename(xlsx_path)
-    imported_count = 0
-    for workbook_external_id, meta in meta_by_id.items():
-        external_id = external_id_from_filename(xlsx_path, workbook_external_id)
-        delimiter = clean_text(meta.get("分段符号")) or "<分段>"
-        example_row = example_by_id.get(normalize_link_id(workbook_external_id), {})
-        example_text = clean_text(example_row.get("example_text"))
-        base = upsert_base(
-            level=level,
-            skill=ExerciseBase.Skill.SPEAKING,
-            exercise_type=ExerciseBase.ExerciseType.SPEAKING_PROMPT_SEGMENTED,
-            external_id=external_id,
-            title=clean_text(meta.get("标题")),
-            exam_type=clean_text(meta.get("考试类型")),
-            is_real_exam=parse_bool(meta.get("是否真题")),
-            imported_from_file=xlsx_path.name,
-        )
-        exercise, _ = SpeakingPromptSegmentedExercise.objects.update_or_create(
-            exercise_base=base,
-            defaults={
-                "prompt_text": clean_text(meta.get("题目")),
-                "segment_delimiter": delimiter,
-                "example_text_raw": example_text,
-            },
-        )
-        exercise.segments.all().delete()
-        segments = [segment.strip() for segment in example_text.split(delimiter) if segment.strip()]
-        for index, segment_text in enumerate(segments, start=1):
-            SpeakingPromptSegment.objects.create(
-                exercise=exercise,
-                segment_order=index,
-                segment_text=segment_text,
+    return {
+        "external_id": external_id_from_filename(xlsx_path, workbook_id),
+        "level": infer_level_from_filename(xlsx_path),
+        "title": clean_text(meta["标题"]) or SPEAKING_TEIL_CONFIG["2"]["title"],
+        "exam_type": clean_text(meta["考试类型"]),
+        "is_real_exam": parse_bool(meta["是否真题"]),
+        "instruction": SPEAKING_TEIL_CONFIG["2"]["instruction"],
+        "content": {
+            "schema_version": 1,
+            "teil": "2",
+            "task": clean_text(meta["题目"]),
+            "cards": cards,
+            "delimiter": clean_text(meta["分段符号"]),
+            "dialogue": parse_tagged_dialogue(xlsx_path, example_text),
+        },
+    }
+
+
+def parse_speaking_gemeinsam_etwas_planen_workbook(xlsx_path: Path) -> dict[str, object]:
+    xlsx = pd.ExcelFile(xlsx_path, engine="openpyxl")
+    meta_df = get_sheet(xlsx, "meta")
+    require_columns(
+        meta_df,
+        ["ID", "标题", "内容", "句子类型", "考试类型", "是否真题"],
+        "meta",
+    )
+    rows = [row for row in iter_records(meta_df) if clean_text(row.get("内容"))]
+    if not rows:
+        raise ImportErrorWithContext(f"{xlsx_path.name}: Teil 3 dialogue is empty")
+
+    workbook_id = single_workbook_value(xlsx_path, rows, "ID")
+    title = single_workbook_value(xlsx_path, rows, "标题")
+    exam_type = single_workbook_value(xlsx_path, rows, "考试类型")
+    is_real_exam = parse_bool(single_workbook_value(xlsx_path, rows, "是否真题"))
+    dialogue = []
+    sections: list[dict[str, object]] = []
+    turns_by_type: dict[str, list[dict[str, object]]] = {}
+    for sequence, row in enumerate(rows, start=1):
+        sentence_type = clean_text(row["句子类型"])
+        if not sentence_type:
+            raise ImportErrorWithContext(
+                f"{xlsx_path.name}: missing 句子类型 in dialogue row {sequence + 1}"
             )
-        imported_count += 1
-    return imported_count
+        turn = {
+            "sequence": sequence,
+            "role": "TN1" if sequence % 2 else "TN2",
+            "text": clean_text(row["内容"]),
+            "sentence_type": sentence_type,
+        }
+        dialogue.append(turn)
+        if sentence_type not in turns_by_type:
+            turns_by_type[sentence_type] = []
+            sections.append({"type": sentence_type, "turns": turns_by_type[sentence_type]})
+        turns_by_type[sentence_type].append(turn)
+
+    return {
+        "external_id": external_id_from_filename(xlsx_path, workbook_id),
+        "level": infer_level_from_filename(xlsx_path),
+        "title": title or SPEAKING_TEIL_CONFIG["3"]["title"],
+        "exam_type": exam_type,
+        "is_real_exam": is_real_exam,
+        "instruction": SPEAKING_TEIL_CONFIG["3"]["instruction"],
+        "content": {
+            "schema_version": 1,
+            "teil": "3",
+            "sections": sections,
+            "dialogue": dialogue,
+        },
+    }
+
+
+def save_speaking_exercise(
+    xlsx_path: Path,
+    parsed: dict[str, object],
+    exercise_type: str,
+) -> int:
+    base = upsert_base(
+        level=parsed["level"],
+        skill=ExerciseBase.Skill.SPEAKING,
+        exercise_type=exercise_type,
+        external_id=parsed["external_id"],
+        title=parsed["title"],
+        exam_type=parsed["exam_type"],
+        is_real_exam=parsed["is_real_exam"],
+        imported_from_file=xlsx_path.name,
+    )
+    SpeakingTeilExercise.objects.update_or_create(
+        exercise_base=base,
+        defaults={"instruction": parsed["instruction"], "content": parsed["content"]},
+    )
+    return 1
+
+
+def import_speaking_einander_kennenlernen(xlsx_path: Path) -> int:
+    return save_speaking_exercise(
+        xlsx_path,
+        parse_speaking_einander_kennenlernen_workbook(xlsx_path),
+        ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+    )
+
+
+def import_speaking_ueber_ein_thema_sprechen(xlsx_path: Path) -> int:
+    return save_speaking_exercise(
+        xlsx_path,
+        parse_speaking_ueber_ein_thema_sprechen_workbook(xlsx_path),
+        ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+    )
+
+
+def import_speaking_gemeinsam_etwas_planen(xlsx_path: Path) -> int:
+    return save_speaking_exercise(
+        xlsx_path,
+        parse_speaking_gemeinsam_etwas_planen_workbook(xlsx_path),
+        ExerciseBase.ExerciseType.SPEAKING_TEIL3,
+    )
 
 
 TYPE_CONFIG: dict[str, dict[str, object]] = {
@@ -848,17 +1120,23 @@ TYPE_CONFIG: dict[str, dict[str, object]] = {
         "failed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/writing/failed",
         "importer": import_writing,
     },
-    "speaking_gap_matching": {
-        "raw_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_gap_matching/raw",
-        "processed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_gap_matching/processed",
-        "failed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_gap_matching/failed",
-        "importer": import_speaking_gap_matching,
+    "speaking_einander_kennenlernen": {
+        "raw_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_einander_kennenlernen/raw",
+        "processed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_einander_kennenlernen/processed",
+        "failed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_einander_kennenlernen/failed",
+        "importer": import_speaking_einander_kennenlernen,
     },
-    "speaking_prompt_segmented": {
-        "raw_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_prompt_segmented/raw",
-        "processed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_prompt_segmented/processed",
-        "failed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_prompt_segmented/failed",
-        "importer": import_speaking_prompt_segmented,
+    "speaking_ueber_ein_thema_sprechen": {
+        "raw_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_ueber_ein_thema_sprechen/raw",
+        "processed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_ueber_ein_thema_sprechen/processed",
+        "failed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_ueber_ein_thema_sprechen/failed",
+        "importer": import_speaking_ueber_ein_thema_sprechen,
+    },
+    "speaking_gemeinsam_etwas_planen": {
+        "raw_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_gemeinsam_etwas_planen/raw",
+        "processed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_gemeinsam_etwas_planen/processed",
+        "failed_dir": REPO_ROOT / "apps/exam_preparation/data/imports/speaking_gemeinsam_etwas_planen/failed",
+        "importer": import_speaking_gemeinsam_etwas_planen,
     },
 }
 
@@ -867,23 +1145,39 @@ def move_file(path: Path, target_dir: Path) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / path.name
     if target.exists():
-        target.unlink()
+        raise ImportErrorWithContext(f"Refusing to overwrite existing file: {target}")
     path.replace(target)
 
 
-def collect_files(base_dir: Path, file_arg: str) -> list[Path]:
+def collect_files(base_dir: Path, file_arg: str, recursive: bool = False) -> list[Path]:
     if file_arg:
         candidate = Path(file_arg)
         if not candidate.is_absolute():
             candidate = base_dir / file_arg
+        if not candidate.exists() and recursive:
+            candidates = sorted(base_dir.rglob(candidate.name))
+            if len(candidates) == 1:
+                candidate = candidates[0]
         return [candidate]
+    paths = base_dir.rglob("*") if recursive else base_dir.iterdir()
     return sorted(
         path
-        for path in base_dir.iterdir()
+        for path in paths
         if path.is_file()
         and path.suffix.lower() in {".xlsx", ".xlsm"}
         and not path.stem.lower().endswith("_example")
     )
+
+
+def archive_dir(kind: str, root_dir: Path, path: Path) -> Path:
+    if kind == "listening":
+        teil = re.search(r"(?:^|_)teil([123])(?:_|$)", path.stem, re.IGNORECASE)
+        if not teil:
+            raise ImportErrorWithContext(
+                f"{path.name}: listening filename must include Teil1, Teil2, or Teil3"
+            )
+        return root_dir / f"Teil{teil.group(1)}"
+    return root_dir
 
 
 def import_kind(
@@ -900,8 +1194,13 @@ def import_kind(
     failed_dir = config["failed_dir"]
     importer: ImporterFn = config["importer"]  # type: ignore[assignment]
 
+    if kind == "listening":
+        for teil in ("Teil1", "Teil2", "Teil3"):
+            (processed_dir / teil).mkdir(parents=True, exist_ok=True)
+            (failed_dir / teil).mkdir(parents=True, exist_ok=True)
+
     source_dir = failed_dir if retry_failed else raw_dir
-    files = collect_files(source_dir, file_arg)
+    files = collect_files(source_dir, file_arg, recursive=retry_failed)
     if not files:
         source_label = "failed" if retry_failed else "raw"
         log(f"No xlsx/xlsm files found for kind={kind} in {source_label}/.")
@@ -921,12 +1220,16 @@ def import_kind(
             ok += 1
             log(f"OK: {path.name} imported exercises={imported_count}")
             if not no_move and path.parent in {raw_dir, failed_dir}:
-                move_file(path, processed_dir)
+                move_file(path, archive_dir(kind, processed_dir, path))
+            elif not no_move and kind == "listening" and path.parent.parent == failed_dir:
+                move_file(path, archive_dir(kind, processed_dir, path))
         except Exception as exc:  # noqa: BLE001
             failed += 1
             log(f"FAILED: {path.name} error={exc}")
-            if not no_move and path.parent == raw_dir:
-                move_file(path, failed_dir)
+            if not no_move and path.parent in {raw_dir, failed_dir}:
+                move_file(path, archive_dir(kind, failed_dir, path))
+            elif not no_move and kind == "listening" and path.parent.parent == failed_dir:
+                log(f"Keeping failed file in place: {path}")
         finally:
             log(f"=== Import end: kind={kind} file={path.name} ===")
     log(f"Summary: kind={kind} ok={ok} failed={failed} total={len(files)}")

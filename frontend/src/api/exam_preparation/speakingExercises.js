@@ -12,46 +12,12 @@ function normalizeList(data) {
   return { results: [], count: 0 };
 }
 
-export async function fetchSpeakingGapMatchingExercises() {
-  const data = await apiFetch(`${BASE}/speaking-gap-matching-exercises/`);
+export async function fetchSpeakingTeilExercises(teil) {
+  const query = teil ? `?exercise_base__exercise_type=SPEAKING_TEIL${encodeURIComponent(teil)}` : "";
+  const data = await apiFetch(`${BASE}/speaking-teil-exercises/${query}`);
   return normalizeList(data);
 }
 
-export function fetchSpeakingGapMatchingExerciseDetail(exerciseId) {
-  return apiFetch(`${BASE}/speaking-gap-matching-exercises/${exerciseId}/`);
-}
-
-export async function fetchSpeakingPromptSegmentedExercises() {
-  const data = await apiFetch(`${BASE}/speaking-prompt-segmented-exercises/`);
-  return normalizeList(data);
-}
-
-export function fetchSpeakingPromptSegmentedExerciseDetail(exerciseId) {
-  return apiFetch(`${BASE}/speaking-prompt-segmented-exercises/${exerciseId}/`);
-}
-
-export async function fetchSpeakingGapBlankStates(exerciseId) {
-  const query = exerciseId ? `?blank__exercise=${encodeURIComponent(exerciseId)}` : "";
-  const data = await apiFetch(`${BASE}/user-speaking-gap-blank-states/${query}`);
-  return normalizeList(data);
-}
-
-export function saveSpeakingGapBlankState(payload) {
-  return apiFetch(`${BASE}/user-speaking-gap-blank-states/`, {
-    method: "POST",
-    body: payload,
-  });
-}
-
-export async function fetchSpeakingPromptSegmentedExerciseStates(exerciseId) {
-  const query = exerciseId ? `?exercise=${encodeURIComponent(exerciseId)}` : "";
-  const data = await apiFetch(`${BASE}/user-speaking-prompt-segmented-exercise-states/${query}`);
-  return normalizeList(data);
-}
-
-export function saveSpeakingPromptSegmentedExerciseState(payload) {
-  return apiFetch(`${BASE}/user-speaking-prompt-segmented-exercise-states/`, {
-    method: "POST",
-    body: payload,
-  });
+export function fetchSpeakingTeilExerciseDetail(exerciseId) {
+  return apiFetch(`${BASE}/speaking-teil-exercises/${exerciseId}/`);
 }

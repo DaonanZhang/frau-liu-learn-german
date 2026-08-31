@@ -29,6 +29,7 @@ from apps.exam_preparation.views import (
     SpeakingGapOptionViewSet,
     SpeakingPromptSegmentedExerciseViewSet,
     SpeakingPromptSegmentViewSet,
+    SpeakingTeilExerciseViewSet,
     UserClozeChoiceBlankStateViewSet,
     UserClozeMatchingBlankStateViewSet,
     UserExerciseFavoriteViewSet,
@@ -113,6 +114,11 @@ router.register(
 )
 router.register(r"speaking-gap-blanks", SpeakingGapBlankViewSet, basename="exam-prep-speaking-gap-blanks")
 router.register(r"speaking-gap-options", SpeakingGapOptionViewSet, basename="exam-prep-speaking-gap-options")
+router.register(
+    r"speaking-teil-exercises",
+    SpeakingTeilExerciseViewSet,
+    basename="exam-prep-speaking-teil-exercises",
+)
 router.register(
     r"speaking-prompt-segmented-exercises",
     SpeakingPromptSegmentedExerciseViewSet,

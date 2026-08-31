@@ -29,6 +29,7 @@ from .speaking import (
     SpeakingGapOption,
     SpeakingPromptSegment,
     SpeakingPromptSegmentedExercise,
+    SpeakingTeilExercise,
 )
 from .user_activity import (
     UserClozeChoiceBlankState,
@@ -72,6 +73,7 @@ __all__ = [
     "SpeakingGapOption",
     "SpeakingPromptSegmentedExercise",
     "SpeakingPromptSegment",
+    "SpeakingTeilExercise",
     "UserExerciseFavorite",
     "UserListeningQuestionState",
     "UserReadingUnderstandingQuestionState",

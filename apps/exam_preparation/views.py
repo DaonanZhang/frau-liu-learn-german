@@ -37,6 +37,7 @@ from apps.exam_preparation.models import (
     SpeakingGapOption,
     SpeakingPromptSegment,
     SpeakingPromptSegmentedExercise,
+    SpeakingTeilExercise,
     UserClozeChoiceBlankState,
     UserClozeMatchingBlankState,
     UserExerciseFavorite,
@@ -84,6 +85,7 @@ from apps.exam_preparation.serializers import (
     SpeakingPromptSegmentedExerciseDetailSerializer,
     SpeakingPromptSegmentedExerciseSerializer,
     SpeakingPromptSegmentSerializer,
+    SpeakingTeilExerciseSerializer,
     UserClozeChoiceBlankStateSerializer,
     UserClozeMatchingBlankStateSerializer,
     UserExerciseFavoriteSerializer,
@@ -402,6 +404,14 @@ class SpeakingGapMatchingExerciseViewSet(BaseExamPreparationViewSet):
         if self.action == "retrieve":
             return SpeakingGapMatchingExerciseDetailSerializer
         return super().get_serializer_class()
+
+
+class SpeakingTeilExerciseViewSet(BaseExamPreparationViewSet):
+    queryset = SpeakingTeilExercise.objects.select_related("exercise_base").all()
+    serializer_class = SpeakingTeilExerciseSerializer
+    filterset_fields = ["exercise_base", "exercise_base__exercise_type"]
+    search_fields = ["instruction", "exercise_base__external_id", "exercise_base__title"]
+    ordering_fields = ["id", "created_at", "updated_at"]
 
 
 class SpeakingGapBlankViewSet(BaseExamPreparationViewSet):

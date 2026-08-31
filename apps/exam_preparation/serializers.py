@@ -27,6 +27,7 @@ from apps.exam_preparation.models import (
     SpeakingGapOption,
     SpeakingPromptSegment,
     SpeakingPromptSegmentedExercise,
+    SpeakingTeilExercise,
     UserClozeChoiceBlankState,
     UserClozeMatchingBlankState,
     UserExerciseFavorite,
@@ -594,6 +595,15 @@ class SpeakingGapMatchingExerciseSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class SpeakingTeilExerciseSerializer(serializers.ModelSerializer):
+    exercise_base = ExerciseBaseSerializer(read_only=True)
+
+    class Meta:
+        model = SpeakingTeilExercise
+        fields = ["id", "exercise_base", "instruction", "content", "created_at", "updated_at"]
+        read_only_fields = fields
 
 
 class SpeakingGapBlankSerializer(serializers.ModelSerializer):

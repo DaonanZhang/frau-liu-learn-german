@@ -20,8 +20,9 @@ Place future exam-preparation XLSX files under:
 - `apps/exam_preparation/data/imports/cloze_choice/raw`
 - `apps/exam_preparation/data/imports/cloze_matching/raw`
 - `apps/exam_preparation/data/imports/writing/raw`
-- `apps/exam_preparation/data/imports/speaking_gap_matching/raw`
-- `apps/exam_preparation/data/imports/speaking_prompt_segmented/raw`
+- `apps/exam_preparation/data/imports/speaking_einander_kennenlernen/raw`
+- `apps/exam_preparation/data/imports/speaking_ueber_ein_thema_sprechen/raw`
+- `apps/exam_preparation/data/imports/speaking_gemeinsam_etwas_planen/raw`
 
 Directory meaning:
 
@@ -93,7 +94,7 @@ to read child sheets but stores the filename suffix and logs `ID OVERRIDE`.
 
 Suggested filename:
 
-- `b1_listening_001.xlsx`
+- `b1_listening_teil1_001.xlsx`
 
 Tabs:
 
@@ -109,25 +110,46 @@ Columns:
 - `原标题` optional
 - `script` optional
 - `考试类型`
-- `什么真题` or equivalent source text
+- `是否真题` or legacy `什么真题`
 
 Mapping:
 
 - `音频文件_ID` -> `ExerciseBase.external_id`
 - `原标题` -> `ExerciseBase.title`
 - `考试类型` -> `ExerciseBase.exam_type`
-- `什么真题` -> prefer `ExerciseBase.source_reference` or `source_name` depending on actual content
-- `音频文件网盘地址` -> `ListeningExercise.audio_file_url`
-- audio file name stem -> `ListeningExercise.audio_file_identifier`
+- `是否真题` or legacy `什么真题` -> `ExerciseBase.is_real_exam`
+- `音频文件网盘地址` is retained as a required source column for workbook
+  compatibility; the importer replaces it with the verified local audio URL
+- local audio URL is backfilled from
+  `frontend/public/resources/ExamPreparation/exam_preparation_audio/`
+  after the workbook data is read
+- listening type determines the local subfolder:
+  - `short_text_true_false_with_prep` -> `Teil1`
+  - `short_text_true_false_once` -> `Teil2`
+  - `dialog_true_false_twice` -> `Teil3`
+- the local audio file must have the exact stem
+  `TeilX_<音频文件_ID>`; for example, `Teil1_001.mp3`
+- `ListeningExercise.audio_file_identifier` -> the matched local audio file stem
 - `script` -> `ListeningExercise.script`
 - listening-level constants:
   - `ExerciseBase.skill = LISTENING`
-  - `ExerciseBase.exercise_type = LISTENING_CHOICE`
+  - `ExerciseBase.exercise_type` is determined by the filename:
+    - `teil1` -> `LISTENING_TEIL1`
+    - `teil2` -> `LISTENING_TEIL2`
+    - `teil3` -> `LISTENING_TEIL3`
 
 Notes:
 
 - The current database already supports multiple listening subtypes through `ListeningExercise.listening_type`.
-- If the XLSX needs to distinguish subtype, the importer should infer it from file location, filename, or an added meta column.
+- The filename must contain `teil1`, `teil2`, or `teil3`; this determines the
+  listening subtype and is the source of truth. `meta.listening_type` is
+  optional, but if present it must agree with the filename.
+- For compatibility, the importer accepts either `是否真题` or the legacy
+  `什么真题` column name for the real-exam flag. If both are present,
+  `是否真题` takes precedence.
+- The importer creates missing `Teil1`, `Teil2`, or `Teil3` directories, but a
+  missing matching audio file is an import error. The workbook transaction is
+  rolled back and the workbook is moved to `failed/`.
 
 ### 1.2 `exercise` tab
 
@@ -545,7 +567,104 @@ Conclusion:
 
 ## 5. Speaking
 
-Speaking now needs to support two different exercise types:
+Speaking uses the three telc speaking tasks directly:
+
+- `SPEAKING_TEIL1` — Einander kennenlernen
+- `SPEAKING_TEIL2` — Über ein Thema sprechen
+- `SPEAKING_TEIL3` — Gemeinsam etwas planen
+
+Each Teil has its own import directory because its workbook structure is independent from the other two Teil formats.
+
+### 5.1 Shared rules
+
+The three Teil formats are independent. Do not convert them into a generic
+`meta + exercise` workbook.
+
+Shared mapping:
+
+- the numeric filename suffix is `ExerciseBase.external_id`
+- `ExerciseBase.skill = SPEAKING`
+- each folder selects its fixed `SPEAKING_TEIL1`, `SPEAKING_TEIL2`, or
+  `SPEAKING_TEIL3` exercise type
+- every workbook contains exactly one exercise
+- the normalized payload is stored in `SpeakingTeilExercise.content`
+
+### 5.2 Teil 1 — Einander kennenlernen
+
+Example filename: `Kennenlernen_002.xlsx`.
+
+The workbook has one worksheet; its name is not significant. Required columns:
+
+- `ID`
+- `Role`
+- `内容`
+
+Each non-empty row is one dialogue turn. `Role` is preserved exactly, including
+`TN1`, `TN2`, `Prüfer (an TN1)`, and `Prüfer (an TN2)`.
+
+This source format omits shared metadata. The Teil 1 contract therefore uses
+the fixed values `level=B1`, `exam_type=telc`, title
+`Einander kennenlernen`, and `is_real_exam=false`. The importer also adds the
+standard conversation topics used by the frontend before the example dialogue
+is revealed.
+
+Normalized `content` fields:
+
+- `teil`
+- `topics`
+- `participants`
+- `has_examiner_prompts`
+- `dialogue[]` with `sequence`, `role`, and `text`
+
+### 5.3 Teil 2 — Über ein Thema sprechen
+
+Example filename: `b1_speaking_segmented_017.xlsm`.
+
+The `meta` worksheet contains exactly one row with:
+
+- `ID`, `标题`, `题目`
+- `Card1_Titel`, `Card1_content`
+- `Card2_Titel`, `Card2_content`
+- `考试类型`, `是否真题`, `分段符号`
+
+The `example` worksheet contains exactly one row with `exercise_id` and
+`example_text`. The example must use paired `<TN1>...</TN1>` and
+`<TN2>...</TN2>` tags. Text outside those tags is rejected.
+
+Normalized `content` fields:
+
+- `teil`, `task`, and `delimiter`
+- `cards[]` with `participant`, `title`, and `content`
+- `dialogue[]` with `sequence`, `role`, and `text`
+
+### 5.4 Teil 3 — Gemeinsam etwas planen
+
+Example filename: `b1_speaking_planen_008.xlsm`.
+
+The workbook has one `meta` worksheet. Required columns:
+
+- `ID`, `标题`, `内容`
+- `句子类型`
+- `考试类型`, `是否真题`
+
+The repeated metadata must be consistent across all rows. Each non-empty row
+is one dialogue turn. Because this workbook has no role column, turns are
+assigned alternately to `TN1` and `TN2`, starting with `TN1`. Consecutive rows
+with the same `句子类型` form one ordered planning stage.
+
+Normalized `content` fields:
+
+- `teil`
+- `sections[]` with `type` and ordered `turns`
+- `dialogue[]` with `sequence`, `role`, `text`, and `sentence_type`
+
+### 5.5 Removed legacy speaking formats
+
+The old `SPEAKING_GAP_MATCHING` and `SPEAKING_PROMPT_SEGMENTED` workbook files and import entry points have been removed. The notes below are historical only.
+
+<!-- legacy content retained below -->
+
+Speaking previously supported two different exercise types:
 
 - `SPEAKING_GAP_MATCHING`
 - `SPEAKING_PROMPT_SEGMENTED`
@@ -554,7 +673,7 @@ Speaking now needs to support two different exercise types:
 
 Suggested filename:
 
-- `b1_speaking_gap_matching_example.xlsx`
+- removed; no legacy workbook is retained
 
 Speaking XLSX is now intentionally aligned with `3.1 Cloze Choice`.
 
@@ -628,7 +747,7 @@ This is the new speaking type you described:
 
 Suggested filename:
 
-- `b1_speaking_prompt_segmented_001.xlsx`
+- removed; no legacy workbook is retained
 
 Tabs:
 
@@ -724,7 +843,9 @@ What already fits well:
 - reading title matching
 - cloze choice
 - cloze matching
-- speaking gap matching
+- speaking Teil 1
+- speaking Teil 2
+- speaking Teil 3
 - writing
 
 What is still structurally correct in DB but needs importer normalization:
@@ -733,12 +854,6 @@ What is still structurally correct in DB but needs importer normalization:
   - XLSX is flat
   - DB is normalized
   - importer should deduplicate ad texts into a shared ad pool
-
-What requires a new concrete database model:
-
-- speaking prompt with segmented model text
-  - this is a genuinely different business object
-  - it should not be forced into `SpeakingGapMatchingExercise`
 
 What needs a small XLSX adjustment to fully match the current DB:
 

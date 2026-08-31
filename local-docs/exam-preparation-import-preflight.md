@@ -83,6 +83,8 @@ For every exercise type:
 - the meta/exercise ID required to create `ExerciseBase` is non-empty
 - `考试类型` / `exam_type` is non-empty
 - supported boolean fields can be parsed by `parse_bool()`
+- numeric Excel boolean values such as `0.0` and `1.0` are accepted as false
+  and true respectively
 - integer fields can be parsed by `parse_int()`
 - child rows link to the intended meta exercise
 
@@ -135,7 +137,13 @@ Interpret the flat `exercise` sheet as follows:
 ### Listening and speaking
 
 - apply the same structural, ID-link, boolean, and integer checks
-- follow their importer-specific answer and segmentation validation in
+- speaking Teil 1: require one sheet with `ID`, `Role`, and `内容`; every
+  dialogue row must have a role
+- speaking Teil 2: require one matching row in `meta` and `example`, two
+  complete opinion cards, and a fully TN1/TN2-tagged example dialogue
+- speaking Teil 3: require consistent repeated metadata, a non-empty
+  `句子类型` for every turn, and preserve section order by first occurrence
+- follow all importer-specific validation in
   `scripts/exam_preparation_importer.py`
 
 ## 6. Confirm Atomicity Expectations
@@ -164,6 +172,9 @@ failed files should move to `failed/`.
 .venv/bin/python scripts/import_exam_preparation_reading_understanding.py
 .venv/bin/python scripts/import_exam_preparation_reading_ad_matching.py
 .venv/bin/python scripts/import_exam_preparation_reading_title_matching.py
+.venv/bin/python scripts/import_exam_preparation_speaking_einander_kennenlernen.py
+.venv/bin/python scripts/import_exam_preparation_speaking_ueber_ein_thema_sprechen.py
+.venv/bin/python scripts/import_exam_preparation_speaking_gemeinsam_etwas_planen.py
 ```
 
 After execution, reconcile the import summaries with filesystem counts. For a

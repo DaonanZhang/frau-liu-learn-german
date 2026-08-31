@@ -89,7 +89,7 @@
 
 .exam-speaking-type-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1rem;
 }
 
@@ -197,7 +197,7 @@
   }
 
   .exam-speaking-type-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .exam-speaking-hero__copy {
@@ -221,5 +221,11 @@
 
   .exam-speaking-type__cta {
     width: 100%;
+  }
+}
+
+@media (max-width: 680px) {
+  .exam-speaking-type-grid {
+    grid-template-columns: 1fr;
   }
 }

@@ -1,0 +1,49 @@
+.speaking-detail-page { display: flex; flex-direction: column; gap: 1.2rem; color: #2f3440; }
+.speaking-detail-topbar { display: flex; }
+.speaking-detail-back { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 1rem; border: 1px solid rgba(223, 226, 229, 0.96); border-radius: 999px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 10px 24px rgba(38, 52, 74, 0.06); color: #2f6f5e; font-weight: 700; text-decoration: none; }
+.speaking-detail-hero { padding: 1.55rem; border: 1px solid rgba(221, 223, 227, 0.9); border-radius: 1.45rem; background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.58), transparent 30%), linear-gradient(135deg, #efe2c9 0%, #f8f4ec 44%, #dfeaf2 100%); box-shadow: 0 14px 32px rgba(39, 51, 74, 0.07); }
+.speaking-detail-hero__eyebrow, .speaking-detail-card__eyebrow { margin: 0 0 0.35rem; color: #6b5a48; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.speaking-detail-hero h1 { margin: 0; color: #2f2a25; font-size: clamp(1.75rem, 3vw, 2.55rem); line-height: 1.2; }
+.speaking-detail-badges, .speaking-detail-topic-list { display: flex; flex-wrap: wrap; gap: 0.55rem; margin-top: 1rem; }
+.speaking-detail-badges span, .speaking-detail-topic-list span { display: inline-flex; align-items: center; min-height: 2rem; padding: 0.4rem 0.72rem; border: 1px solid #e6d2b5; border-radius: 999px; background: rgba(255, 252, 247, 0.88); color: #74562f; font-size: 0.82rem; font-weight: 700; }
+.speaking-detail-badges .speaking-detail-badge--exam { border-color: #b9ddcf; background: #eaf7f1; color: #24624f; }
+.speaking-detail-card { padding: 1.35rem; border: 1px solid rgba(223, 226, 229, 0.96); border-radius: 1.3rem; background: #fff; box-shadow: 0 14px 30px rgba(38, 52, 74, 0.06); }
+.speaking-detail-card h2 { margin: 0; color: #2d2925; font-size: clamp(1.3rem, 2vw, 1.65rem); }
+.speaking-detail-task__instruction, .speaking-detail-recording p { margin: 0.7rem 0 0; color: #5b6472; line-height: 1.7; }
+.speaking-detail-task__text { margin: 1rem 0 0; padding: 1rem; border-left: 4px solid #2f6f5e; border-radius: 0 0.8rem 0.8rem 0; background: #f4f8f6; color: #37424f; line-height: 1.75; white-space: pre-line; }
+.speaking-detail-opinion-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.1rem; }
+.speaking-detail-opinion { padding: 1.05rem; border: 1px solid #e2e5e8; border-radius: 1rem; background: #fffaf2; }
+.speaking-detail-opinion:nth-child(2) { background: #f2f7f8; }
+.speaking-detail-opinion > span { color: #2f6f5e; font-size: 0.78rem; font-weight: 800; }
+.speaking-detail-opinion h3 { margin: 0.35rem 0 0; color: #2d2925; font-size: 1.08rem; }
+.speaking-detail-opinion p { margin: 0.65rem 0 0; color: #525d69; line-height: 1.7; white-space: pre-line; }
+.speaking-detail-stage-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; margin: 1.1rem 0 0; padding: 0; list-style: none; }
+.speaking-detail-stage-list li { display: flex; align-items: center; gap: 0.7rem; min-width: 0; padding: 0.75rem 0.85rem; border: 1px solid #e2e5e8; border-radius: 0.9rem; background: #f8faf9; }
+.speaking-detail-stage-list span { display: grid; flex: 0 0 1.8rem; width: 1.8rem; height: 1.8rem; place-items: center; border-radius: 50%; background: #2f6f5e; color: #fff; font-size: 0.78rem; font-weight: 800; }
+.speaking-detail-stage-list p { margin: 0; color: #4d5865; line-height: 1.4; }
+.speaking-detail-recording { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1.25rem; }
+.speaking-detail-recording .shadowing-practice-bar { width: auto; min-width: 8rem; margin: 0; box-shadow: none; }
+.speaking-detail-section-list { display: flex; flex-direction: column; gap: 1.2rem; margin-top: 1rem; }
+.speaking-detail-dialogue-section h3 { margin: 0 0 0.65rem; color: #56616e; font-size: 0.92rem; }
+.speaking-detail-dialogue { display: flex; flex-direction: column; gap: 0.7rem; margin-top: 1rem; }
+.speaking-detail-dialogue-section .speaking-detail-dialogue { margin-top: 0; }
+.speaking-detail-turn { width: min(78%, 44rem); padding: 0.8rem 0.95rem; border: 1px solid #e2e5e8; border-radius: 1rem 1rem 1rem 0.25rem; background: #fffaf2; }
+.speaking-detail-turn--tn2 { align-self: flex-end; border-radius: 1rem 1rem 0.25rem 1rem; background: #eef6f4; }
+.speaking-detail-turn--examiner { align-self: center; width: min(90%, 50rem); border-color: #eadbc8; border-radius: 1rem; background: #f8f4ee; }
+.speaking-detail-turn__role { color: #2f6f5e; font-size: 0.75rem; font-weight: 800; }
+.speaking-detail-turn p { margin: 0.35rem 0 0; color: #3f4955; line-height: 1.65; white-space: pre-line; }
+.speaking-detail-state { padding: 1rem; border: 1px solid #dfe2e5; border-radius: 1rem; background: #fff; color: #5b6472; }
+.speaking-detail-state--error { color: #a33a3a; }
+
+@media (max-width: 990px) {
+  .speaking-detail-page { gap: 1rem; }
+  .speaking-detail-back { width: 100%; justify-content: center; }
+  .speaking-detail-hero, .speaking-detail-card { padding: 1.05rem; border-radius: 1rem; }
+  .speaking-detail-recording { grid-template-columns: 1fr; }
+  .speaking-detail-recording .shadowing-practice-bar { width: 100%; }
+}
+
+@media (max-width: 680px) {
+  .speaking-detail-opinion-grid, .speaking-detail-stage-list { grid-template-columns: 1fr; }
+  .speaking-detail-turn, .speaking-detail-turn--examiner { width: 100%; box-sizing: border-box; }
+}

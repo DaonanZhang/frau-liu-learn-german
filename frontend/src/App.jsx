@@ -27,8 +27,7 @@ import ListeningExercisePage from "./pages/ListeningExercisePage.jsx";
 import ReadingTitleMatchingPage from "./pages/ReadingTitleMatchingPage.jsx";
 import ReadingUnderstandingPage from "./pages/ReadingUnderstandingPage.jsx";
 import ReadingAdMatchingPage from "./pages/ReadingAdMatchingPage.jsx";
-import SpeakingGapMatchingPage from "./pages/SpeakingGapMatchingPage.jsx";
-import SpeakingPromptSegmentedPage from "./pages/SpeakingPromptSegmentedPage.jsx";
+import SpeakingTeilExercisePage from "./pages/SpeakingTeilExercisePage.jsx";
 import ModulePurchasePage from "./pages/ModulePurchasePage.jsx";
 import ModuleCheckoutPage from "./pages/ModuleCheckoutPage.jsx";
 import AlipayReturnPage from "./pages/AlipayReturnPage.jsx";
@@ -46,10 +45,7 @@ import {
   fetchClozeChoiceExercises,
   fetchClozeMatchingExercises,
 } from "./api/exam_preparation/clozeExercises.js";
-import {
-  fetchSpeakingGapMatchingExercises,
-  fetchSpeakingPromptSegmentedExercises,
-} from "./api/exam_preparation/speakingExercises.js";
+import { fetchSpeakingTeilExercises } from "./api/exam_preparation/speakingExercises.js";
 
 import { AuthProvider } from "./api/auth";
 import { useAuth } from "./api/auth/useAuth.js";
@@ -284,42 +280,26 @@ const router = createBrowserRouter([
         ),
       },
       { path: "/modules/exam-preparation/lesen/ad-matching/:exerciseId", element: <ReadingAdMatchingPage /> },
-      {
-        path: "/modules/exam-preparation/sprechen/gap-matching",
-        element: (
-          <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/sprechen"
-            backLabel="← Zurück zu Sprechen"
-            eyebrow="Sprechen"
-            title="Lückentext mit Satzoptionen"
-            description="Wähle eine Aufgabe aus und ergänze einen Sprechtext mit passenden Aussagen."
-            tags={["Aussagen ergänzen", "Kontext beachten", "Sprechtraining"]}
-            fetchExercises={fetchSpeakingGapMatchingExercises}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/sprechen/gap-matching/${exercise.id}`}
-            cardLabel="Sprechübung"
-            cardDescription="Öffne diese Aufgabe und ergänze den Text mit den passenden Satzoptionen."
-          />
-        ),
-      },
-      { path: "/modules/exam-preparation/sprechen/gap-matching/:exerciseId", element: <SpeakingGapMatchingPage /> },
-      {
-        path: "/modules/exam-preparation/sprechen/prompt-segmented",
-        element: (
-          <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/sprechen"
-            backLabel="← Zurück zu Sprechen"
-            eyebrow="Sprechen"
-            title="Prompt mit geordneten Abschnitten"
-            description="Wähle eine Aufgabe aus und bringe die Abschnitte eines Beispieltexts in die richtige Reihenfolge."
-            tags={["Reihenfolge ordnen", "Antwort strukturieren", "Sprechtraining"]}
-            fetchExercises={fetchSpeakingPromptSegmentedExercises}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/sprechen/prompt-segmented/${exercise.id}`}
-            cardLabel="Sprechübung"
-            cardDescription="Öffne diese Aufgabe und ordne die Abschnitte des Beispieltexts sinnvoll an."
-          />
-        ),
-      },
-      { path: "/modules/exam-preparation/sprechen/prompt-segmented/:exerciseId", element: <SpeakingPromptSegmentedPage /> },
+      ...[1, 2, 3].flatMap((teil) => [
+        {
+          path: `/modules/exam-preparation/sprechen/teil-${teil}`,
+          element: (
+            <ExerciseSelectionPage
+              backTo="/modules/exam-preparation/sprechen"
+              backLabel="← Zurück zu Sprechen"
+              eyebrow={`Sprechen · Teil ${teil}`}
+              title={["Einander kennenlernen", "Über ein Thema sprechen", "Gemeinsam etwas planen"][teil - 1]}
+              description="Wähle eine Aufgabe aus und übe die passende telc-Sprechaufgabe."
+              tags={["telc B1", "Sprechtraining", "Prüfungsvorbereitung"]}
+              fetchExercises={() => fetchSpeakingTeilExercises(teil)}
+              buildExerciseHref={(exercise) => `/modules/exam-preparation/sprechen/teil-${teil}/${exercise.id}`}
+              cardLabel={`Sprechen Teil ${teil}`}
+              cardDescription="Öffne diese Aufgabe und sprich sie anhand der angegebenen Stichpunkte durch."
+            />
+          ),
+        },
+        { path: `/modules/exam-preparation/sprechen/teil-${teil}/:exerciseId`, element: <SpeakingTeilExercisePage teil={teil} /> },
+      ]),
       { path: "/modules/:moduleId/preview", element: <ModulePurchasePage /> },
       { path: "/modules/:moduleId/purchase", element: <ModuleCheckoutPage /> },
       { path: "/manual", element: <ManualPage /> },

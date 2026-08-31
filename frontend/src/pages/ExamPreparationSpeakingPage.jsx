@@ -3,22 +3,31 @@ import "./ExamPreparationSpeakingPage.css";
 
 const SPEAKING_TYPES = [
   {
-    key: "gap-matching",
-    title: "句子匹配",
-    label: "根据语境补全表达",
-    description: "通过补全对话或口语文本中的空缺内容，练习在语境里选择更自然的表达方式，帮助你强化口语结构和句子衔接。",
-    to: "/modules/exam-preparation/sprechen/gap-matching",
+    key: "teil1",
+    title: "Teil 1",
+    label: "Einander kennenlernen",
+    description: "围绕姓名、 Herkunft、居住、家庭、学习德语、职业和语言等信息与搭档互相了解。",
+    to: "/modules/exam-preparation/sprechen/teil-1",
     cta: "进入这一题型",
     focus: "表达衔接",
   },
   {
-    key: "prompt-segmented",
-    title: "段落组织",
-    label: "整理表达顺序与结构",
-    description: "围绕口语题目整理表达内容的先后顺序，更适合训练开头、展开和结尾之间的逻辑组织，让回答更完整、更有条理。",
-    to: "/modules/exam-preparation/sprechen/prompt-segmented",
+    key: "teil2",
+    title: "Teil 2",
+    label: "Über ein Thema sprechen",
+    description: "先复述自己的文章内容，再介绍搭档的相反观点，最后交换意见并谈个人经验。",
+    to: "/modules/exam-preparation/sprechen/teil-2",
     cta: "进入这一题型",
     focus: "组织表达",
+  },
+  {
+    key: "teil3",
+    title: "Teil 3",
+    label: "Gemeinsam etwas planen",
+    description: "和搭档交换想法、讨论任务安排，最终就时间、地点、费用和分工等事项达成一致。",
+    to: "/modules/exam-preparation/sprechen/teil-3",
+    cta: "进入这一题型",
+    focus: "协商计划",
   },
 ];
 
@@ -36,7 +45,7 @@ export default function ExamPreparationSpeakingPage() {
           <p className="exam-speaking-hero__eyebrow">Sprechen</p>
           <h1 className="exam-speaking-hero__title">口语模块</h1>
           <p className="exam-speaking-hero__copy">
-            这里的练习重点放在开口表达、句子组织和回答结构上。你可以根据自己的需要，选择练习语境补全，或者训练完整表达的组织能力。
+            这里按照 telc B1 Sprechen 的 Teil 1、Teil 2 和 Teil 3 训练真实口语任务：互相了解、围绕主题讨论，以及共同制定计划。
           </p>
           <div className="exam-speaking-hero__tags" aria-label="口语模块特点">
             <span className="exam-speaking-hero__tag">口头表达训练</span>

@@ -18,8 +18,9 @@ when the filename and example disagree.
 | `b1_cloze_question_` | `imports/cloze_choice/raw/` | `b1_cloze_question_example.xlsx` |
 | `b1_cloze_matching_` | `imports/cloze_matching/raw/` | `b1_cloze_matching_example.xlsx` |
 | `b1_writing_` | `imports/writing/raw/` | `b1_writing_example.xlsx` |
-| `b1_speaking_gap_matching_` | `imports/speaking_gap_matching/raw/` | `b1_speaking_gap_matching_example.xlsx` |
-| `b1_speaking_prompt_segmented_` | `imports/speaking_prompt_segmented/raw/` | `b1_speaking_prompt_segmented_example.xlsx` |
+| `Kennenlernen_` | `imports/speaking_einander_kennenlernen/raw/` | Einander kennenlernen |
+| `b1_speaking_segmented_` | `imports/speaking_ueber_ein_thema_sprechen/raw/` | Über ein Thema sprechen |
+| `b1_speaking_planen_` | `imports/speaking_gemeinsam_etwas_planen/raw/` | Gemeinsam etwas planen |
 
 All paths in the table are relative to
 `apps/exam_preparation/data/`.
@@ -37,6 +38,9 @@ the expected mapping is:
 | `B1阅读_单选_Teil2` | `imports/reading_understanding/raw/` |
 | `B1阅读_广告_Teil3` | `imports/reading_ad_matching/raw/` |
 | `B1阅读_标题_Teil1` | `imports/reading_title_matching/raw/` |
+| `B1_口语_kennenlernen` | `imports/speaking_einander_kennenlernen/raw/` |
+| `B1_口语_über_ein_Thema_sprechen` | `imports/speaking_ueber_ein_thema_sprechen/raw/` |
+| `B1_口语_Gemeinsam_etwas_planen` | `imports/speaking_gemeinsam_etwas_planen/raw/` |
 
 Filename-prefix matching remains authoritative if more source folders are
 added later.

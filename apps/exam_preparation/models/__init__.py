@@ -23,14 +23,7 @@ from .reading import (
     ReadingUnderstandingExercise,
     ReadingUnderstandingQuestion,
 )
-from .speaking import (
-    SpeakingGapBlank,
-    SpeakingGapMatchingExercise,
-    SpeakingGapOption,
-    SpeakingPromptSegment,
-    SpeakingPromptSegmentedExercise,
-    SpeakingTeilExercise,
-)
+from .speaking import SpeakingTeilExercise
 from .user_activity import (
     UserClozeChoiceBlankState,
     UserClozeMatchingBlankState,
@@ -39,8 +32,6 @@ from .user_activity import (
     UserReadingAdMatchingItemState,
     UserReadingTitleMatchingItemState,
     UserReadingUnderstandingQuestionState,
-    UserSpeakingGapBlankState,
-    UserSpeakingPromptSegmentedExerciseState,
     UserWritingExampleTextState,
     UserWritingExerciseState,
 )
@@ -68,11 +59,6 @@ __all__ = [
     "ClozeMatchingBlankAnswer",
     "WritingExercise",
     "WritingExampleText",
-    "SpeakingGapMatchingExercise",
-    "SpeakingGapBlank",
-    "SpeakingGapOption",
-    "SpeakingPromptSegmentedExercise",
-    "SpeakingPromptSegment",
     "SpeakingTeilExercise",
     "UserExerciseFavorite",
     "UserListeningQuestionState",
@@ -81,8 +67,6 @@ __all__ = [
     "UserReadingAdMatchingItemState",
     "UserClozeChoiceBlankState",
     "UserClozeMatchingBlankState",
-    "UserSpeakingGapBlankState",
     "UserWritingExampleTextState",
     "UserWritingExerciseState",
-    "UserSpeakingPromptSegmentedExerciseState",
 ]

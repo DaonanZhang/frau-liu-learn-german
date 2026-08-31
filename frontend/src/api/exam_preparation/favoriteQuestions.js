@@ -9,10 +9,8 @@ const STATE_ENDPOINTS = {
   reading_ad_matching_item: "user-reading-ad-matching-item-states",
   cloze_choice_blank: "user-cloze-choice-blank-states",
   cloze_matching_blank: "user-cloze-matching-blank-states",
-  speaking_gap_blank: "user-speaking-gap-blank-states",
   writing_exercise: "user-writing-exercise-states",
   writing_example_text: "user-writing-example-text-states",
-  speaking_prompt_segmented_exercise: "user-speaking-prompt-segmented-exercise-states",
 };
 
 export function fetchFavoriteQuestions() {

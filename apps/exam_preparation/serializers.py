@@ -22,11 +22,6 @@ from apps.exam_preparation.models import (
     ReadingUnderstandingAnswerOption,
     ReadingUnderstandingExercise,
     ReadingUnderstandingQuestion,
-    SpeakingGapBlank,
-    SpeakingGapMatchingExercise,
-    SpeakingGapOption,
-    SpeakingPromptSegment,
-    SpeakingPromptSegmentedExercise,
     SpeakingTeilExercise,
     UserClozeChoiceBlankState,
     UserClozeMatchingBlankState,
@@ -35,8 +30,6 @@ from apps.exam_preparation.models import (
     UserReadingAdMatchingItemState,
     UserReadingTitleMatchingItemState,
     UserReadingUnderstandingQuestionState,
-    UserSpeakingGapBlankState,
-    UserSpeakingPromptSegmentedExerciseState,
     UserWritingExampleTextState,
     UserWritingExerciseState,
     WritingExampleText,
@@ -581,148 +574,12 @@ class WritingExerciseDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class SpeakingGapMatchingExerciseSerializer(serializers.ModelSerializer):
-    exercise_base = ExerciseBaseSerializer(read_only=True)
-
-    class Meta:
-        model = SpeakingGapMatchingExercise
-        fields = [
-            "id",
-            "exercise_base",
-            "content_with_placeholders",
-            "original_source_text",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-
 class SpeakingTeilExerciseSerializer(serializers.ModelSerializer):
     exercise_base = ExerciseBaseSerializer(read_only=True)
 
     class Meta:
         model = SpeakingTeilExercise
         fields = ["id", "exercise_base", "instruction", "content", "created_at", "updated_at"]
-        read_only_fields = fields
-
-
-class SpeakingGapBlankSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SpeakingGapBlank
-        fields = "__all__"
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-
-class SpeakingGapOptionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SpeakingGapOption
-        fields = "__all__"
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-
-class SpeakingGapOptionDetailSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SpeakingGapOption
-        fields = [
-            "id",
-            "option_key",
-            "option_text",
-            "is_correct",
-            "explanation",
-            "sort_order",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = fields
-
-
-class SpeakingGapBlankDetailSerializer(serializers.ModelSerializer):
-    options = SpeakingGapOptionDetailSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = SpeakingGapBlank
-        fields = [
-            "id",
-            "blank_key",
-            "blank_number",
-            "created_at",
-            "updated_at",
-            "options",
-        ]
-        read_only_fields = fields
-
-
-class SpeakingGapMatchingExerciseDetailSerializer(serializers.ModelSerializer):
-    exercise_base = ExerciseBaseSerializer(read_only=True)
-    blanks = SpeakingGapBlankDetailSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = SpeakingGapMatchingExercise
-        fields = [
-            "id",
-            "exercise_base",
-            "content_with_placeholders",
-            "original_source_text",
-            "created_at",
-            "updated_at",
-            "blanks",
-        ]
-        read_only_fields = fields
-
-
-class SpeakingPromptSegmentedExerciseSerializer(serializers.ModelSerializer):
-    exercise_base = ExerciseBaseSerializer(read_only=True)
-
-    class Meta:
-        model = SpeakingPromptSegmentedExercise
-        fields = [
-            "id",
-            "exercise_base",
-            "prompt_text",
-            "segment_delimiter",
-            "example_text_raw",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-
-class SpeakingPromptSegmentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SpeakingPromptSegment
-        fields = "__all__"
-        read_only_fields = ["id", "created_at", "updated_at"]
-
-
-class SpeakingPromptSegmentDetailSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SpeakingPromptSegment
-        fields = [
-            "id",
-            "segment_order",
-            "segment_text",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields = fields
-
-
-class SpeakingPromptSegmentedExerciseDetailSerializer(serializers.ModelSerializer):
-    exercise_base = ExerciseBaseSerializer(read_only=True)
-    segments = SpeakingPromptSegmentDetailSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = SpeakingPromptSegmentedExercise
-        fields = [
-            "id",
-            "exercise_base",
-            "prompt_text",
-            "segment_delimiter",
-            "example_text_raw",
-            "created_at",
-            "updated_at",
-            "segments",
-        ]
         read_only_fields = fields
 
 
@@ -775,13 +632,6 @@ class UserClozeMatchingBlankStateSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "user", "created_at", "updated_at"]
 
 
-class UserSpeakingGapBlankStateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserSpeakingGapBlankState
-        fields = "__all__"
-        read_only_fields = ["id", "user", "created_at", "updated_at"]
-
-
 class UserWritingExerciseStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserWritingExerciseState
@@ -792,12 +642,5 @@ class UserWritingExerciseStateSerializer(serializers.ModelSerializer):
 class UserWritingExampleTextStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserWritingExampleTextState
-        fields = "__all__"
-        read_only_fields = ["id", "user", "created_at", "updated_at"]
-
-
-class UserSpeakingPromptSegmentedExerciseStateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserSpeakingPromptSegmentedExerciseState
         fields = "__all__"
         read_only_fields = ["id", "user", "created_at", "updated_at"]

@@ -7,9 +7,6 @@ from apps.accounts.models import Entitlement, Module
 
 from apps.exam_preparation.models import (
     ExerciseBase,
-    SpeakingGapBlank,
-    SpeakingGapMatchingExercise,
-    SpeakingGapOption,
     WritingExampleText,
     WritingExercise,
 )
@@ -148,94 +145,6 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         states = response.data.get("results", []) if isinstance(response.data, dict) else response.data
         self.assertEqual(states[0]["time_spent_seconds"], 325)
-
-
-class SpeakingGapChoiceApiTests(APITestCase):
-    def setUp(self):
-        self.user = get_user_model().objects.create_user(
-            telephone="13800138003",
-            password="test-password",
-        )
-        module, _ = Module.objects.get_or_create(
-            key="exam_preparation",
-            name="备考季",
-            is_active=True,
-        )
-        Entitlement.objects.create(
-            user=self.user,
-            module=module,
-            season=None,
-            plan=Entitlement.Plan.MONTH_1,
-            status=Entitlement.Status.ACTIVE,
-        )
-        self.client.force_authenticate(self.user)
-        exercise_base = ExerciseBase.objects.create(
-            exam_type="telc B1",
-            level=ExerciseBase.Level.B1,
-            skill=ExerciseBase.Skill.SPEAKING,
-            exercise_type=ExerciseBase.ExerciseType.SPEAKING_GAP_MATCHING,
-            external_id="SPRECHEN-TEIL-1-TEST",
-            title="Ein Ausflug",
-        )
-        self.exercise = SpeakingGapMatchingExercise.objects.create(
-            exercise_base=exercise_base,
-            content_with_placeholders="Gestern {{blank_1}} ich im Park.",
-            original_source_text="Sprachbausteine Teil 1 sample",
-        )
-        self.blank = SpeakingGapBlank.objects.create(
-            exercise=self.exercise,
-            blank_key="blank_1",
-            blank_number=1,
-        )
-        SpeakingGapOption.objects.create(
-            blank=self.blank,
-            option_key="A",
-            option_text="war",
-            is_correct=True,
-            explanation="Gestern requires the past tense here.",
-            sort_order=0,
-        )
-        SpeakingGapOption.objects.create(
-            blank=self.blank,
-            option_key="B",
-            option_text="bin",
-            is_correct=False,
-            sort_order=1,
-        )
-
-    def test_detail_exposes_options_per_blank_like_cloze_choice(self):
-        response = self.client.get(
-            reverse(
-                "exam-prep-speaking-gap-matching-exercises-detail",
-                args=[self.exercise.pk],
-            )
-        )
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertNotIn("options", response.data)
-        self.assertEqual(response.data["blanks"][0]["blank_key"], "blank_1")
-        self.assertEqual(
-            [(option["option_text"], option["is_correct"]) for option in response.data["blanks"][0]["options"]],
-            [("war", True), ("bin", False)],
-        )
-
-    def test_blank_answer_and_favorite_use_the_per_blank_options(self):
-        response = self.client.post(
-            reverse("exam-prep-user-speaking-gap-blank-states-list"),
-            {
-                "blank": self.blank.pk,
-                "is_favorited": True,
-                "answer_payload": {"selected_option_key": "A"},
-                "is_correct": True,
-            },
-            format="json",
-        )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        favorites_response = self.client.get(reverse("exam-prep-favorite-questions-list"))
-        self.assertEqual(favorites_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(favorites_response.data["count"], 1)
-        self.assertIn("war", favorites_response.data["results"][0]["context_text"])
 
 
 class ExamPreparationPermissionTests(APITestCase):

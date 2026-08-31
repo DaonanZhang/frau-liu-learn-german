@@ -207,32 +207,6 @@ class UserClozeMatchingBlankState(BaseUserExerciseState):
         ]
 
 
-class UserSpeakingGapBlankState(BaseUserExerciseState):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="exam_preparation_speaking_gap_blank_states",
-        verbose_name="user",
-    )
-    blank = models.ForeignKey(
-        "exam_preparation.SpeakingGapBlank",
-        on_delete=models.CASCADE,
-        related_name="user_states",
-        verbose_name="blank",
-    )
-
-    class Meta:
-        verbose_name = "user speaking gap blank state"
-        verbose_name_plural = "user speaking gap blank states"
-        ordering = ["-updated_at", "id"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "blank"],
-                name="exam_prep_user_sg_blank_state_uq",
-            )
-        ]
-
-
 class UserWritingExerciseState(BaseUserExerciseState):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -286,31 +260,5 @@ class UserWritingExampleTextState(BaseUserExerciseState):
             models.UniqueConstraint(
                 fields=["user", "example_text"],
                 name="exam_prep_user_write_example_state_uq",
-            )
-        ]
-
-
-class UserSpeakingPromptSegmentedExerciseState(BaseUserExerciseState):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="exam_preparation_speaking_prompt_segmented_exercise_states",
-        verbose_name="user",
-    )
-    exercise = models.ForeignKey(
-        "exam_preparation.SpeakingPromptSegmentedExercise",
-        on_delete=models.CASCADE,
-        related_name="user_states",
-        verbose_name="exercise",
-    )
-
-    class Meta:
-        verbose_name = "user speaking prompt segmented exercise state"
-        verbose_name_plural = "user speaking prompt segmented exercise states"
-        ordering = ["-updated_at", "id"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "exercise"],
-                name="exam_prep_user_sps_ex_state_uq",
             )
         ]

@@ -32,8 +32,6 @@ class ExerciseBase(models.Model):
         SPEAKING_TEIL1 = "SPEAKING_TEIL1", "Speaking Teil 1"
         SPEAKING_TEIL2 = "SPEAKING_TEIL2", "Speaking Teil 2"
         SPEAKING_TEIL3 = "SPEAKING_TEIL3", "Speaking Teil 3"
-        SPEAKING_GAP_MATCHING = "SPEAKING_GAP_MATCHING", "Speaking gap matching"
-        SPEAKING_PROMPT_SEGMENTED = "SPEAKING_PROMPT_SEGMENTED", "Speaking prompt segmented"
 
     class CreationMethod(models.TextChoices):
         MANUAL = "manual", "Manual"

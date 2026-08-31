@@ -117,21 +117,6 @@
   font-size: calc(1rem + var(--exam-detail-font-increase));
 }
 
-/* Speaking: prompts, source content, options, segments and feedback. */
-.speaking-panel,
-.speaking-feedback-list {
-  font-size: calc(1rem + var(--exam-detail-font-increase));
-}
-
-.speaking-content {
-  font-size: calc(1.04rem + var(--exam-detail-font-increase));
-}
-
-.speaking-prompt-block h2,
-.speaking-segment-panel__header h2 {
-  font-size: calc(1.1rem + var(--exam-detail-font-increase));
-}
-
 /* The shared answer picker is used by multiple detail question types. */
 .exercise-option-sheet__option-label {
   font-size: calc(0.96rem + var(--exam-detail-font-increase));

@@ -32,11 +32,6 @@ from apps.exam_preparation.models import (
     ReadingUnderstandingAnswerOption,
     ReadingUnderstandingExercise,
     ReadingUnderstandingQuestion,
-    SpeakingGapBlank,
-    SpeakingGapMatchingExercise,
-    SpeakingGapOption,
-    SpeakingPromptSegment,
-    SpeakingPromptSegmentedExercise,
     SpeakingTeilExercise,
     UserClozeChoiceBlankState,
     UserClozeMatchingBlankState,
@@ -45,8 +40,6 @@ from apps.exam_preparation.models import (
     UserReadingAdMatchingItemState,
     UserReadingTitleMatchingItemState,
     UserReadingUnderstandingQuestionState,
-    UserSpeakingGapBlankState,
-    UserSpeakingPromptSegmentedExerciseState,
     UserWritingExampleTextState,
     UserWritingExerciseState,
     WritingExampleText,
@@ -78,13 +71,6 @@ from apps.exam_preparation.serializers import (
     ReadingUnderstandingAnswerOptionSerializer,
     ReadingUnderstandingExerciseSerializer,
     ReadingUnderstandingQuestionSerializer,
-    SpeakingGapBlankSerializer,
-    SpeakingGapMatchingExerciseDetailSerializer,
-    SpeakingGapMatchingExerciseSerializer,
-    SpeakingGapOptionSerializer,
-    SpeakingPromptSegmentedExerciseDetailSerializer,
-    SpeakingPromptSegmentedExerciseSerializer,
-    SpeakingPromptSegmentSerializer,
     SpeakingTeilExerciseSerializer,
     UserClozeChoiceBlankStateSerializer,
     UserClozeMatchingBlankStateSerializer,
@@ -93,8 +79,6 @@ from apps.exam_preparation.serializers import (
     UserReadingAdMatchingItemStateSerializer,
     UserReadingTitleMatchingItemStateSerializer,
     UserReadingUnderstandingQuestionStateSerializer,
-    UserSpeakingGapBlankStateSerializer,
-    UserSpeakingPromptSegmentedExerciseStateSerializer,
     UserWritingExampleTextStateSerializer,
     UserWritingExerciseStateSerializer,
     WritingExampleTextSerializer,
@@ -391,64 +375,12 @@ class WritingExampleTextViewSet(BaseExamPreparationViewSet):
     ordering_fields = ["id", "sort_order", "created_at", "updated_at"]
 
 
-class SpeakingGapMatchingExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = SpeakingGapMatchingExercise.objects.select_related("exercise_base").prefetch_related(
-        "blanks__options",
-    ).all()
-    serializer_class = SpeakingGapMatchingExerciseSerializer
-    filterset_fields = ["exercise_base"]
-    search_fields = ["content_with_placeholders", "exercise_base__external_id", "exercise_base__title"]
-    ordering_fields = ["id", "created_at", "updated_at"]
-
-    def get_serializer_class(self):
-        if self.action == "retrieve":
-            return SpeakingGapMatchingExerciseDetailSerializer
-        return super().get_serializer_class()
-
-
 class SpeakingTeilExerciseViewSet(BaseExamPreparationViewSet):
     queryset = SpeakingTeilExercise.objects.select_related("exercise_base").all()
     serializer_class = SpeakingTeilExerciseSerializer
     filterset_fields = ["exercise_base", "exercise_base__exercise_type"]
     search_fields = ["instruction", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "created_at", "updated_at"]
-
-
-class SpeakingGapBlankViewSet(BaseExamPreparationViewSet):
-    queryset = SpeakingGapBlank.objects.select_related("exercise", "exercise__exercise_base").prefetch_related("options").all()
-    serializer_class = SpeakingGapBlankSerializer
-    filterset_fields = ["exercise", "blank_key", "blank_number"]
-    search_fields = ["blank_key", "exercise__exercise_base__external_id", "exercise__exercise_base__title"]
-    ordering_fields = ["id", "blank_number", "created_at", "updated_at"]
-
-
-class SpeakingGapOptionViewSet(BaseExamPreparationViewSet):
-    queryset = SpeakingGapOption.objects.select_related("blank", "blank__exercise", "blank__exercise__exercise_base").all()
-    serializer_class = SpeakingGapOptionSerializer
-    filterset_fields = ["blank", "option_key", "is_correct"]
-    search_fields = ["option_text", "blank__exercise__exercise_base__external_id", "blank__exercise__exercise_base__title"]
-    ordering_fields = ["id", "sort_order", "created_at", "updated_at"]
-
-
-class SpeakingPromptSegmentedExerciseViewSet(BaseExamPreparationViewSet):
-    queryset = SpeakingPromptSegmentedExercise.objects.select_related("exercise_base").prefetch_related("segments").all()
-    serializer_class = SpeakingPromptSegmentedExerciseSerializer
-    filterset_fields = ["exercise_base", "segment_delimiter"]
-    search_fields = ["prompt_text", "example_text_raw", "exercise_base__external_id", "exercise_base__title"]
-    ordering_fields = ["id", "created_at", "updated_at"]
-
-    def get_serializer_class(self):
-        if self.action == "retrieve":
-            return SpeakingPromptSegmentedExerciseDetailSerializer
-        return super().get_serializer_class()
-
-
-class SpeakingPromptSegmentViewSet(BaseExamPreparationViewSet):
-    queryset = SpeakingPromptSegment.objects.select_related("exercise", "exercise__exercise_base").all()
-    serializer_class = SpeakingPromptSegmentSerializer
-    filterset_fields = ["exercise", "segment_order"]
-    search_fields = ["segment_text", "exercise__exercise_base__external_id", "exercise__exercise_base__title"]
-    ordering_fields = ["id", "segment_order", "created_at", "updated_at"]
 
 
 class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
@@ -704,35 +636,6 @@ class FavoriteQuestionViewSet(ViewSet):
             )
             items.append(payload)
 
-        speaking_gap_states = UserSpeakingGapBlankState.objects.filter(
-            user=user,
-            is_favorited=True,
-        ).select_related(
-            "blank__exercise__exercise_base",
-        ).prefetch_related("blank__options")
-        for state in speaking_gap_states:
-            blank = state.blank
-            exercise = blank.exercise
-            payload = self._base_payload(
-                state,
-                exercise.exercise_base,
-                state_type="speaking_gap_blank",
-                target_field="blank",
-                target_id=blank.pk,
-                exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/sprechen/gap-matching/{exercise.pk}",
-            )
-            payload.update(
-                question_label=f"口语填空 · 第 {blank.blank_number} 空",
-                question_text=self._blank_excerpt(
-                    exercise.content_with_placeholders,
-                    blank.blank_key,
-                    blank.blank_number,
-                ),
-                context_text=self._option_summary(blank.options.all()),
-            )
-            items.append(payload)
-
         writing_states = UserWritingExerciseState.objects.filter(
             user=user,
             is_favorited=True,
@@ -777,28 +680,6 @@ class FavoriteQuestionViewSet(ViewSet):
                 question_label=example.label or f"Beispieltext {example.sort_order + 1}",
                 question_text=self._preview_text(example.example_text),
                 context_text=self._preview_text(example.note),
-            )
-            items.append(payload)
-
-        speaking_prompt_states = UserSpeakingPromptSegmentedExerciseState.objects.filter(
-            user=user,
-            is_favorited=True,
-        ).select_related("exercise__exercise_base")
-        for state in speaking_prompt_states:
-            exercise = state.exercise
-            payload = self._base_payload(
-                state,
-                exercise.exercise_base,
-                state_type="speaking_prompt_segmented_exercise",
-                target_field="exercise",
-                target_id=exercise.pk,
-                exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/sprechen/prompt-segmented/{exercise.pk}",
-            )
-            payload.update(
-                question_label="口语表达 · 段落排序",
-                question_text=exercise.prompt_text,
-                context_text="根据主题整理示例段落的正确顺序。",
             )
             items.append(payload)
 
@@ -917,24 +798,6 @@ class UserClozeMatchingBlankStateViewSet(BaseUserExerciseStateViewSet):
     ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
 
 
-class UserSpeakingGapBlankStateViewSet(BaseUserExerciseStateViewSet):
-    queryset = UserSpeakingGapBlankState.objects.select_related(
-        "user",
-        "blank",
-        "blank__exercise",
-        "blank__exercise__exercise_base",
-    ).all()
-    serializer_class = UserSpeakingGapBlankStateSerializer
-    state_lookup_field = "blank"
-    filterset_fields = ["blank", "blank__exercise", "is_favorited", "is_correct"]
-    search_fields = [
-        "blank__blank_key",
-        "blank__exercise__exercise_base__external_id",
-        "blank__exercise__exercise_base__title",
-    ]
-    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]
-
-
 class UserWritingExerciseStateViewSet(BaseUserExerciseStateViewSet):
     queryset = UserWritingExerciseState.objects.select_related(
         "user",
@@ -970,20 +833,3 @@ class UserWritingExampleTextStateViewSet(BaseUserExerciseStateViewSet):
         "example_text__writing_exercise__exercise_base__title",
     ]
     ordering_fields = ["id", "created_at", "updated_at"]
-
-
-class UserSpeakingPromptSegmentedExerciseStateViewSet(BaseUserExerciseStateViewSet):
-    queryset = UserSpeakingPromptSegmentedExerciseState.objects.select_related(
-        "user",
-        "exercise",
-        "exercise__exercise_base",
-    ).all()
-    serializer_class = UserSpeakingPromptSegmentedExerciseStateSerializer
-    state_lookup_field = "exercise"
-    filterset_fields = ["exercise", "is_favorited", "is_correct"]
-    search_fields = [
-        "exercise__exercise_base__external_id",
-        "exercise__exercise_base__title",
-        "exercise__prompt_text",
-    ]
-    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]

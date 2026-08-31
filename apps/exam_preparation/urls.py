@@ -24,11 +24,6 @@ from apps.exam_preparation.views import (
     ReadingUnderstandingAnswerOptionViewSet,
     ReadingUnderstandingExerciseViewSet,
     ReadingUnderstandingQuestionViewSet,
-    SpeakingGapBlankViewSet,
-    SpeakingGapMatchingExerciseViewSet,
-    SpeakingGapOptionViewSet,
-    SpeakingPromptSegmentedExerciseViewSet,
-    SpeakingPromptSegmentViewSet,
     SpeakingTeilExerciseViewSet,
     UserClozeChoiceBlankStateViewSet,
     UserClozeMatchingBlankStateViewSet,
@@ -37,8 +32,6 @@ from apps.exam_preparation.views import (
     UserReadingAdMatchingItemStateViewSet,
     UserReadingTitleMatchingItemStateViewSet,
     UserReadingUnderstandingQuestionStateViewSet,
-    UserSpeakingGapBlankStateViewSet,
-    UserSpeakingPromptSegmentedExerciseStateViewSet,
     UserWritingExampleTextStateViewSet,
     UserWritingExerciseStateViewSet,
     WritingExampleTextViewSet,
@@ -108,26 +101,9 @@ router.register(
 router.register(r"writing-exercises", WritingExerciseViewSet, basename="exam-prep-writing-exercises")
 router.register(r"writing-example-texts", WritingExampleTextViewSet, basename="exam-prep-writing-example-texts")
 router.register(
-    r"speaking-gap-matching-exercises",
-    SpeakingGapMatchingExerciseViewSet,
-    basename="exam-prep-speaking-gap-matching-exercises",
-)
-router.register(r"speaking-gap-blanks", SpeakingGapBlankViewSet, basename="exam-prep-speaking-gap-blanks")
-router.register(r"speaking-gap-options", SpeakingGapOptionViewSet, basename="exam-prep-speaking-gap-options")
-router.register(
     r"speaking-teil-exercises",
     SpeakingTeilExerciseViewSet,
     basename="exam-prep-speaking-teil-exercises",
-)
-router.register(
-    r"speaking-prompt-segmented-exercises",
-    SpeakingPromptSegmentedExerciseViewSet,
-    basename="exam-prep-speaking-prompt-segmented-exercises",
-)
-router.register(
-    r"speaking-prompt-segments",
-    SpeakingPromptSegmentViewSet,
-    basename="exam-prep-speaking-prompt-segments",
 )
 router.register(r"user-exercise-favorites", UserExerciseFavoriteViewSet, basename="exam-prep-user-exercise-favorites")
 router.register(r"favorite-questions", FavoriteQuestionViewSet, basename="exam-prep-favorite-questions")
@@ -162,11 +138,6 @@ router.register(
     basename="exam-prep-user-cloze-matching-blank-states",
 )
 router.register(
-    r"user-speaking-gap-blank-states",
-    UserSpeakingGapBlankStateViewSet,
-    basename="exam-prep-user-speaking-gap-blank-states",
-)
-router.register(
     r"user-writing-exercise-states",
     UserWritingExerciseStateViewSet,
     basename="exam-prep-user-writing-exercise-states",
@@ -175,11 +146,6 @@ router.register(
     r"user-writing-example-text-states",
     UserWritingExampleTextStateViewSet,
     basename="exam-prep-user-writing-example-text-states",
-)
-router.register(
-    r"user-speaking-prompt-segmented-exercise-states",
-    UserSpeakingPromptSegmentedExerciseStateViewSet,
-    basename="exam-prep-user-speaking-prompt-segmented-exercise-states",
 )
 
 urlpatterns = [

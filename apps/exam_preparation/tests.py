@@ -194,3 +194,99 @@ class ExamPreparationPermissionTests(APITestCase):
             format="json",
         )
         self.assertEqual(write_response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ExamPreparationFreeTrialTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138005",
+            password="test-password",
+        )
+        self.module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            name="备考季",
+            is_active=True,
+        )
+        self.exercises = []
+        for index in range(1, 5):
+            exercise_base = ExerciseBase.objects.create(
+                exam_type="telc B1",
+                level=ExerciseBase.Level.B1,
+                skill=ExerciseBase.Skill.WRITING,
+                exercise_type=ExerciseBase.ExerciseType.WRITING_PROMPT,
+                external_id=f"TRIAL-WRITING-{index}",
+                title=f"Writing {index}",
+            )
+            self.exercises.append(
+                WritingExercise.objects.create(
+                    exercise_base=exercise_base,
+                    request_text=f"Request {index}",
+                    task_text=f"Task {index}",
+                )
+            )
+        self.list_url = reverse("exam-prep-writing-exercises-list")
+        self.state_url = reverse("exam-prep-user-writing-exercise-states-list")
+        self.client.force_authenticate(self.user)
+
+    def test_unentitled_user_sees_three_unlocked_cards_and_masked_locked_cards(self):
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", []) if isinstance(response.data, dict) else response.data
+        self.assertEqual(
+            [item["is_locked"] for item in results],
+            [False, False, False, True],
+        )
+        self.assertEqual(results[3]["request_text"], "")
+        self.assertEqual(results[3]["task_text"], "")
+
+    def test_unentitled_user_cannot_bypass_locked_detail_or_state_api(self):
+        free_detail_url = reverse(
+            "exam-prep-writing-exercises-detail",
+            args=[self.exercises[0].pk],
+        )
+        locked_detail_url = reverse(
+            "exam-prep-writing-exercises-detail",
+            args=[self.exercises[3].pk],
+        )
+
+        self.assertEqual(self.client.get(free_detail_url).status_code, status.HTTP_200_OK)
+        locked_response = self.client.get(locked_detail_url)
+        self.assertEqual(locked_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            locked_response.data["code"],
+            "exam_preparation_purchase_required",
+        )
+
+        free_state = self.client.post(
+            self.state_url,
+            {"exercise": self.exercises[0].pk, "answer_payload": {"text": "Test"}},
+            format="json",
+        )
+        locked_state = self.client.post(
+            self.state_url,
+            {"exercise": self.exercises[3].pk, "answer_payload": {"text": "Bypass"}},
+            format="json",
+        )
+        self.assertEqual(free_state.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(locked_state.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_entitlement_unlocks_every_exercise(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+
+        response = self.client.get(self.list_url)
+        results = response.data.get("results", []) if isinstance(response.data, dict) else response.data
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(all(not item["is_locked"] for item in results))
+        self.assertEqual(results[3]["request_text"], "Request 4")
+        locked_detail_url = reverse(
+            "exam-prep-writing-exercises-detail",
+            args=[self.exercises[3].pk],
+        )
+        self.assertEqual(self.client.get(locked_detail_url).status_code, status.HTTP_200_OK)

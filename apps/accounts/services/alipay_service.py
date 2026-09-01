@@ -378,6 +378,39 @@ class AlipayService:
 
         return response
 
+    def close_trade(self, *, merchant_order_no: str) -> dict[str, object]:
+        """Close one unpaid Alipay trade and return the verified response."""
+
+        payload, response_body = self.execute_api(
+            method="alipay.trade.close",
+            biz_content={
+                "out_trade_no": merchant_order_no,
+            },
+        )
+        response = payload.get("alipay_trade_close_response")
+        if not isinstance(response, dict):
+            raise AlipayGatewayError("Missing alipay_trade_close_response in gateway reply.")
+
+        signature = str(payload.get("sign") or "").strip()
+        if not signature:
+            raise AlipayGatewayError("Missing gateway response signature.")
+
+        response_string = _extract_json_object_string(
+            response_body,
+            field_name="alipay_trade_close_response",
+        )
+        try:
+            self._alipay_public_key.verify(
+                base64.b64decode(signature),
+                response_string.encode("utf-8"),
+                padding.PKCS1v15(),
+                hashes.SHA256(),
+            )
+        except (InvalidSignature, ValueError, TypeError) as exc:
+            raise AlipayGatewayError("Invalid gateway response signature.") from exc
+
+        return response
+
     def build_page_pay_url(
         self,
         *,

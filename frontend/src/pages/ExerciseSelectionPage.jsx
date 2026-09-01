@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
 import "./ExerciseSelectionPage.css";
 
 export default function ExerciseSelectionPage({
@@ -17,6 +18,7 @@ export default function ExerciseSelectionPage({
   cardCta = "Übung öffnen",
   emptyMessage = "Zurzeit sind keine Aufgaben verfügbar.",
 }) {
+  const navigate = useNavigate();
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -84,13 +86,10 @@ export default function ExerciseSelectionPage({
               `Übung ${index + 1}`;
             const isRealExam = Boolean(exercise?.exercise_base?.is_real_exam);
             const examType = exercise?.exercise_base?.exam_type?.trim();
+            const isLocked = Boolean(exercise?.is_locked);
 
-            return (
-              <Link
-                key={exercise.id || index}
-                to={buildExerciseHref(exercise)}
-                className="exercise-selection-card"
-              >
+            const cardContent = (
+              <>
                 <div className="exercise-selection-card__top">
                   <div className="exercise-selection-card__meta">
                     <div className="exercise-selection-card__meta-left">
@@ -113,10 +112,34 @@ export default function ExerciseSelectionPage({
                   </div>
                   <h2 className="exercise-selection-card__title">{cardTitle}</h2>
                 </div>
+                {isLocked ? (
+                  <span className="exercise-selection-card__lock" aria-hidden="true">🔒</span>
+                ) : null}
                 <p className="exercise-selection-card__description">{cardDescription}</p>
                 <div className="exercise-selection-card__bottom">
-                  <span className="exercise-selection-card__cta">{cardCta}</span>
+                  <span className="exercise-selection-card__cta">
+                    {isLocked ? "购买后解锁" : cardCta}
+                  </span>
                 </div>
+              </>
+            );
+
+            return isLocked ? (
+              <button
+                key={exercise.id || index}
+                type="button"
+                className="exercise-selection-card exercise-selection-card--locked"
+                onClick={() => showExamPreparationPurchasePrompt(navigate)}
+              >
+                {cardContent}
+              </button>
+            ) : (
+              <Link
+                key={exercise.id || index}
+                to={buildExerciseHref(exercise)}
+                className="exercise-selection-card"
+              >
+                {cardContent}
               </Link>
             );
           })}

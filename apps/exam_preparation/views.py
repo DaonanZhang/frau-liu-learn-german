@@ -5,12 +5,14 @@ import re
 from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from rest_framework.filters import OrderingFilter, SearchFilter
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ViewSet
 
 from apps.accounts.permissions import HasValidEntitlement, IsAdminOrReadOnly
+from apps.exam_preparation.access import get_parent_exercise, user_can_access_exercise
 
 from apps.exam_preparation.models import (
     ClozeChoiceBlank,
@@ -92,10 +94,28 @@ class BaseExamPreparationViewSet(ModelViewSet):
     required_module_key = "exam_preparation"
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
     ordering = ["id"]
+    trial_access_enabled = False
+
+    def get_permissions(self):
+        if self.trial_access_enabled and self.action in {"list", "retrieve"}:
+            return [IsAuthenticated(), IsAdminOrReadOnly()]
+        return super().get_permissions()
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if self.trial_access_enabled and not user_can_access_exercise(request.user, instance):
+            raise PermissionDenied(
+                {
+                    "message": "购买备考季后可解锁该题目。",
+                    "code": "exam_preparation_purchase_required",
+                }
+            )
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
-    permission_classes = [IsAuthenticated, HasValidEntitlement]
+    permission_classes = [IsAuthenticated]
     state_lookup_field = ""
     ordering = ["-updated_at", "id"]
 
@@ -110,12 +130,23 @@ class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
             validated_data["last_answered_at"] = timezone.now()
         return validated_data
 
+    def _ensure_target_access(self, target_object):
+        exercise = get_parent_exercise(target_object)
+        if exercise is None or not user_can_access_exercise(self.request.user, exercise):
+            raise PermissionDenied(
+                {
+                    "message": "购买备考季后可解锁该题目。",
+                    "code": "exam_preparation_purchase_required",
+                }
+            )
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated_data = self._apply_answer_timestamp(dict(serializer.validated_data))
         lookup_field = self.state_lookup_field
         target_object = validated_data[lookup_field]
+        self._ensure_target_access(target_object)
         defaults = {
             key: value
             for key, value in validated_data.items()
@@ -134,6 +165,12 @@ class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
 
     def perform_update(self, serializer):
         validated_data = self._apply_answer_timestamp(dict(serializer.validated_data))
+        lookup_field = self.state_lookup_field
+        target_object = validated_data.get(
+            lookup_field,
+            getattr(serializer.instance, lookup_field),
+        )
+        self._ensure_target_access(target_object)
         serializer.save(**validated_data)
 
 
@@ -146,6 +183,7 @@ class ExerciseBaseViewSet(BaseExamPreparationViewSet):
 
 
 class ListeningExerciseViewSet(BaseExamPreparationViewSet):
+    trial_access_enabled = True
     queryset = ListeningExercise.objects.select_related("exercise_base").prefetch_related(
         "questions__answer_options",
     ).all()
@@ -181,6 +219,7 @@ class ListeningAnswerOptionViewSet(BaseExamPreparationViewSet):
 
 
 class ReadingTitleMatchingExerciseViewSet(BaseExamPreparationViewSet):
+    trial_access_enabled = True
     queryset = ReadingTitleMatchingExercise.objects.select_related("exercise_base").prefetch_related(
         "options",
         "items__correct_option",
@@ -217,6 +256,7 @@ class ReadingTitleMatchingOptionViewSet(BaseExamPreparationViewSet):
 
 
 class ReadingUnderstandingExerciseViewSet(BaseExamPreparationViewSet):
+    trial_access_enabled = True
     queryset = ReadingUnderstandingExercise.objects.select_related("exercise_base").prefetch_related(
         "questions__answer_options",
     ).all()
@@ -252,6 +292,7 @@ class ReadingUnderstandingAnswerOptionViewSet(BaseExamPreparationViewSet):
 
 
 class ReadingAdMatchingExerciseViewSet(BaseExamPreparationViewSet):
+    trial_access_enabled = True
     queryset = ReadingAdMatchingExercise.objects.select_related("exercise_base").prefetch_related(
         "ads",
         "items__correct_ad",
@@ -288,6 +329,7 @@ class ReadingAdMatchingAdViewSet(BaseExamPreparationViewSet):
 
 
 class ClozeChoiceExerciseViewSet(BaseExamPreparationViewSet):
+    trial_access_enabled = True
     queryset = ClozeChoiceExercise.objects.select_related("exercise_base").prefetch_related(
         "blanks__options",
     ).all()
@@ -319,6 +361,7 @@ class ClozeChoiceOptionViewSet(BaseExamPreparationViewSet):
 
 
 class ClozeMatchingExerciseViewSet(BaseExamPreparationViewSet):
+    trial_access_enabled = True
     queryset = ClozeMatchingExercise.objects.select_related("exercise_base").prefetch_related(
         "options",
         "blank_answers__correct_option",
@@ -355,6 +398,7 @@ class ClozeMatchingBlankAnswerViewSet(BaseExamPreparationViewSet):
 
 
 class WritingExerciseViewSet(BaseExamPreparationViewSet):
+    trial_access_enabled = True
     queryset = WritingExercise.objects.select_related("exercise_base").prefetch_related("example_texts").all()
     serializer_class = WritingExerciseSerializer
     filterset_fields = ["exercise_base", "time_limit_minutes", "words_limit"]
@@ -376,6 +420,7 @@ class WritingExampleTextViewSet(BaseExamPreparationViewSet):
 
 
 class SpeakingTeilExerciseViewSet(BaseExamPreparationViewSet):
+    trial_access_enabled = True
     queryset = SpeakingTeilExercise.objects.select_related("exercise_base").all()
     serializer_class = SpeakingTeilExerciseSerializer
     filterset_fields = ["exercise_base", "exercise_base__exercise_type"]

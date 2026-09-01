@@ -272,16 +272,15 @@ def _query_and_sync_payment_status(
     return "synced"
 
 
-def _renew_uncreated_payment(*, payment_id: int) -> None:
+def _mark_open_payment_closed(*, payment_id: int) -> None:
     with transaction.atomic():
         payment = AlipayWebsitePayment.objects.select_for_update().get(pk=payment_id)
         if payment.status in {
             AlipayWebsitePayment.Status.CREATED,
             AlipayWebsitePayment.Status.PENDING,
         }:
-            timeout_seconds = parse_timeout_express_seconds(settings.ALIPAY_TIMEOUT_EXPRESS)
-            payment.expires_at = timezone.now() + timedelta(seconds=timeout_seconds)
-            payment.save(update_fields=["expires_at", "updated_at"])
+            payment.status = AlipayWebsitePayment.Status.CLOSED
+            payment.save(update_fields=["status", "updated_at"])
 
 
 def _should_query_remote_payment_status(*, payment: AlipayWebsitePayment) -> bool:
@@ -338,8 +337,8 @@ def _find_open_purchase_for_scope(
     module_id: int | None,
     season_id: int | None,
 ) -> PaymentGrantTask | None:
-    candidates = (
-        PaymentGrantTask.objects.select_related("payment", "offer")
+    return (
+        PaymentGrantTask.objects.select_related("payment", "offer", "module", "season")
         .filter(
             user_id=user_id,
             module_id=module_id,
@@ -350,30 +349,47 @@ def _find_open_purchase_for_scope(
             ],
         )
         .order_by("-id")
+        .first()
     )
-    for grant_task in candidates:
-        payment = grant_task.payment
-        expired = payment.expires_at is not None and payment.expires_at <= timezone.now()
-        if expired or _should_query_remote_payment_status(payment=payment):
-            try:
-                outcome = _query_and_sync_payment_status(payment=payment)
-                if expired and outcome == "not_found":
-                    _renew_uncreated_payment(payment_id=payment.id)
-            except (AlipayConfigurationError, AlipayGatewayError):
-                logger.exception(
-                    "Could not reconcile an open Alipay order",
-                    extra={"payment_id": payment.id},
-                )
-        payment.refresh_from_db()
-        grant_task.refresh_from_db()
-        if payment.status in {
-            AlipayWebsitePayment.Status.CREATED,
-            AlipayWebsitePayment.Status.PENDING,
-        }:
-            return grant_task
-        if payment.status == AlipayWebsitePayment.Status.PAID:
-            _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
-    return None
+
+
+def _close_unpaid_payment(*, payment: AlipayWebsitePayment, alipay_service) -> str:
+    """Close an earlier unpaid order before a new purchase intent is created."""
+
+    if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
+        _mark_open_payment_closed(payment_id=payment.id)
+        return "closed"
+
+    outcome = _query_and_sync_payment_status(payment=payment)
+    payment.refresh_from_db()
+    if payment.status == AlipayWebsitePayment.Status.PAID:
+        _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
+        return "paid"
+    if payment.status not in {
+        AlipayWebsitePayment.Status.CREATED,
+        AlipayWebsitePayment.Status.PENDING,
+    }:
+        return "closed"
+    if outcome == "not_found":
+        _mark_open_payment_closed(payment_id=payment.id)
+        return "closed"
+    if outcome != "synced":
+        raise AlipayGatewayError("Could not confirm the previous Alipay order status.")
+
+    close_response = alipay_service.close_trade(
+        merchant_order_no=payment.merchant_order_no
+    )
+    if str(close_response.get("code") or "").strip() == "10000":
+        _mark_open_payment_closed(payment_id=payment.id)
+        return "closed"
+
+    # The buyer may have completed payment between the status query and close call.
+    _query_and_sync_payment_status(payment=payment)
+    payment.refresh_from_db()
+    if payment.status == AlipayWebsitePayment.Status.PAID:
+        _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
+        return "paid"
+    raise AlipayGatewayError("The previous Alipay order could not be closed safely.")
 
 
 def _simulate_local_paid_purchase(
@@ -549,56 +565,94 @@ class CreateAlipayPurchaseAPIView(APIView):
                     ),
                     status=status.HTTP_200_OK,
                 )
-
-        open_grant_task = _find_open_purchase_for_scope(
-            user_id=request.user.id,
-            module_id=module.id if module is not None else None,
-            season_id=season.id if season is not None else None,
-        )
-        if open_grant_task is not None:
-            payment = open_grant_task.payment
-            if payment.expires_at is not None and payment.expires_at <= timezone.now():
+            if existing_payment.status in {
+                AlipayWebsitePayment.Status.CREATED,
+                AlipayWebsitePayment.Status.PENDING,
+            }:
+                if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
+                    return Response(
+                        {"detail": "This local simulated purchase is already being processed."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                pay_url = alipay_service.build_page_pay_url(payment=existing_payment)
+                if existing_payment.status == AlipayWebsitePayment.Status.CREATED:
+                    existing_payment.status = AlipayWebsitePayment.Status.PENDING
+                    existing_payment.save(update_fields=["status", "updated_at"])
                 return Response(
-                    {
-                        "detail": "An expired Alipay order is still being reconciled. Please retry shortly.",
-                        "code": "payment_expiry_reconciliation_pending",
-                        "merchant_order_no": payment.merchant_order_no,
-                    },
-                    status=status.HTTP_409_CONFLICT,
+                    _build_purchase_response_data(
+                        payment=existing_payment,
+                        grant_task=existing_intent,
+                        offer=validated_data["offer"],
+                        module=module,
+                        season=season,
+                        plan=plan,
+                        estimated_expires_at=estimated_expires_at,
+                        pay_url=pay_url,
+                        reused_existing_payment=True,
+                    ),
+                    status=status.HTTP_200_OK,
                 )
-            if open_grant_task.offer_id != validated_data["offer"].id:
-                return Response(
-                    {
-                        "detail": "Another unpaid order already exists for this module. Complete it or wait for it to expire before choosing a different plan.",
-                        "code": "open_payment_exists",
-                        "merchant_order_no": payment.merchant_order_no,
-                        "payment_expires_at": payment.expires_at.isoformat() if payment.expires_at else None,
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
-            try:
-                alipay_service = get_alipay_service()
-            except AlipayConfigurationError as exc:
-                return Response(
-                    {"detail": str(exc)},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
-            pay_url = alipay_service.build_page_pay_url(payment=payment)
             return Response(
-                _build_purchase_response_data(
-                    payment=payment,
-                    grant_task=open_grant_task,
-                    offer=validated_data["offer"],
-                    module=module,
-                    season=season,
-                    plan=plan,
-                    estimated_expires_at=estimated_expires_at,
-                    pay_url=pay_url,
-                    reused_existing_payment=True,
-                ),
-                status=status.HTTP_200_OK,
+                {
+                    "detail": "This purchase intent is no longer payable. Start a new purchase.",
+                    "code": "purchase_intent_closed",
+                },
+                status=status.HTTP_409_CONFLICT,
             )
+
+        while True:
+            open_grant_task = _find_open_purchase_for_scope(
+                user_id=request.user.id,
+                module_id=module.id if module is not None else None,
+                season_id=season.id if season is not None else None,
+            )
+            if open_grant_task is None:
+                break
+            payment = open_grant_task.payment
+            try:
+                close_outcome = _close_unpaid_payment(
+                    payment=payment,
+                    alipay_service=alipay_service,
+                )
+            except (AlipayConfigurationError, AlipayGatewayError):
+                logger.exception(
+                    "Could not safely close the previous Alipay order",
+                    extra={"payment_id": payment.id},
+                )
+                return Response(
+                    {
+                        "detail": "The previous unpaid order could not be closed safely. Please retry shortly.",
+                        "code": "previous_payment_close_pending",
+                        "merchant_order_no": payment.merchant_order_no,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            if close_outcome == "paid":
+                open_grant_task.refresh_from_db()
+                old_module = open_grant_task.module
+                old_season = open_grant_task.season
+                old_expiry = estimate_entitlement_expiry(
+                    user=request.user,
+                    module=old_module,
+                    season=old_season,
+                    plan=open_grant_task.plan,
+                )
+                return_url = alipay_service.config.return_url if alipay_service else _resolve_frontend_return_url(request)
+                return Response(
+                    _build_purchase_response_data(
+                        payment=payment,
+                        grant_task=open_grant_task,
+                        offer=open_grant_task.offer,
+                        module=old_module,
+                        season=old_season,
+                        plan=open_grant_task.plan,
+                        estimated_expires_at=old_expiry,
+                        pay_url=f"{return_url}?{urlencode({'out_trade_no': payment.merchant_order_no})}",
+                        reused_existing_payment=True,
+                        already_paid=True,
+                    ),
+                    status=status.HTTP_200_OK,
+                )
 
         incomplete_paid_grant_task = _find_incomplete_paid_purchase(
             user_id=request.user.id,

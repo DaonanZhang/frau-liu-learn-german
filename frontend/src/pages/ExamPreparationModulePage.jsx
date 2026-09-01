@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../api/auth/useAuth.js";
+import { EXAM_PREPARATION_MODULE } from "./Homepage/homeShared.js";
+import { hasModuleAccess } from "../utils/moduleAccess.js";
 import "./ExamPreparationModulePage.css";
 
 const SKILL_CARDS = [
@@ -52,6 +54,7 @@ const SKILL_CARDS = [
 
 export default function ExamPreparationModulePage() {
   const { user } = useAuth();
+  const hasFullAccess = hasModuleAccess(user, EXAM_PREPARATION_MODULE);
   const currentExpiry = (Array.isArray(user?.entitlements) ? user.entitlements : [])
     .filter((item) => item?.module?.key === "exam_preparation" && item?.status === "active" && item?.expires_at)
     .map((item) => new Date(item.expires_at))
@@ -74,8 +77,9 @@ export default function ExamPreparationModulePage() {
           </div>
           <div className="exam-module-hero__access">
             <span>
-              当前权限有效至：{currentExpiry
-                ? new Intl.DateTimeFormat("zh-CN", {
+              {hasFullAccess
+                ? `当前权限有效至：${currentExpiry
+                  ? new Intl.DateTimeFormat("zh-CN", {
                     year: "numeric",
                     month: "2-digit",
                     day: "2-digit",
@@ -83,9 +87,12 @@ export default function ExamPreparationModulePage() {
                     minute: "2-digit",
                     hour12: false,
                   }).format(currentExpiry)
-                : "长期有效"}
+                  : "长期有效"}`
+                : "当前为免费试用：每个题型开放前 3 道题"}
             </span>
-            <Link to="/modules/exam-preparation/purchase">延长有效期</Link>
+            <Link to="/modules/exam-preparation/purchase">
+              {hasFullAccess ? "延长有效期" : "解锁全部题目"}
+            </Link>
           </div>
         </div>
       </section>

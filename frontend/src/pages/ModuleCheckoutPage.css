@@ -35,11 +35,58 @@
 
 .module-checkout-page__hero,
 .module-checkout-page__state,
+.module-checkout-page__current-access,
 .module-checkout-page__offer {
   border-radius: 1.2rem;
   background: #ffffff;
   border: 1px solid var(--checkout-border);
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+}
+
+.module-checkout-page__current-access {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1.1rem;
+  border-color: #a7dfc5;
+  background:
+    radial-gradient(circle at top right, rgba(125, 211, 199, 0.2), transparent 40%),
+    linear-gradient(135deg, #f2fff8 0%, #ffffff 70%);
+}
+
+.module-checkout-page__current-access-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 2.7rem;
+  height: 2.7rem;
+  border-radius: 999px;
+  background: var(--checkout-accent);
+  color: #ffffff;
+  font-size: 1.2rem;
+  font-weight: 900;
+  box-shadow: 0 8px 20px rgba(31, 143, 99, 0.2);
+}
+
+.module-checkout-page__current-access-label {
+  color: #39705b;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.module-checkout-page__current-access-date {
+  display: block;
+  margin-top: 0.12rem;
+  color: #145c40;
+  font-size: 1.08rem;
+}
+
+.module-checkout-page__current-access-note {
+  margin: 0.3rem 0 0;
+  color: #527363;
+  font-size: 0.86rem;
+  line-height: 1.5;
 }
 
 .module-checkout-page__hero {
@@ -160,6 +207,8 @@
 
 .module-checkout-page__offer-aside {
   min-width: 0;
+  display: flex;
+  align-items: center;
 }
 
 .module-checkout-page__offer-top {
@@ -202,12 +251,15 @@
 
 .module-checkout-page__offer-badge--inline {
   margin-top: 0;
+  margin-right: auto;
+  margin-left: auto;
   width: fit-content;
 }
 
 .module-checkout-page__price-block {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.15rem;
   min-width: 0;
 }
@@ -215,7 +267,7 @@
 .module-checkout-page__price-row {
   display: flex;
   align-items: baseline;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 0.5rem;
   flex-wrap: wrap;
 }
@@ -258,7 +310,7 @@
   color: var(--checkout-accent);
   font-size: 0.82rem;
   font-weight: 900;
-  text-align: right;
+  text-align: center;
 }
 
 .module-checkout-page__offer-description {
@@ -298,8 +350,8 @@
 .module-checkout-page__price-card {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  height: 100%;
+  gap: 0.7rem;
+  width: 100%;
   padding: 1rem;
   border-radius: 1rem;
   border: 1px solid #dbe5f2;
@@ -313,13 +365,14 @@
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.08em;
+  text-align: center;
   text-transform: uppercase;
 }
 
 .module-checkout-page__pay {
   width: 100%;
   height: 52px;
-  margin-top: 1rem;
+  margin-top: 0.3rem;
   border: none;
   border-radius: 16px;
   background: linear-gradient(90deg, #7dd3c7 0%, #f5d0e2 100%);
@@ -339,6 +392,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
+}
+
+.module-checkout-page__footer-row > :only-child {
+  grid-column: 1 / -1;
+  justify-self: center;
+  width: min(100%, 34rem);
 }
 
 .module-checkout-page__trial,
@@ -390,6 +449,10 @@
     padding: 1.6rem 1.7rem;
   }
 
+  .module-checkout-page__current-access {
+    padding: 1.15rem 1.35rem;
+  }
+
   .module-checkout-page__title {
     font-size: 2.2rem;
   }
@@ -435,8 +498,6 @@
   }
 
   .module-checkout-page__price-card {
-    min-height: 100%;
-    justify-content: space-between;
     padding: 1.15rem;
   }
 

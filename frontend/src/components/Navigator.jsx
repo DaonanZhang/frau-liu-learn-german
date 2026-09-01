@@ -2,6 +2,8 @@ import "./Navigator.css";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../api/auth";
 import useMaxWidth from "../hooks/useMaxWidth.js";
+import { EXAM_PREPARATION_MODULE } from "../pages/Homepage/homeShared.js";
+import { hasModuleAccess } from "../utils/moduleAccess.js";
 
 export default function Navigator() {
   const { user, loading, logout } = useAuth();
@@ -28,6 +30,8 @@ export default function Navigator() {
   const isLexiconActive = pathname.startsWith("/lexicon");
   const isFavoriteQuestionsActive = pathname.startsWith("/favorite-questions");
   const isProfileActive = pathname.startsWith("/profile");
+  const isExamPreparationActive = pathname.startsWith("/modules/exam-preparation");
+  const isExamPreparationPurchaseActive = pathname === "/modules/exam-preparation/purchase";
 
   const titleText = isMobileView ? "符号刘" : "符号刘的德语素材库";
   const manualText = isMobileView ? "手册" : "操作手册";
@@ -35,6 +39,10 @@ export default function Navigator() {
   const lexiconText = isMobileView ? "卡片" : "德语卡片";
   const favoriteQuestionsText = isMobileView ? "收藏题" : "收藏题目";
   const redeemText = isMobileView ? "兑换" : "兑换码";
+  const hasFullExamAccess = hasModuleAccess(user, EXAM_PREPARATION_MODULE);
+  const examRenewText = hasFullExamAccess
+    ? (isMobileView ? "续费" : "延长备考季")
+    : (isMobileView ? "解锁" : "解锁备考季");
 
   return (
     <header className="navigator">
@@ -57,6 +65,24 @@ export default function Navigator() {
         </div>
 
         <nav className="nav-right">
+          {isExamPreparationActive ? (
+            <button
+              className={[
+                "nav-btn",
+                "nav-btn--exam-renew",
+                isExamPreparationPurchaseActive ? "nav-btn--active" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              type="button"
+              onClick={() => {
+                navigate("/modules/exam-preparation/purchase");
+              }}
+            >
+              {examRenewText}
+            </button>
+          ) : null}
+
           <button
             className={[
               "nav-btn",

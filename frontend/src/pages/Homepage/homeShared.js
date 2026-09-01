@@ -63,6 +63,11 @@ export const EXAM_PREPARATION_MODULE = {
   badge: "考试专项训练",
   stats: ["B1 起步", "分题型练习", "30-90 天可选"],
   image: "/images/2.png",
+  originalPricesByDuration: {
+    30: 40,
+    60: 80,
+    90: 120,
+  },
   purchaseLabels: ["30 天", "60 天", "90 天"],
   purchaseDescription:
     "备考季按有效天数购买。已有有效权限时，新购买的 30/60/90 天会从当前最晚到期时间继续顺延。",

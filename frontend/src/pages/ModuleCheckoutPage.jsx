@@ -33,6 +33,53 @@ function getOriginalPrice(offer) {
   return Number(offer?.price_amount);
 }
 
+function getReferenceOriginalPrice(module, offer) {
+  const durationDays = Number(offer?.access_duration_days);
+  const durationPrice = Number(module?.originalPricesByDuration?.[durationDays]);
+  if (Number.isFinite(durationPrice)) {
+    return durationPrice;
+  }
+  return Number(module?.originalPrice);
+}
+
+function getCurrentModuleExpiry(user, module) {
+  const now = new Date();
+  const expiries = (Array.isArray(user?.entitlements) ? user.entitlements : [])
+    .filter((item) => {
+      if (item?.status !== "active" || item?.module?.key !== module?.moduleKey) {
+        return false;
+      }
+      const startsAt = item?.starts_at ? new Date(item.starts_at) : null;
+      const expiresAt = item?.expires_at ? new Date(item.expires_at) : null;
+      return (
+        expiresAt
+        && !Number.isNaN(expiresAt.getTime())
+        && expiresAt > now
+        && (!startsAt || Number.isNaN(startsAt.getTime()) || startsAt <= now)
+      );
+    })
+    .map((item) => new Date(item.expires_at));
+
+  if (expiries.length === 0) {
+    return null;
+  }
+  return new Date(Math.max(...expiries.map((date) => date.getTime())));
+}
+
+function formatCurrentExpiry(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(value);
+}
+
 function formatExpiry(value) {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime())) {
@@ -54,6 +101,8 @@ export default function ModuleCheckoutPage() {
   const { user, loading, isAuthenticated, reloadMe } = useAuth();
   const module = MODULES_BY_ID[moduleId];
   const alreadyHasAccess = useMemo(() => hasModuleAccess(user, module), [user, module]);
+  const currentModuleExpiry = useMemo(() => getCurrentModuleExpiry(user, module), [user, module]);
+  const isExamPreparation = module?.id === "exam-preparation";
 
   const [offers, setOffers] = useState([]);
   const [loadingOffers, setLoadingOffers] = useState(true);
@@ -227,12 +276,29 @@ export default function ModuleCheckoutPage() {
           </div>
           <p className="module-checkout-page__description">{module.purchaseDescription}</p>
           <p className="module-checkout-page__notice">
-            {alreadyHasAccess
-              ? "你当前已有有效权限，新购买的天数会从现有最晚到期时间继续顺延。"
-              : "支付成功后将自动开通对应模块权限，有效期从支付确认时刻开始计算。"}
+            {isExamPreparation
+              ? "集中练习听力、阅读、语言模块、写作与口语，为考试做好更充分的准备。"
+              : alreadyHasAccess
+                ? "你当前已有有效权限，新购买的天数会从现有最晚到期时间继续顺延。"
+                : "支付成功后将自动开通对应模块权限，有效期从支付确认时刻开始计算。"}
           </p>
         </div>
       </section>
+
+      {isExamPreparation && currentModuleExpiry ? (
+        <section className="module-checkout-page__current-access" aria-label="当前备考季有效期">
+          <div className="module-checkout-page__current-access-icon" aria-hidden="true">✓</div>
+          <div>
+            <div className="module-checkout-page__current-access-label">当前备考季有效期</div>
+            <strong className="module-checkout-page__current-access-date">
+              有效至 {formatCurrentExpiry(currentModuleExpiry)}
+            </strong>
+            <p className="module-checkout-page__current-access-note">
+              再次购买时，所选天数会从当前到期时间继续顺延。
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {loadingOffers ? <div className="module-checkout-page__state">加载购买方案中...</div> : null}
         {!loadingOffers && offersError ? (
@@ -251,7 +317,7 @@ export default function ModuleCheckoutPage() {
                 const isCreating = creatingOrderCode === offer.code;
                 const displayPrice = getDisplayPrice(offer);
                 const originalPrice = getOriginalPrice(offer);
-                const moduleOriginalPrice = Number(module?.originalPrice);
+                const referenceOriginalPrice = getReferenceOriginalPrice(module, offer);
                 const hasDiscount = Boolean(offer?.is_discounted_for_user) && Number(offer?.discount_amount) > 0;
                 return (
                   <article key={offer.code} className="module-checkout-page__offer">
@@ -270,13 +336,24 @@ export default function ModuleCheckoutPage() {
                       </div>
 
                         <p className="module-checkout-page__offer-description">
-                          {offer.description || `解锁 ${module.title} 全部正式学习内容、工具与后续学习体验。`}
+                          {isExamPreparation
+                            ? "激活备考季全部内容！"
+                            : offer.description || `解锁 ${module.title} 全部正式学习内容、工具与后续学习体验。`}
                         </p>
 
                         <ul className="module-checkout-page__offer-notes">
-                          <li>支付成功后自动开通或顺延对应模块权限。</li>
-                          <li>重复回调不会重复增加有效期。</li>
-                          {offer.access_duration_days ? <li>有效期按连续 24 小时/天计算。</li> : null}
+                          {isExamPreparation ? (
+                            <>
+                              <li>听力、阅读、语言模块、写作与口语题型，一次解锁。</li>
+                              <li>支持支付宝安全支付，付款完成后即可开始练习。</li>
+                              <li>保留学习进度与收藏记录。</li>
+                            </>
+                          ) : (
+                            <>
+                              <li>一次购买，解锁本方案包含的全部正式学习内容。</li>
+                              <li>支持支付宝安全支付，付款完成后即可开始学习。</li>
+                            </>
+                          )}
                         </ul>
                       </div>
 
@@ -290,9 +367,9 @@ export default function ModuleCheckoutPage() {
                           ) : null}
                           <div className="module-checkout-page__price-block">
                             <div className="module-checkout-page__price-row">
-                              {Number.isFinite(moduleOriginalPrice) ? (
+                              {Number.isFinite(referenceOriginalPrice) ? (
                                 <span className="module-checkout-page__price-list">
-                                  ¥{formatPromoPrice(moduleOriginalPrice)}
+                                  ¥{formatPromoPrice(referenceOriginalPrice)}
                                 </span>
                               ) : null}
                               {Number.isFinite(originalPrice) ? (
@@ -334,7 +411,7 @@ export default function ModuleCheckoutPage() {
         ) : null}
 
       <div className="module-checkout-page__footer-row">
-        {module?.id !== "exam-preparation" ? <button
+        <button
           className="module-checkout-page__trial"
           type="button"
           onClick={() => {
@@ -343,8 +420,8 @@ export default function ModuleCheckoutPage() {
             }
           }}
         >
-          立刻试用
-        </button> : null}
+          {isExamPreparation ? "免费试用" : "立刻试用"}
+        </button>
         <button
           className="module-checkout-page__ghost"
           type="button"

@@ -82,6 +82,21 @@
   border: none;
 }
 
+.nav-btn.nav-btn--exam-renew {
+  color: #166534;
+  border-color: rgba(22, 101, 52, 0.22);
+  background: #ecfdf3;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nav-btn.nav-btn--exam-renew:hover,
+.nav-btn.nav-btn--exam-renew.nav-btn--active {
+  color: #ffffff;
+  border-color: #15803d;
+  background: #15803d;
+}
+
 .nav-btn:not(.ghost):hover {
   background: #1677ff;
   color: #fff;

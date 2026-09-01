@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.exam_preparation.access import (
+    FREE_EXERCISES_PER_TYPE,
+    user_has_full_exam_preparation_access,
+)
 from apps.exam_preparation.models import (
     ClozeChoiceBlank,
     ClozeChoiceExercise,
@@ -37,6 +41,44 @@ from apps.exam_preparation.models import (
 )
 
 
+class TrialAwareExerciseSerializerMixin:
+    locked_content_fields = ()
+
+    def get_is_locked(self, exercise):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if "has_full_exam_preparation_access" not in self.context:
+            self.context["has_full_exam_preparation_access"] = user_has_full_exam_preparation_access(user)
+        if self.context["has_full_exam_preparation_access"]:
+            return False
+
+        exercise_type = exercise.exercise_base.exercise_type
+        cache_key = (type(exercise), exercise_type)
+        free_ids_by_type = self.context.setdefault("free_trial_exercise_ids", {})
+        if cache_key not in free_ids_by_type:
+            free_ids_by_type[cache_key] = set(
+                type(exercise).objects.filter(
+                    exercise_base__exercise_type=exercise_type,
+                )
+                .order_by("id")
+                .values_list("id", flat=True)[:FREE_EXERCISES_PER_TYPE]
+            )
+        return exercise.pk not in free_ids_by_type[cache_key]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if self.get_is_locked(instance):
+            for field_name in self.locked_content_fields:
+                if field_name in data:
+                    if isinstance(data[field_name], dict):
+                        data[field_name] = {}
+                    elif isinstance(data[field_name], list):
+                        data[field_name] = []
+                    else:
+                        data[field_name] = ""
+        return data
+
+
 class ExerciseBaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExerciseBase
@@ -44,13 +86,16 @@ class ExerciseBaseSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
-class ListeningExerciseSerializer(serializers.ModelSerializer):
+class ListeningExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
+    locked_content_fields = ("audio_file_identifier", "audio_file_url", "script")
 
     class Meta:
         model = ListeningExercise
         fields = [
             "id",
+            "is_locked",
             "exercise_base",
             "listening_type",
             "audio_file_identifier",
@@ -129,13 +174,16 @@ class ListeningExerciseDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ReadingTitleMatchingExerciseSerializer(serializers.ModelSerializer):
+class ReadingTitleMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
+    locked_content_fields = ("instruction",)
 
     class Meta:
         model = ReadingTitleMatchingExercise
         fields = [
             "id",
+            "is_locked",
             "exercise_base",
             "instruction",
             "created_at",
@@ -194,13 +242,16 @@ class ReadingTitleMatchingExerciseDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ReadingUnderstandingExerciseSerializer(serializers.ModelSerializer):
+class ReadingUnderstandingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
+    locked_content_fields = ("text_markdown",)
 
     class Meta:
         model = ReadingUnderstandingExercise
         fields = [
             "id",
+            "is_locked",
             "exercise_base",
             "text_markdown",
             "created_at",
@@ -272,13 +323,16 @@ class ReadingUnderstandingExerciseDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ReadingAdMatchingExerciseSerializer(serializers.ModelSerializer):
+class ReadingAdMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
+    locked_content_fields = ("instruction",)
 
     class Meta:
         model = ReadingAdMatchingExercise
         fields = [
             "id",
+            "is_locked",
             "exercise_base",
             "instruction",
             "created_at",
@@ -352,13 +406,16 @@ class ReadingAdMatchingExerciseDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ClozeChoiceExerciseSerializer(serializers.ModelSerializer):
+class ClozeChoiceExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
+    locked_content_fields = ("content_with_placeholders", "original_source_text")
 
     class Meta:
         model = ClozeChoiceExercise
         fields = [
             "id",
+            "is_locked",
             "exercise_base",
             "content_with_placeholders",
             "original_source_text",
@@ -432,13 +489,16 @@ class ClozeChoiceExerciseDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class ClozeMatchingExerciseSerializer(serializers.ModelSerializer):
+class ClozeMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
+    locked_content_fields = ("content_with_placeholders", "original_source_text")
 
     class Meta:
         model = ClozeMatchingExercise
         fields = [
             "id",
+            "is_locked",
             "exercise_base",
             "content_with_placeholders",
             "original_source_text",
@@ -514,13 +574,16 @@ class ClozeMatchingExerciseDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class WritingExerciseSerializer(serializers.ModelSerializer):
+class WritingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
+    locked_content_fields = ("request_text", "task_text")
 
     class Meta:
         model = WritingExercise
         fields = [
             "id",
+            "is_locked",
             "exercise_base",
             "request_text",
             "time_limit_minutes",
@@ -574,12 +637,14 @@ class WritingExerciseDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class SpeakingTeilExerciseSerializer(serializers.ModelSerializer):
+class SpeakingTeilExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
+    is_locked = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
+    locked_content_fields = ("instruction", "content")
 
     class Meta:
         model = SpeakingTeilExercise
-        fields = ["id", "exercise_base", "instruction", "content", "created_at", "updated_at"]
+        fields = ["id", "is_locked", "exercise_base", "instruction", "content", "created_at", "updated_at"]
         read_only_fields = fields
 
 

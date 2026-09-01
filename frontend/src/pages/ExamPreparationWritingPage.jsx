@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { fetchWritingExercises } from "../api/exam_preparation/writingExercises.js";
+import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
 import "./ExamPreparationWritingPage.css";
 
 function extractPreview(text) {
@@ -8,6 +9,7 @@ function extractPreview(text) {
 }
 
 export default function ExamPreparationWritingPage() {
+  const navigate = useNavigate();
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -73,13 +75,10 @@ export default function ExamPreparationWritingPage() {
             const preview = extractPreview(exercise?.request_text) || "进入后查看完整题目要求并开始书面作答练习。";
             const timeLimit = exercise?.time_limit_minutes ? `${exercise.time_limit_minutes} 分钟` : "不限时";
             const wordsLimit = exercise?.words_limit ? `${exercise.words_limit} 词` : "字数不限";
+            const isLocked = Boolean(exercise?.is_locked);
 
-            return (
-              <Link
-                key={exercise.id || index}
-                to={`/modules/exam-preparation/schreiben/${exercise.id}`}
-                className="writing-entry-card"
-              >
+            const cardContent = (
+              <>
                 <div className="writing-entry-card__top">
                   <div className="writing-entry-card__meta">
                     <span className="writing-entry-card__chip">写作任务</span>
@@ -87,6 +86,10 @@ export default function ExamPreparationWritingPage() {
                   </div>
                   <h2 className="writing-entry-card__title">{title}</h2>
                 </div>
+
+                {isLocked ? (
+                  <span className="writing-entry-card__lock" aria-hidden="true">🔒</span>
+                ) : null}
 
                 <p className="writing-entry-card__description">{preview}</p>
 
@@ -96,8 +99,29 @@ export default function ExamPreparationWritingPage() {
                 </div>
 
                 <div className="writing-entry-card__bottom">
-                  <span className="writing-entry-card__cta">进入题目</span>
+                  <span className="writing-entry-card__cta">
+                    {isLocked ? "购买后解锁" : "进入题目"}
+                  </span>
                 </div>
+              </>
+            );
+
+            return isLocked ? (
+              <button
+                key={exercise.id || index}
+                type="button"
+                className="writing-entry-card writing-entry-card--locked"
+                onClick={() => showExamPreparationPurchasePrompt(navigate)}
+              >
+                {cardContent}
+              </button>
+            ) : (
+              <Link
+                key={exercise.id || index}
+                to={`/modules/exam-preparation/schreiben/${exercise.id}`}
+                className="writing-entry-card"
+              >
+                {cardContent}
               </Link>
             );
           })}

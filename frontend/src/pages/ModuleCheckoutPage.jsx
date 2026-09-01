@@ -14,7 +14,17 @@ function formatPromoPrice(amount) {
   if (!Number.isFinite(numeric)) {
     return "";
   }
-  return String(numeric.toFixed(1)).replace(/\.0$/, "");
+  return numeric.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+}
+
+function getDisplayedSavings({ referenceOriginalPrice, originalPrice, displayPrice }) {
+  const displayedOriginalPrice = Number.isFinite(referenceOriginalPrice)
+    ? referenceOriginalPrice
+    : originalPrice;
+  if (!Number.isFinite(displayedOriginalPrice) || !Number.isFinite(displayPrice)) {
+    return 0;
+  }
+  return Math.max(0, Number((displayedOriginalPrice - displayPrice).toFixed(2)));
 }
 
 function getDisplayPrice(offer) {
@@ -319,6 +329,11 @@ export default function ModuleCheckoutPage() {
                 const originalPrice = getOriginalPrice(offer);
                 const referenceOriginalPrice = getReferenceOriginalPrice(module, offer);
                 const hasDiscount = Boolean(offer?.is_discounted_for_user) && Number(offer?.discount_amount) > 0;
+                const displayedSavings = getDisplayedSavings({
+                  referenceOriginalPrice,
+                  originalPrice,
+                  displayPrice,
+                });
                 return (
                   <article key={offer.code} className="module-checkout-page__offer">
                     <div className="module-checkout-page__offer-shell">
@@ -385,7 +400,7 @@ export default function ModuleCheckoutPage() {
                             </div>
                             {hasDiscount ? (
                               <div className="module-checkout-page__discount-note">
-                                已减 ¥{formatPromoPrice(offer.discount_amount)}
+                                已减 ¥{formatPromoPrice(displayedSavings)}
                               </div>
                             ) : null}
                           </div>

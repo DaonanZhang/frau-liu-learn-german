@@ -76,12 +76,20 @@ export default function ExamPreparationWritingPage() {
             const timeLimit = exercise?.time_limit_minutes ? `${exercise.time_limit_minutes} 分钟` : "不限时";
             const wordsLimit = exercise?.words_limit ? `${exercise.words_limit} 词` : "字数不限";
             const isLocked = Boolean(exercise?.is_locked);
+            const showFreeTrialBadge = Boolean(exercise?.show_free_trial_badge);
 
             const cardContent = (
               <>
                 <div className="writing-entry-card__top">
                   <div className="writing-entry-card__meta">
-                    <span className="writing-entry-card__chip">写作任务</span>
+                    <div className="writing-entry-card__badges">
+                      <span className="writing-entry-card__chip">写作任务</span>
+                      {showFreeTrialBadge ? (
+                        <span className="writing-entry-card__trial-badge" aria-label="免费试用">
+                          免费试用
+                        </span>
+                      ) : null}
+                    </div>
                     <span className="writing-entry-card__focus">书面表达</span>
                   </div>
                   <h2 className="writing-entry-card__title">{title}</h2>

@@ -229,8 +229,9 @@ export default function ReadingAdMatchingPage() {
           <div className="reading-ad-hero__main">
             <h1 className="reading-ad-hero__title">{heroTitle}</h1>
           </div>
-          {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="reading-ad-hero__badges">
+              {exercise?.exercise_base?.exam_type ? <span className="reading-ad-hero__badge reading-ad-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
               {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="reading-ad-hero__badge">
                   难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}

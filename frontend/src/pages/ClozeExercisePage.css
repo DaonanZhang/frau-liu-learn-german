@@ -81,6 +81,13 @@
   font-weight: 700;
 }
 
+.cloze-hero__badge--exam-type {
+  min-height: 2.7rem;
+  padding: 0.58rem 1.05rem;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
 .cloze-hero__badge--real {
   background: rgba(207, 99, 39, 0.12);
   border-color: rgba(207, 99, 39, 0.24);
@@ -216,64 +223,6 @@
   vertical-align: middle;
 }
 
-.cloze-select-frame {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  min-width: 11rem;
-  min-height: 2.9rem;
-  padding: 0 2.5rem 0 0;
-  border: 1px solid #d7dce3;
-  border-radius: 0.95rem;
-  background: #ffffff;
-}
-
-.cloze-select-frame--selected {
-  border-color: #cf6327;
-  background: rgba(207, 99, 39, 0.1);
-}
-
-.cloze-select-frame--correct {
-  border-color: #7bcf92;
-  background: #eefaf3;
-}
-
-.cloze-select-frame--wrong {
-  border-color: #e6a3a3;
-  background: #fff1f1;
-}
-
-.cloze-select-frame__caret {
-  position: absolute;
-  right: 1.2rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #7a838f;
-  font-size: 0.9rem;
-  pointer-events: none;
-}
-
-.cloze-select {
-  min-width: 0;
-  width: 100%;
-  min-height: 2.9rem;
-  border: none;
-  padding: 0 2.5rem 0 0.8rem;
-  background: transparent;
-  color: #2f2a25;
-  font-size: 0.98rem;
-  font-weight: 700;
-  appearance: none;
-  outline: none;
-}
-
-.cloze-select-trigger {
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  text-align: left;
-}
-
 .cloze-select--selected {
   color: #9a4210;
 }
@@ -330,6 +279,23 @@
 .cloze-drop-slot__chip--wrong {
   background: #fde4e4;
   color: #992626;
+}
+
+.cloze-choice-slot-trigger {
+  width: 100%;
+  min-height: 2.35rem;
+  cursor: pointer;
+}
+
+.cloze-choice-slot-trigger--empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 0.8rem;
+  padding: 0.4rem 0.7rem;
+  background: transparent;
+  font: inherit;
 }
 
 .cloze-inline-feedback {
@@ -452,17 +418,13 @@
     align-items: flex-start;
   }
 
-  .cloze-select {
-    width: 100%;
-  }
-
   .cloze-blank-inline {
     display: flex;
     width: 100%;
     margin: 0.35rem 0;
   }
 
-  .cloze-select-frame {
+  .cloze-drop-slot {
     width: 100%;
     min-width: 0;
   }

@@ -87,6 +87,7 @@ export default function ExerciseSelectionPage({
             const isRealExam = Boolean(exercise?.exercise_base?.is_real_exam);
             const examType = exercise?.exercise_base?.exam_type?.trim();
             const isLocked = Boolean(exercise?.is_locked);
+            const showFreeTrialBadge = Boolean(exercise?.show_free_trial_badge);
 
             const cardContent = (
               <>
@@ -105,6 +106,14 @@ export default function ExerciseSelectionPage({
                       {isRealExam ? (
                         <span className="exercise-selection-card__badge exercise-selection-card__badge--real">
                           真题
+                        </span>
+                      ) : null}
+                      {showFreeTrialBadge ? (
+                        <span
+                          className="exercise-selection-card__badge exercise-selection-card__badge--free-trial"
+                          aria-label="免费试用"
+                        >
+                          免费试用
                         </span>
                       ) : null}
                     </div>

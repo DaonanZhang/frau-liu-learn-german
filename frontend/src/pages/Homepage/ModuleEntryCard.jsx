@@ -65,7 +65,7 @@ function formatPromoPrice(amount) {
   if (!Number.isFinite(numeric)) {
     return "";
   }
-  return String(numeric.toFixed(1)).replace(/\.0$/, "");
+  return numeric.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 }
 
 function getDisplayPrice(offer) {
@@ -79,15 +79,19 @@ function getDisplayPrice(offer) {
 function buildCheckoutModalHtml(module, offers) {
   const cards = offers.map((offer) => {
     const originalPrice = Number(module?.originalPrice);
+    const displayPrice = getDisplayPrice(offer);
     const originalPriceHtml = Number.isFinite(originalPrice)
       ? `<span class="module-checkout-modal__price-original">¥${escapeHtml(formatPromoPrice(originalPrice))}</span>`
       : "";
     const hasDiscount = Boolean(offer?.is_discounted_for_user) && Number(offer?.discount_amount) > 0;
+    const displayedSavings = Number.isFinite(originalPrice) && Number.isFinite(displayPrice)
+      ? Math.max(0, Number((originalPrice - displayPrice).toFixed(2)))
+      : 0;
     const discountBadgeHtml = hasDiscount
       ? `<div class="module-checkout-modal__discount-badge">${escapeHtml(offer?.discount_label || "品牌挚友专享")}</div>`
       : "";
     const discountNoteHtml = hasDiscount
-      ? `<div class="module-checkout-modal__discount-note">已减 ¥${escapeHtml(formatPromoPrice(offer?.discount_amount))}</div>`
+      ? `<div class="module-checkout-modal__discount-note">已减 ¥${escapeHtml(formatPromoPrice(displayedSavings))}</div>`
       : "";
 
     return `
@@ -101,7 +105,7 @@ function buildCheckoutModalHtml(module, offers) {
           <div class="module-checkout-modal__price-block">
             <div class="module-checkout-modal__price-row">
               ${originalPriceHtml}
-              <span class="module-checkout-modal__price-sale${hasDiscount ? " module-checkout-modal__price-sale--discount" : ""}">¥${escapeHtml(formatPromoPrice(getDisplayPrice(offer)))}</span>
+              <span class="module-checkout-modal__price-sale${hasDiscount ? " module-checkout-modal__price-sale--discount" : ""}">¥${escapeHtml(formatPromoPrice(displayPrice))}</span>
             </div>
             ${discountNoteHtml}
           </div>

@@ -4,30 +4,24 @@ import "./ExamPreparationReadingPage.css";
 const READING_TYPES = [
   {
     key: "title-matching",
-    title: "标题匹配",
-    label: "阅读段落，匹配合适标题",
+    title: "Teil 1",
     description: "适合训练快速概括段落大意的能力。你需要抓住每一段的核心信息，再从多个标题中选出最合适的一项。",
     to: "/modules/exam-preparation/lesen/title-matching",
     cta: "进入这一题型",
-    focus: "概括主旨",
   },
   {
     key: "understanding",
-    title: "文章理解",
-    label: "阅读文章，完成理解题",
+    title: "Teil 2",
     description: "围绕一篇完整文章进行练习，更适合提升细节理解、语境判断和信息定位能力，帮助你更稳地完成阅读选择题。",
     to: "/modules/exam-preparation/lesen/understanding",
     cta: "进入这一题型",
-    focus: "细节理解",
   },
   {
     key: "ad-matching",
-    title: "信息匹配",
-    label: "根据需求匹配合适信息",
+    title: "Teil 3",
     description: "通过对比条件与信息内容完成匹配，适合训练筛选关键词、判断需求重点和快速查找相关信息的能力。",
     to: "/modules/exam-preparation/lesen/ad-matching",
     cta: "进入这一题型",
-    focus: "查找对应信息",
   },
 ];
 
@@ -60,11 +54,7 @@ export default function ExamPreparationReadingPage() {
           const content = (
             <>
               <div className="exam-reading-type__top">
-                <div className="exam-reading-type__meta">
-                  <span className="exam-reading-type__mono">{item.title}</span>
-                  <span className="exam-reading-type__focus">{item.focus}</span>
-                </div>
-                <h2 className="exam-reading-type__title">{item.label}</h2>
+                <h2 className="exam-reading-type__title">{item.title}</h2>
               </div>
               <p className="exam-reading-type__description">{item.description}</p>
               <div className="exam-reading-type__bottom">

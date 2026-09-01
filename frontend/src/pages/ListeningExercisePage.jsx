@@ -21,11 +21,16 @@ const INSTRUCTION_BY_TYPE = {
     "Sie hören nun ein Gespräch. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch zweimal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
 };
 
+const EYEBROW_BY_TYPE = {
+  short_text_true_false_with_prep: "Hören · Teil 1",
+  short_text_true_false_once: "Hören · Teil 2",
+  dialog_true_false_twice: "Hören · Teil 3",
+};
+
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
 
 export default function ListeningExercisePage({
   listeningType,
-  eyebrow = "LISTENING",
   backTo = "/modules/exam-preparation/hoeren",
 }) {
   const { exerciseId } = useParams();
@@ -38,7 +43,6 @@ export default function ListeningExercisePage({
   const [favoritedByQuestionId, setFavoritedByQuestionId] = useState({});
   const [favoritePendingByQuestionId, setFavoritePendingByQuestionId] = useState({});
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
 
@@ -103,7 +107,6 @@ export default function ListeningExercisePage({
       return undefined;
     }
 
-    audioElement.volume = volume;
     audioElement.playbackRate = playbackRate;
     audioElement.loop = repeatEnabled;
 
@@ -124,7 +127,7 @@ export default function ListeningExercisePage({
       audioElement.removeEventListener("pause", handlePause);
       audioElement.removeEventListener("ended", handlePause);
     };
-  }, [volume, playbackRate, repeatEnabled]);
+  }, [playbackRate, repeatEnabled]);
 
   const questions = useMemo(() => {
     return Array.isArray(exercise?.questions) ? exercise.questions : [];
@@ -253,10 +256,14 @@ export default function ListeningExercisePage({
 
         <section className="listening-exercise-hero">
           <div className="listening-exercise-hero__main">
+            <p className="listening-exercise-audio-panel__eyebrow">
+              {EYEBROW_BY_TYPE[listeningType] || "Hören"}
+            </p>
             <h1 className="listening-exercise-hero__title">{heroTitle}</h1>
           </div>
-          {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="listening-exercise-hero__badges">
+              {exercise?.exercise_base?.exam_type ? <span className="listening-exercise-hero__badge listening-exercise-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
               {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="listening-exercise-hero__badge">
                   难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
@@ -320,20 +327,6 @@ export default function ListeningExercisePage({
             >
               Wieder abspielen
             </button>
-            <label className="listening-exercise-slider">
-              <span className="listening-exercise-control-label">Lautstärke</span>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.05"
-                value={volume}
-                onChange={(event) => {
-                  setVolume(Number(event.target.value));
-                }}
-              />
-              <strong>{Math.round(volume * 100)}%</strong>
-            </label>
             <label className="listening-exercise-select">
               <span className="listening-exercise-control-label">Geschwindigkeit</span>
               <select

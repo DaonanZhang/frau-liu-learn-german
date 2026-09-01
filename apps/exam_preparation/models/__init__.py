@@ -34,6 +34,7 @@ from .user_activity import (
     UserReadingUnderstandingQuestionState,
     UserWritingExampleTextState,
     UserWritingExerciseState,
+    UserSpeakingTurnState,
 )
 from .writing import WritingExampleText, WritingExercise
 
@@ -69,4 +70,5 @@ __all__ = [
     "UserClozeMatchingBlankState",
     "UserWritingExampleTextState",
     "UserWritingExerciseState",
+    "UserSpeakingTurnState",
 ]

@@ -118,6 +118,22 @@ class PurchaseOfferAdmin(admin.ModelAdmin):
     search_fields = ("code", "title", "module__key", "season__title")
 
 
+@admin.register(ActivationCodeRecord)
+class ActivationCodeRecordAdmin(admin.ModelAdmin):
+    list_display = ("id", "code_preview", "remark", "status", "consumed_by_user", "consumed_at", "created_at")
+    list_filter = ("status", "created_at", "consumed_at")
+    search_fields = ("code_hash", "remark", "consumed_by_user__telephone")
+    readonly_fields = ("code_hash", "code_ciphertext", "status", "payload", "ttl_seconds", "expires_at", "consumed_by_user", "consumed_at", "created_at", "updated_at")
+
+    @admin.display(description="Code")
+    def code_preview(self, obj):
+        from apps.accounts.services.activation_codes import decrypt_activation_code
+        return decrypt_activation_code(obj.code_ciphertext) or f"legacy:{obj.code_hash[:12]}"
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(AlipayWebsitePayment)
 class AlipayWebsitePaymentAdmin(admin.ModelAdmin):
     list_display = (
@@ -169,35 +185,6 @@ class PaymentGrantTaskAdmin(admin.ModelAdmin):
         "last_error",
         "processed_at",
         "idempotency_key",
-        "created_at",
-        "updated_at",
-    )
-
-    def has_delete_permission(self, request, obj=None):
-        return False
-
-
-@admin.register(ActivationCodeRecord)
-class ActivationCodeRecordAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "code_hash",
-        "status",
-        "expires_at",
-        "consumed_by_user",
-        "consumed_at",
-        "created_at",
-    )
-    list_filter = ("status",)
-    search_fields = ("code_hash", "consumed_by_user__telephone")
-    readonly_fields = (
-        "code_hash",
-        "payload",
-        "status",
-        "ttl_seconds",
-        "expires_at",
-        "consumed_by_user",
-        "consumed_at",
         "created_at",
         "updated_at",
     )

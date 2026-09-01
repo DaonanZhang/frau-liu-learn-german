@@ -34,6 +34,7 @@ from apps.exam_preparation.views import (
     UserReadingUnderstandingQuestionStateViewSet,
     UserWritingExampleTextStateViewSet,
     UserWritingExerciseStateViewSet,
+    UserSpeakingTurnStateViewSet,
     WritingExampleTextViewSet,
     WritingExerciseViewSet,
 )
@@ -146,6 +147,11 @@ router.register(
     r"user-writing-example-text-states",
     UserWritingExampleTextStateViewSet,
     basename="exam-prep-user-writing-example-text-states",
+)
+router.register(
+    r"user-speaking-turn-states",
+    UserSpeakingTurnStateViewSet,
+    basename="exam-prep-user-speaking-turn-states",
 )
 
 urlpatterns = [

@@ -180,8 +180,9 @@ export default function ClozeChoicePage() {
 
         <section className="cloze-hero">
           <h1 className="cloze-hero__title">{heroTitle}</h1>
-          {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="cloze-hero__badges">
+              {exercise?.exercise_base?.exam_type ? <span className="cloze-hero__badge cloze-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
               {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="cloze-hero__badge">
                   难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
@@ -219,20 +220,16 @@ export default function ClozeChoicePage() {
                     <span key={blankKey} className="cloze-blank-inline">
                       <span
                         className={[
-                          "cloze-select-frame",
-                          selectedKey && !isChecked ? "cloze-select-frame--selected" : "",
-                          isChecked && isCorrect ? "cloze-select-frame--correct" : "",
-                          isChecked && selectedKey && !isCorrect ? "cloze-select-frame--wrong" : "",
+                          "cloze-drop-slot",
                         ].filter(Boolean).join(" ")}
                       >
                         <button
                           type="button"
                           className={[
-                            "cloze-select",
-                            "cloze-select-trigger",
-                            selectedKey && !isChecked ? "cloze-select--selected" : "",
-                            isChecked && isCorrect ? "cloze-select--correct" : "",
-                            isChecked && selectedKey && !isCorrect ? "cloze-select--wrong" : "",
+                            "cloze-choice-slot-trigger",
+                            selectedKey ? "cloze-drop-slot__chip" : "cloze-choice-slot-trigger--empty",
+                            isChecked && isCorrect ? "cloze-drop-slot__chip--correct" : "",
+                            isChecked && selectedKey && !isCorrect ? "cloze-drop-slot__chip--wrong" : "",
                           ].filter(Boolean).join(" ")}
                           onClick={() => {
                             setActiveBlankKey(blankKey);
@@ -242,13 +239,12 @@ export default function ClozeChoicePage() {
                         >
                           {selectedKey
                             ? (blank?.options || []).find((option) => option.option_key === selectedKey)?.option_text || selectedKey
-                            : `Lücke ${blank?.blank_number || ""}`}
+                            : <span className="cloze-drop-slot__placeholder">{blank?.blank_number || ""}</span>}
                         </button>
-                        <span className="cloze-select-frame__caret" aria-hidden="true">▾</span>
                       </span>
                       <ExerciseOptionSheet
                         open={activeBlankKey === blankKey}
-                        title={`Lücke ${blank?.blank_number || ""}`}
+                        title={`${blank?.blank_number || ""}`}
                         subtitle="请选择当前空格的答案。"
                         selectedValue={selectedKey}
                         options={blank?.options?.map((option) => ({
@@ -304,7 +300,7 @@ export default function ClozeChoicePage() {
                   ].join(" ")}
                 >
                   <div className="cloze-feedback-card__header">
-                    <strong>Lücke {blank.blank_number}</strong>
+                    <strong>{blank.blank_number}</strong>
                     <ExerciseFavoriteButton
                       isFavorited={Boolean(favoritedByBlankId[blank.id])}
                       pending={Boolean(favoritePendingByBlankId[blank.id])}

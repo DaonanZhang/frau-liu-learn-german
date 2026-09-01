@@ -538,6 +538,104 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertTrue(response.data[0]["is_discounted_for_user"])
 
     @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_exam_preparation_offer_gets_ten_yuan_discount_for_video_trial_user(self, mock_get_alipay_service: Mock) -> None:
+        mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"
+        video_module = Module.objects.create(
+            key="learning_by_video",
+            name="Learning by Video",
+            is_active=True,
+        )
+        exam_module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        Entitlement.objects.create(
+            user=self.user,
+            module=video_module,
+            plan=Entitlement.Plan.TRIAL_7D,
+            status=Entitlement.Status.ACTIVE,
+            expires_at=timezone.now() + timedelta(days=7),
+        )
+        exam_offer = PurchaseOffer.objects.create(
+            code="exam-preparation-30d-test",
+            title="备考季 30 天",
+            module=exam_module,
+            plan=Entitlement.Plan.MONTH_1,
+            price_amount=Decimal("29.90"),
+            currency="CNY",
+            is_active=True,
+        )
+
+        response = self.client.get(
+            "/api/accounts/purchase-offers/",
+            {"module": exam_module.key},
+        )
+
+        offer_data = next(item for item in response.data if item["code"] == exam_offer.code)
+        self.assertEqual(offer_data["discount_amount"], "10.00")
+        self.assertEqual(offer_data["final_price_amount"], "19.90")
+        self.assertEqual(offer_data["discount_label"], "品牌挚友专享")
+
+        purchase = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {"offer_code": exam_offer.code, "idempotency_key": "00000000-0000-4000-8000-000000000010"},
+            format="json",
+        )
+        self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(purchase.data["amount"], "19.90")
+
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_video_offer_is_half_price_for_active_exam_preparation_user(self, mock_get_alipay_service: Mock) -> None:
+        mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"
+        video_module = Module.objects.create(
+            key="learning_by_video",
+            name="Learning by Video",
+            is_active=True,
+        )
+        exam_module = Module.objects.get(key="exam_preparation")
+        video_season = ModuleSeason.objects.create(
+            module=video_module,
+            season_number=4,
+            title="Vlog季",
+        )
+        Entitlement.objects.create(
+            user=self.user,
+            module=exam_module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+        video_offer = PurchaseOffer.objects.create(
+            code="vlog-season-half-price-test",
+            title="Vlog季终身版",
+            module=video_module,
+            season=video_season,
+            plan=Entitlement.Plan.LIFETIME,
+            price_amount=Decimal("59.90"),
+            currency="CNY",
+            is_active=True,
+        )
+
+        response = self.client.get(
+            "/api/accounts/purchase-offers/",
+            {"module": video_module.key, "season_number": 4},
+        )
+
+        offer_data = next(item for item in response.data if item["code"] == video_offer.code)
+        self.assertEqual(offer_data["discount_amount"], "29.95")
+        self.assertEqual(offer_data["final_price_amount"], "29.95")
+        self.assertEqual(offer_data["discount_label"], "备考季专享")
+
+        purchase = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {"offer_code": video_offer.code, "idempotency_key": "00000000-0000-4000-8000-000000000011"},
+            format="json",
+        )
+        self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(purchase.data["amount"], "29.95")
+
+    @patch("apps.accounts.views.payment.get_alipay_service")
     def test_create_purchase_applies_vlog_discount_for_season1_owner(self, mock_get_alipay_service: Mock) -> None:
         mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"
         Entitlement.objects.create(

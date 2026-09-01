@@ -9,6 +9,7 @@ from apps.exam_preparation.models import (
     ExerciseBase,
     WritingExampleText,
     WritingExercise,
+    SpeakingTeilExercise,
 )
 
 
@@ -147,6 +148,72 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
         self.assertEqual(states[0]["time_spent_seconds"], 325)
 
 
+class SpeakingTurnFavoriteApiTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(telephone="13800138009", password="test-password")
+        module, _ = Module.objects.get_or_create(key="exam_preparation", defaults={"name": "备考季", "is_active": True})
+        Entitlement.objects.create(user=self.user, module=module, plan=Entitlement.Plan.MONTH_1, status=Entitlement.Status.ACTIVE)
+        base = ExerciseBase.objects.create(
+            exam_type="telc",
+            level=ExerciseBase.Level.B1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+            external_id="SPEAKING-T2-001",
+            title="Gespräch",
+        )
+        self.exercise = SpeakingTeilExercise.objects.create(
+            exercise_base=base,
+            content={"teil": "2", "dialogue": [{"sequence": 1, "role": "TN1", "text": "Hallo"}]},
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_turns_can_be_favorited_independently_and_listed(self):
+        state_url = reverse("exam-prep-user-speaking-turn-states-list")
+        response = self.client.post(
+            state_url,
+            {"exercise": self.exercise.pk, "turn_key": "turn:1", "is_favorited": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        favorites = self.client.get(reverse("exam-prep-favorite-questions-list"))
+        self.assertEqual(favorites.status_code, status.HTTP_200_OK)
+        self.assertEqual(favorites.data["results"][0]["state_type"], "speaking_turn")
+        self.assertEqual(favorites.data["results"][0]["question_text"], "Hallo")
+        self.assertEqual(favorites.data["results"][0]["turn_key"], "turn:1")
+
+    def test_dialogue_order_result_is_persisted_and_updated(self):
+        state_url = reverse("exam-prep-user-speaking-turn-states-list")
+        payload = {
+            "exercise": self.exercise.pk,
+            "turn_key": "dialogue-order:all",
+            "answer_payload": {
+                "ordered_turn_keys": ["turn:1"],
+                "is_checked": True,
+            },
+            "is_correct": True,
+        }
+
+        created = self.client.post(state_url, payload, format="json")
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+
+        payload["answer_payload"] = {
+            "ordered_turn_keys": [],
+            "is_checked": False,
+        }
+        payload["is_correct"] = None
+        updated = self.client.post(state_url, payload, format="json")
+        self.assertEqual(updated.status_code, status.HTTP_200_OK)
+
+        response = self.client.get(state_url, {"exercise": self.exercise.pk})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        states = response.data.get("results", []) if isinstance(response.data, dict) else response.data
+        order_state = next(item for item in states if item["turn_key"] == "dialogue-order:all")
+        self.assertEqual(order_state["answer_payload"]["ordered_turn_keys"], [])
+        self.assertFalse(order_state["answer_payload"]["is_checked"])
+        self.assertIsNone(order_state["is_correct"])
+
+
 class ExamPreparationPermissionTests(APITestCase):
     def setUp(self):
         self.module, _ = Module.objects.get_or_create(
@@ -237,6 +304,10 @@ class ExamPreparationFreeTrialTests(APITestCase):
             [item["is_locked"] for item in results],
             [False, False, False, True],
         )
+        self.assertEqual(
+            [item["show_free_trial_badge"] for item in results],
+            [True, True, True, False],
+        )
         self.assertEqual(results[3]["request_text"], "")
         self.assertEqual(results[3]["task_text"], "")
 
@@ -284,6 +355,7 @@ class ExamPreparationFreeTrialTests(APITestCase):
         results = response.data.get("results", []) if isinstance(response.data, dict) else response.data
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(all(not item["is_locked"] for item in results))
+        self.assertTrue(all(not item["show_free_trial_badge"] for item in results))
         self.assertEqual(results[3]["request_text"], "Request 4")
         locked_detail_url = reverse(
             "exam-prep-writing-exercises-detail",

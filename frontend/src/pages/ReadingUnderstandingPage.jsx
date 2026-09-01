@@ -180,8 +180,9 @@ export default function ReadingUnderstandingPage() {
           <div className="reading-understanding-hero__main">
             <h1 className="reading-understanding-hero__title">{heroTitle}</h1>
           </div>
-          {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="reading-understanding-hero__badges">
+              {exercise?.exercise_base?.exam_type ? <span className="reading-understanding-hero__badge reading-understanding-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
               {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="reading-understanding-hero__badge">
                   难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}

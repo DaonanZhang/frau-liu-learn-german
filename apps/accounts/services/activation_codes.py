@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import base64
 import logging
 import secrets
 import string
@@ -16,6 +17,7 @@ from django.core.cache import cache
 from django.db import IntegrityError
 from django.utils import timezone
 from redis.exceptions import RedisError
+from cryptography.fernet import Fernet, InvalidToken
 
 
 # ============================
@@ -85,10 +87,13 @@ class ActivationPayload:
     """
 
     entitlements: list[ActivationEntitlementItem]
+    remark: str = ""
 
     def validate(self) -> None:
         if not self.entitlements:
             raise ValueError("ActivationPayload.entitlements cannot be empty")
+        if len(self.remark) > 255:
+            raise ValueError("ActivationPayload.remark cannot exceed 255 characters")
 
         for item in self.entitlements:
             item.validate()
@@ -96,7 +101,7 @@ class ActivationPayload:
     # -------- serialization --------
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "entitlements": [
                 {
                     "module": e.module_key,
@@ -106,6 +111,9 @@ class ActivationPayload:
                 for e in self.entitlements
             ]
         }
+        if self.remark:
+            data["remark"] = self.remark
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ActivationPayload":
@@ -123,7 +131,7 @@ class ActivationPayload:
                 )
             )
 
-        payload = cls(entitlements=items)
+        payload = cls(entitlements=items, remark=str(data.get("remark") or "").strip())
         payload.validate()
         return payload
 
@@ -161,6 +169,25 @@ def activation_code_hash(code: str) -> str:
         normalized_code.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
+
+
+def _activation_code_fernet() -> Fernet:
+    digest = hashlib.sha256(str(settings.ACTIVATION_CODE_HASH_KEY).encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def encrypt_activation_code(code: str) -> str:
+    normalized_code = str(code or "").strip().upper()
+    return _activation_code_fernet().encrypt(normalized_code.encode("utf-8")).decode("ascii")
+
+
+def decrypt_activation_code(ciphertext: str) -> str:
+    if not ciphertext:
+        return ""
+    try:
+        return _activation_code_fernet().decrypt(ciphertext.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError):
+        return ""
 
 
 def activation_code_exists(code: str) -> bool:
@@ -245,6 +272,8 @@ def store_activation_code(
     try:
         record = ActivationCodeRecord.objects.create(
             code_hash=activation_code_hash(normalized_code),
+            code_ciphertext=encrypt_activation_code(normalized_code),
+            remark=payload.remark,
             payload=payload_data,
             ttl_seconds=ttl_seconds,
             expires_at=timezone.now() + timedelta(seconds=ttl_seconds),

@@ -4,21 +4,17 @@ import "./ExamPreparationSprachbausteinePage.css";
 const SPRACHBAUSTEINE_TYPES = [
   {
     key: "cloze-choice",
-    title: "逐空选择",
-    label: "每个空格单独判断",
+    title: "Teil 1",
     description: "每一空都有对应选项，适合逐题分析词义、语法和固定搭配，帮助你更稳地判断每个空格最自然的表达方式。",
     to: "/modules/exam-preparation/sprachbausteine/cloze-choice",
     cta: "进入这一题型",
-    focus: "逐题分析",
   },
   {
     key: "cloze-matching",
-    title: "共享选项池",
-    label: "多个空格统一匹配",
+    title: "Teil 2",
     description: "多个空格共用同一组选项，更适合训练整体判断能力。你需要同时比较句意、语法和上下文，完成更接近考试的综合匹配。",
     to: "/modules/exam-preparation/sprachbausteine/cloze-matching",
     cta: "进入这一题型",
-    focus: "综合匹配",
   },
 ];
 
@@ -50,11 +46,7 @@ export default function ExamPreparationSprachbausteinePage() {
         {SPRACHBAUSTEINE_TYPES.map((item) => (
           <Link key={item.key} to={item.to} className="exam-sprach-type exam-sprach-type--link">
             <div className="exam-sprach-type__top">
-              <div className="exam-sprach-type__meta">
-                <span className="exam-sprach-type__mono">{item.title}</span>
-                <span className="exam-sprach-type__focus">{item.focus}</span>
-              </div>
-              <h2 className="exam-sprach-type__title">{item.label}</h2>
+              <h2 className="exam-sprach-type__title">{item.title}</h2>
             </div>
             <p className="exam-sprach-type__description">{item.description}</p>
             <div className="exam-sprach-type__bottom">

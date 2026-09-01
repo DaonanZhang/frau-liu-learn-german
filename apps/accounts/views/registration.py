@@ -40,7 +40,10 @@ class RegisterVerifyCodeAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(payload.to_dict(), status=status.HTTP_200_OK)
+        return Response(
+            {"entitlements": payload.to_dict()["entitlements"]},
+            status=status.HTTP_200_OK,
+        )
 
 
 class RegisterAPIView(APIView):

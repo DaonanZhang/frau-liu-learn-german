@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
+from django.db import models
 from django.utils import timezone
 
 from apps.accounts.models import Entitlement, PurchaseOffer
 
 UPGRADE_DISCOUNT_AMOUNT = Decimal("5.00")
 UPGRADE_DISCOUNT_LABEL = "品牌挚友专享"
+EXAM_PREPARATION_VIDEO_DISCOUNT_AMOUNT = Decimal("10.00")
+EXAM_PREPARATION_VIDEO_DISCOUNT_LABEL = "品牌挚友专享"
+VIDEO_EXAM_PREPARATION_DISCOUNT_LABEL = "备考季专享"
 UPGRADE_DISCOUNT_RULES = {
     "science-season-lifetime": {2},
     "vlog-season-lifetime": {1, 2},
@@ -51,9 +55,72 @@ def _user_has_upgrade_discount(*, user, offer: PurchaseOffer) -> bool:
     ).exists()
 
 
+def _user_has_exam_preparation_video_discount(*, user, offer: PurchaseOffer) -> bool:
+    if (
+        not user
+        or not getattr(user, "is_authenticated", False)
+        or offer.module.key != "exam_preparation"
+    ):
+        return False
+
+    now = timezone.now()
+    return Entitlement.objects.filter(
+        user=user,
+        module__key="learning_by_video",
+        status=Entitlement.Status.ACTIVE,
+        starts_at__lte=now,
+    ).filter(
+        models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+    ).exists()
+
+
+def _user_has_video_exam_preparation_discount(*, user, offer: PurchaseOffer) -> bool:
+    if (
+        not user
+        or not getattr(user, "is_authenticated", False)
+        or offer.module.key != "learning_by_video"
+    ):
+        return False
+
+    now = timezone.now()
+    return Entitlement.objects.filter(
+        user=user,
+        module__key="exam_preparation",
+        season__isnull=True,
+        status=Entitlement.Status.ACTIVE,
+        starts_at__lte=now,
+    ).filter(
+        models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+    ).exists()
+
+
 def get_purchase_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
     original_amount = offer.price_amount
-    if not _user_has_upgrade_discount(user=user, offer=offer):
+
+    if _user_has_video_exam_preparation_discount(user=user, offer=offer):
+        final_amount = (original_amount * Decimal("0.50")).quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        )
+        return PurchasePricing(
+            original_amount=original_amount,
+            final_amount=final_amount,
+            discount_amount=original_amount - final_amount,
+            discount_label=VIDEO_EXAM_PREPARATION_DISCOUNT_LABEL,
+            is_discounted=True,
+        )
+
+    discount_amount = Decimal("0.00")
+    discount_labels = []
+
+    if _user_has_upgrade_discount(user=user, offer=offer):
+        discount_amount += UPGRADE_DISCOUNT_AMOUNT
+        discount_labels.append(UPGRADE_DISCOUNT_LABEL)
+    if _user_has_exam_preparation_video_discount(user=user, offer=offer):
+        discount_amount += EXAM_PREPARATION_VIDEO_DISCOUNT_AMOUNT
+        discount_labels.append(EXAM_PREPARATION_VIDEO_DISCOUNT_LABEL)
+
+    if discount_amount <= 0:
         return PurchasePricing(
             original_amount=original_amount,
             final_amount=original_amount,
@@ -63,12 +130,12 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
         )
 
     max_discount = max(original_amount - Decimal("0.01"), Decimal("0.00"))
-    discount_amount = min(UPGRADE_DISCOUNT_AMOUNT, max_discount)
+    discount_amount = min(discount_amount, max_discount)
     final_amount = original_amount - discount_amount
     return PurchasePricing(
         original_amount=original_amount,
         final_amount=final_amount,
         discount_amount=discount_amount,
-        discount_label=UPGRADE_DISCOUNT_LABEL if discount_amount > 0 else "",
+        discount_label=" + ".join(discount_labels) if discount_amount > 0 else "",
         is_discounted=discount_amount > 0,
     )

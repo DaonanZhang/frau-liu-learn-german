@@ -4,33 +4,27 @@ import "./ExamPreparationListeningPage.css";
 const LISTENING_TYPES = [
   {
     key: "short-text-prep",
-    title: "短篇听力",
-    label: "先读题，再听录音",
+    title: "Teil 1",
     description:
       "适合先看题目再进入听力的练习方式。你可以先整理关键信息，再通过录音判断内容是否正确，帮助自己建立更稳定的听题节奏。",
     to: "/modules/exam-preparation/hoeren/short-text-prep",
     cta: "进入这一题型",
-    focus: "信息预判",
   },
   {
     key: "short-text-once",
-    title: "短篇听力",
-    label: "直接听音作答",
+    title: "Teil 2",
     description:
       "更接近正式考试中的即时反应训练。你需要一边听，一边快速抓住重点并完成判断，适合强化第一遍获取信息的能力。",
     to: "/modules/exam-preparation/hoeren/short-text-once",
     cta: "进入这一题型",
-    focus: "快速判断",
   },
   {
     key: "dialog-twice",
-    title: "对话听力",
-    label: "完整对话，双遍训练",
+    title: "Teil 3",
     description:
       "围绕较长对话展开，更适合训练连续理解、人物关系和细节捕捉。通过完整听对话并集中作答，可以提升整体听力稳定性。",
     to: "/modules/exam-preparation/hoeren/dialog-twice",
     cta: "进入这一题型",
-    focus: "连续理解",
   },
 ];
 
@@ -62,11 +56,7 @@ export default function ExamPreparationListeningPage() {
         {LISTENING_TYPES.map((item) => (
           <Link key={item.key} to={item.to} className="exam-listening-type exam-listening-type--link">
             <div className="exam-listening-type__top">
-              <div className="exam-listening-type__meta">
-                <span className="exam-listening-type__mono">{item.title}</span>
-                <span className="exam-listening-type__focus">{item.focus}</span>
-              </div>
-              <h2 className="exam-listening-type__title">{item.label}</h2>
+              <h2 className="exam-listening-type__title">{item.title}</h2>
             </div>
             <p className="exam-listening-type__description">{item.description}</p>
             <div className="exam-listening-type__bottom">

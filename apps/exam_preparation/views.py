@@ -44,6 +44,7 @@ from apps.exam_preparation.models import (
     UserReadingUnderstandingQuestionState,
     UserWritingExampleTextState,
     UserWritingExerciseState,
+    UserSpeakingTurnState,
     WritingExampleText,
     WritingExercise,
 )
@@ -83,6 +84,7 @@ from apps.exam_preparation.serializers import (
     UserReadingUnderstandingQuestionStateSerializer,
     UserWritingExampleTextStateSerializer,
     UserWritingExerciseStateSerializer,
+    UserSpeakingTurnStateSerializer,
     WritingExampleTextSerializer,
     WritingExerciseDetailSerializer,
     WritingExerciseSerializer,
@@ -117,6 +119,7 @@ class BaseExamPreparationViewSet(ModelViewSet):
 class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
     permission_classes = [IsAuthenticated]
     state_lookup_field = ""
+    state_lookup_fields = ()
     ordering = ["-updated_at", "id"]
 
     def get_queryset(self):
@@ -144,17 +147,17 @@ class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         validated_data = self._apply_answer_timestamp(dict(serializer.validated_data))
-        lookup_field = self.state_lookup_field
-        target_object = validated_data[lookup_field]
+        lookup_fields = self.state_lookup_fields or (self.state_lookup_field,)
+        target_object = validated_data[lookup_fields[0]]
         self._ensure_target_access(target_object)
         defaults = {
             key: value
             for key, value in validated_data.items()
-            if key != lookup_field
+            if key not in lookup_fields
         }
         instance, created = self.get_queryset().update_or_create(
             user=request.user,
-            **{lookup_field: target_object},
+            **{field: validated_data[field] for field in lookup_fields},
             defaults=defaults,
         )
         output_serializer = self.get_serializer(instance)
@@ -728,6 +731,40 @@ class FavoriteQuestionViewSet(ViewSet):
             )
             items.append(payload)
 
+        speaking_turn_states = UserSpeakingTurnState.objects.filter(
+            user=user,
+            is_favorited=True,
+        ).select_related("exercise__exercise_base")
+        for state in speaking_turn_states:
+            exercise = state.exercise
+            exercise_base = exercise.exercise_base
+            content = exercise.content or {}
+            all_turns = content.get("dialogue") or []
+            turn = next(
+                (
+                    item for item in all_turns
+                    if str(item.get("sequence")) == str(state.turn_key).split(":")[-1]
+                ),
+                {},
+            )
+            teil = str(content.get("teil") or "1")
+            payload = self._base_payload(
+                state,
+                exercise_base,
+                state_type="speaking_turn",
+                target_field="exercise",
+                target_id=exercise.pk,
+                exercise_id=exercise.pk,
+                href=f"/modules/exam-preparation/sprechen/teil-{teil}/{exercise.pk}",
+            )
+            payload["turn_key"] = state.turn_key
+            payload.update(
+                question_label=f"口语对话 · {turn.get('role') or 'TN'}",
+                question_text=self._preview_text(turn.get("text")),
+                context_text="跟读并练习这句对话。",
+            )
+            items.append(payload)
+
         items.sort(key=lambda item: item["updated_at"], reverse=True)
         return Response({"count": len(items), "results": items})
 
@@ -878,3 +915,14 @@ class UserWritingExampleTextStateViewSet(BaseUserExerciseStateViewSet):
         "example_text__writing_exercise__exercise_base__title",
     ]
     ordering_fields = ["id", "created_at", "updated_at"]
+
+
+class UserSpeakingTurnStateViewSet(BaseUserExerciseStateViewSet):
+    queryset = UserSpeakingTurnState.objects.select_related(
+        "user", "exercise", "exercise__exercise_base"
+    ).all()
+    serializer_class = UserSpeakingTurnStateSerializer
+    state_lookup_fields = ("exercise", "turn_key")
+    filterset_fields = ["exercise", "turn_key", "is_favorited", "is_correct"]
+    search_fields = ["turn_key", "exercise__exercise_base__external_id", "exercise__exercise_base__title"]
+    ordering_fields = ["id", "last_answered_at", "created_at", "updated_at"]

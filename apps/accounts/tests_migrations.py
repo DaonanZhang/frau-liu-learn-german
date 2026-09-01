@@ -9,9 +9,6 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 from django.utils import timezone
 
-from apps.accounts.models import ActivationCodeRecord
-
-
 class ActivationCodeLedgerMigrationTests(TransactionTestCase):
     common_parent = ("accounts", "0012_purchaseoffer_paymentgranttask_offer")
     migrate_from = ("accounts", "0016_seed_exam_preparation_offers")
@@ -24,11 +21,14 @@ class ActivationCodeLedgerMigrationTests(TransactionTestCase):
 
     def tearDown(self) -> None:
         MigrationExecutor(connection).migrate(
-            [("accounts", "0018_update_exam_preparation_offer_copy")]
+            [("accounts", "0019_activation_code_remark_ciphertext")]
         )
         super().tearDown()
 
     def test_reverse_is_blocked_when_it_would_make_ledger_data_unusable(self) -> None:
+        executor = MigrationExecutor(connection)
+        historical_apps = executor.loader.project_state([self.migrate_to]).apps
+        ActivationCodeRecord = historical_apps.get_model("accounts", "ActivationCodeRecord")
         record = ActivationCodeRecord.objects.create(
             code_hash="a" * 64,
             payload={"entitlements": []},
@@ -36,7 +36,6 @@ class ActivationCodeLedgerMigrationTests(TransactionTestCase):
             expires_at=timezone.now() + timedelta(hours=1),
         )
 
-        executor = MigrationExecutor(connection)
         with self.assertRaises(IrreversibleError):
             executor.migrate([self.migrate_from, self.legacy_parent])
 

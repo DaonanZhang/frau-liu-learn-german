@@ -90,6 +90,13 @@
   font-weight: 700;
 }
 
+.reading-title-hero__badge--exam-type {
+  min-height: 2.7rem;
+  padding: 0.58rem 1.05rem;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
 .reading-title-hero__badge--real {
   background: rgba(207, 99, 39, 0.12);
   border-color: rgba(207, 99, 39, 0.24);

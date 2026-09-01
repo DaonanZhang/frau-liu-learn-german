@@ -5,29 +5,23 @@ const SPEAKING_TYPES = [
   {
     key: "teil1",
     title: "Teil 1",
-    label: "Einander kennenlernen",
     description: "围绕姓名、 Herkunft、居住、家庭、学习德语、职业和语言等信息与搭档互相了解。",
     to: "/modules/exam-preparation/sprechen/teil-1",
     cta: "进入这一题型",
-    focus: "表达衔接",
   },
   {
     key: "teil2",
     title: "Teil 2",
-    label: "Über ein Thema sprechen",
     description: "先复述自己的文章内容，再介绍搭档的相反观点，最后交换意见并谈个人经验。",
     to: "/modules/exam-preparation/sprechen/teil-2",
     cta: "进入这一题型",
-    focus: "组织表达",
   },
   {
     key: "teil3",
     title: "Teil 3",
-    label: "Gemeinsam etwas planen",
     description: "和搭档交换想法、讨论任务安排，最终就时间、地点、费用和分工等事项达成一致。",
     to: "/modules/exam-preparation/sprechen/teil-3",
     cta: "进入这一题型",
-    focus: "协商计划",
   },
 ];
 
@@ -59,11 +53,7 @@ export default function ExamPreparationSpeakingPage() {
         {SPEAKING_TYPES.map((item) => (
           <Link key={item.key} to={item.to} className="exam-speaking-type exam-speaking-type--link">
             <div className="exam-speaking-type__top">
-              <div className="exam-speaking-type__meta">
-                <span className="exam-speaking-type__mono">{item.title}</span>
-                <span className="exam-speaking-type__focus">{item.focus}</span>
-              </div>
-              <h2 className="exam-speaking-type__title">{item.label}</h2>
+              <h2 className="exam-speaking-type__title">{item.title}</h2>
             </div>
             <p className="exam-speaking-type__description">{item.description}</p>
             <div className="exam-speaking-type__bottom">

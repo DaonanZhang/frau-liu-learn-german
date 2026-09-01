@@ -83,3 +83,9 @@ export const fetchWritingExampleTextStates = (exerciseId) =>
 
 export const saveWritingExampleTextState = (payload) =>
   saveState("user-writing-example-text-states", payload);
+
+export const fetchSpeakingTurnStates = (exerciseId) =>
+  fetchStateList("user-speaking-turn-states", { exercise: exerciseId });
+
+export const saveSpeakingTurnState = (payload) =>
+  saveState("user-speaking-turn-states", payload);

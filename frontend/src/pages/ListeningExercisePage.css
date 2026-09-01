@@ -97,6 +97,13 @@
   font-weight: 700;
 }
 
+.listening-exercise-hero__badge--exam-type {
+  min-height: 2.7rem;
+  padding: 0.58rem 1.05rem;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
 .listening-exercise-hero__badge--real {
   background: rgba(207, 99, 39, 0.12);
   border-color: rgba(207, 99, 39, 0.24);
@@ -170,7 +177,7 @@
 
 .listening-exercise-controls {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.9rem;
   align-items: end;
 }
@@ -193,7 +200,7 @@
 
 .listening-exercise-control-btn,
 .listening-exercise-check-btn {
-  background: #cf6327;
+  background: #2f7d62;
   color: #ffffff;
 }
 

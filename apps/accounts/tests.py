@@ -29,6 +29,7 @@ from apps.accounts.services.activation_codes import (
     store_activation_code,
     verify_activation_code,
     activation_code_hash,
+    decrypt_activation_code,
 )
 from apps.accounts.services.email_service import send_password_reset_email
 from apps.accounts.services.password_reset_codes import verify_password_reset_code
@@ -300,7 +301,32 @@ class ActivationCodeApiTests(APITestCase):
         )
 
         self.assertFalse(hasattr(record, "code"))
+        self.assertEqual(decrypt_activation_code(record.code_ciphertext), "TRACK001")
         self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
+
+    def test_activation_code_remark_is_kept_in_redis_payload_and_durable_record(self) -> None:
+        payload = ActivationPayload(
+            entitlements=[
+                ActivationEntitlementItem(
+                    module_key="learning_by_video",
+                    plan=ActivationPlan.LIFETIME,
+                    season_number=1,
+                )
+            ],
+            remark="2026 秋季渠道 A",
+        )
+        store_activation_code(code="REMARK01", payload=payload)
+
+        verified = verify_activation_code("REMARK01")
+        record = ActivationCodeRecord.objects.get(code_hash=activation_code_hash("REMARK01"))
+        self.assertEqual(verified.remark, "2026 秋季渠道 A")
+        self.assertEqual(record.remark, "2026 秋季渠道 A")
+
+        apply_activation_code_for_user(user=self.user, code="REMARK01")
+        record.refresh_from_db()
+        self.assertEqual(record.consumed_by_user, self.user)
+        self.assertIsNotNone(record.consumed_at)
+        self.assertEqual(decrypt_activation_code(record.code_ciphertext), "REMARK01")
 
     def test_compatible_consume_service_marks_hash_record(self) -> None:
         self._store_code("CONSUME1", season_number=1)

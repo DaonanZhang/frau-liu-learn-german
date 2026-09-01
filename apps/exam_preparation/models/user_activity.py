@@ -262,3 +262,26 @@ class UserWritingExampleTextState(BaseUserExerciseState):
                 name="exam_prep_user_write_example_state_uq",
             )
         ]
+
+
+class UserSpeakingTurnState(BaseUserExerciseState):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="exam_preparation_speaking_turn_states",
+    )
+    exercise = models.ForeignKey(
+        "exam_preparation.SpeakingTeilExercise",
+        on_delete=models.CASCADE,
+        related_name="user_turn_states",
+    )
+    turn_key = models.CharField(max_length=80)
+
+    class Meta:
+        ordering = ["-updated_at", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "exercise", "turn_key"],
+                name="exam_prep_user_speak_turn_state_uq",
+            )
+        ]

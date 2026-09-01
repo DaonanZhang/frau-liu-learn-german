@@ -15,6 +15,8 @@ class ActivationCodeRecord(models.Model):
         REVOKED = "revoked", "Revoked"
 
     code_hash = models.CharField(max_length=64, unique=True)
+    code_ciphertext = models.TextField(blank=True, default="")
+    remark = models.CharField(max_length=255, blank=True, default="")
     payload = models.JSONField(default=dict)
     status = models.CharField(
         max_length=16,

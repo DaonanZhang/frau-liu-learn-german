@@ -36,6 +36,7 @@ from apps.exam_preparation.models import (
     UserReadingUnderstandingQuestionState,
     UserWritingExampleTextState,
     UserWritingExerciseState,
+    UserSpeakingTurnState,
     WritingExampleText,
     WritingExercise,
 )
@@ -44,12 +45,15 @@ from apps.exam_preparation.models import (
 class TrialAwareExerciseSerializerMixin:
     locked_content_fields = ()
 
-    def get_is_locked(self, exercise):
+    def _has_full_access(self):
         request = self.context.get("request")
         user = getattr(request, "user", None)
         if "has_full_exam_preparation_access" not in self.context:
             self.context["has_full_exam_preparation_access"] = user_has_full_exam_preparation_access(user)
-        if self.context["has_full_exam_preparation_access"]:
+        return self.context["has_full_exam_preparation_access"]
+
+    def get_is_locked(self, exercise):
+        if self._has_full_access():
             return False
 
         exercise_type = exercise.exercise_base.exercise_type
@@ -64,6 +68,9 @@ class TrialAwareExerciseSerializerMixin:
                 .values_list("id", flat=True)[:FREE_EXERCISES_PER_TYPE]
             )
         return exercise.pk not in free_ids_by_type[cache_key]
+
+    def get_show_free_trial_badge(self, exercise):
+        return not self._has_full_access() and not self.get_is_locked(exercise)
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -88,6 +95,7 @@ class ExerciseBaseSerializer(serializers.ModelSerializer):
 
 class ListeningExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
     is_locked = serializers.SerializerMethodField()
+    show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
     locked_content_fields = ("audio_file_identifier", "audio_file_url", "script")
 
@@ -96,6 +104,7 @@ class ListeningExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers
         fields = [
             "id",
             "is_locked",
+            "show_free_trial_badge",
             "exercise_base",
             "listening_type",
             "audio_file_identifier",
@@ -176,6 +185,7 @@ class ListeningExerciseDetailSerializer(serializers.ModelSerializer):
 
 class ReadingTitleMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
     is_locked = serializers.SerializerMethodField()
+    show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
     locked_content_fields = ("instruction",)
 
@@ -184,6 +194,7 @@ class ReadingTitleMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, 
         fields = [
             "id",
             "is_locked",
+            "show_free_trial_badge",
             "exercise_base",
             "instruction",
             "created_at",
@@ -244,6 +255,7 @@ class ReadingTitleMatchingExerciseDetailSerializer(serializers.ModelSerializer):
 
 class ReadingUnderstandingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
     is_locked = serializers.SerializerMethodField()
+    show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
     locked_content_fields = ("text_markdown",)
 
@@ -252,6 +264,7 @@ class ReadingUnderstandingExerciseSerializer(TrialAwareExerciseSerializerMixin, 
         fields = [
             "id",
             "is_locked",
+            "show_free_trial_badge",
             "exercise_base",
             "text_markdown",
             "created_at",
@@ -325,6 +338,7 @@ class ReadingUnderstandingExerciseDetailSerializer(serializers.ModelSerializer):
 
 class ReadingAdMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
     is_locked = serializers.SerializerMethodField()
+    show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
     locked_content_fields = ("instruction",)
 
@@ -333,6 +347,7 @@ class ReadingAdMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, ser
         fields = [
             "id",
             "is_locked",
+            "show_free_trial_badge",
             "exercise_base",
             "instruction",
             "created_at",
@@ -408,6 +423,7 @@ class ReadingAdMatchingExerciseDetailSerializer(serializers.ModelSerializer):
 
 class ClozeChoiceExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
     is_locked = serializers.SerializerMethodField()
+    show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
     locked_content_fields = ("content_with_placeholders", "original_source_text")
 
@@ -416,6 +432,7 @@ class ClozeChoiceExerciseSerializer(TrialAwareExerciseSerializerMixin, serialize
         fields = [
             "id",
             "is_locked",
+            "show_free_trial_badge",
             "exercise_base",
             "content_with_placeholders",
             "original_source_text",
@@ -491,6 +508,7 @@ class ClozeChoiceExerciseDetailSerializer(serializers.ModelSerializer):
 
 class ClozeMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
     is_locked = serializers.SerializerMethodField()
+    show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
     locked_content_fields = ("content_with_placeholders", "original_source_text")
 
@@ -499,6 +517,7 @@ class ClozeMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, seriali
         fields = [
             "id",
             "is_locked",
+            "show_free_trial_badge",
             "exercise_base",
             "content_with_placeholders",
             "original_source_text",
@@ -576,6 +595,7 @@ class ClozeMatchingExerciseDetailSerializer(serializers.ModelSerializer):
 
 class WritingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
     is_locked = serializers.SerializerMethodField()
+    show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
     locked_content_fields = ("request_text", "task_text")
 
@@ -584,6 +604,7 @@ class WritingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.M
         fields = [
             "id",
             "is_locked",
+            "show_free_trial_badge",
             "exercise_base",
             "request_text",
             "time_limit_minutes",
@@ -639,12 +660,22 @@ class WritingExerciseDetailSerializer(serializers.ModelSerializer):
 
 class SpeakingTeilExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):
     is_locked = serializers.SerializerMethodField()
+    show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
     locked_content_fields = ("instruction", "content")
 
     class Meta:
         model = SpeakingTeilExercise
-        fields = ["id", "is_locked", "exercise_base", "instruction", "content", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "is_locked",
+            "show_free_trial_badge",
+            "exercise_base",
+            "instruction",
+            "content",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = fields
 
 
@@ -707,5 +738,12 @@ class UserWritingExerciseStateSerializer(serializers.ModelSerializer):
 class UserWritingExampleTextStateSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserWritingExampleTextState
+        fields = "__all__"
+        read_only_fields = ["id", "user", "created_at", "updated_at"]
+
+
+class UserSpeakingTurnStateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSpeakingTurnState
         fields = "__all__"
         read_only_fields = ["id", "user", "created_at", "updated_at"]

@@ -314,8 +314,9 @@ export default function ClozeMatchingPage() {
 
         <section className="cloze-hero">
           <h1 className="cloze-hero__title">{heroTitle}</h1>
-          {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="cloze-hero__badges">
+              {exercise?.exercise_base?.exam_type ? <span className="cloze-hero__badge cloze-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
               {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="cloze-hero__badge">
                   难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
@@ -466,7 +467,7 @@ export default function ClozeMatchingPage() {
                           </button>
                         ) : (
                           <span className="cloze-drop-slot__placeholder">
-                            Lücke {blank?.blank_number || ""}
+                            {blank?.blank_number || ""}
                           </span>
                         )}
                       </span>
@@ -507,7 +508,7 @@ export default function ClozeMatchingPage() {
                   ].join(" ")}
                 >
                   <div className="cloze-feedback-card__header">
-                    <strong>Lücke {blank.blank_number}</strong>
+                    <strong>{blank.blank_number}</strong>
                     <ExerciseFavoriteButton
                       isFavorited={Boolean(favoritedByBlankId[blank.id])}
                       pending={Boolean(favoritePendingByBlankId[blank.id])}

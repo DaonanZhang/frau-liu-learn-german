@@ -122,38 +122,11 @@
   gap: 0.55rem;
 }
 
-.exam-speaking-type__meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.exam-speaking-type__mono {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.9rem;
-  padding: 0.32rem 0.68rem;
-  border-radius: 999px;
-  background: #fff8ee;
-  border: 1px solid #efd8b9;
-  color: #7b5b2f;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.exam-speaking-type__focus {
-  color: #6c7b8c;
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
 .exam-speaking-type__title {
   margin: 0;
   color: #2d2925;
-  font-size: clamp(1.45rem, 2vw, 1.72rem);
-  line-height: 1.15;
+  font-size: clamp(2rem, 4vw, 2.65rem);
+  line-height: 1.05;
 }
 
 .exam-speaking-type__description {

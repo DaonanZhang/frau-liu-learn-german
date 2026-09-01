@@ -5,7 +5,7 @@ import json
 from django.core.management.base import BaseCommand
 
 from apps.accounts.models import ActivationCodeRecord
-from apps.accounts.services.activation_codes import activation_code_hash
+from apps.accounts.services.activation_codes import activation_code_hash, decrypt_activation_code
 
 
 class Command(BaseCommand):
@@ -18,6 +18,11 @@ class Command(BaseCommand):
             type=str,
             choices=[choice for choice, _ in ActivationCodeRecord.Status.choices],
             help="Filter by persisted status",
+        )
+        parser.add_argument(
+            "--show-code",
+            action="store_true",
+            help="Decrypt and print the original code for authorized operational review",
         )
         parser.add_argument(
             "--limit",
@@ -53,9 +58,12 @@ class Command(BaseCommand):
                 if record.consumed_by_user_id
                 else "-"
             )
+            code_label = decrypt_activation_code(record.code_ciphertext) if options["show_code"] else "[hidden]"
             self.stdout.write(
                 (
+                    f"code={code_label} "
                     f"code_hash={record.code_hash} "
+                    f"remark={record.remark or '-'} "
                     f"status={record.status} "
                     f"created_at={record.created_at.isoformat()} "
                     f"expires_at={record.expires_at.isoformat()} "

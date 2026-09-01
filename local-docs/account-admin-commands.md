@@ -10,7 +10,7 @@ All commands assume project root as current directory.
 - `plan="lifetime"` means permanent access and maps to `expires_at=None`.
 - Season-scoped entitlement requires both `module` and `season_number`.
 - Module-wide entitlement applies to all seasons of that module when `season=None`.
-- Activation codes are stored in cache/Redis and currently default to 720-day TTL.
+- Active activation codes are stored in Redis and in a durable database ledger. The original code is encrypted at rest; remarks, consumer, and consumption time remain available after redemption.
 - For operator runs, prefer printing codes directly to terminal on the server instead of writing files.
 
 ## Check User By Telephone
@@ -235,9 +235,15 @@ the user's current latest expiry instead of replacing it. A day is an exact
 24-hour access period.
 
 ```bash
-.venv/bin/python manage.py generate_exam_preparation_codes --days 30 --count 10
-.venv/bin/python manage.py generate_exam_preparation_codes --days 60 --count 10
-.venv/bin/python manage.py generate_exam_preparation_codes --days 90 --count 10
+.venv/bin/python manage.py generate_exam_preparation_codes --days 30 --count 10 --remark "渠道/批次备注"
+.venv/bin/python manage.py generate_exam_preparation_codes --days 60 --count 10 --remark "渠道/批次备注"
+.venv/bin/python manage.py generate_exam_preparation_codes --days 90 --count 10 --remark "渠道/批次备注"
+```
+
+Inspect the durable redemption ledger. Omit `--show-code` to keep original codes hidden:
+
+```bash
+.venv/bin/python manage.py list_activation_codes --status consumed --show-code
 ```
 
 Supported durations are exactly `30`, `60`, and `90` days.

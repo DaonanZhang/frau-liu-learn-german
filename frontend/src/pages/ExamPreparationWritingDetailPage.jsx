@@ -15,6 +15,14 @@ import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ExamPreparationWritingDetailPage.css";
 
+function renderHyphenLineBreaks(text, fallback) {
+  return String(text || fallback).split("-").map((part, index) => (
+    <span key={`${index}-${part}`}>
+      {index > 0 ? <><br />-</> : null}{part}
+    </span>
+  ));
+}
+
 function formatTime(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -299,8 +307,9 @@ export default function ExamPreparationWritingDetailPage() {
 
         <section className="writing-detail-hero">
           <h1 className="writing-detail-hero__title">{heroTitle}</h1>
-          {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="writing-detail-hero__badges">
+              {exercise?.exercise_base?.exam_type ? <span className="writing-detail-hero__badge writing-detail-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
               {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="writing-detail-hero__badge">
                   难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
@@ -325,7 +334,7 @@ export default function ExamPreparationWritingDetailPage() {
           ].filter(Boolean).join(" ")}
         >
           <h2>Anleitung</h2>
-          <p>{exercise?.request_text || "请阅读题目要求并完成写作。"}</p>
+          <p>{renderHyphenLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}</p>
         </section>
 
         <section className="writing-detail-meta-panel">
@@ -369,7 +378,7 @@ export default function ExamPreparationWritingDetailPage() {
             ].filter(Boolean).join(" ")}
           >
             <h2>写作要求</h2>
-            <p>{exercise?.task_text || "请根据题目要求完成写作。"}</p>
+            <p>{renderHyphenLineBreaks(exercise?.task_text, "请根据题目要求完成写作。")}</p>
           </article>
 
           <article

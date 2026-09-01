@@ -25,6 +25,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--days", type=int, choices=PLAN_BY_DAYS, required=True)
         parser.add_argument("--count", type=int, default=1)
+        parser.add_argument("--remark", type=str, default="")
 
     def handle(self, *args, **options):
         days = options["days"]
@@ -40,7 +41,8 @@ class Command(BaseCommand):
                     plan=PLAN_BY_DAYS[days],
                     season_number=None,
                 )
-            ]
+            ],
+            remark=options["remark"].strip(),
         )
 
         codes = []

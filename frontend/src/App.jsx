@@ -103,7 +103,7 @@ const router = createBrowserRouter([
             backTo="/modules/exam-preparation/sprachbausteine"
             backLabel="← Zurück zu Sprachbausteine"
             eyebrow="Sprachbausteine"
-            title="Lückentext mit Einzeloptionen"
+            title="Teil 1"
             description="Wähle eine konkrete Aufgabe aus und trainiere jede Lücke einzeln mit den dazugehörigen Antwortmöglichkeiten."
             tags={["Lücken einzeln lösen", "Wortschatz und Grammatik", "Gezieltes Üben"]}
             fetchExercises={fetchClozeChoiceExercises}
@@ -124,7 +124,7 @@ const router = createBrowserRouter([
             backTo="/modules/exam-preparation/sprachbausteine"
             backLabel="← Zurück zu Sprachbausteine"
             eyebrow="Sprachbausteine"
-            title="Lückentext mit gemeinsamem Pool"
+            title="Teil 2"
             description="Wähle eine Aufgabe aus und bearbeite einen Lückentext mit gemeinsamem Antwortpool, wie in der eigentlichen Prüfungssituation."
             tags={["Gemeinsamer Pool", "Kontext beachten", "Prüfungsnahes Training"]}
             fetchExercises={fetchClozeMatchingExercises}
@@ -145,7 +145,7 @@ const router = createBrowserRouter([
             backTo="/modules/exam-preparation/hoeren"
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
-            title="Kurze Texte mit Vorbereitungszeit"
+            title="Teil 1"
             description="Wähle eine konkrete Hörübung aus. Vor dem Hören kannst du die Aufgaben lesen und dich gezielt auf die Aussagen vorbereiten."
             tags={["Vorbereitungszeit", "Kurze Hörtexte", "Richtig oder falsch"]}
             fetchExercises={() => fetchListeningExercises("short_text_true_false_with_prep")}
@@ -160,7 +160,6 @@ const router = createBrowserRouter([
         element: (
           <ListeningExercisePage
             listeningType="short_text_true_false_with_prep"
-            eyebrow="LISTENING_SHORT_TEXT_PREP"
             backTo="/modules/exam-preparation/hoeren/short-text-prep"
           />
         ),
@@ -172,7 +171,7 @@ const router = createBrowserRouter([
             backTo="/modules/exam-preparation/hoeren"
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
-            title="Kurze Texte einmal hören"
+            title="Teil 2"
             description="Wähle eine Hörübung aus und trainiere das unmittelbare Verstehen ohne zusätzliche Vorbereitungsphase."
             tags={["Direkt hören", "Schnell reagieren", "Kurztexte"]}
             fetchExercises={() => fetchListeningExercises("short_text_true_false_once")}
@@ -187,7 +186,6 @@ const router = createBrowserRouter([
         element: (
           <ListeningExercisePage
             listeningType="short_text_true_false_once"
-            eyebrow="LISTENING_SHORT_TEXT_ONCE"
             backTo="/modules/exam-preparation/hoeren/short-text-once"
           />
         ),
@@ -199,7 +197,7 @@ const router = createBrowserRouter([
             backTo="/modules/exam-preparation/hoeren"
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
-            title="Gespräch zweimal hören"
+            title="Teil 3"
             description="Wähle eine Dialogübung aus und trainiere das Verstehen längerer Gespräche mit zwei Hördurchgängen."
             tags={["Dialoge", "Zweimal hören", "Details verstehen"]}
             fetchExercises={() => fetchListeningExercises("dialog_true_false_twice")}
@@ -214,7 +212,6 @@ const router = createBrowserRouter([
         element: (
           <ListeningExercisePage
             listeningType="dialog_true_false_twice"
-            eyebrow="LISTENING_DIALOG_TWICE"
             backTo="/modules/exam-preparation/hoeren/dialog-twice"
           />
         ),
@@ -227,7 +224,7 @@ const router = createBrowserRouter([
             backTo="/modules/exam-preparation/lesen"
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
-            title="Titel zuordnen"
+            title="Teil 1"
             description="Wähle eine Aufgabe aus und ordne mehreren Textabschnitten die passende Überschrift zu."
             tags={["Hauptaussage erkennen", "Titel zuordnen", "Lesetraining"]}
             fetchExercises={fetchReadingTitleMatchingExercises}
@@ -248,7 +245,7 @@ const router = createBrowserRouter([
             backTo="/modules/exam-preparation/lesen"
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
-            title="Leseverstehen"
+            title="Teil 2"
             description="Wähle eine Aufgabe aus und bearbeite Fragen zu einem zusammenhängenden Lesetext."
             tags={["Text verstehen", "Fragen beantworten", "Details erfassen"]}
             fetchExercises={fetchReadingUnderstandingExercises}
@@ -266,7 +263,7 @@ const router = createBrowserRouter([
             backTo="/modules/exam-preparation/lesen"
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
-            title="Anzeige zuordnen"
+            title="Teil 3"
             description="Wähle eine Aufgabe aus und finde zu jeder Situation die passende Anzeige."
             tags={["Situationen vergleichen", "Passende Anzeige finden", "Informationen abgleichen"]}
             fetchExercises={fetchReadingAdMatchingExercises}
@@ -287,8 +284,8 @@ const router = createBrowserRouter([
             <ExerciseSelectionPage
               backTo="/modules/exam-preparation/sprechen"
               backLabel="← Zurück zu Sprechen"
-              eyebrow={`Sprechen · Teil ${teil}`}
-              title={["Einander kennenlernen", "Über ein Thema sprechen", "Gemeinsam etwas planen"][teil - 1]}
+              eyebrow="Sprechen"
+              title={`Teil ${teil}`}
               description="Wähle eine Aufgabe aus und übe die passende telc-Sprechaufgabe."
               tags={["telc B1", "Sprechtraining", "Prüfungsvorbereitung"]}
               fetchExercises={() => fetchSpeakingTeilExercises(teil)}

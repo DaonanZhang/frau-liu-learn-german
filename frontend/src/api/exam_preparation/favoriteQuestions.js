@@ -11,6 +11,7 @@ const STATE_ENDPOINTS = {
   cloze_matching_blank: "user-cloze-matching-blank-states",
   writing_exercise: "user-writing-exercise-states",
   writing_example_text: "user-writing-example-text-states",
+  speaking_turn: "user-speaking-turn-states",
 };
 
 export function fetchFavoriteQuestions() {
@@ -30,6 +31,7 @@ export function removeFavoriteQuestion(question) {
     method: "POST",
     body: {
       [targetField]: targetId,
+      ...(question?.turn_key ? { turn_key: question.turn_key } : {}),
       is_favorited: false,
     },
   });

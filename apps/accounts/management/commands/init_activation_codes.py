@@ -21,6 +21,7 @@ class Command(BaseCommand):
             default=10,
             help="Number of activation codes to generate",
         )
+        parser.add_argument("--remark", type=str, default="")
 
     def handle(self, *args, **options):
         count = options["count"]
@@ -38,7 +39,8 @@ class Command(BaseCommand):
                         plan=ActivationPlan.LIFETIME,
                         season_number=None,
                     )
-                ]
+                ],
+                remark=options["remark"].strip(),
             )
 
             try:

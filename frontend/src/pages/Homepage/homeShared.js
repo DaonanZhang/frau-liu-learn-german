@@ -34,13 +34,13 @@ export const VLOG_SEASON_MODULE = {
   purchaseSeasonNumber: 4,
   originalPrice: 99.9,
   title: "Vlog季",
-  subtitle: "80期持续更新中",
+  subtitle: "80期已完结",
   description:
     "这是一套由符号刘博士团队独立开发的德语原创口语实战素材库。该资料专为 A2-B2 级别的德语学习者设计，通过精选80期德语母语者的生活化 Vlog 视频，带你走出课本，沉浸式掌握最鲜活、最地道的德语表达。",
   badge: "跟着视频学德语",
-  stats: ["A2-B2", "80期持续更新中", "日常口语"],
+  stats: ["A2-B2", "80期已完结", "日常口语"],
   image: "/images/2.png",
-  purchaseLabels: ["A2-B2", "80期持续更新中", "日常口语"],
+  purchaseLabels: ["A2-B2", "80期已完结", "日常口语"],
   purchaseDescription:
     "这是一套由符号刘博士团队独立开发的德语原创口语实战素材库。该资料专为 A2-B2 级别的德语学习者设计，通过精选80期德语母语者的生活化 Vlog 视频，带你走出课本，沉浸式掌握最鲜活、最地道的德语表达。",
   purchaseFeatures: [

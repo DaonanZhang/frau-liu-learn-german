@@ -24,10 +24,13 @@ from apps.accounts.services.activation_codes import (
     ActivationEntitlementItem,
     ActivationPayload,
     ActivationPlan,
+    consume_activation_code,
+    revoke_activation_code,
     store_activation_code,
     verify_activation_code,
     activation_code_hash,
 )
+from apps.accounts.services.email_service import send_password_reset_email
 from apps.accounts.services.password_reset_codes import verify_password_reset_code
 
 
@@ -81,12 +84,21 @@ class PasswordResetApiTests(APITestCase):
     def setUp(self) -> None:
         super().setUp()
         cache.clear()
+        self.email_patcher = patch(
+            "apps.accounts.security.password_reset.send_password_reset_email_async",
+            side_effect=send_password_reset_email,
+        )
+        self.email_patcher.start()
         self.user = get_user_model().objects.create_user(
             telephone="13800138000",
             country_code="+86",
             password="old-pass-123",
             email="learner@example.com",
         )
+
+    def tearDown(self) -> None:
+        self.email_patcher.stop()
+        super().tearDown()
 
     def test_request_password_reset_sends_email_and_stores_code(self) -> None:
         response = self.client.post(
@@ -101,7 +113,7 @@ class PasswordResetApiTests(APITestCase):
         self.assertIn("learner@example.com", mail.outbox[0].to)
 
         html_body = mail.outbox[0].alternatives[0][0]
-        self.assertIn("Frau Liu Learn German", html_body)
+        self.assertIn("符号刘的德语素材库", html_body)
 
         code = self._extract_code_from_html(html_body)
         self.assertTrue(
@@ -279,6 +291,57 @@ class ActivationCodeApiTests(APITestCase):
         record = ActivationCodeRecord.objects.get(code_hash=activation_code_hash("ONETIME1"))
         self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
         self.assertEqual(record.consumed_by_user_id, self.user.id)
+
+    def test_persisted_activation_code_uses_hash_instead_of_plaintext(self) -> None:
+        self._store_code("TRACK001", season_number=1)
+
+        record = ActivationCodeRecord.objects.get(
+            code_hash=activation_code_hash("TRACK001")
+        )
+
+        self.assertFalse(hasattr(record, "code"))
+        self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
+
+    def test_compatible_consume_service_marks_hash_record(self) -> None:
+        self._store_code("CONSUME1", season_number=1)
+
+        consume_activation_code("consume1", user=self.user)
+
+        record = ActivationCodeRecord.objects.get(
+            code_hash=activation_code_hash("CONSUME1")
+        )
+        self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
+        self.assertEqual(record.consumed_by_user_id, self.user.id)
+        self.assertIsNone(verify_activation_code("CONSUME1"))
+
+    def test_revoke_activation_code_command_uses_hash_lookup(self) -> None:
+        self._store_code("REVOKE01", season_number=1)
+        output = StringIO()
+
+        call_command("revoke_activation_code", "revoke01", stdout=output)
+
+        record = ActivationCodeRecord.objects.get(
+            code_hash=activation_code_hash("REVOKE01")
+        )
+        self.assertEqual(record.status, ActivationCodeRecord.Status.REVOKED)
+        self.assertIsNone(verify_activation_code("REVOKE01"))
+        self.assertIn("Revoked activation code: revoke01", output.getvalue())
+        self.assertTrue(revoke_activation_code("REVOKE01"))
+
+    def test_list_activation_codes_filters_by_plaintext_without_exposing_it(self) -> None:
+        self._store_code("LISTCODE1", season_number=1)
+        output = StringIO()
+
+        call_command(
+            "list_activation_codes",
+            code="listcode1",
+            stdout=output,
+        )
+
+        rendered = output.getvalue()
+        self.assertIn(f"code_hash={activation_code_hash('LISTCODE1')}", rendered)
+        self.assertIn("status=active", rendered)
+        self.assertNotIn("LISTCODE1", rendered)
 
     def test_redeemed_code_is_rejected_even_if_redis_value_reappears(self) -> None:
         self._store_code("LEDGER01", season_number=1)

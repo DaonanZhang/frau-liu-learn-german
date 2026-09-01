@@ -19,23 +19,31 @@ function pickErrorMessage(err, fallback) {
   return fallback;
 }
 
-function normalizeLoginErrorMessage(message) {
-  const text = String(message || "").trim();
-  if (!text) {
-    return "账号或密码输入错误。";
-  }
+function getLoginErrorPresentation(err) {
+  const errorCode = String(err?.data?.code || "").trim();
+  const errorMessage = pickErrorMessage(err, "");
 
-  const normalized = text.toLowerCase();
   if (
-    normalized.includes("no active account") ||
-    normalized.includes("unable to log in") ||
-    normalized.includes("credentials") ||
-    normalized.includes("password")
+    errorCode === "no_active_account" ||
+    errorMessage === "账号或密码输入错误。"
   ) {
-    return "账号或密码输入错误。";
+    return {
+      title: "登录失败",
+      text: "账号或密码输入错误。",
+    };
   }
 
-  return text;
+  if (errorCode === "maintenance_mode") {
+    return {
+      title: "服务器维修中",
+      text: errorMessage || "服务器正在维修，目前无法登录，请稍后再试。",
+    };
+  }
+
+  return {
+    title: "暂时无法登录",
+    text: "服务器暂时出现问题，请稍后再试。",
+  };
 }
 
 /**
@@ -77,11 +85,12 @@ export async function login(telephone, password, countryCode) {
 
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
+    const errorPresentation = getLoginErrorPresentation(err);
 
     await Swal.fire({
       icon: "error",
-      title: "登录失败",
-      text: normalizeLoginErrorMessage(pickErrorMessage(err, "账号或密码输入错误。")),
+      title: errorPresentation.title,
+      text: errorPresentation.text,
     });
 
     return { ok: false };

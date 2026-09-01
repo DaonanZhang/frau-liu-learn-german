@@ -193,6 +193,7 @@ def ensure_activation_code_table(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [
         ("accounts", "0016_seed_exam_preparation_offers"),
+        ("accounts", "0013_activationcoderecord"),
     ]
 
     operations = [

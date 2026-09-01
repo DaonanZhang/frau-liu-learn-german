@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/enable_hls_5seg.sh [input] [output_dir] [--overwrite] [--reencode] [--update-db] [--whitelist-file FILE] [--allow NAME]
+  scripts/enable_hls_5seg.sh [input] [output_dir] [--overwrite] [--reencode] [--update-db] [--upload-cos] [--cover-dir DIR] [--video-url-prefix URL] [--whitelist-file FILE] [--allow NAME]
 
 Input:
   - a single .mp4 file, or
@@ -16,11 +16,16 @@ Behavior:
   - Creates an HLS playlist (.m3u8)
   - Splits each video into ~5 segments (fMP4)
   - HLS output filenames are normalized to ASCII-safe stems
+  - COS credentials default to ~/.cos.conf (override with COS_CONFIG_PATH), or use
+    COS_SECRET_ID/COS_SECRET_KEY or TENCENTCLOUD_SECRET_ID/TENCENTCLOUD_SECRET_KEY
 
 Options:
   --overwrite            Overwrite existing outputs
   --reencode             Re-encode to H.264/AAC for maximum HLS compatibility
   --update-db            Update Video.video_url in DB to use .m3u8 under the resolved output prefix
+  --upload-cos           Upload generated HLS files and cover files to both COS buckets
+  --cover-dir DIR        Cover directory uploaded recursively with --upload-cos
+  --video-url-prefix URL Explicit URL prefix for --update-db; auto-derived when omitted
   --whitelist-file FILE  Only process mp4 names listed in FILE (one per line, supports .mp4 or stem)
   --allow NAME           Add one whitelist item (repeatable; supports .mp4 or stem)
 EOF
@@ -31,6 +36,9 @@ output_dir=""
 overwrite=0
 reencode=0
 update_db=0
+upload_cos=0
+cover_upload_dir=""
+video_url_prefix=""
 whitelist_file=""
 allow_items=()
 
@@ -47,6 +55,26 @@ while [[ $# -gt 0 ]]; do
     --update-db)
       update_db=1
       shift
+      ;;
+    --upload-cos)
+      upload_cos=1
+      shift
+      ;;
+    --cover-dir)
+      cover_upload_dir="${2:-}"
+      if [[ -z "$cover_upload_dir" ]]; then
+        echo "--cover-dir requires a directory path" >&2
+        exit 1
+      fi
+      shift 2
+      ;;
+    --video-url-prefix)
+      video_url_prefix="${2:-}"
+      if [[ -z "$video_url_prefix" ]]; then
+        echo "--video-url-prefix requires a URL prefix" >&2
+        exit 1
+      fi
+      shift 2
       ;;
     --whitelist-file)
       whitelist_file="${2:-}"
@@ -118,9 +146,42 @@ fi
 
 whitelist_enabled=0
 whitelist_keys=()
+upload_stems=()
 
 to_lower() {
   printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+normalize_hls_stem() {
+  "$PY_BIN" - "$1" <<'PY'
+import re
+import sys
+import unicodedata
+
+s = (sys.argv[1] if len(sys.argv) > 1 else "").strip()
+s = s.replace("ß", "ss").replace("ẞ", "SS")
+s = unicodedata.normalize("NFKD", s)
+s = "".join(ch for ch in s if not unicodedata.combining(ch))
+s = s.replace("?", "_").replace("#", "_").replace("%", "_")
+s = re.sub(r"\s+", "_", s)
+s = re.sub(r"[^A-Za-z0-9._-]+", "_", s)
+s = re.sub(r"_+", "_", s).strip("._")
+print(s or "media")
+PY
+}
+
+register_upload_stem() {
+  local stem="$1"
+  local existing
+  if [[ -z "$stem" ]]; then
+    return 0
+  fi
+  for existing in "${upload_stems[@]-}"; do
+    if [[ "$existing" == "$stem" ]]; then
+      return 0
+    fi
+  done
+  upload_stems+=("$stem")
 }
 
 add_whitelist_item() {
@@ -142,7 +203,7 @@ add_whitelist_item() {
     return 0
   fi
   existing=0
-  for existing_key in "${whitelist_keys[@]}"; do
+  for existing_key in "${whitelist_keys[@]-}"; do
     if [[ "$existing_key" == "$key" ]]; then
       existing=1
       break
@@ -190,22 +251,7 @@ build_hls() {
   local base out_base
   base="$(basename "$in")"
   base="${base%.*}"
-  out_base="$("$PY_BIN" - "$base" <<'PY'
-import re
-import sys
-import unicodedata
-
-s = (sys.argv[1] if len(sys.argv) > 1 else "").strip()
-s = s.replace("ß", "ss").replace("ẞ", "SS")
-s = unicodedata.normalize("NFKD", s)
-s = "".join(ch for ch in s if not unicodedata.combining(ch))
-s = s.replace("?", "_").replace("#", "_").replace("%", "_")
-s = re.sub(r"\s+", "_", s)
-s = re.sub(r"[^A-Za-z0-9._-]+", "_", s)
-s = re.sub(r"_+", "_", s).strip("._")
-print(s or "media")
-PY
-)"
+  out_base="$(normalize_hls_stem "$base")"
   if [[ "$base" != "$out_base" ]]; then
     echo "Normalized HLS stem: '$base' -> '$out_base'"
   fi
@@ -235,6 +281,205 @@ PY
     -hls_fmp4_init_filename "${out_base}-init.mp4" \
     -hls_segment_filename "$output_dir/${out_base}-%03d.m4s" \
     "$output_dir/${out_base}.m3u8"
+}
+
+upload_hls_to_cos() {
+  local repo_root="$1"
+  local output_dir_abs public_root cos_prefix file filename stem matched
+  local cover_dir_abs cover_prefix cover_relative cover_file_count encoded_key
+  local coscmd="${COSCMD_BIN:-/srv/projects/frau-liu-learn-german/cos-venv/bin/coscmd}"
+  local cos_config_path="${COS_CONFIG_PATH:-}"
+  local temp_cos_config=""
+  local secret_id="${COS_SECRET_ID:-${TENCENTCLOUD_SECRET_ID:-}}"
+  local secret_key="${COS_SECRET_KEY:-${TENCENTCLOUD_SECRET_KEY:-}}"
+
+  local cos_target_names=("Shanghai" "Frankfurt")
+  local cos_target_buckets=(
+    "${COS_SHANGHAI_BUCKET:-frauliu-1335740446}"
+    "${COS_FRANKFURT_BUCKET:-frauliu-eu-1335740446}"
+  )
+  local cos_target_regions=(
+    "${COS_SHANGHAI_REGION:-ap-shanghai}"
+    "${COS_FRANKFURT_REGION:-eu-frankfurt}"
+  )
+  local cos_target_domains=(
+    "${COS_SHANGHAI_DOMAIN:-https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com}"
+    "${COS_FRANKFURT_DOMAIN:-https://frauliu-eu-1335740446.cos.eu-frankfurt.myqcloud.com}"
+  )
+  local cos_upload_successes=0
+  local cos_upload_failures=0
+
+  if [[ ! -x "$coscmd" ]]; then
+    if command -v coscmd >/dev/null 2>&1; then
+      coscmd="$(command -v coscmd)"
+    else
+      echo "COS upload requested, but coscmd is not executable: $coscmd" >&2
+      return 1
+    fi
+  fi
+
+  if [[ -n "$secret_id" || -n "$secret_key" ]]; then
+    if [[ -z "$secret_id" || -z "$secret_key" ]]; then
+      echo "COS credentials are incomplete: set both COS_SECRET_ID/COS_SECRET_KEY or TENCENTCLOUD_SECRET_ID/TENCENTCLOUD_SECRET_KEY." >&2
+      return 1
+    fi
+    temp_cos_config="$(mktemp)"
+    chmod 600 "$temp_cos_config"
+    {
+      printf '[common]\n'
+      printf 'secret_id = %s\n' "$secret_id"
+      printf 'secret_key = %s\n' "$secret_key"
+      printf 'bucket = %s\n' "${cos_target_buckets[0]}"
+      printf 'region = %s\n' "${cos_target_regions[0]}"
+      printf 'max_thread = 5\n'
+      printf 'part_size = 1\n'
+      printf 'retry = 5\n'
+      printf 'timeout = 60\n'
+      printf 'schema = https\n'
+      printf 'verify = md5\n'
+      printf 'anonymous = False\n'
+    } > "$temp_cos_config"
+    cos_config_path="$temp_cos_config"
+    echo "COS credentials loaded from environment variables."
+  elif [[ -z "$cos_config_path" ]]; then
+    if [[ -z "${HOME:-}" ]]; then
+      echo "COS upload requested, but HOME is unset and COS_CONFIG_PATH was not provided." >&2
+      return 1
+    fi
+    cos_config_path="$HOME/.cos.conf"
+  fi
+
+  if [[ ! -f "$cos_config_path" ]]; then
+    echo "COS upload requested, but config file was not found: $cos_config_path" >&2
+    if [[ -n "$temp_cos_config" ]]; then
+      rm -f "$temp_cos_config"
+    fi
+    return 1
+  fi
+
+  output_dir_abs="$(cd "$output_dir" && pwd)"
+  public_root="$repo_root/frontend/public"
+  if [[ "$output_dir_abs" == "$public_root"/* ]]; then
+    cos_prefix="${output_dir_abs#$public_root/}"
+  else
+    cos_prefix="resources/ScienceSeason1/learning_by_video_video"
+  fi
+
+  echo "Uploading HLS files to both Tencent COS buckets: cos://$cos_prefix/"
+  echo "  Shanghai: ${cos_target_buckets[0]} (${cos_target_regions[0]})"
+  echo "  Frankfurt: ${cos_target_buckets[1]} (${cos_target_regions[1]})"
+
+  shopt -s nullglob
+
+  if [[ "${#upload_stems[@]}" -eq 0 ]]; then
+    echo "No selected HLS stems to upload."
+    if [[ -n "$temp_cos_config" ]]; then
+      rm -f "$temp_cos_config"
+    fi
+    return 0
+  fi
+
+  upload_file_to_all_cos_targets() {
+    local local_file="$1"
+    local object_key="$2"
+    local target_index target_name target_bucket target_region target_domain public_url upload_rc
+
+    for ((target_index = 0; target_index < ${#cos_target_names[@]}; target_index++)); do
+      target_name="${cos_target_names[$target_index]}"
+      target_bucket="${cos_target_buckets[$target_index]}"
+      target_region="${cos_target_regions[$target_index]}"
+      target_domain="${cos_target_domains[$target_index]}"
+
+      echo "Uploading [$target_name]: $(basename "$local_file") -> cos://$target_bucket/$object_key"
+      if "$coscmd" -c "$cos_config_path" -b "$target_bucket" -r "$target_region" upload "$local_file" "$object_key"; then
+        encoded_key="$("$PY_BIN" - "$object_key" <<'PY'
+import sys
+from urllib.parse import quote
+
+print(quote(sys.argv[1], safe="/"))
+PY
+)"
+        public_url="${target_domain%/}/${encoded_key#/}"
+        echo "Uploaded [$target_name]: $public_url"
+        cos_upload_successes=$((cos_upload_successes + 1))
+      else
+        upload_rc=$?
+        echo "COS upload failed [$target_name]: file=$local_file bucket=$target_bucket region=$target_region key=$object_key exit=$upload_rc" >&2
+        cos_upload_failures=$((cos_upload_failures + 1))
+      fi
+    done
+  }
+
+  # Upload fragments first, then publish the playlist last so clients do not see incomplete media.
+  for stem in "${upload_stems[@]}"; do
+    matched=0
+    for file in "$output_dir_abs/${stem}-init.mp4" "$output_dir_abs/${stem}-"*.m4s; do
+      if [[ -f "$file" ]]; then
+        matched=1
+        filename="$(basename "$file")"
+        upload_file_to_all_cos_targets "$file" "$cos_prefix/$filename"
+      fi
+    done
+    for file in "$output_dir_abs/${stem}.m3u8"; do
+      if [[ -f "$file" ]]; then
+        matched=1
+        filename="$(basename "$file")"
+        upload_file_to_all_cos_targets "$file" "$cos_prefix/$filename"
+      fi
+    done
+    if [[ "$matched" -eq 0 ]]; then
+      echo "No HLS output found for selected stem: $stem" >&2
+    fi
+  done
+
+  if [[ -n "$cover_upload_dir" ]]; then
+    if [[ ! -d "$cover_upload_dir" ]]; then
+      echo "Cover directory not found for COS upload: $cover_upload_dir" >&2
+      if [[ -n "$temp_cos_config" ]]; then
+        rm -f "$temp_cos_config"
+      fi
+      return 1
+    fi
+
+    cover_dir_abs="$(cd "$cover_upload_dir" && pwd)"
+    if [[ "$cover_dir_abs" == "$public_root"/* ]]; then
+      cover_prefix="${cover_dir_abs#$public_root/}"
+    else
+      cover_prefix="resources/ScienceSeason1/learning_by_video_cover_letters"
+    fi
+
+    cover_file_count=0
+    echo "Uploading cover files recursively to both Tencent COS buckets: cos://$cover_prefix/"
+    while IFS= read -r -d '' file; do
+      cover_relative="${file#$cover_dir_abs/}"
+      upload_file_to_all_cos_targets "$file" "$cover_prefix/$cover_relative"
+      cover_file_count=$((cover_file_count + 1))
+    done < <(find "$cover_dir_abs" -type f -print0)
+    echo "Cover upload scan completed: files=$cover_file_count"
+  fi
+
+  if [[ -n "$temp_cos_config" ]]; then
+    rm -f "$temp_cos_config"
+  fi
+
+  echo "COS dual-upload summary: successful=$cos_upload_successes, failed=$cos_upload_failures"
+  if [[ "$cos_upload_failures" -gt 0 ]]; then
+    echo "COS dual upload completed with errors. Each target was attempted independently; see error lines above." >&2
+  else
+    echo "COS dual upload completed successfully for Shanghai and Frankfurt."
+  fi
+}
+
+derive_output_relative_path() {
+  local repo_root="$1"
+  local output_dir_abs public_root
+  output_dir_abs="$(cd "$output_dir" && pwd)"
+  public_root="$repo_root/frontend/public"
+  if [[ "$output_dir_abs" == "$public_root"/* ]]; then
+    printf '%s' "${output_dir_abs#$public_root/}"
+  else
+    printf '%s' "resources/ScienceSeason1/learning_by_video_video"
+  fi
 }
 
 is_allowed_mp4() {
@@ -270,9 +515,11 @@ if [[ -d "$input" ]]; then
     exit 1
   fi
   processed=0
+  selected=0
   skipped=0
   failed=0
   for f in "${files[@]}"; do
+    file_base=""
     if is_hls_init_mp4 "$f"; then
       echo "Skip (HLS init file): $f"
       skipped=$((skipped + 1))
@@ -283,6 +530,10 @@ if [[ -d "$input" ]]; then
       skipped=$((skipped + 1))
       continue
     fi
+    selected=$((selected + 1))
+    file_base="$(basename "$f")"
+    file_base="${file_base%.*}"
+    register_upload_stem "$(normalize_hls_stem "$file_base")"
     if build_hls "$f"; then
       processed=$((processed + 1))
     else
@@ -297,11 +548,15 @@ if [[ -d "$input" ]]; then
   done
   echo "HLS result: processed=${processed}, skipped=${skipped}, failed=${failed}"
   if [[ "$whitelist_enabled" -eq 1 ]]; then
-    echo "Whitelist result: processed=${processed}, skipped=${skipped}, failed=${failed}"
-    if [[ "$processed" -eq 0 ]]; then
+    echo "Whitelist result: selected=${selected}, processed=${processed}, skipped=${skipped}, failed=${failed}"
+    if [[ "$selected" -eq 0 ]]; then
       echo "No files matched whitelist." >&2
       exit 1
     fi
+  fi
+  if [[ "$failed" -gt 0 ]]; then
+    echo "HLS processing completed with failures: ${failed}" >&2
+    exit 1
   fi
 else
   if is_hls_init_mp4 "$input"; then
@@ -312,6 +567,9 @@ else
     echo "Input file is not in whitelist: $input" >&2
     exit 1
   fi
+  single_base="$(basename "$input")"
+  single_base="${single_base%.*}"
+  register_upload_stem "$(normalize_hls_stem "$single_base")"
   if ! build_hls "$input"; then
     rc=$?
     if [[ "$rc" -ne 2 ]]; then
@@ -334,27 +592,33 @@ if [[ "$update_db" -eq 1 ]]; then
     PY_BIN="${PYTHON_BIN:-python}"
   fi
 
-  public_root="$repo_root/frontend/public"
-  video_prefix="/resources/ScienceSeason1/learning_by_video_video/"
-  if [[ "$output_dir" == "$public_root"/* ]]; then
-    rel_path="${output_dir#$public_root/}"
-    video_prefix="/${rel_path%/}/"
+  rel_path="$(derive_output_relative_path "$repo_root")"
+  if [[ -n "$video_url_prefix" ]]; then
+    resolved_video_prefix="${video_url_prefix%/}"
+  else
+    resolved_video_prefix="/${rel_path%/}"
   fi
 
   "$PY_BIN" "$repo_root/manage.py" shell -c "from urllib.parse import urlsplit,urlunsplit;import os;from django.db import transaction;from apps.learning_by_video.models import Video
 
-VIDEO_PREFIX = '$video_prefix'
+VIDEO_PREFIX = '$resolved_video_prefix'
 
 def to_m3u8(url):
-    if not url or VIDEO_PREFIX not in url:
+    if not url:
         return url
-    p=urlsplit(url)
-    path=p.path
-    base,ext=os.path.splitext(path)
-    if path.lower().endswith('.m3u8'):
+    parsed_prefix = urlsplit(VIDEO_PREFIX)
+    current = urlsplit(url)
+    current_name = os.path.basename(current.path or '')
+    stem, _ext = os.path.splitext(current_name)
+    if not stem:
         return url
-    new_path=(base if ext else path)+'.m3u8'
-    return urlunsplit((p.scheme,p.netloc,new_path,p.query,p.fragment))
+    if parsed_prefix.scheme and parsed_prefix.netloc:
+        prefix_path = '/' + parsed_prefix.path.lstrip('/')
+        new_path = prefix_path.rstrip('/') + '/' + stem + '.m3u8'
+        return urlunsplit((parsed_prefix.scheme, parsed_prefix.netloc, new_path, '', ''))
+    prefix_path = '/' + VIDEO_PREFIX.lstrip('/')
+    new_path = prefix_path.rstrip('/') + '/' + stem + '.m3u8'
+    return urlunsplit((current.scheme, current.netloc, new_path, current.query, current.fragment))
 
 with transaction.atomic():
     qs=Video.objects.all().only('id','video_url')
@@ -367,4 +631,10 @@ with transaction.atomic():
     if updates:
         Video.objects.bulk_update(updates,['video_url'])
     print(f'updated={len(updates)} total={qs.count()}')"
+fi
+
+if [[ "$upload_cos" -eq 1 ]]; then
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  repo_root="$(cd "$script_dir/.." && pwd)"
+  upload_hls_to_cos "$repo_root"
 fi

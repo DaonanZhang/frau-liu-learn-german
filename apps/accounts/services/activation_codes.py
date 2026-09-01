@@ -163,6 +163,17 @@ def activation_code_hash(code: str) -> str:
     ).hexdigest()
 
 
+def activation_code_exists(code: str) -> bool:
+    """Return whether a normalized activation code has a persisted ledger record."""
+    normalized_code = str(code or "").strip().upper()
+    if not normalized_code:
+        return False
+    ActivationCodeRecord = apps.get_model("accounts", "ActivationCodeRecord")
+    return ActivationCodeRecord.objects.filter(
+        code_hash=activation_code_hash(normalized_code)
+    ).exists()
+
+
 @contextmanager
 def activation_code_lock(code: str):
     """Serialize redemption of one code across all application processes.
@@ -206,7 +217,11 @@ def generate_activation_code(length: int = 8) -> str:
     Generate an activation code like: A9F3KQ2M
     """
     alphabet = string.ascii_uppercase + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(length))
+    for _ in range(100):
+        code = "".join(secrets.choice(alphabet) for _ in range(length))
+        if not activation_code_exists(code):
+            return code
+    raise RuntimeError("Failed to generate a unique activation code")
 
 
 def store_activation_code(
@@ -292,14 +307,51 @@ def verify_activation_code(code: str) -> Optional[ActivationPayload]:
         return None
 
 
-def consume_activation_code(code: str) -> None:
+def consume_activation_code(code: str, *, user=None) -> None:
     """
-    Delete activation code after successful registration.
+    Persist consumption for compatible callers and remove the Redis value.
+
+    The redemption transaction normally marks the ledger first. The guarded
+    update makes this function safe to call afterwards via ``on_commit`` while
+    preserving the older public service API.
     """
+    normalized_code = str(code or "").strip().upper()
+    if not normalized_code:
+        return
+    ActivationCodeRecord = apps.get_model("accounts", "ActivationCodeRecord")
+    ActivationCodeRecord.objects.filter(
+        code_hash=activation_code_hash(normalized_code),
+        status=ActivationCodeRecord.Status.ACTIVE,
+    ).update(
+        status=ActivationCodeRecord.Status.CONSUMED,
+        consumed_at=timezone.now(),
+        consumed_by_user_id=getattr(user, "id", None),
+    )
     try:
-        cache.delete(_redis_key(code))
+        cache.delete(_redis_key(normalized_code))
     except RedisError:
         logger.warning(
             "Redeemed activation code could not be removed from Redis; the database ledger still blocks reuse",
             exc_info=True,
         )
+
+
+def revoke_activation_code(code: str) -> bool:
+    """Revoke a persisted code and remove its Redis value."""
+    normalized_code = str(code or "").strip().upper()
+    if not normalized_code:
+        return False
+    ActivationCodeRecord = apps.get_model("accounts", "ActivationCodeRecord")
+    updated = ActivationCodeRecord.objects.filter(
+        code_hash=activation_code_hash(normalized_code),
+    ).exclude(
+        status=ActivationCodeRecord.Status.CONSUMED,
+    ).update(status=ActivationCodeRecord.Status.REVOKED)
+    try:
+        cache.delete(_redis_key(normalized_code))
+    except RedisError:
+        logger.warning(
+            "Revoked activation code could not be removed from Redis; the database ledger still blocks use",
+            exc_info=True,
+        )
+    return bool(updated)

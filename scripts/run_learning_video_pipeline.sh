@@ -33,13 +33,22 @@ Options:
   --overwrite           Overwrite ffmpeg outputs when rebuilding
   --reencode            Re-encode during HLS build (enable_hls_5seg.sh --reencode)
   --keep-mov            Do NOT delete MOV source files after step 0 conversion
+  --upload-cos          Upload HLS and cover files to Shanghai and Frankfurt COS after Step 1
+  --sync-to-frankfurt   Standalone mode: sync missing Vlog video and cover legacy files only to Frankfurt COS
+  --sync-vlog-to-frankfurt
+                        Backward-compatible alias for --sync-to-frankfurt
+  --sync-resources-to-cos
+                        Standalone mode: sync all frontend/public/resources files to both COS buckets
+  --dedupe-etag         With a sync command, also skip matching single-part COS ETags
+  --video-url-prefix U  Explicit URL prefix for Step 3 video_url backfill
+  --cover-url-prefix U  Explicit URL prefix for Step 3 cover_letter_url backfill
 
   --skip-step0          Skip MOV -> MP4
   --skip-step1          Skip HLS build
   --skip-step2          Skip XLSX import
   --skip-step3          Skip URL backfill
   --skip-step4          Skip subtitle aggregate backfill
-  --dry-run             Print commands only (no execution)
+  --dry-run             Print pipeline commands only; Frankfurt sync scans but does not upload
   -h, --help            Show this help
 EOF
 }
@@ -54,10 +63,16 @@ XLSX_DIR="$DEFAULT_XLSX_DIR"
 MODULE_KEY="learning_by_video"
 SEASON_NUMBER="1"
 RESOURCE_PROFILE="$DEFAULT_RESOURCE_PROFILE"
+VIDEO_URL_PREFIX=""
+COVER_URL_PREFIX=""
 
 OVERWRITE=0
 REENCODE=0
 DELETE_MOV=1
+UPLOAD_COS=0
+SYNC_VLOG_TO_FRANKFURT=0
+SYNC_RESOURCES_TO_BOTH_COS=0
+SYNC_DEDUPE_ETAG=0
 SKIP_STEP0=0
 SKIP_STEP1=0
 SKIP_STEP2=0
@@ -102,6 +117,30 @@ while [[ $# -gt 0 ]]; do
     --keep-mov)
       DELETE_MOV=0
       shift
+      ;;
+    --upload-cos)
+      UPLOAD_COS=1
+      shift
+      ;;
+    --sync-to-frankfurt|--sync-vlog-to-frankfurt)
+      SYNC_VLOG_TO_FRANKFURT=1
+      shift
+      ;;
+    --sync-resources-to-cos)
+      SYNC_RESOURCES_TO_BOTH_COS=1
+      shift
+      ;;
+    --dedupe-etag)
+      SYNC_DEDUPE_ETAG=1
+      shift
+      ;;
+    --video-url-prefix)
+      VIDEO_URL_PREFIX="${2:-}"
+      shift 2
+      ;;
+    --cover-url-prefix)
+      COVER_URL_PREFIX="${2:-}"
+      shift 2
       ;;
     --skip-step0)
       SKIP_STEP0=1
@@ -185,10 +224,71 @@ run_cmd() {
   "$@"
 }
 
+if [[ "$SYNC_VLOG_TO_FRANKFURT" -eq 1 && "$SYNC_RESOURCES_TO_BOTH_COS" -eq 1 ]]; then
+  echo "Choose only one standalone sync mode." >&2
+  exit 1
+fi
+
+if [[ "$SYNC_VLOG_TO_FRANKFURT" -eq 1 ]]; then
+  sync_cmd=("$ROOT_DIR/scripts/sync_vlog_to_frankfurt_cos.sh")
+  if [[ "$SYNC_DEDUPE_ETAG" -eq 1 ]]; then
+    sync_cmd+=("--dedupe-etag")
+  fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    sync_cmd+=("--dry-run")
+  fi
+  printf '+'
+  for arg in "${sync_cmd[@]}"; do
+    printf ' %q' "$arg"
+  done
+  printf '\n'
+  "${sync_cmd[@]}"
+  exit $?
+fi
+
+if [[ "$SYNC_RESOURCES_TO_BOTH_COS" -eq 1 ]]; then
+  sync_cmd=("$ROOT_DIR/scripts/sync_resources_to_both_cos.sh")
+  if [[ "$SYNC_DEDUPE_ETAG" -eq 1 ]]; then
+    sync_cmd+=("--dedupe-etag")
+  fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    sync_cmd+=("--dry-run")
+  fi
+  printf '+'
+  for arg in "${sync_cmd[@]}"; do
+    printf ' %q' "$arg"
+  done
+  printf '\n'
+  "${sync_cmd[@]}"
+  exit $?
+fi
+
 count_files() {
   local dir="$1"
   local pattern="$2"
   find "$dir" -maxdepth 1 -type f -iname "$pattern" | wc -l | tr -d ' '
+}
+
+make_step1_whitelist_from_xlsx() {
+  local xlsx_dir="$1"
+  local whitelist_file="$2"
+  local found=0
+  local xlsx base
+
+  : > "$whitelist_file"
+  shopt -s nullglob
+  for xlsx in "$xlsx_dir"/*.xlsx "$xlsx_dir"/*.XLSX; do
+    if [[ -f "$xlsx" ]]; then
+      found=1
+      base="$(basename "$xlsx")"
+      base="${base%.*}"
+      printf '%s\n' "$base" >> "$whitelist_file"
+    fi
+  done
+  if [[ "$found" -eq 1 ]]; then
+    return 0
+  fi
+  return 1
 }
 
 if [[ ! -d "$VIDEO_DIR" ]]; then
@@ -231,7 +331,16 @@ echo "Cover dir: $COVER_DIR"
 echo "XLSX dir: $XLSX_DIR"
 echo "Module/Season: $MODULE_KEY / $SEASON_NUMBER"
 echo "Resource profile: $RESOURCE_PROFILE"
+echo "Upload COS: $UPLOAD_COS"
 echo "Dry run: $DRY_RUN"
+
+if [[ -n "$VIDEO_URL_PREFIX" ]]; then
+  echo "Video URL prefix: $VIDEO_URL_PREFIX"
+fi
+
+if [[ -n "$COVER_URL_PREFIX" ]]; then
+  echo "Cover URL prefix: $COVER_URL_PREFIX"
+fi
 
 # Step 0: MOV -> MP4
 if [[ "$SKIP_STEP0" -eq 1 ]]; then
@@ -258,16 +367,34 @@ if [[ "$SKIP_STEP1" -eq 1 ]]; then
   echo "Step 1 skipped."
 else
   mp4_count="$(count_files "$VIDEO_DIR" "*.mp4")"
+  xlsx_count_for_step1="$(count_files "$XLSX_DIR" "*.xlsx")"
   echo "Step 1: MP4 files found: $mp4_count"
   if [[ "$mp4_count" -gt 0 ]]; then
     cmd=("$ROOT_DIR/scripts/enable_hls_5seg.sh" "$VIDEO_DIR" "$VIDEO_DIR")
+    step1_whitelist_file=""
     if [[ "$OVERWRITE" -eq 1 ]]; then
       cmd+=("--overwrite")
     fi
     if [[ "$REENCODE" -eq 1 ]]; then
       cmd+=("--reencode")
     fi
+    if [[ "$xlsx_count_for_step1" -gt 0 ]]; then
+      step1_whitelist_file="$(mktemp)"
+      if make_step1_whitelist_from_xlsx "$XLSX_DIR" "$step1_whitelist_file"; then
+        echo "Step 1 whitelist derived from XLSX batch: $xlsx_count_for_step1 file(s)"
+        cmd+=("--whitelist-file" "$step1_whitelist_file")
+      else
+        rm -f "$step1_whitelist_file"
+        step1_whitelist_file=""
+      fi
+    fi
+    if [[ "$UPLOAD_COS" -eq 1 ]]; then
+      cmd+=("--upload-cos" "--cover-dir" "$COVER_DIR")
+    fi
     run_cmd "${cmd[@]}"
+    if [[ -n "$step1_whitelist_file" ]]; then
+      rm -f "$step1_whitelist_file"
+    fi
   else
     echo "Step 1 auto-skip: no MP4 files."
   fi
@@ -303,14 +430,21 @@ fi
 if [[ "$SKIP_STEP3" -eq 1 ]]; then
   echo "Step 3 skipped."
 else
-  run_cmd "${MANAGE_RUNNER[@]}" sync_video_media_urls \
+  cmd=("${MANAGE_RUNNER[@]}" sync_video_media_urls \
     --mode apply \
     --only-missing \
     --empty-only \
     --module-key "$MODULE_KEY" \
     --video-dir "$VIDEO_DIR" \
     --cover-dir "$COVER_DIR" \
-    --season-number "$SEASON_NUMBER"
+    --season-number "$SEASON_NUMBER")
+  if [[ -n "$VIDEO_URL_PREFIX" ]]; then
+    cmd+=("--video-url-prefix" "$VIDEO_URL_PREFIX")
+  fi
+  if [[ -n "$COVER_URL_PREFIX" ]]; then
+    cmd+=("--cover-url-prefix" "$COVER_URL_PREFIX")
+  fi
+  run_cmd "${cmd[@]}"
 fi
 
 # Step 4: aggregate subtitle text

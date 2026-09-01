@@ -26,6 +26,7 @@ Default behavior:
 - Auto-skips Step 0 if no MOV files exist.
 - Auto-skips Step 2 if no XLSX files exist.
 - Backfill runs in safe mode (`--only-missing --empty-only`) to avoid overwriting existing non-empty URLs.
+- On server, `--upload-cos` uploads every generated HLS asset plus all files under the resolved `learning_by_video_cover_letters` directory to both the Shanghai (`frauliu-1335740446`, `ap-shanghai`) and Frankfurt (`frauliu-eu-1335740446`, `eu-frankfurt`) Tencent COS buckets, but DB media URLs should still backfill to local `/resources/...` paths so nginx can proxy them later.
 
 Alternative resource buckets:
 - `frontend/public/resources/ScienceSeason1`
@@ -37,11 +38,11 @@ Each resource bucket should contain:
 
 Server run from MP4 stage:
 
-`scripts/run_learning_video_pipeline.sh --skip-step0`
+`scripts/run_learning_video_pipeline.sh --skip-step0 --upload-cos`
 
 Dry run:
 
-`scripts/run_learning_video_pipeline.sh --skip-step0 --dry-run`
+`scripts/run_learning_video_pipeline.sh --skip-step0 --upload-cos --dry-run`
 
 ## Vlog Season Runbook
 Use this when importing or updating `Vlog season` videos, which currently maps to `season_number=4` and resource bucket `VlogSeason1`.
@@ -66,10 +67,51 @@ Dry run for Step 1 to Step 4:
 
 Actual Step 1 to Step 4 run:
 
-`scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog`
+`scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --upload-cos`
+
+### Frankfurt Legacy Sync
+
+Use this standalone command to backfill Vlog files that exist locally but are missing from the Frankfurt COS bucket. It never reads or writes the Shanghai bucket.
+
+Dry run:
+
+`scripts/sync_vlog_to_frankfurt_cos.sh --dry-run`
+
+Equivalent one-stop command mode:
+
+`scripts/run_learning_video_pipeline.sh --sync-to-frankfurt --dedupe-etag --dry-run`
+
+Actual sync:
+
+`scripts/sync_vlog_to_frankfurt_cos.sh`
+
+Equivalent one-stop command mode:
+
+`scripts/run_learning_video_pipeline.sh --sync-to-frankfurt --dedupe-etag`
+
+Defaults:
+- recursively scans only `frontend/public/resources/VlogSeason1/learning_by_video_video` and `frontend/public/resources/VlogSeason1/learning_by_video_cover_letters`
+- maps local relative paths to `resources/VlogSeason1/...`
+- lists only `frauliu-eu-1335740446` in `eu-frankfurt`
+- skips keys already present in Frankfurt; optional `--dedupe-etag` also skips local MD5 values matching existing single-part ETags
+- uses the Tencent COS Python SDK high-level upload with multipart resume support and five retry attempts
+- reads credentials from `~/.cos.conf`; environment credential pairs supported by the HLS uploader are also accepted
+
+### Full Resources Dual-COS Sync
+
+Use this standalone command to compare every local file below `frontend/public/resources` with both COS buckets and upload only missing objects. Object keys preserve the `resources/...` layout. A failure in one region does not prevent the other region from running.
+
+Dry run with key and single-part ETag deduplication:
+
+`scripts/run_learning_video_pipeline.sh --sync-resources-to-cos --dedupe-etag --dry-run`
+
+Actual sync:
+
+`scripts/run_learning_video_pipeline.sh --sync-resources-to-cos --dedupe-etag`
 
 Observed successful run shape for Vlog season:
 - Step 1 slices each `mp4` into `.m3u8`, `-init.mp4`, and `.m4s` files in `frontend/public/resources/VlogSeason1/learning_by_video_video`
+- Step 1 on server additionally uploads generated HLS files and recursively uploads the configured cover directory to both COS buckets via `scripts/enable_hls_5seg.sh --upload-cos --cover-dir ...`; successful uploads print the public URL for each target, and one target failing does not prevent the other target from being attempted
 - Step 2 runs `manage.py import_xlsx_all --module-key learning_by_video --season-number 4`
 - Step 3 runs `manage.py sync_video_media_urls --mode apply --only-missing --empty-only --module-key learning_by_video --video-dir frontend/public/resources/VlogSeason1/learning_by_video_video --cover-dir frontend/public/resources/VlogSeason1/learning_by_video_cover_letters --season-number 4`
 - Step 4 runs `manage.py backfill_video_full_subtitles --only-missing --module-key learning_by_video --season-number 4`
@@ -107,6 +149,20 @@ Practical effect:
 - For `localNow` to `local_now` migrations specifically, treat `local_now` as the only correct implementation target and update all affected call sites, tests, and comparisons to match it.
 - Do not add compatibility wrappers or aliases unless the user explicitly asks for a compatibility fix.
 
+## Local Vs Server Rule
+- Local development and server operations must be treated as separate run targets.
+- Local workflow may continue using local resource paths for inspection and dry runs.
+- Server workflow should upload generated HLS assets and cover letters to both configured COS buckets after slicing, while DB media URLs continue to use local `/resources/...` paths for nginx proxying.
+- `scripts/push_learning_media.sh` is for syncing source files from local machine to server. It should not replace the server-side HLS-to-COS step.
+- When asked for a Django shell script, management command, or ops script in this project, first confirm whether the target is local or server if the task can differ by environment.
+- For server-targeted learning video tasks, explicitly consider COS upload, server paths such as `/srv/projects/frau-liu-learn-german/...`, and keep DB URL backfill aligned with the nginx proxy path strategy unless explicitly asked otherwise.
+
+## Cross-Module Media Rule
+- COS storage is not only a learning-video concern. For any future module that introduces media files, always evaluate whether the resource should be stored in COS and whether the DB/API should continue exposing nginx-proxied `/resources/...` paths instead of direct COS URLs.
+- When designing or modifying upload, slicing, sync, or backfill scripts for new modules, verify that COS object keys stay structurally aligned with the corresponding `/resources/...` URL path, including the `resources/` prefix and subdirectory layout.
+- If a module may use a non-standard output directory outside `frontend/public/resources/...`, do not silently fall back to a default COS path assumption; explicitly review and confirm the mapping strategy first.
+- Exam preparation content must follow this same rule. In particular, listening audio files must be treated as COS-backed media and their storage path, proxy path, and future upload/backfill flow must be considered whenever the exam module is changed.
+
 ## Session Progress Summary
 Completed in this round:
 
@@ -134,13 +190,13 @@ Before run:
 
 Run:
 - Recommended first pass:
-  - `scripts/run_learning_video_pipeline.sh --skip-step0 --dry-run`
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --upload-cos --dry-run`
 - Actual run:
-  - `scripts/run_learning_video_pipeline.sh --skip-step0`
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --upload-cos`
 - Vlog season dry run:
-  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --dry-run`
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --upload-cos --dry-run`
 - Vlog season actual run:
-  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog`
+  - `scripts/run_learning_video_pipeline.sh --skip-step0 --season-number 4 --resource-profile vlog --upload-cos`
 
 After run:
 - Spot check DB rows for new videos (`video_url`, `cover_letter_url`, `season`).

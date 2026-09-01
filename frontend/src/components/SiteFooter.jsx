@@ -3,6 +3,8 @@ import "./SiteFooter.css";
 
 export default function SiteFooter({ className = "" }) {
   const [isNoticeOpen, setIsNoticeOpen] = useState(false);
+  const isCnDomain =
+    typeof window !== "undefined" && window.location.hostname.toLowerCase().endsWith(".cn");
 
   useEffect(() => {
     if (!isNoticeOpen) {
@@ -47,11 +49,15 @@ export default function SiteFooter({ className = "" }) {
           |
         </span>
         <a
-          href="https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34182202342323"
+          href={
+            isCnDomain
+              ? " "
+              : "https://www.beian.gov.cn/portal/registerSystemInfo?recordcode=34182202342323"
+          }
           rel="noreferrer"
           target="_blank"
         >
-          皖公网安备34182202342323号
+          {isCnDomain ? "皖公网安备34182202342348号" : "皖公网安备34182202342323号"}
         </a>
       </div>
 

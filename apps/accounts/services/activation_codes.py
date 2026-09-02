@@ -3,20 +3,16 @@ from __future__ import annotations
 import hashlib
 import hmac
 import base64
-import logging
 import secrets
 import string
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Optional
 
 from django.apps import apps
 from django.conf import settings
-from django.core.cache import cache
 from django.db import IntegrityError
 from django.utils import timezone
-from redis.exceptions import RedisError
 from cryptography.fernet import Fernet, InvalidToken
 
 
@@ -83,7 +79,7 @@ class ActivationEntitlementItem:
 @dataclass(frozen=True)
 class ActivationPayload:
     """
-    Full payload stored in Redis for an activation code.
+    Full payload persisted for an activation code.
     """
 
     entitlements: list[ActivationEntitlementItem]
@@ -137,21 +133,10 @@ class ActivationPayload:
 
 
 # ============================
-# Redis helpers
+# Persistence helpers
 # ============================
 
 DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 720  # 720 days
-logger = logging.getLogger(__name__)
-
-
-def _redis_key(code: str) -> str:
-    return f"activation_code:{str(code or '').strip().upper()}"
-
-
-def _redis_lock_key(code: str) -> str:
-    return f"activation_code_lock:{str(code or '').strip().upper()}"
-
-
 def activation_code_hash(code: str) -> str:
     """Return the keyed normalized lookup digest for an activation code.
 
@@ -201,44 +186,6 @@ def activation_code_exists(code: str) -> bool:
     ).exists()
 
 
-@contextmanager
-def activation_code_lock(code: str):
-    """Serialize redemption of one code across all application processes.
-
-    Args:
-        code: Plaintext activation code to lock.
-
-    Yields:
-        Whether this process acquired the lock.
-    """
-
-    lock_key = _redis_lock_key(code)
-    try:
-        lock = cache.lock(lock_key, timeout=60, blocking_timeout=0)
-    except AttributeError:
-        lock = None
-
-    if lock is not None:
-        acquired = lock.acquire(blocking=False)
-        try:
-            yield acquired
-        finally:
-            if acquired:
-                try:
-                    lock.release()
-                except RedisError:
-                    logger.warning("Activation code lock expired before release", exc_info=True)
-        return
-
-    token = secrets.token_urlsafe(16)
-    acquired = cache.add(lock_key, token, timeout=60)
-    try:
-        yield acquired
-    finally:
-        if acquired and cache.get(lock_key) == token:
-            cache.delete(lock_key)
-
-
 def generate_activation_code(length: int = 8) -> str:
     """
     Generate an activation code like: A9F3KQ2M
@@ -246,7 +193,10 @@ def generate_activation_code(length: int = 8) -> str:
     alphabet = string.ascii_uppercase + string.digits
     for _ in range(100):
         code = "".join(secrets.choice(alphabet) for _ in range(length))
-        if not activation_code_exists(code):
+        PromotionCodeRecord = apps.get_model("accounts", "PromotionCodeRecord")
+        if not activation_code_exists(code) and not PromotionCodeRecord.objects.filter(
+            code_hash=activation_code_hash(code)
+        ).exists():
             return code
     raise RuntimeError("Failed to generate a unique activation code")
 
@@ -258,7 +208,7 @@ def store_activation_code(
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
 ) -> None:
     """
-    Validate and store activation payload into Redis.
+    Validate and persist an activation code in the database.
     """
     payload.validate()
     normalized_code = str(code or "").strip().upper()
@@ -267,10 +217,13 @@ def store_activation_code(
     if ttl_seconds <= 0:
         raise ValueError("Activation code TTL must be positive")
     from apps.accounts.models import ActivationCodeRecord
+    PromotionCodeRecord = apps.get_model("accounts", "PromotionCodeRecord")
 
     payload_data = payload.to_dict()
+    if PromotionCodeRecord.objects.filter(code_hash=activation_code_hash(normalized_code)).exists():
+        raise ValueError("Code already exists as a promotion code")
     try:
-        record = ActivationCodeRecord.objects.create(
+        ActivationCodeRecord.objects.create(
             code_hash=activation_code_hash(normalized_code),
             code_ciphertext=encrypt_activation_code(normalized_code),
             remark=payload.remark,
@@ -280,18 +233,6 @@ def store_activation_code(
         )
     except IntegrityError as exc:
         raise ValueError("Activation code already exists") from exc
-    try:
-        stored = cache.add(
-            _redis_key(normalized_code),
-            payload_data,
-            timeout=ttl_seconds,
-        )
-    except RedisError:
-        record.delete()
-        raise
-    if not stored:
-        record.delete()
-        raise ValueError("Activation code already exists")
 
 
 def verify_activation_code(code: str) -> Optional[ActivationPayload]:
@@ -323,26 +264,15 @@ def verify_activation_code(code: str) -> Optional[ActivationPayload]:
         ).update(status=ActivationCodeRecord.Status.EXPIRED)
         return None
 
-    raw = cache.get(_redis_key(normalized_code))
-    if not raw:
-        return None
-
-    if record.payload != raw:
-        return None
-
     try:
-        return ActivationPayload.from_dict(raw)
+        return ActivationPayload.from_dict(record.payload)
     except ValueError:
         return None
 
 
 def consume_activation_code(code: str, *, user=None) -> None:
     """
-    Persist consumption for compatible callers and remove the Redis value.
-
-    The redemption transaction normally marks the ledger first. The guarded
-    update makes this function safe to call afterwards via ``on_commit`` while
-    preserving the older public service API.
+    Persist consumption for compatible callers.
     """
     normalized_code = str(code or "").strip().upper()
     if not normalized_code:
@@ -356,17 +286,10 @@ def consume_activation_code(code: str, *, user=None) -> None:
         consumed_at=timezone.now(),
         consumed_by_user_id=getattr(user, "id", None),
     )
-    try:
-        cache.delete(_redis_key(normalized_code))
-    except RedisError:
-        logger.warning(
-            "Redeemed activation code could not be removed from Redis; the database ledger still blocks reuse",
-            exc_info=True,
-        )
 
 
 def revoke_activation_code(code: str) -> bool:
-    """Revoke a persisted code and remove its Redis value."""
+    """Revoke a persisted activation code."""
     normalized_code = str(code or "").strip().upper()
     if not normalized_code:
         return False
@@ -376,11 +299,4 @@ def revoke_activation_code(code: str) -> bool:
     ).exclude(
         status=ActivationCodeRecord.Status.CONSUMED,
     ).update(status=ActivationCodeRecord.Status.REVOKED)
-    try:
-        cache.delete(_redis_key(normalized_code))
-    except RedisError:
-        logger.warning(
-            "Revoked activation code could not be removed from Redis; the database ledger still blocks use",
-            exc_info=True,
-        )
     return bool(updated)

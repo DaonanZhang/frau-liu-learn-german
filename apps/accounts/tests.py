@@ -304,7 +304,7 @@ class ActivationCodeApiTests(APITestCase):
         self.assertEqual(decrypt_activation_code(record.code_ciphertext), "TRACK001")
         self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
 
-    def test_activation_code_remark_is_kept_in_redis_payload_and_durable_record(self) -> None:
+    def test_activation_code_remark_is_kept_in_durable_record(self) -> None:
         payload = ActivationPayload(
             entitlements=[
                 ActivationEntitlementItem(
@@ -369,12 +369,9 @@ class ActivationCodeApiTests(APITestCase):
         self.assertIn("status=active", rendered)
         self.assertNotIn("LISTCODE1", rendered)
 
-    def test_redeemed_code_is_rejected_even_if_redis_value_reappears(self) -> None:
+    def test_database_status_blocks_reuse_of_redeemed_code(self) -> None:
         self._store_code("LEDGER01", season_number=1)
-        payload = verify_activation_code("LEDGER01")
         apply_activation_code_for_user(user=self.user, code="LEDGER01")
-
-        cache.set("activation_code:LEDGER01", payload.to_dict(), timeout=300)
 
         self.assertIsNone(verify_activation_code("LEDGER01"))
         with self.assertRaisesRegex(ValueError, "Invalid or expired"):

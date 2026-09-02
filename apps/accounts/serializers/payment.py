@@ -5,7 +5,9 @@ from decimal import Decimal
 from django.utils import timezone
 from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.purchase_offer import PurchaseOffer
+from apps.accounts.models.payment_grant_task import PaymentGrantTask
 from apps.accounts.services import get_purchase_pricing
+from apps.accounts.services.promotion_codes import get_coupon_for_offer
 from rest_framework import serializers
 
 
@@ -35,6 +37,7 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
 
     offer_code = serializers.SlugField(max_length=64)
     idempotency_key = serializers.UUIDField()
+    coupon_id = serializers.IntegerField(required=False, min_value=1)
 
     @staticmethod
     def _has_nonexpiring_access(*, user, offer: PurchaseOffer) -> bool:
@@ -80,9 +83,35 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
         attrs["module"] = offer.module
         attrs["season"] = offer.season
         attrs["plan"] = offer.plan
-        pricing = get_purchase_pricing(
-            user=user,
-            offer=offer,
+        existing_intent = (
+            PaymentGrantTask.objects
+            .select_related("payment")
+            .filter(idempotency_key=str(attrs["idempotency_key"]))
+            .first()
         )
+        if existing_intent is not None:
+            if existing_intent.user_id != getattr(user, "id", None) or existing_intent.offer_id != offer.id:
+                raise serializers.ValidationError(
+                    {"detail": "The idempotency key is already bound to another purchase intent."}
+                )
+            attrs["total_amount"] = existing_intent.payment.total_amount
+            attrs["coupon"] = None
+            attrs["pricing"] = None
+            return attrs
+        requested_coupon_id = attrs.get("coupon_id")
+        coupon = None
+        if requested_coupon_id is not None:
+            coupon = get_coupon_for_offer(
+                user=user,
+                offer=offer,
+                coupon_id=requested_coupon_id,
+            )
+            if coupon is None:
+                raise serializers.ValidationError({"coupon_id": "优惠券不可用或不适用于该商品。"})
+        pricing = get_purchase_pricing(user=user, offer=offer, coupon=coupon)
+        if requested_coupon_id is not None and pricing.coupon is None:
+            raise serializers.ValidationError({"coupon_id": "该优惠券不会降低当前价格。"})
         attrs["total_amount"] = pricing.final_amount
+        attrs["pricing"] = pricing
+        attrs["coupon"] = pricing.coupon
         return attrs

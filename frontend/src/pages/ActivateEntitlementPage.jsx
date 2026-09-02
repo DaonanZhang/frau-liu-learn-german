@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import AuthLayout from "../components/AuthLayout.jsx";
-import { applyActivationCode, verifyActivationCode } from "../api/auth/auth";
+import { redeemCode } from "../api/auth/auth";
 import { useAuth } from "../api/auth/useAuth.js";
 
 export default function ActivateEntitlementPage() {
@@ -22,20 +22,22 @@ export default function ActivateEntitlementPage() {
 
     setLoading(true);
     try {
-      const data = await verifyActivationCode(code.trim());
-      if (!data || (Array.isArray(data?.entitlements) && data.entitlements.length === 0)) {
+      const result = await redeemCode(code.trim());
+      if (result?.type === "promotion") {
         await Swal.fire({
-          icon: "error",
-          title: "兑换码无效",
-          text: "兑换码无效或已过期",
+          icon: "success",
+          title: "优惠领取成功",
+          text: `已获得 ¥${result.coupon.discount_amount} 优惠，下单时会自动使用适用的最优优惠。`,
         });
-        return;
-      }
-      const result = await applyActivationCode(code.trim());
-      if (result.ok) {
+      } else {
+        await Swal.fire({
+          icon: "success",
+          title: "激活成功",
+          text: "权限已添加到当前账户",
+        });
         await reloadMe();
-        navigate("/", { replace: true });
       }
+      navigate("/", { replace: true });
     } catch (err) {
       console.error("[verify] failed:", err);
       await Swal.fire({
@@ -57,7 +59,7 @@ export default function ActivateEntitlementPage() {
       </div>
 
       <h1 className="auth-title">兑换码</h1>
-      <p className="auth-subtitle">输入兑换码，激活权限</p>
+      <p className="auth-subtitle">输入激活码或推广码，兑换权限或优惠</p>
 
       <form className="auth-form" onSubmit={onVerify}>
         <input

@@ -248,6 +248,7 @@ locations are part of the skill-loading contract.
 - Project overview: `local-docs/project-readme.md`
 - Frontend overview: `local-docs/frontend-readme.md`
 - Account administration: `local-docs/account-admin-commands.md`
+- Promotion code operations: `local-docs/promotion-code-operations.md`
 - Learning-video import skill summary:
   `local-docs/learning-video-import-skill-summary.md`
 - Video subtitle backfill record:

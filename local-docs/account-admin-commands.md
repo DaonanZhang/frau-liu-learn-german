@@ -10,7 +10,7 @@ All commands assume project root as current directory.
 - `plan="lifetime"` means permanent access and maps to `expires_at=None`.
 - Season-scoped entitlement requires both `module` and `season_number`.
 - Module-wide entitlement applies to all seasons of that module when `season=None`.
-- Active activation codes are stored in Redis and in a durable database ledger. The original code is encrypted at rest; remarks, consumer, and consumption time remain available after redemption.
+- Activation codes are stored only in the durable database ledger. The original code is encrypted at rest; remarks, consumer, and consumption time remain available after redemption.
 - For operator runs, prefer printing codes directly to terminal on the server instead of writing files.
 
 ## Check User By Telephone
@@ -170,7 +170,7 @@ else:
 
 ## Generate Season Activation Codes In Bulk
 
-This prints codes directly to the terminal and stores them in Redis-backed cache.
+This prints codes directly to the terminal and stores them in the database.
 Adjust `SEASON_NUMBER`, `SEASON_TITLE`, and `COUNT` as needed.
 
 ```bash
@@ -228,9 +228,9 @@ for code in codes:
 
 ## Generate Exam Preparation Timed Activation Codes
 
-These commands store module-wide `exam_preparation` codes in Redis, create a
-database hash-only redemption ledger, and print the plaintext codes once to
-stdout. Codes inherit the current 720-day Redis TTL. Redeeming a code extends
+These commands store module-wide `exam_preparation` codes in the database and
+print the plaintext codes once to stdout. Codes inherit the current 720-day
+database expiry. Redeeming a code extends
 the user's current latest expiry instead of replacing it. A day is an exact
 24-hour access period.
 

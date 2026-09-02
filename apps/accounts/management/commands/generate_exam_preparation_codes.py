@@ -20,7 +20,7 @@ PLAN_BY_DAYS = {
 
 
 class Command(BaseCommand):
-    help = "Generate Redis-backed 30/60/90-day activation codes for exam_preparation."
+    help = "Generate database-backed 30/60/90-day activation codes for exam_preparation."
 
     def add_arguments(self, parser):
         parser.add_argument("--days", type=int, choices=PLAN_BY_DAYS, required=True)

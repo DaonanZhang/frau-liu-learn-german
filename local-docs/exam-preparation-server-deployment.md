@@ -146,7 +146,7 @@ Before first server use of `exam_preparation`:
    systemd timer that runs the same management command every 15 minutes.
    Automatic payment/grant recovery requires a scheduler, but does not require
    Celery specifically.
-10. Confirm Redis is available. Generated activation codes are held in Redis,
+10. Activation codes are stored in PostgreSQL and do not require Redis,
     while the database redemption ledger is the final one-time-use authority.
 11. Keep `ACTIVATION_CODE_HASH_KEY` stable and identical on every backend
     instance. It defaults to `DJANGO_SECRET_KEY`; setting a dedicated secret is

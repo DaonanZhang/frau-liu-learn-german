@@ -8,7 +8,15 @@ from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.module import Module
 from apps.accounts.models.module_season import ModuleSeason
 from apps.accounts.models.purchase_offer import PurchaseOffer
-from apps.accounts.models import ActivationCodeRecord, AlipayWebsitePayment, PaymentGrantTask
+from apps.accounts.models import (
+    ActivationCodeRecord,
+    AlipayWebsitePayment,
+    PaymentDiscountApplication,
+    PaymentGrantTask,
+    PromotionCampaign,
+    PromotionCodeRecord,
+    UserCoupon,
+)
 from apps.accounts.models.user_data import UserData, UserActiveDay
 
 User = get_user_model()
@@ -188,6 +196,69 @@ class PaymentGrantTaskAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PromotionCampaign)
+class PromotionCampaignAdmin(admin.ModelAdmin):
+    list_display = ("id", "code", "name", "organization_name", "is_active", "created_at")
+    list_filter = ("is_active", "created_at")
+    search_fields = ("code", "name", "organization_name", "remark")
+
+
+@admin.register(PromotionCodeRecord)
+class PromotionCodeRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "code_preview", "campaign", "discount_amount", "status",
+        "consumed_by_user", "consumed_at", "expires_at",
+    )
+    list_filter = ("campaign", "status", "is_stackable", "consumed_at", "created_at")
+    search_fields = ("code_hash", "remark", "campaign__code", "consumed_by_user__telephone")
+    readonly_fields = (
+        "code_hash", "code_ciphertext", "status", "consumed_by_user", "consumed_at",
+        "created_at", "updated_at",
+    )
+
+    @admin.display(description="Code")
+    def code_preview(self, obj):
+        from apps.accounts.services.activation_codes import decrypt_activation_code
+        return decrypt_activation_code(obj.code_ciphertext) or f"legacy:{obj.code_hash[:12]}"
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(UserCoupon)
+class UserCouponAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "user", "campaign", "discount_amount", "status", "expires_at",
+        "reserved_payment", "used_payment", "used_at",
+    )
+    list_filter = ("campaign", "status", "is_stackable", "issued_at", "used_at")
+    search_fields = (
+        "user__telephone", "campaign__code", "promotion_code__code_hash",
+        "reserved_payment__merchant_order_no", "used_payment__merchant_order_no",
+    )
+    readonly_fields = [field.name for field in UserCoupon._meta.fields]
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PaymentDiscountApplication)
+class PaymentDiscountApplicationAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "campaign", "user", "offer", "original_amount",
+        "promotion_discount_amount", "final_amount", "status", "applied_at",
+    )
+    list_filter = ("campaign", "status", "offer__module", "applied_at", "created_at")
+    search_fields = (
+        "user__telephone", "campaign__code", "payment__merchant_order_no",
+        "promotion_code__code_hash", "offer__code",
+    )
+    readonly_fields = [field.name for field in PaymentDiscountApplication._meta.fields]
 
     def has_delete_permission(self, request, obj=None):
         return False

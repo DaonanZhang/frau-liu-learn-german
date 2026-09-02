@@ -29,8 +29,8 @@ Use this skill for operational account changes in this repository.
    - prefer a copy-paste-safe `manage.py shell -c` command over editing app code
    - print codes directly to stdout unless the user explicitly asks for file output
    - keep the payload season-scoped by setting `season_number` on `ActivationEntitlementItem`
-   - mention that activation codes are stored in cache/Redis and currently default to 720-day TTL
-   - avoid duplicate codes within the same batch and skip codes that already exist in Redis
+   - mention that activation codes are stored in the database and currently default to a 720-day expiry
+   - avoid duplicate codes within the same batch and skip codes that already exist in the database
 5. Before mutating existing access, prefer checking current entitlements.
 6. If the user asks for a reusable snippet, start from the template below and fill only the requested parameters.
 

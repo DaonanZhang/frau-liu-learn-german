@@ -26,6 +26,9 @@ class PurchasePricing:
     discount_amount: Decimal
     discount_label: str
     is_discounted: bool
+    automatic_discount_amount: Decimal = Decimal("0.00")
+    promotion_discount_amount: Decimal = Decimal("0.00")
+    coupon: object | None = None
 
 
 def _user_has_upgrade_discount(*, user, offer: PurchaseOffer) -> bool:
@@ -94,7 +97,7 @@ def _user_has_video_exam_preparation_discount(*, user, offer: PurchaseOffer) -> 
     ).exists()
 
 
-def get_purchase_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
+def _get_automatic_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
     original_amount = offer.price_amount
 
     if _user_has_video_exam_preparation_discount(user=user, offer=offer):
@@ -108,6 +111,7 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
             discount_amount=original_amount - final_amount,
             discount_label=VIDEO_EXAM_PREPARATION_DISCOUNT_LABEL,
             is_discounted=True,
+            automatic_discount_amount=original_amount - final_amount,
         )
 
     discount_amount = Decimal("0.00")
@@ -138,4 +142,44 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
         discount_amount=discount_amount,
         discount_label=" + ".join(discount_labels) if discount_amount > 0 else "",
         is_discounted=discount_amount > 0,
+        automatic_discount_amount=discount_amount,
     )
+
+
+def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> PurchasePricing:
+    automatic = _get_automatic_pricing(user=user, offer=offer)
+    if not user or not getattr(user, "is_authenticated", False):
+        return automatic
+    if coupon is False:
+        return automatic
+
+    if coupon is None:
+        from apps.accounts.services.promotion_codes import eligible_coupon_queryset
+
+        coupons = eligible_coupon_queryset(user=user, offer=offer)
+    else:
+        coupons = [coupon]
+
+    best = automatic
+    for candidate in coupons:
+        if candidate.is_stackable:
+            base_amount = automatic.final_amount
+            automatic_discount = automatic.automatic_discount_amount
+        else:
+            base_amount = automatic.original_amount
+            automatic_discount = Decimal("0.00")
+        candidate_final = max(base_amount - candidate.discount_amount, Decimal("0.01"))
+        if candidate_final >= best.final_amount:
+            continue
+        promotion_discount = base_amount - candidate_final
+        best = PurchasePricing(
+            original_amount=automatic.original_amount,
+            final_amount=candidate_final,
+            discount_amount=automatic.original_amount - candidate_final,
+            discount_label=f"{candidate.campaign.name}专享",
+            is_discounted=True,
+            automatic_discount_amount=automatic_discount,
+            promotion_discount_amount=promotion_discount,
+            coupon=candidate,
+        )
+    return best

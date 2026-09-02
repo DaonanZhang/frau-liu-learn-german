@@ -235,6 +235,7 @@ export default function ModuleCheckoutPage() {
       setCreatingOrderCode(offerCode);
       const order = await createAlipayPurchase({
         offerCode,
+        couponId: offer?.promotion_coupon_id,
       });
       savePendingPaymentContext(order?.merchant_order_no, {
         returnPath: `/modules/${module.id}/preview`,

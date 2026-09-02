@@ -16,6 +16,7 @@ from apps.accounts.views.registration import (
     RegisterAPIView,
 )
 from apps.accounts.views.activation import ActivationCodeApplyAPIView
+from apps.accounts.views.code_redemption import RedeemCodeAPIView
 from apps.accounts.views.payment import (
     AlipayNotifyAPIView,
     AlipayPaymentStatusAPIView,
@@ -60,6 +61,11 @@ urlpatterns += [
         "auth/activate-code/",
         ActivationCodeApplyAPIView.as_view(),
         name="activate-code",
+    ),
+    path(
+        "auth/redeem-code/",
+        RedeemCodeAPIView.as_view(),
+        name="redeem-code",
     ),
 ]
 

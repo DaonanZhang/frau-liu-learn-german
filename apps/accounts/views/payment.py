@@ -20,7 +20,12 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from urllib.parse import urlencode
 
-from apps.accounts.models import AlipayWebsitePayment, PaymentGrantTask
+from apps.accounts.models import (
+    AlipayWebsitePayment,
+    PaymentDiscountApplication,
+    PaymentGrantTask,
+    UserCoupon,
+)
 from apps.accounts.serializers.payment import (
     CreateAlipayDebugPaymentSerializer,
     CreateAlipayPurchaseSerializer,
@@ -36,7 +41,9 @@ from apps.accounts.services import (
     process_pending_payment_grant_tasks_for_payment,
     process_payment_grant_task_by_id,
     estimate_entitlement_expiry,
+    get_purchase_pricing,
 )
+from apps.accounts.services.promotion_codes import get_coupon_for_offer, sync_payment_discount_status
 
 REMOTE_PAYMENT_QUERY_COOLDOWN_SECONDS = 5
 logger = logging.getLogger(__name__)
@@ -259,6 +266,7 @@ def _query_and_sync_payment_status(
                 "updated_at",
             ]
         )
+        sync_payment_discount_status(payment_id=locked_payment.id)
         current_status = locked_payment.status
 
     if (
@@ -281,6 +289,7 @@ def _mark_open_payment_closed(*, payment_id: int) -> None:
         }:
             payment.status = AlipayWebsitePayment.Status.CLOSED
             payment.save(update_fields=["status", "updated_at"])
+            sync_payment_discount_status(payment_id=payment.id)
 
 
 def _should_query_remote_payment_status(*, payment: AlipayWebsitePayment) -> bool:
@@ -422,6 +431,7 @@ def _simulate_local_paid_purchase(
             "updated_at",
         ]
     )
+    sync_payment_discount_status(payment_id=payment.id)
     process_payment_grant_task_by_id(payment_grant_task_id=payment_grant_task.id)
 
     return_url = _resolve_frontend_return_url(request)
@@ -763,6 +773,37 @@ class CreateAlipayPurchaseAPIView(APIView):
                 season=season,
                 plan=plan,
             )
+            selected_coupon = validated_data.get("coupon")
+            locked_coupon = None
+            if selected_coupon is not None:
+                locked_coupon = get_coupon_for_offer(
+                    user=request.user,
+                    offer=validated_data["offer"],
+                    coupon_id=selected_coupon.id,
+                    for_update=True,
+                )
+                if locked_coupon is None:
+                    return Response(
+                        {"detail": "优惠券已被使用、已过期或不再适用于该商品。"},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+            else:
+                locked_coupon = get_coupon_for_offer(
+                    user=request.user,
+                    offer=validated_data["offer"],
+                    for_update=True,
+                )
+            pricing = get_purchase_pricing(
+                user=request.user,
+                offer=validated_data["offer"],
+                coupon=locked_coupon if locked_coupon is not None else False,
+            )
+            if locked_coupon is not None and pricing.coupon is None:
+                return Response(
+                    {"detail": "该优惠券不会降低当前价格。"},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            total_amount = pricing.final_amount
             payment = AlipayWebsitePayment.objects.create(
                 merchant_order_no=_build_merchant_order_no(user_id=request.user.id),
                 subject=payment_subject,
@@ -780,6 +821,25 @@ class CreateAlipayPurchaseAPIView(APIView):
                 status=PaymentGrantTask.Status.PENDING,
                 idempotency_key=idempotency_key,
             )
+            if pricing.coupon is not None:
+                PaymentDiscountApplication.objects.create(
+                    payment=payment,
+                    coupon=pricing.coupon,
+                    promotion_code=pricing.coupon.promotion_code,
+                    campaign=pricing.coupon.campaign,
+                    user=request.user,
+                    offer=validated_data["offer"],
+                    original_amount=pricing.original_amount,
+                    automatic_discount_amount=pricing.automatic_discount_amount,
+                    promotion_discount_amount=pricing.promotion_discount_amount,
+                    final_amount=pricing.final_amount,
+                )
+                pricing.coupon.status = UserCoupon.Status.RESERVED
+                pricing.coupon.reserved_payment = payment
+                pricing.coupon.reserved_at = timezone.now()
+                pricing.coupon.save(
+                    update_fields=["status", "reserved_payment", "reserved_at", "updated_at"]
+                )
 
         if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
             try:
@@ -794,6 +854,7 @@ class CreateAlipayPurchaseAPIView(APIView):
                 payment_grant_task.status = PaymentGrantTask.Status.FAILED
                 payment_grant_task.last_error = str(exc)
                 payment_grant_task.save(update_fields=["status", "last_error", "updated_at"])
+                sync_payment_discount_status(payment_id=payment.id)
                 return Response(
                     {"detail": f"Local simulated payment failed: {exc}"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -907,6 +968,7 @@ class AlipayNotifyAPIView(APIView):
                     "updated_at",
                 ]
             )
+            sync_payment_discount_status(payment_id=payment.id)
 
         if payment.status == AlipayWebsitePayment.Status.PAID:
             try:

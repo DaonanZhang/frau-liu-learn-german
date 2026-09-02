@@ -6,7 +6,7 @@ from django.utils import timezone
 
 
 class ActivationCodeRecord(models.Model):
-    """Durable one-time redemption ledger for Redis-backed activation codes."""
+    """Durable database record for one-time activation codes."""
 
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"

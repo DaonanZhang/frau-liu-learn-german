@@ -183,6 +183,7 @@ export default function ModuleEntryCard({ module }) {
 
         const order = await createAlipayPurchase({
           offerCode: offer.code,
+          couponId: offer?.promotion_coupon_id,
         });
         savePendingPaymentContext(order?.merchant_order_no, {
           returnPath: window.location.pathname + window.location.search + window.location.hash,

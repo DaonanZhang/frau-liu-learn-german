@@ -21,6 +21,8 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
     is_discounted_for_user = serializers.SerializerMethodField()
     access_duration_days = serializers.SerializerMethodField()
     estimated_expires_at = serializers.SerializerMethodField()
+    promotion_coupon_id = serializers.SerializerMethodField()
+    promotion_campaign = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOffer
@@ -42,6 +44,8 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
             "is_discounted_for_user",
             "access_duration_days",
             "estimated_expires_at",
+            "promotion_coupon_id",
+            "promotion_campaign",
             "currency",
         )
         read_only_fields = fields
@@ -55,9 +59,15 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
         return obj.get_plan_display()
 
     def _get_pricing(self, obj: PurchaseOffer):
+        cache = getattr(self, "_pricing_cache", None)
+        if cache is None:
+            cache = self._pricing_cache = {}
+        if obj.pk in cache:
+            return cache[obj.pk]
         request = self.context.get("request")
         user = getattr(request, "user", None)
-        return get_purchase_pricing(user=user, offer=obj)
+        cache[obj.pk] = get_purchase_pricing(user=user, offer=obj)
+        return cache[obj.pk]
 
     def get_final_price_amount(self, obj: PurchaseOffer) -> str:
         return f"{self._get_pricing(obj).final_amount:.2f}"
@@ -73,6 +83,14 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
 
     def get_is_discounted_for_user(self, obj: PurchaseOffer) -> bool:
         return self._get_pricing(obj).is_discounted
+
+    def get_promotion_coupon_id(self, obj: PurchaseOffer) -> int | None:
+        coupon = self._get_pricing(obj).coupon
+        return coupon.id if coupon is not None else None
+
+    def get_promotion_campaign(self, obj: PurchaseOffer) -> str:
+        coupon = self._get_pricing(obj).coupon
+        return coupon.campaign.name if coupon is not None else ""
 
     def get_access_duration_days(self, obj: PurchaseOffer) -> int | None:
         return get_plan_duration_days(obj.plan)

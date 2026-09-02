@@ -45,12 +45,13 @@ export function createPaymentIntentKey() {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export async function createAlipayPurchase({ offerCode, idempotencyKey } = {}) {
+export async function createAlipayPurchase({ offerCode, couponId, idempotencyKey } = {}) {
   const purchaseIntentKey = idempotencyKey || createPaymentIntentKey();
   return apiFetch("/accounts/payments/alipay/create/", {
     method: "POST",
     body: {
       offer_code: offerCode,
+      ...(couponId ? { coupon_id: couponId } : {}),
       idempotency_key: purchaseIntentKey,
     },
   });

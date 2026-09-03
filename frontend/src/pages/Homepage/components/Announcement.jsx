@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { fetchAnnouncementList } from "../../../api/announcement.js";
 import Card from "./Card.jsx";
@@ -28,12 +28,11 @@ function formatDate(value) {
 }
 
 export default function Announcement({
-  title = "学习消息",
+  title = "通知",
   items = DEFAULT_ITEMS,
-  limit = 3,
-  onCollapseToggle,
 }) {
   const [listItems, setListItems] = useState(items);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
     let aborted = false;
@@ -54,6 +53,7 @@ export default function Announcement({
         }));
 
         setListItems(mapped);
+        setCurrentIndex(0);
       })
       .catch(() => {
         // keep fallback items
@@ -64,29 +64,50 @@ export default function Announcement({
     };
   }, []);
 
-  const displayItems = useMemo(() => {
-    if (!Array.isArray(listItems)) return [];
-    if (!Number.isFinite(Number(limit))) return listItems;
-    return listItems.slice(0, Math.max(0, Number(limit)));
-  }, [listItems, limit]);
+  const itemCount = Array.isArray(listItems) ? listItems.length : 0;
+  const currentItem = itemCount > 0 ? listItems[currentIndex] : null;
 
-  const actions = (
-    <button className="msg-collapse-btn" type="button" onClick={onCollapseToggle}>
-      ▲
-    </button>
-  );
+  const actions = itemCount > 1 ? (
+    <div className="msg-nav" aria-label="通知切换">
+      <button
+        className="msg-nav-btn"
+        type="button"
+        onClick={() => setCurrentIndex((index) => Math.max(0, index - 1))}
+        disabled={currentIndex === 0}
+        aria-label="查看较新的通知"
+      >
+        ‹
+      </button>
+      <span className="msg-nav-count" aria-live="polite">
+        {currentIndex + 1}/{itemCount}
+      </span>
+      <button
+        className="msg-nav-btn"
+        type="button"
+        onClick={() =>
+          setCurrentIndex((index) => Math.min(itemCount - 1, index + 1))
+        }
+        disabled={currentIndex === itemCount - 1}
+        aria-label="查看较早的通知"
+      >
+        ›
+      </button>
+    </div>
+  ) : null;
 
   return (
     <Card title={title} icon="💬" actions={actions}>
       <div className="msg-list">
-        {displayItems.map((it, idx) => (
-          <article key={`${it.title}-${idx}`} className="msg-item">
-            <div className="msg-type">{it.type}</div>
-            <div className="msg-title">{it.title}</div>
-            <div className="msg-desc">{it.description}</div>
-            {it.dateText ? <div className="msg-date">{it.dateText}</div> : null}
+        {currentItem ? (
+          <article key={`${currentItem.title}-${currentIndex}`} className="msg-item">
+            <div className="msg-type">{currentItem.type}</div>
+            <div className="msg-title">{currentItem.title}</div>
+            <div className="msg-desc">{currentItem.description}</div>
+            {currentItem.dateText ? (
+              <div className="msg-date">{currentItem.dateText}</div>
+            ) : null}
           </article>
-        ))}
+        ) : null}
       </div>
     </Card>
   );

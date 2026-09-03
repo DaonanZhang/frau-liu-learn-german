@@ -143,17 +143,40 @@
 }
 
 /* Messages */
-.msg-collapse-btn {
+.msg-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.msg-nav-btn {
   width: 2rem;
   height: 2rem;
+  padding: 0;
   border-radius: 0.5rem;
   border: 1px solid #e5e7eb;
   background: #fff;
+  color: #334155;
+  font-size: 1.4rem;
+  line-height: 1;
   cursor: pointer;
 }
 
-.msg-collapse-btn:hover {
+.msg-nav-btn:hover:not(:disabled) {
   background: #f5f6f8;
+}
+
+.msg-nav-btn:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.msg-nav-count {
+  min-width: 2.25rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .msg-list {

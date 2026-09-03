@@ -38,6 +38,7 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
     offer_code = serializers.SlugField(max_length=64)
     idempotency_key = serializers.UUIDField()
     coupon_id = serializers.IntegerField(required=False, min_value=1)
+    use_coupon = serializers.BooleanField(required=False, default=True)
 
     @staticmethod
     def _has_nonexpiring_access(*, user, offer: PurchaseOffer) -> bool:
@@ -99,6 +100,18 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
             attrs["pricing"] = None
             return attrs
         requested_coupon_id = attrs.get("coupon_id")
+        use_coupon = attrs.get("use_coupon", True)
+        if not use_coupon and requested_coupon_id is not None:
+            raise serializers.ValidationError(
+                {"coupon_id": "明确不使用优惠券时不能同时指定 coupon_id。"}
+            )
+        if not use_coupon:
+            pricing = get_purchase_pricing(user=user, offer=offer, coupon=False)
+            attrs["total_amount"] = pricing.final_amount
+            attrs["pricing"] = pricing
+            attrs["coupon"] = False
+            attrs["coupon_selection_source"] = ""
+            return attrs
         coupon = None
         if requested_coupon_id is not None:
             coupon = get_coupon_for_offer(
@@ -114,4 +127,7 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
         attrs["total_amount"] = pricing.final_amount
         attrs["pricing"] = pricing
         attrs["coupon"] = pricing.coupon
+        attrs["coupon_selection_source"] = (
+            "manual" if requested_coupon_id is not None else "automatic"
+        )
         return attrs

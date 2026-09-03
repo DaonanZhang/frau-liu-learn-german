@@ -10,6 +10,7 @@ from apps.accounts.views import (
     PurchaseOfferViewSet,
     UserDataViewSet,
     UserViewSet,
+    UserCouponViewSet,
 )
 from apps.accounts.views.registration import (
     RegisterVerifyCodeAPIView,
@@ -39,6 +40,7 @@ router.register(r"entitlements", EntitlementViewSet, basename="entitlement")
 router.register(r"module-seasons", ModuleSeasonViewSet, basename="module-season")
 router.register(r"homepage-settings", HomepageSettingViewSet, basename="homepage-setting")
 router.register(r"purchase-offers", PurchaseOfferViewSet, basename="purchase-offer")
+router.register(r"coupons", UserCouponViewSet, basename="coupon")
 
 urlpatterns = [
     path("", include(router.urls)),

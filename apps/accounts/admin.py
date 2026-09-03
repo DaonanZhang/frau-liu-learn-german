@@ -13,7 +13,6 @@ from apps.accounts.models import (
     AlipayWebsitePayment,
     PaymentDiscountApplication,
     PaymentGrantTask,
-    PromotionCampaign,
     PromotionCodeRecord,
     UserCoupon,
 )
@@ -201,30 +200,18 @@ class PaymentGrantTaskAdmin(admin.ModelAdmin):
         return False
 
 
-@admin.register(PromotionCampaign)
-class PromotionCampaignAdmin(admin.ModelAdmin):
-    list_display = ("id", "code", "name", "organization_name", "is_active", "created_at")
-    list_filter = ("is_active", "created_at")
-    search_fields = ("code", "name", "organization_name", "remark")
-
-
 @admin.register(PromotionCodeRecord)
 class PromotionCodeRecordAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "code_preview", "campaign", "discount_amount", "status",
+        "id", "code", "campaign_name", "organization_name", "remark", "discount_amount", "status",
         "consumed_by_user", "consumed_at", "expires_at",
     )
-    list_filter = ("campaign", "status", "is_stackable", "consumed_at", "created_at")
-    search_fields = ("code_hash", "remark", "campaign__code", "consumed_by_user__telephone")
+    list_filter = ("campaign_name", "organization_name", "status", "is_stackable", "consumed_at", "created_at")
+    search_fields = ("code", "remark", "campaign_name", "organization_name", "consumed_by_user__telephone")
     readonly_fields = (
-        "code_hash", "code_ciphertext", "status", "consumed_by_user", "consumed_at",
+        "code", "status", "consumed_by_user", "consumed_at",
         "created_at", "updated_at",
     )
-
-    @admin.display(description="Code")
-    def code_preview(self, obj):
-        from apps.accounts.services.activation_codes import decrypt_activation_code
-        return decrypt_activation_code(obj.code_ciphertext) or f"legacy:{obj.code_hash[:12]}"
 
     def has_delete_permission(self, request, obj=None):
         return False
@@ -233,12 +220,12 @@ class PromotionCodeRecordAdmin(admin.ModelAdmin):
 @admin.register(UserCoupon)
 class UserCouponAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "user", "campaign", "discount_amount", "status", "expires_at",
+        "id", "user", "campaign_name", "organization_name", "discount_amount", "status", "expires_at",
         "reserved_payment", "used_payment", "used_at",
     )
-    list_filter = ("campaign", "status", "is_stackable", "issued_at", "used_at")
+    list_filter = ("promotion_code__campaign_name", "promotion_code__organization_name", "status", "is_stackable", "issued_at", "used_at")
     search_fields = (
-        "user__telephone", "campaign__code", "promotion_code__code_hash",
+        "user__telephone", "promotion_code__campaign_name", "promotion_code__organization_name", "promotion_code__code",
         "reserved_payment__merchant_order_no", "used_payment__merchant_order_no",
     )
     readonly_fields = [field.name for field in UserCoupon._meta.fields]
@@ -246,17 +233,29 @@ class UserCouponAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
+    @admin.display(description="Campaign", ordering="promotion_code__campaign_name")
+    def campaign_name(self, obj):
+        return obj.promotion_code.campaign_name
+
+    @admin.display(description="Organization", ordering="promotion_code__organization_name")
+    def organization_name(self, obj):
+        return obj.promotion_code.organization_name
+
 
 @admin.register(PaymentDiscountApplication)
 class PaymentDiscountApplicationAdmin(admin.ModelAdmin):
     list_display = (
-        "id", "campaign", "user", "offer", "original_amount",
-        "promotion_discount_amount", "final_amount", "status", "applied_at",
+        "id", "campaign_name_snapshot", "campaign_organization_snapshot", "user", "offer", "original_amount",
+        "promotion_discount_amount", "final_amount", "selection_source",
+        "status", "applied_at",
     )
-    list_filter = ("campaign", "status", "offer__module", "applied_at", "created_at")
+    list_filter = (
+        "campaign_name_snapshot", "campaign_organization_snapshot", "selection_source", "status", "offer__module",
+        "applied_at", "created_at",
+    )
     search_fields = (
-        "user__telephone", "campaign__code", "payment__merchant_order_no",
-        "promotion_code__code_hash", "offer__code",
+        "user__telephone", "campaign_name_snapshot", "campaign_organization_snapshot", "payment__merchant_order_no",
+        "promotion_code__code", "offer__code",
     )
     readonly_fields = [field.name for field in PaymentDiscountApplication._meta.fields]
 

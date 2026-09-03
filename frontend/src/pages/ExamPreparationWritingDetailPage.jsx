@@ -15,10 +15,10 @@ import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ExamPreparationWritingDetailPage.css";
 
-function renderHyphenLineBreaks(text, fallback) {
-  return String(text || fallback).split("-").map((part, index) => (
+function renderStoredLineBreaks(text, fallback) {
+  return String(text || fallback).split(/<br\s*\/?>/gi).map((part, index) => (
     <span key={`${index}-${part}`}>
-      {index > 0 ? <><br />-</> : null}{part}
+      {index > 0 ? <br /> : null}{part}
     </span>
   ));
 }
@@ -334,7 +334,7 @@ export default function ExamPreparationWritingDetailPage() {
           ].filter(Boolean).join(" ")}
         >
           <h2>Anleitung</h2>
-          <p>{renderHyphenLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}</p>
+          <p>{renderStoredLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}</p>
         </section>
 
         <section className="writing-detail-meta-panel">
@@ -378,7 +378,7 @@ export default function ExamPreparationWritingDetailPage() {
             ].filter(Boolean).join(" ")}
           >
             <h2>写作要求</h2>
-            <p>{renderHyphenLineBreaks(exercise?.task_text, "请根据题目要求完成写作。")}</p>
+            <p>{renderStoredLineBreaks(exercise?.task_text, "请根据题目要求完成写作。")}</p>
           </article>
 
           <article

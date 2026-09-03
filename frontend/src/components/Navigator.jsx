@@ -160,7 +160,7 @@ export default function Navigator() {
               className="nav-btn nav-btn--gradient"
               type="button"
               onClick={() => {
-                navigate("/activate-entitlement");
+                navigate("/redeem-code");
               }}
             >
               {redeemText}

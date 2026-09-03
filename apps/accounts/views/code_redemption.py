@@ -46,10 +46,10 @@ class RedeemCodeAPIView(APIView):
                     "type": "promotion",
                     "coupon": {
                         "id": coupon.id,
-                        "campaign": coupon.campaign.name,
                         "discount_amount": f"{coupon.discount_amount:.2f}",
                         "minimum_order_amount": f"{coupon.minimum_order_amount:.2f}",
-                        "expires_at": coupon.expires_at.isoformat(),
+                        "expires_at": coupon.expires_at.isoformat() if coupon.expires_at else None,
+                        "profile_path": "/profile#coupons",
                     },
                 },
                 status=status.HTTP_200_OK,

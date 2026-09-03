@@ -195,7 +195,7 @@ def generate_activation_code(length: int = 8) -> str:
         code = "".join(secrets.choice(alphabet) for _ in range(length))
         PromotionCodeRecord = apps.get_model("accounts", "PromotionCodeRecord")
         if not activation_code_exists(code) and not PromotionCodeRecord.objects.filter(
-            code_hash=activation_code_hash(code)
+            code=code
         ).exists():
             return code
     raise RuntimeError("Failed to generate a unique activation code")
@@ -220,7 +220,7 @@ def store_activation_code(
     PromotionCodeRecord = apps.get_model("accounts", "PromotionCodeRecord")
 
     payload_data = payload.to_dict()
-    if PromotionCodeRecord.objects.filter(code_hash=activation_code_hash(normalized_code)).exists():
+    if PromotionCodeRecord.objects.filter(code=normalized_code).exists():
         raise ValueError("Code already exists as a promotion code")
     try:
         ActivationCodeRecord.objects.create(

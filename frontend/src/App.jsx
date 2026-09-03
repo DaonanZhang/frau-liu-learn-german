@@ -82,7 +82,7 @@ const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
   { path: "/activate", element: <ActivatePage /> },
-  { path: "/activate-entitlement", element: <ActivateEntitlementPage /> },
+  { path: "/activate-entitlement", element: <Navigate to="/redeem-code" replace /> },
   { path: "/payments/alipay/return", element: <AlipayReturnPage /> },
   {
     element: <AppLayout />,
@@ -305,6 +305,7 @@ const router = createBrowserRouter([
       { path: "/favorite-questions", element: <FavoriteQuestionsPage /> },
       { path: "/learning-records", element: <LearningRecordPage /> },
       { path: "/profile", element: <ProfilePage /> },
+      { path: "/redeem-code", element: <ActivateEntitlementPage /> },
     ]),
   },
   { path: "*", element: <FallbackRedirect /> },

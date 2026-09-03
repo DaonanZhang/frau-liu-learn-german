@@ -242,9 +242,9 @@
   margin-top: 0.6rem;
   padding: 0.38rem 0.76rem;
   border-radius: 999px;
-  background: var(--checkout-accent-soft);
-  border: 1px solid #9be2b4;
-  color: var(--checkout-accent);
+  background: #fff1f2;
+  border: 1px solid #fecdd3;
+  color: #dc2626;
   font-size: 0.76rem;
   font-weight: 900;
 }
@@ -302,12 +302,12 @@
 }
 
 .module-checkout-page__price-sale--discount {
-  color: var(--checkout-accent);
+  color: #dc2626;
 }
 
 .module-checkout-page__discount-note {
   margin-top: 0.32rem;
-  color: var(--checkout-accent);
+  color: #dc2626;
   font-size: 0.82rem;
   font-weight: 900;
   text-align: center;
@@ -369,6 +369,74 @@
   text-transform: uppercase;
 }
 
+.module-checkout-page__couponSelector {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid #f0d8aa;
+  border-radius: 14px;
+  background: #fffaf0;
+  color: #302719;
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.module-checkout-page__couponSelector:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.module-checkout-page__couponSelectorIcon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  background: #e45b24;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.module-checkout-page__couponSelectorText {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.module-checkout-page__couponSelectorText strong {
+  font-size: 0.86rem;
+}
+
+.module-checkout-page__couponSelectorText small {
+  overflow: hidden;
+  color: #8b5d15;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-checkout-page__couponSelectorCount {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #fff0df;
+  color: #c04b1c;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.module-checkout-page__couponSelectorArrow {
+  color: #9a7b4c;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
 .module-checkout-page__pay {
   width: 100%;
   height: 52px;
@@ -428,6 +496,213 @@
 
 .module-checkout-page__state--error {
   color: #b42318;
+}
+
+.module-checkout-page__couponOverlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+}
+
+.module-checkout-page__couponBackdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(17, 24, 39, 0.52);
+  cursor: pointer;
+}
+
+.module-checkout-page__couponSheet {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 42rem);
+  max-height: min(82vh, 46rem);
+  overflow-y: auto;
+  border-radius: 22px 22px 0 0;
+  background: #fff;
+  box-shadow: 0 -20px 60px rgba(17, 24, 39, 0.22);
+  padding: 0.75rem 1rem max(1rem, env(safe-area-inset-bottom));
+}
+
+.module-checkout-page__couponSheetHandle {
+  width: 2.8rem;
+  height: 0.28rem;
+  margin: 0 auto 0.8rem;
+  border-radius: 999px;
+  background: #d1d5db;
+}
+
+.module-checkout-page__couponSheetHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.module-checkout-page__couponSheetHeader h2 {
+  margin: 0.15rem 0 0;
+  color: #111827;
+  font-size: 1.35rem;
+}
+
+.module-checkout-page__couponSheetHeader p {
+  margin: 0.3rem 0 0;
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
+.module-checkout-page__couponSheetEyebrow {
+  color: #b8491b;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.module-checkout-page__couponSheetHeader > button {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #111827;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.module-checkout-page__couponChoices {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.module-checkout-page__couponChoice {
+  display: grid;
+  grid-template-columns: 6.8rem minmax(0, 1fr) 2rem;
+  align-items: stretch;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 7.2rem;
+  overflow: hidden;
+  border: 1px solid #ead9bb;
+  border-radius: 14px;
+  background: #fffdf8;
+  color: #27211a;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.module-checkout-page__couponChoice.is-selected {
+  border-color: #e45b24;
+  box-shadow: 0 0 0 2px rgba(228, 91, 36, 0.12);
+}
+
+.module-checkout-page__couponChoice.is-disabled {
+  filter: grayscale(0.75);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.module-checkout-page__couponChoiceValue {
+  display: grid;
+  place-content: center;
+  gap: 0.25rem;
+  background: #fff5df;
+  color: #e45b24;
+  text-align: center;
+}
+
+.module-checkout-page__couponChoiceValue strong {
+  font-size: 1.65rem;
+  font-style: normal;
+  line-height: 1;
+}
+
+.module-checkout-page__couponChoiceValue strong small {
+  margin-right: 0.1rem;
+  font-size: 0.78rem;
+}
+
+.module-checkout-page__couponChoiceValue > small {
+  color: #8b5d15;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.module-checkout-page__couponChoiceBody {
+  display: grid;
+  align-content: center;
+  gap: 0.28rem;
+  min-width: 0;
+  padding: 0.75rem 0;
+}
+
+.module-checkout-page__couponChoiceBody strong {
+  overflow: hidden;
+  font-size: 0.92rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-checkout-page__couponChoiceBody small {
+  color: #6b7280;
+  font-size: 0.72rem;
+}
+
+.module-checkout-page__couponChoiceBody em {
+  color: #b8491b;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.module-checkout-page__couponRadio {
+  align-self: center;
+  justify-self: start;
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  margin-right: 0;
+  border: 1.5px solid #c7a96f;
+  border-radius: 999px;
+  background: #fff;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.module-checkout-page__couponChoice.is-selected .module-checkout-page__couponRadio {
+  border-color: #e45b24;
+  background: #e45b24;
+}
+
+.module-checkout-page__couponChoice--none {
+  grid-template-columns: 3.3rem minmax(0, 1fr) 2rem;
+  min-height: 5.2rem;
+  background: #f9fafb;
+  border-color: #e5e7eb;
+}
+
+.module-checkout-page__couponChoiceNoneIcon {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  margin-left: 0.75rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  color: #6b7280;
+  font-weight: 900;
 }
 
 @media (min-width: 900px) {
@@ -503,5 +778,33 @@
 
   .module-checkout-page__price-sale {
     font-size: 1.7rem;
+  }
+
+  .module-checkout-page__couponOverlay {
+    align-items: center;
+  }
+
+  .module-checkout-page__couponSheet {
+    border-radius: 22px;
+    padding: 1rem 1.2rem 1.2rem;
+  }
+
+  .module-checkout-page__couponSheetHandle {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .module-checkout-page__couponSelectorCount {
+    display: none;
+  }
+
+  .module-checkout-page__couponChoice {
+    grid-template-columns: 5.8rem minmax(0, 1fr) 1.8rem;
+    gap: 0.55rem;
+  }
+
+  .module-checkout-page__couponChoice--none {
+    grid-template-columns: 3.3rem minmax(0, 1fr) 1.8rem;
   }
 }

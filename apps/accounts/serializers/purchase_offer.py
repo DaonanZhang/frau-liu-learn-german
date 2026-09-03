@@ -22,7 +22,6 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
     access_duration_days = serializers.SerializerMethodField()
     estimated_expires_at = serializers.SerializerMethodField()
     promotion_coupon_id = serializers.SerializerMethodField()
-    promotion_campaign = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOffer
@@ -45,7 +44,6 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
             "access_duration_days",
             "estimated_expires_at",
             "promotion_coupon_id",
-            "promotion_campaign",
             "currency",
         )
         read_only_fields = fields
@@ -87,10 +85,6 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
     def get_promotion_coupon_id(self, obj: PurchaseOffer) -> int | None:
         coupon = self._get_pricing(obj).coupon
         return coupon.id if coupon is not None else None
-
-    def get_promotion_campaign(self, obj: PurchaseOffer) -> str:
-        coupon = self._get_pricing(obj).coupon
-        return coupon.campaign.name if coupon is not None else ""
 
     def get_access_duration_days(self, obj: PurchaseOffer) -> int | None:
         return get_plan_duration_days(obj.plan)

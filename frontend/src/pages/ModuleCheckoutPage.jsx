@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Swal from "sweetalert2";
 
 import { fetchPurchaseOffers, createAlipayPurchase, savePendingPaymentContext } from "../api/payments/alipay.js";
+import { fetchCouponChoices } from "../api/coupons.js";
 import { useAuth } from "../api/auth/useAuth.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
 import { hasModuleAccess } from "../utils/moduleAccess.js";
@@ -15,6 +16,35 @@ function formatPromoPrice(amount) {
     return "";
   }
   return numeric.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+}
+
+function formatCouponExpiry(value) {
+  if (!value) {
+    return "长期有效";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "长期有效";
+  }
+  return `有效期至 ${new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date)}`;
+}
+
+function formatCouponScope(coupon) {
+  const scope = coupon?.scope || {};
+  if (scope.offer_title) {
+    return scope.offer_title;
+  }
+  if (scope.module_name && scope.season_number) {
+    return `${scope.module_name} · Season ${scope.season_number}`;
+  }
+  if (scope.module_name) {
+    return scope.module_name;
+  }
+  return "全部商品";
 }
 
 function getDisplayedSavings({ referenceOriginalPrice, originalPrice, displayPrice }) {
@@ -108,16 +138,25 @@ function formatExpiry(value) {
 export default function ModuleCheckoutPage() {
   const { moduleId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, loading, isAuthenticated, reloadMe } = useAuth();
   const module = MODULES_BY_ID[moduleId];
   const alreadyHasAccess = useMemo(() => hasModuleAccess(user, module), [user, module]);
   const currentModuleExpiry = useMemo(() => getCurrentModuleExpiry(user, module), [user, module]);
   const isExamPreparation = module?.id === "exam-preparation";
+  const requestedCouponId = useMemo(() => {
+    const value = Number(searchParams.get("coupon"));
+    return Number.isInteger(value) && value > 0 ? value : null;
+  }, [searchParams]);
 
   const [offers, setOffers] = useState([]);
   const [loadingOffers, setLoadingOffers] = useState(true);
   const [offersError, setOffersError] = useState("");
   const [creatingOrderCode, setCreatingOrderCode] = useState("");
+  const [couponChoicesByOffer, setCouponChoicesByOffer] = useState({});
+  const [selectedCouponByOffer, setSelectedCouponByOffer] = useState({});
+  const [couponSelectionModeByOffer, setCouponSelectionModeByOffer] = useState({});
+  const [couponSheetOfferCode, setCouponSheetOfferCode] = useState("");
 
   const targetSeasonNumber = useMemo(() => {
     if (Number.isFinite(Number(module?.purchaseSeasonNumber))) {
@@ -147,7 +186,39 @@ export default function ModuleCheckoutPage() {
         });
 
         if (!aborted) {
-          setOffers(Array.isArray(data) ? data : []);
+          const nextOffers = Array.isArray(data) ? data : [];
+          setOffers(nextOffers);
+
+          if (isAuthenticated) {
+            const choiceResults = await Promise.allSettled(
+              nextOffers.map((offer) => fetchCouponChoices(offer.code))
+            );
+            if (!aborted) {
+              const choicesByOffer = {};
+              const defaultsByOffer = {};
+              const modesByOffer = {};
+              choiceResults.forEach((result, index) => {
+                if (result.status === "fulfilled") {
+                  const offerCode = nextOffers[index].code;
+                  choicesByOffer[offerCode] = result.value;
+                  const requestedChoice = result.value?.choices?.find(
+                    (choice) => choice?.coupon?.id === requestedCouponId && choice?.is_applicable
+                  );
+                  defaultsByOffer[offerCode] = requestedChoice
+                    ? requestedCouponId
+                    : result.value?.default_coupon_id ?? null;
+                  modesByOffer[offerCode] = requestedChoice ? "manual" : "automatic";
+                }
+              });
+              setCouponChoicesByOffer(choicesByOffer);
+              setSelectedCouponByOffer(defaultsByOffer);
+              setCouponSelectionModeByOffer(modesByOffer);
+            }
+          } else {
+            setCouponChoicesByOffer({});
+            setSelectedCouponByOffer({});
+            setCouponSelectionModeByOffer({});
+          }
         }
       } catch (err) {
         if (!aborted) {
@@ -165,7 +236,7 @@ export default function ModuleCheckoutPage() {
     return () => {
       aborted = true;
     };
-  }, [module, targetSeasonNumber]);
+  }, [isAuthenticated, module, requestedCouponId, targetSeasonNumber]);
 
   useEffect(() => {
     if (!creatingOrderCode || !isAuthenticated || !module) {
@@ -233,9 +304,19 @@ export default function ModuleCheckoutPage() {
 
     try {
       setCreatingOrderCode(offerCode);
+      const couponBundle = couponChoicesByOffer[offerCode];
+      const hasExplicitSelection = Object.prototype.hasOwnProperty.call(
+        selectedCouponByOffer,
+        offerCode
+      );
+      const selectedCouponId = hasExplicitSelection
+        ? selectedCouponByOffer[offerCode]
+        : offer?.promotion_coupon_id ?? couponBundle?.default_coupon_id ?? null;
+      const couponSelectionMode = couponSelectionModeByOffer[offerCode] || "automatic";
       const order = await createAlipayPurchase({
         offerCode,
-        couponId: offer?.promotion_coupon_id,
+        couponId: couponSelectionMode === "manual" ? selectedCouponId : undefined,
+        useCoupon: couponSelectionMode !== "none",
       });
       savePendingPaymentContext(order?.merchant_order_no, {
         returnPath: `/modules/${module.id}/preview`,
@@ -326,15 +407,35 @@ export default function ModuleCheckoutPage() {
             <div className="module-checkout-page__offer-list">
               {offers.map((offer) => {
                 const isCreating = creatingOrderCode === offer.code;
-                const displayPrice = getDisplayPrice(offer);
-                const originalPrice = getOriginalPrice(offer);
+                const couponBundle = couponChoicesByOffer[offer.code];
+                const hasExplicitSelection = Object.prototype.hasOwnProperty.call(
+                  selectedCouponByOffer,
+                  offer.code
+                );
+                const selectedCouponId = hasExplicitSelection
+                  ? selectedCouponByOffer[offer.code]
+                  : offer?.promotion_coupon_id ?? couponBundle?.default_coupon_id ?? null;
+                const selectedChoice = couponBundle?.choices?.find(
+                  (item) => item?.coupon?.id === selectedCouponId
+                );
+                const selectedPricing = selectedCouponId === null
+                  ? couponBundle?.no_coupon_pricing
+                  : selectedChoice?.pricing;
+                const displayPrice = Number(selectedPricing?.final_amount ?? getDisplayPrice(offer));
+                const originalPrice = Number(selectedPricing?.original_amount ?? getOriginalPrice(offer));
                 const referenceOriginalPrice = getReferenceOriginalPrice(module, offer);
-                const hasDiscount = Boolean(offer?.is_discounted_for_user) && Number(offer?.discount_amount) > 0;
+                const totalDiscount = Number(
+                  selectedPricing?.total_discount_amount ?? offer?.discount_amount
+                );
                 const displayedSavings = getDisplayedSavings({
                   referenceOriginalPrice,
                   originalPrice,
                   displayPrice,
                 });
+                const effectiveSavings = displayedSavings > 0
+                  ? displayedSavings
+                  : Math.max(0, Number.isFinite(totalDiscount) ? totalDiscount : 0);
+                const hasDiscount = effectiveSavings > 0;
                 return (
                   <article key={offer.code} className="module-checkout-page__offer">
                     <div className="module-checkout-page__offer-shell">
@@ -378,7 +479,7 @@ export default function ModuleCheckoutPage() {
                           <div className="module-checkout-page__price-caption">当前支付金额</div>
                           {hasDiscount ? (
                             <div className="module-checkout-page__offer-badge module-checkout-page__offer-badge--inline">
-                              {offer.discount_label || "品牌挚友专享"}
+                              优惠
                             </div>
                           ) : null}
                           <div className="module-checkout-page__price-block">
@@ -401,10 +502,37 @@ export default function ModuleCheckoutPage() {
                             </div>
                             {hasDiscount ? (
                               <div className="module-checkout-page__discount-note">
-                                已减 ¥{formatPromoPrice(displayedSavings)}
+                                已减 ¥{formatPromoPrice(effectiveSavings)}
                               </div>
                             ) : null}
                           </div>
+
+                          <button
+                            className="module-checkout-page__couponSelector"
+                            type="button"
+                            disabled={!couponBundle}
+                            onClick={() => setCouponSheetOfferCode(offer.code)}
+                          >
+                            <span className="module-checkout-page__couponSelectorIcon" aria-hidden="true">券</span>
+                            <span className="module-checkout-page__couponSelectorText">
+                              <strong>优惠券</strong>
+                              <small>
+                                {selectedChoice
+                                  ? `已选优惠券 · 本单减 ¥${formatPromoPrice(selectedChoice.pricing?.promotion_discount_amount)}`
+                                  : selectedCouponId === null
+                                    ? "不使用优惠券"
+                                    : couponBundle
+                                      ? "暂无适用优惠券"
+                                      : "正在匹配最优优惠"}
+                              </small>
+                            </span>
+                            {couponBundle?.available_count > 0 ? (
+                              <span className="module-checkout-page__couponSelectorCount">
+                                {couponBundle.available_count} 张可用
+                              </span>
+                            ) : null}
+                            <span className="module-checkout-page__couponSelectorArrow" aria-hidden="true">›</span>
+                          </button>
 
                           <button
                             className="module-checkout-page__pay"
@@ -448,6 +576,104 @@ export default function ModuleCheckoutPage() {
           稍后再说
         </button>
       </div>
+
+      {couponSheetOfferCode ? (() => {
+        const couponBundle = couponChoicesByOffer[couponSheetOfferCode];
+        const activeOffer = offers.find((offer) => offer.code === couponSheetOfferCode);
+        const selectedCouponId = Object.prototype.hasOwnProperty.call(
+          selectedCouponByOffer,
+          couponSheetOfferCode
+        )
+          ? selectedCouponByOffer[couponSheetOfferCode]
+          : couponBundle?.default_coupon_id ?? null;
+        return (
+          <div className="module-checkout-page__couponOverlay" role="presentation">
+            <button
+              type="button"
+              className="module-checkout-page__couponBackdrop"
+              aria-label="关闭优惠券选择"
+              onClick={() => setCouponSheetOfferCode("")}
+            />
+            <section
+              className="module-checkout-page__couponSheet"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="coupon-sheet-title"
+            >
+              <div className="module-checkout-page__couponSheetHandle" aria-hidden="true" />
+              <div className="module-checkout-page__couponSheetHeader">
+                <div>
+                  <div className="module-checkout-page__couponSheetEyebrow">SMART SAVINGS</div>
+                  <h2 id="coupon-sheet-title">选择优惠券</h2>
+                  <p>{activeOffer?.title || "当前商品"} · 默认选择最省方案</p>
+                </div>
+                <button type="button" onClick={() => setCouponSheetOfferCode("")} aria-label="关闭">×</button>
+              </div>
+
+              <div className="module-checkout-page__couponChoices">
+                {(couponBundle?.choices || []).map((choice) => {
+                  const coupon = choice.coupon;
+                  const checked = selectedCouponId === coupon.id;
+                  return (
+                    <button
+                      key={coupon.id}
+                      type="button"
+                      disabled={!choice.is_applicable}
+                      className={`module-checkout-page__couponChoice${checked ? " is-selected" : ""}${!choice.is_applicable ? " is-disabled" : ""}`}
+                      onClick={() => {
+                        setSelectedCouponByOffer((current) => ({
+                          ...current,
+                          [couponSheetOfferCode]: coupon.id,
+                        }));
+                        setCouponSelectionModeByOffer((current) => ({
+                          ...current,
+                          [couponSheetOfferCode]: "manual",
+                        }));
+                        setCouponSheetOfferCode("");
+                      }}
+                    >
+                      <span className="module-checkout-page__couponChoiceValue">
+                        <strong><small>¥</small>{formatPromoPrice(coupon.discount_amount)}</strong>
+                        <small>{Number(coupon.minimum_order_amount) > 0 ? `满 ¥${formatPromoPrice(coupon.minimum_order_amount)} 可用` : "无门槛"}</small>
+                      </span>
+                      <span className="module-checkout-page__couponChoiceBody">
+                        <strong>{Number(coupon.minimum_order_amount) > 0 ? "满减优惠券" : "无门槛优惠券"}</strong>
+                        <small>适用于：{formatCouponScope(coupon)}</small>
+                        <small>{formatCouponExpiry(coupon.expires_at)}</small>
+                        <em>{choice.is_applicable ? `本单优惠 ¥${choice.pricing?.promotion_discount_amount}` : choice.unavailable_reason}</em>
+                      </span>
+                      <span className="module-checkout-page__couponRadio" aria-hidden="true">{checked ? "✓" : ""}</span>
+                    </button>
+                  );
+                })}
+
+                <button
+                  type="button"
+                  className={`module-checkout-page__couponChoice module-checkout-page__couponChoice--none${selectedCouponId === null ? " is-selected" : ""}`}
+                  onClick={() => {
+                    setSelectedCouponByOffer((current) => ({
+                      ...current,
+                      [couponSheetOfferCode]: null,
+                    }));
+                    setCouponSelectionModeByOffer((current) => ({
+                      ...current,
+                      [couponSheetOfferCode]: "none",
+                    }));
+                    setCouponSheetOfferCode("");
+                  }}
+                >
+                  <span className="module-checkout-page__couponChoiceNoneIcon" aria-hidden="true">—</span>
+                  <span className="module-checkout-page__couponChoiceBody">
+                    <strong>不使用优惠券</strong>
+                    <small>仅保留当前账号自动享有的优惠</small>
+                  </span>
+                  <span className="module-checkout-page__couponRadio" aria-hidden="true">{selectedCouponId === null ? "✓" : ""}</span>
+                </button>
+              </div>
+            </section>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }

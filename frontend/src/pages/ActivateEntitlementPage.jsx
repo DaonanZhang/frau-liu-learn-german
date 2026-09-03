@@ -9,7 +9,7 @@ export default function ActivateEntitlementPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { reloadMe } = useAuth();
+  const { reloadMe, logout } = useAuth();
 
   const canVerify = useMemo(
     () => code.trim().length > 0 && !loading,
@@ -27,8 +27,10 @@ export default function ActivateEntitlementPage() {
         await Swal.fire({
           icon: "success",
           title: "优惠领取成功",
-          text: `已获得 ¥${result.coupon.discount_amount} 优惠，下单时会自动使用适用的最优优惠。`,
+          text: `已获得 ¥${result.coupon.discount_amount} 优惠。可在个人资料的“我的优惠券”中查看。`,
         });
+        navigate(result?.coupon?.profile_path || "/profile#coupons", { replace: true });
+        return;
       } else {
         await Swal.fire({
           icon: "success",
@@ -40,6 +42,27 @@ export default function ActivateEntitlementPage() {
       navigate("/", { replace: true });
     } catch (err) {
       console.error("[verify] failed:", err);
+      if (err?.status === 401) {
+        logout();
+        await Swal.fire({
+          icon: "warning",
+          title: "登录已失效",
+          text: "请重新登录后再兑换，兑换码尚未被使用。",
+        });
+        navigate("/login", {
+          replace: true,
+          state: { returnTo: "/redeem-code" },
+        });
+        return;
+      }
+      if (err?.status >= 500) {
+        await Swal.fire({
+          icon: "error",
+          title: "兑换暂时失败",
+          text: "服务器处理兑换码时出现问题，请稍后重试。兑换码尚未被使用。",
+        });
+        return;
+      }
       await Swal.fire({
         icon: "error",
         title: "兑换码无效",
@@ -51,7 +74,7 @@ export default function ActivateEntitlementPage() {
   };
 
   return (
-    <AuthLayout className="auth-activate">
+    <AuthLayout className="auth-activate" showFooter={false}>
       <div className="auth-logo" aria-hidden="true">
         <div className="logo-pill">
           <div className="logo-triangle" />

@@ -775,7 +775,9 @@ class CreateAlipayPurchaseAPIView(APIView):
             )
             selected_coupon = validated_data.get("coupon")
             locked_coupon = None
-            if selected_coupon is not None:
+            if selected_coupon is False:
+                locked_coupon = False
+            elif selected_coupon is not None:
                 locked_coupon = get_coupon_for_offer(
                     user=request.user,
                     offer=validated_data["offer"],
@@ -796,9 +798,17 @@ class CreateAlipayPurchaseAPIView(APIView):
             pricing = get_purchase_pricing(
                 user=request.user,
                 offer=validated_data["offer"],
-                coupon=locked_coupon if locked_coupon is not None else False,
+                coupon=(
+                    locked_coupon
+                    if locked_coupon is not None and locked_coupon is not False
+                    else False
+                ),
             )
-            if locked_coupon is not None and pricing.coupon is None:
+            if (
+                locked_coupon is not None
+                and locked_coupon is not False
+                and pricing.coupon is None
+            ):
                 return Response(
                     {"detail": "该优惠券不会降低当前价格。"},
                     status=status.HTTP_409_CONFLICT,
@@ -826,13 +836,16 @@ class CreateAlipayPurchaseAPIView(APIView):
                     payment=payment,
                     coupon=pricing.coupon,
                     promotion_code=pricing.coupon.promotion_code,
-                    campaign=pricing.coupon.campaign,
                     user=request.user,
                     offer=validated_data["offer"],
                     original_amount=pricing.original_amount,
                     automatic_discount_amount=pricing.automatic_discount_amount,
                     promotion_discount_amount=pricing.promotion_discount_amount,
                     final_amount=pricing.final_amount,
+                    selection_source=validated_data["coupon_selection_source"],
+                    campaign_name_snapshot=pricing.coupon.promotion_code.campaign_name,
+                    campaign_organization_snapshot=pricing.coupon.promotion_code.organization_name,
+                    promotion_code_remark_snapshot=pricing.coupon.promotion_code.remark,
                 )
                 pricing.coupon.status = UserCoupon.Status.RESERVED
                 pricing.coupon.reserved_payment = payment

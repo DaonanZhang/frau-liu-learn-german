@@ -8,29 +8,22 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const [tokenPresent, setTokenPresent] = useState(
-    () => Boolean(localStorage.getItem("accessToken"))
-  );
-
   const hasToken = useCallback(() => Boolean(localStorage.getItem("accessToken")), []);
 
   const reloadMe = useCallback(async () => {
     if (!hasToken()) {
       setUser(null);
-      setTokenPresent(false);
       return null;
     }
 
     try {
       const me = await apiFetch("/accounts/users/me/");
       setUser(me);
-      setTokenPresent(true);
       return me;
     } catch (error) {
       if (error?.status === 401) {
         clearAuthTokens();
         setUser(null);
-        setTokenPresent(false);
       }
       return null;
     } finally {
@@ -39,13 +32,20 @@ export function AuthProvider({ children }) {
   }, [hasToken]);
 
   useEffect(() => {
-    const token = hasToken();
-    setTokenPresent(token);
-    setLoading(false);
-    if (!user && token) {
-      reloadMe();
+    let cancelled = false;
+
+    async function bootstrapAuthentication() {
+      await reloadMe();
+      if (!cancelled) {
+        setLoading(false);
+      }
     }
-  }, [user, hasToken, reloadMe]);
+
+    bootstrapAuthentication();
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadMe]);
 
   useEffect(() => {
     function refreshVisibleSession() {
@@ -64,21 +64,24 @@ export function AuthProvider({ children }) {
     };
   }, [hasToken, reloadMe]);
 
-  const notifyLogin = useCallback(() => {
-    setTokenPresent(true);
-    reloadMe();
+  const notifyLogin = useCallback(async () => {
+    setLoading(true);
+    try {
+      return await reloadMe();
+    } finally {
+      setLoading(false);
+    }
   }, [reloadMe]);
 
   const value = {
     user,
     loading,
-    isAuthenticated: Boolean(user) || tokenPresent,
+    isAuthenticated: Boolean(user),
     reloadMe,
     notifyLogin,
     logout: () => {
       clearAuthTokens();
       setUser(null);
-      setTokenPresent(false);
       setLoading(false);
     },
   };

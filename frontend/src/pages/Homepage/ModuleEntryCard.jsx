@@ -88,7 +88,7 @@ function buildCheckoutModalHtml(module, offers) {
       ? Math.max(0, Number((originalPrice - displayPrice).toFixed(2)))
       : 0;
     const discountBadgeHtml = hasDiscount
-      ? `<div class="module-checkout-modal__discount-badge">${escapeHtml(offer?.discount_label || "品牌挚友专享")}</div>`
+      ? `<div class="module-checkout-modal__discount-badge">${escapeHtml(offer?.discount_label || "优惠券优惠")}</div>`
       : "";
     const discountNoteHtml = hasDiscount
       ? `<div class="module-checkout-modal__discount-note">已减 ¥${escapeHtml(formatPromoPrice(displayedSavings))}</div>`

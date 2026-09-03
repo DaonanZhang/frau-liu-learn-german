@@ -7,24 +7,19 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Count, Sum
 from django.utils import timezone
 
-from apps.accounts.models import PaymentDiscountApplication, PromotionCampaign, PromotionCodeRecord
-from apps.accounts.services.activation_codes import decrypt_activation_code
+from apps.accounts.models import PaymentDiscountApplication, PromotionCodeRecord
 
 
 class Command(BaseCommand):
     help = "Report promotion-code redemptions and paid coupon purchases for one campaign and month."
 
     def add_arguments(self, parser) -> None:
-        parser.add_argument("--campaign", required=True)
+        parser.add_argument("--campaign-name", required=True)
+        parser.add_argument("--organization", default="")
         parser.add_argument("--month", help="Calendar month in YYYY-MM format; defaults to the current month.")
         parser.add_argument("--details", action="store_true")
 
     def handle(self, *args, **options) -> None:
-        try:
-            campaign = PromotionCampaign.objects.get(code=options["campaign"])
-        except PromotionCampaign.DoesNotExist as exc:
-            raise CommandError("Unknown promotion campaign") from exc
-
         month_text = options.get("month") or timezone.localdate().strftime("%Y-%m")
         try:
             month_start_date = datetime.strptime(month_text, "%Y-%m").date().replace(day=1)
@@ -39,17 +34,20 @@ class Command(BaseCommand):
         next_month = timezone.make_aware(datetime.combine(next_month_date, datetime.min.time()), current_tz)
 
         redeemed = PromotionCodeRecord.objects.filter(
-            campaign=campaign,
+            campaign_name=options["campaign_name"],
             status=PromotionCodeRecord.Status.CONSUMED,
             consumed_at__gte=month_start,
             consumed_at__lt=next_month,
         ).select_related("consumed_by_user")
         paid = PaymentDiscountApplication.objects.filter(
-            campaign=campaign,
+            campaign_name_snapshot=options["campaign_name"],
             status=PaymentDiscountApplication.Status.APPLIED,
             applied_at__gte=month_start,
             applied_at__lt=next_month,
         ).select_related("user", "offer", "payment", "promotion_code")
+        if options["organization"]:
+            redeemed = redeemed.filter(organization_name=options["organization"])
+            paid = paid.filter(campaign_organization_snapshot=options["organization"])
         totals = paid.aggregate(
             paid_orders=Count("id"),
             paying_users=Count("user_id", distinct=True),
@@ -58,7 +56,9 @@ class Command(BaseCommand):
             final_amount=Sum("final_amount"),
         )
 
-        self.stdout.write(f"campaign={campaign.code} name={campaign.name} month={month_text}")
+        self.stdout.write(
+            f"campaign_name={options['campaign_name']} organization={options['organization']} month={month_text}"
+        )
         self.stdout.write(f"redeemed_codes={redeemed.count()}")
         self.stdout.write(f"paid_orders={totals['paid_orders'] or 0}")
         self.stdout.write(f"paying_users={totals['paying_users'] or 0}")
@@ -72,7 +72,7 @@ class Command(BaseCommand):
         for record in redeemed.order_by("consumed_at", "id"):
             self.stdout.write(
                 "\t".join([
-                    decrypt_activation_code(record.code_ciphertext) or record.code_hash[:12],
+                    record.code,
                     getattr(record.consumed_by_user, "telephone", "") or "",
                     timezone.localtime(record.consumed_at).isoformat(),
                 ])
@@ -81,8 +81,7 @@ class Command(BaseCommand):
         for application in paid.order_by("applied_at", "id"):
             self.stdout.write(
                 "\t".join([
-                    decrypt_activation_code(application.promotion_code.code_ciphertext)
-                    or application.promotion_code.code_hash[:12],
+                    application.promotion_code.code,
                     application.user.telephone,
                     application.offer.code,
                     application.payment.merchant_order_no,

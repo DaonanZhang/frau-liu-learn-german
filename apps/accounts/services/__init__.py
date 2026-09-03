@@ -23,6 +23,7 @@ from .entitlement_grant_service import (
     grant_or_extend_entitlement,
     revoke_and_compact_payment_entitlement,
 )
+from .promotion_codes import create_promotion_code_batch
 
 __all__ = [
     "AlipayClientConfig",
@@ -42,4 +43,5 @@ __all__ = [
     "get_entitlement_extension_start",
     "grant_or_extend_entitlement",
     "revoke_and_compact_payment_entitlement",
+    "create_promotion_code_batch",
 ]

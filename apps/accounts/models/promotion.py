@@ -6,19 +6,6 @@ from django.db import models
 from django.db.models import F, Q
 
 
-class PromotionCampaign(models.Model):
-    code = models.SlugField(max_length=64, unique=True)
-    name = models.CharField(max_length=128)
-    organization_name = models.CharField(max_length=128, blank=True, default="")
-    remark = models.CharField(max_length=255, blank=True, default="")
-    is_active = models.BooleanField(default=True, db_index=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self) -> str:
-        return f"PromotionCampaign<{self.code}>"
-
-
 class PromotionCodeRecord(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
@@ -26,13 +13,9 @@ class PromotionCodeRecord(models.Model):
         EXPIRED = "expired", "Expired"
         REVOKED = "revoked", "Revoked"
 
-    code_hash = models.CharField(max_length=64, unique=True)
-    code_ciphertext = models.TextField(blank=True, default="")
-    campaign = models.ForeignKey(
-        PromotionCampaign,
-        on_delete=models.PROTECT,
-        related_name="promotion_codes",
-    )
+    code = models.CharField(max_length=32, unique=True)
+    campaign_name = models.CharField(max_length=128)
+    organization_name = models.CharField(max_length=128, blank=True, default="")
     remark = models.CharField(max_length=255, blank=True, default="")
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2)
     minimum_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -58,7 +41,7 @@ class PromotionCodeRecord(models.Model):
         related_name="promotion_codes",
     )
     is_stackable = models.BooleanField(default=False)
-    coupon_valid_days = models.PositiveIntegerField(default=30)
+    coupon_valid_days = models.PositiveIntegerField(null=True, blank=True, default=None)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -79,13 +62,16 @@ class PromotionCodeRecord(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["campaign", "status", "consumed_at"], name="idx_promo_campaign_use"),
+            models.Index(fields=["campaign_name", "status", "consumed_at"], name="idx_promo_name_use"),
             models.Index(fields=["consumed_by_user", "status"], name="idx_promo_user_status"),
         ]
         constraints = [
             models.CheckConstraint(condition=Q(discount_amount__gt=0), name="promo_discount_positive"),
             models.CheckConstraint(condition=Q(minimum_order_amount__gte=0), name="promo_minimum_nonnegative"),
-            models.CheckConstraint(condition=Q(coupon_valid_days__gt=0), name="promo_valid_days_positive"),
+            models.CheckConstraint(
+                condition=Q(coupon_valid_days__isnull=True) | Q(coupon_valid_days__gt=0),
+                name="promo_valid_days_positive",
+            ),
         ]
 
     def clean(self) -> None:
@@ -100,7 +86,7 @@ class PromotionCodeRecord(models.Model):
                 raise ValidationError("Applicable offer does not belong to the selected season.")
 
     def __str__(self) -> str:
-        return f"PromotionCodeRecord<hash={self.code_hash[:12]} status={self.status}>"
+        return f"PromotionCodeRecord<code={self.code} status={self.status}>"
 
 
 class UserCoupon(models.Model):
@@ -121,11 +107,6 @@ class UserCoupon(models.Model):
         on_delete=models.PROTECT,
         related_name="coupon",
     )
-    campaign = models.ForeignKey(
-        PromotionCampaign,
-        on_delete=models.PROTECT,
-        related_name="coupons",
-    )
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2)
     minimum_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     applicable_module = models.ForeignKey(
@@ -144,7 +125,7 @@ class UserCoupon(models.Model):
         default=Status.AVAILABLE,
         db_index=True,
     )
-    expires_at = models.DateTimeField(db_index=True)
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     reserved_payment = models.OneToOneField(
         "accounts.AlipayWebsitePayment",
         null=True,
@@ -167,7 +148,6 @@ class UserCoupon(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["user", "status", "expires_at"], name="idx_coupon_user_available"),
-            models.Index(fields=["campaign", "status", "used_at"], name="idx_coupon_campaign_use"),
         ]
         constraints = [
             models.CheckConstraint(condition=Q(discount_amount__gt=0), name="coupon_discount_positive"),
@@ -175,7 +155,7 @@ class UserCoupon(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"UserCoupon<user={self.user_id} campaign={self.campaign_id} status={self.status}>"
+        return f"UserCoupon<user={self.user_id} promotion_code={self.promotion_code_id} status={self.status}>"
 
 
 class PaymentDiscountApplication(models.Model):
@@ -185,6 +165,10 @@ class PaymentDiscountApplication(models.Model):
         RELEASED = "released", "Released"
         REFUNDED = "refunded", "Refunded"
 
+    class SelectionSource(models.TextChoices):
+        AUTOMATIC = "automatic", "Automatically selected"
+        MANUAL = "manual", "Selected by user"
+
     payment = models.OneToOneField(
         "accounts.AlipayWebsitePayment",
         on_delete=models.PROTECT,
@@ -193,9 +177,6 @@ class PaymentDiscountApplication(models.Model):
     coupon = models.ForeignKey(UserCoupon, on_delete=models.PROTECT, related_name="payment_applications")
     promotion_code = models.ForeignKey(
         PromotionCodeRecord, on_delete=models.PROTECT, related_name="payment_applications"
-    )
-    campaign = models.ForeignKey(
-        PromotionCampaign, on_delete=models.PROTECT, related_name="payment_applications"
     )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="promotion_purchases"
@@ -207,6 +188,14 @@ class PaymentDiscountApplication(models.Model):
     automatic_discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     promotion_discount_amount = models.DecimalField(max_digits=10, decimal_places=2)
     final_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    selection_source = models.CharField(
+        max_length=16,
+        choices=SelectionSource.choices,
+        default=SelectionSource.AUTOMATIC,
+    )
+    campaign_name_snapshot = models.CharField(max_length=128, blank=True, default="")
+    campaign_organization_snapshot = models.CharField(max_length=128, blank=True, default="")
+    promotion_code_remark_snapshot = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -221,7 +210,7 @@ class PaymentDiscountApplication(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["campaign", "status", "applied_at"], name="idx_discount_campaign_paid"),
+            models.Index(fields=["campaign_name_snapshot", "status", "applied_at"], name="idx_discount_name_paid"),
             models.Index(fields=["user", "status"], name="idx_discount_user_status"),
         ]
         constraints = [

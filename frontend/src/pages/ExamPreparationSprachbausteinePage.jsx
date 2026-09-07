@@ -1,22 +1,6 @@
 import { Link } from "react-router-dom";
+import { SPRACHBAUSTEINE_TYPES } from "./examPreparationTypeContent.js";
 import "./ExamPreparationSprachbausteinePage.css";
-
-const SPRACHBAUSTEINE_TYPES = [
-  {
-    key: "cloze-choice",
-    title: "Teil 1",
-    description: "每一空都有对应选项，适合逐题分析词义、语法和固定搭配，帮助你更稳地判断每个空格最自然的表达方式。",
-    to: "/modules/exam-preparation/sprachbausteine/cloze-choice",
-    cta: "进入这一题型",
-  },
-  {
-    key: "cloze-matching",
-    title: "Teil 2",
-    description: "多个空格共用同一组选项，更适合训练整体判断能力。你需要同时比较句意、语法和上下文，完成更接近考试的综合匹配。",
-    to: "/modules/exam-preparation/sprachbausteine/cloze-matching",
-    cta: "进入这一题型",
-  },
-];
 
 export default function ExamPreparationSprachbausteinePage() {
   return (
@@ -32,7 +16,7 @@ export default function ExamPreparationSprachbausteinePage() {
           <p className="exam-sprach-hero__eyebrow">Sprachbausteine</p>
           <h1 className="exam-sprach-hero__title">语法模块</h1>
           <p className="exam-sprach-hero__copy">
-            这里主要练习词汇、语法和句子结构的综合运用。你可以根据自己的复习习惯，选择逐空判断，或者进入更接近正式考试的共享选项池题型。
+            完整训练 telc B1 Sprachbausteine 的两个部分，通过语法选择和备选词填空巩固语法结构、词汇搭配与上下文理解。
           </p>
           <div className="exam-sprach-hero__tags" aria-label="语法模块特点">
             <span className="exam-sprach-hero__tag">词汇语法训练</span>

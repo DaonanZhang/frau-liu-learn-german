@@ -68,6 +68,15 @@
   font-weight: 700;
 }
 
+.exam-module-hero__notice {
+  margin: 0.85rem 0 0;
+  color: #7b8491;
+  font-size: 0.78rem;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.6;
+}
+
 .exam-module-hero__access {
   display: flex;
   align-items: center;

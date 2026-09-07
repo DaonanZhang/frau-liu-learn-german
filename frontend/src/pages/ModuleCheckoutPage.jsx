@@ -7,6 +7,7 @@ import { fetchCouponChoices } from "../api/coupons.js";
 import { useAuth } from "../api/auth/useAuth.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
 import { hasModuleAccess } from "../utils/moduleAccess.js";
+import PurchaseFeatureList from "../components/PurchaseFeatureList.jsx";
 
 import "./ModuleCheckoutPage.css";
 
@@ -360,13 +361,22 @@ export default function ModuleCheckoutPage() {
           <div className="module-checkout-page__eyebrow">支付页面</div>
           <h1 className="module-checkout-page__title">{module.title}</h1>
           <div className="module-checkout-page__labels">
-            {(module.purchaseLabels || []).map((item) => (
+            {(module.stats || []).map((item) => (
               <span key={item} className="module-checkout-page__label">
                 {item}
               </span>
             ))}
           </div>
           <p className="module-checkout-page__description">{module.purchaseDescription}</p>
+          {isExamPreparation ? (
+            <PurchaseFeatureList
+              features={module.purchaseFeatures}
+              className="module-checkout-page__feature-list"
+            />
+          ) : null}
+          {module.purchaseNotice ? (
+            <p className="module-checkout-page__disclaimer">{module.purchaseNotice}</p>
+          ) : null}
           <p className="module-checkout-page__notice">
             {isExamPreparation
               ? "集中练习听力、阅读、语言模块、写作与口语，为考试做好更充分的准备。"

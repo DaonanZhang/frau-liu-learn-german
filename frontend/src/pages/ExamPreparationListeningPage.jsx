@@ -1,32 +1,6 @@
 import { Link } from "react-router-dom";
+import { LISTENING_TYPES } from "./examPreparationTypeContent.js";
 import "./ExamPreparationListeningPage.css";
-
-const LISTENING_TYPES = [
-  {
-    key: "short-text-prep",
-    title: "Teil 1",
-    description:
-      "适合先看题目再进入听力的练习方式。你可以先整理关键信息，再通过录音判断内容是否正确，帮助自己建立更稳定的听题节奏。",
-    to: "/modules/exam-preparation/hoeren/short-text-prep",
-    cta: "进入这一题型",
-  },
-  {
-    key: "short-text-once",
-    title: "Teil 2",
-    description:
-      "更接近正式考试中的即时反应训练。你需要一边听，一边快速抓住重点并完成判断，适合强化第一遍获取信息的能力。",
-    to: "/modules/exam-preparation/hoeren/short-text-once",
-    cta: "进入这一题型",
-  },
-  {
-    key: "dialog-twice",
-    title: "Teil 3",
-    description:
-      "围绕较长对话展开，更适合训练连续理解、人物关系和细节捕捉。通过完整听对话并集中作答，可以提升整体听力稳定性。",
-    to: "/modules/exam-preparation/hoeren/dialog-twice",
-    cta: "进入这一题型",
-  },
-];
 
 export default function ExamPreparationListeningPage() {
   return (
@@ -42,7 +16,7 @@ export default function ExamPreparationListeningPage() {
           <p className="exam-listening-hero__eyebrow">Hören</p>
           <h1 className="exam-listening-hero__title">听力模块</h1>
           <p className="exam-listening-hero__copy">
-            这里汇集了不同类型的听力练习。你可以根据自己的复习重点，选择更适合当前阶段的题型，练习听关键信息、判断正误以及理解完整对话。
+            完整训练 telc B1 听力的三个部分，在规定播放次数内捕捉日常对话、访谈和公共广播中的关键信息。
           </p>
           <div className="exam-listening-hero__tags" aria-label="听力模块特点">
             <span className="exam-listening-hero__tag">分题型练习</span>

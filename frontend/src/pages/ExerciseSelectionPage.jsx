@@ -9,11 +9,9 @@ export default function ExerciseSelectionPage({
   eyebrow,
   title,
   description,
-  tags = [],
   fetchExercises,
   buildExerciseHref,
   buildCardTitle,
-  cardLabel = "Übung",
   cardDescription = "Öffne diese Aufgabe und beginne direkt mit dem Training.",
   cardCta = "Übung öffnen",
   emptyMessage = "Zurzeit sind keine Aufgaben verfügbar.",
@@ -64,13 +62,6 @@ export default function ExerciseSelectionPage({
           <p className="exercise-selection-hero__eyebrow">{eyebrow}</p>
           <h1 className="exercise-selection-hero__title">{title}</h1>
           <p className="exercise-selection-hero__copy">{description}</p>
-          {tags.length ? (
-            <div className="exercise-selection-hero__tags">
-              {tags.map((tag) => (
-                <span key={tag} className="exercise-selection-hero__tag">{tag}</span>
-              ))}
-            </div>
-          ) : null}
         </div>
       </section>
 
@@ -94,7 +85,6 @@ export default function ExerciseSelectionPage({
                 <div className="exercise-selection-card__top">
                   <div className="exercise-selection-card__meta">
                     <div className="exercise-selection-card__meta-left">
-                      <span className="exercise-selection-card__chip">{cardLabel}</span>
                       {examType ? (
                         <span
                           className="exercise-selection-card__badge exercise-selection-card__badge--exam-type"

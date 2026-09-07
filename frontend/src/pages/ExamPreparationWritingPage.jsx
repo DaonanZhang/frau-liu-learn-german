@@ -55,7 +55,7 @@ export default function ExamPreparationWritingPage() {
           <p className="writing-hero__eyebrow">Schreiben</p>
           <h1 className="writing-hero__title">写作模块</h1>
           <p className="writing-hero__copy">
-            这里用于集中练习书面表达。你可以选择具体题目进入写作页面，围绕题目要求组织内容，并在完成后查看自己的作答与示例答案。
+            考试时间 30 分钟。根据朋友或机构发来的电子邮件完成回复，必须涵盖题目给出的 4 个提示要点（Leitpunkte），并注意书信格式、恰当语体与逻辑连贯性。
           </p>
           <div className="writing-hero__tags" aria-label="写作模块特点">
             <span className="writing-hero__tag">书面表达训练</span>

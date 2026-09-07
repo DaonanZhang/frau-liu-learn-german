@@ -163,6 +163,25 @@
   margin-top: 0.9rem;
   font-size: 0.95rem;
   line-height: 1.75;
+  white-space: pre-line;
+}
+
+.module-checkout-page__feature-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0 0;
+  padding-left: 1.15rem;
+  color: #374151;
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.module-checkout-page__disclaimer {
+  margin: 0.85rem 0 0;
+  color: #7b8491;
+  font-size: 0.78rem;
+  font-style: italic;
+  line-height: 1.55;
 }
 
 .module-checkout-page__notice {

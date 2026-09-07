@@ -1,29 +1,6 @@
 import { Link } from "react-router-dom";
+import { READING_TYPES } from "./examPreparationTypeContent.js";
 import "./ExamPreparationReadingPage.css";
-
-const READING_TYPES = [
-  {
-    key: "title-matching",
-    title: "Teil 1",
-    description: "适合训练快速概括段落大意的能力。你需要抓住每一段的核心信息，再从多个标题中选出最合适的一项。",
-    to: "/modules/exam-preparation/lesen/title-matching",
-    cta: "进入这一题型",
-  },
-  {
-    key: "understanding",
-    title: "Teil 2",
-    description: "围绕一篇完整文章进行练习，更适合提升细节理解、语境判断和信息定位能力，帮助你更稳地完成阅读选择题。",
-    to: "/modules/exam-preparation/lesen/understanding",
-    cta: "进入这一题型",
-  },
-  {
-    key: "ad-matching",
-    title: "Teil 3",
-    description: "通过对比条件与信息内容完成匹配，适合训练筛选关键词、判断需求重点和快速查找相关信息的能力。",
-    to: "/modules/exam-preparation/lesen/ad-matching",
-    cta: "进入这一题型",
-  },
-];
 
 export default function ExamPreparationReadingPage() {
   return (
@@ -39,7 +16,7 @@ export default function ExamPreparationReadingPage() {
           <p className="exam-reading-hero__eyebrow">Lesen</p>
           <h1 className="exam-reading-hero__title">阅读模块</h1>
           <p className="exam-reading-hero__copy">
-            这里提供不同方向的阅读训练。你可以根据自己的复习目标，选择练习概括主旨、理解文章细节，或者完成需求与信息之间的匹配。
+            完整训练 telc B1 阅读的三个部分：短文本标题匹配、长文理解选择，以及生活情境与分类广告匹配。
           </p>
           <div className="exam-reading-hero__tags" aria-label="阅读模块特点">
             <span className="exam-reading-hero__tag">按题型练习</span>

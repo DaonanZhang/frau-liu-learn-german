@@ -18,6 +18,12 @@ import ExamPreparationListeningPage from "./pages/ExamPreparationListeningPage.j
 import ExamPreparationSpeakingPage from "./pages/ExamPreparationSpeakingPage.jsx";
 import ExamPreparationSprachbausteinePage from "./pages/ExamPreparationSprachbausteinePage.jsx";
 import ExamPreparationReadingPage from "./pages/ExamPreparationReadingPage.jsx";
+import {
+  LISTENING_TYPES,
+  READING_TYPES,
+  SPEAKING_TYPES,
+  SPRACHBAUSTEINE_TYPES,
+} from "./pages/examPreparationTypeContent.js";
 import ClozeChoicePage from "./pages/ClozeChoicePage.jsx";
 import ClozeMatchingPage from "./pages/ClozeMatchingPage.jsx";
 import ExamPreparationWritingPage from "./pages/ExamPreparationWritingPage.jsx";
@@ -104,11 +110,9 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Sprachbausteine"
             eyebrow="Sprachbausteine"
             title="Teil 1"
-            description="Wähle eine konkrete Aufgabe aus und trainiere jede Lücke einzeln mit den dazugehörigen Antwortmöglichkeiten."
-            tags={["Lücken einzeln lösen", "Wortschatz und Grammatik", "Gezieltes Üben"]}
+            description={SPRACHBAUSTEINE_TYPES[0].description}
             fetchExercises={fetchClozeChoiceExercises}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/sprachbausteine/cloze-choice/${exercise.id}`}
-            cardLabel="Sprachbausteine"
             cardDescription="Öffne diese Aufgabe und bearbeite die Lücken Schritt für Schritt mit den vorgegebenen Optionen."
           />
         ),
@@ -125,11 +129,9 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Sprachbausteine"
             eyebrow="Sprachbausteine"
             title="Teil 2"
-            description="Wähle eine Aufgabe aus und bearbeite einen Lückentext mit gemeinsamem Antwortpool, wie in der eigentlichen Prüfungssituation."
-            tags={["Gemeinsamer Pool", "Kontext beachten", "Prüfungsnahes Training"]}
+            description={SPRACHBAUSTEINE_TYPES[1].description}
             fetchExercises={fetchClozeMatchingExercises}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/sprachbausteine/cloze-matching/${exercise.id}`}
-            cardLabel="Sprachbausteine"
             cardDescription="Öffne diese Aufgabe und ordne die verfügbaren Ausdrücke den passenden Lücken zu."
           />
         ),
@@ -146,11 +148,9 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
             title="Teil 1"
-            description="Wähle eine konkrete Hörübung aus. Vor dem Hören kannst du die Aufgaben lesen und dich gezielt auf die Aussagen vorbereiten."
-            tags={["Vorbereitungszeit", "Kurze Hörtexte", "Richtig oder falsch"]}
+            description={LISTENING_TYPES[0].description}
             fetchExercises={() => fetchListeningExercises("short_text_true_false_with_prep")}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/hoeren/short-text-prep/${exercise.id}`}
-            cardLabel="Hörübung"
             cardDescription="Öffne diese Hörübung und bearbeite die Aussagen nach einer kurzen Vorbereitungszeit."
           />
         ),
@@ -172,11 +172,9 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
             title="Teil 2"
-            description="Wähle eine Hörübung aus und trainiere das unmittelbare Verstehen ohne zusätzliche Vorbereitungsphase."
-            tags={["Direkt hören", "Schnell reagieren", "Kurztexte"]}
+            description={LISTENING_TYPES[1].description}
             fetchExercises={() => fetchListeningExercises("short_text_true_false_once")}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/hoeren/short-text-once/${exercise.id}`}
-            cardLabel="Hörübung"
             cardDescription="Öffne diese Hörübung und entscheide beim ersten Hören, welche Aussagen richtig oder falsch sind."
           />
         ),
@@ -198,11 +196,9 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
             title="Teil 3"
-            description="Wähle eine Dialogübung aus und trainiere das Verstehen längerer Gespräche mit zwei Hördurchgängen."
-            tags={["Dialoge", "Zweimal hören", "Details verstehen"]}
+            description={LISTENING_TYPES[2].description}
             fetchExercises={() => fetchListeningExercises("dialog_true_false_twice")}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/hoeren/dialog-twice/${exercise.id}`}
-            cardLabel="Hörübung"
             cardDescription="Öffne diese Dialogübung und bearbeite die Aussagen nach dem Hören des Gesprächs."
           />
         ),
@@ -225,14 +221,12 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
             title="Teil 1"
-            description="Wähle eine Aufgabe aus und ordne mehreren Textabschnitten die passende Überschrift zu."
-            tags={["Hauptaussage erkennen", "Titel zuordnen", "Lesetraining"]}
+            description={READING_TYPES[0].description}
             fetchExercises={fetchReadingTitleMatchingExercises}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/lesen/title-matching/${exercise.id}`}
             buildCardTitle={(exercise, index) =>
               `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
             }
-            cardLabel="Leseübung"
             cardDescription="Öffne diese Aufgabe und finde für jeden Text die passende Überschrift."
           />
         ),
@@ -246,11 +240,9 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
             title="Teil 2"
-            description="Wähle eine Aufgabe aus und bearbeite Fragen zu einem zusammenhängenden Lesetext."
-            tags={["Text verstehen", "Fragen beantworten", "Details erfassen"]}
+            description={READING_TYPES[1].description}
             fetchExercises={fetchReadingUnderstandingExercises}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/lesen/understanding/${exercise.id}`}
-            cardLabel="Leseübung"
             cardDescription="Öffne diese Aufgabe und beantworte die Fragen zum Lesetext Schritt für Schritt."
           />
         ),
@@ -264,14 +256,12 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
             title="Teil 3"
-            description="Wähle eine Aufgabe aus und finde zu jeder Situation die passende Anzeige."
-            tags={["Situationen vergleichen", "Passende Anzeige finden", "Informationen abgleichen"]}
+            description={READING_TYPES[2].description}
             fetchExercises={fetchReadingAdMatchingExercises}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/lesen/ad-matching/${exercise.id}`}
             buildCardTitle={(exercise, index) =>
               `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
             }
-            cardLabel="Leseübung"
             cardDescription="Öffne diese Aufgabe und ordne die Situationen den passenden Anzeigen zu."
           />
         ),
@@ -286,11 +276,9 @@ const router = createBrowserRouter([
               backLabel="← Zurück zu Sprechen"
               eyebrow="Sprechen"
               title={`Teil ${teil}`}
-              description="Wähle eine Aufgabe aus und übe die passende telc-Sprechaufgabe."
-              tags={["telc B1", "Sprechtraining", "Prüfungsvorbereitung"]}
+              description={SPEAKING_TYPES[teil - 1].description}
               fetchExercises={() => fetchSpeakingTeilExercises(teil)}
               buildExerciseHref={(exercise) => `/modules/exam-preparation/sprechen/teil-${teil}/${exercise.id}`}
-              cardLabel={`Sprechen Teil ${teil}`}
               cardDescription="Öffne diese Aufgabe und sprich sie anhand der angegebenen Stichpunkte durch."
             />
           ),

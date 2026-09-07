@@ -31,6 +31,7 @@ from apps.accounts.views.password_reset import (
     PasswordResetRequestAPIView,
 )
 from apps.accounts.views.public_status import PublicStatusAPIView
+from apps.accounts.views.bug_report import BugReportCreateAPIView
 
 
 router = DefaultRouter()
@@ -74,6 +75,11 @@ urlpatterns += [
 
 # Login Urls
 urlpatterns += [
+    path(
+        "bug-reports/",
+        BugReportCreateAPIView.as_view(),
+        name="bug-report-create",
+    ),
     path(
         "public/status/",
         PublicStatusAPIView.as_view(),

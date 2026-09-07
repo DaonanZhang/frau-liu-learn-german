@@ -18,11 +18,6 @@ export default function ExamPreparationListeningPage() {
           <p className="exam-listening-hero__copy">
             完整训练 telc B1 听力的三个部分，在规定播放次数内捕捉日常对话、访谈和公共广播中的关键信息。
           </p>
-          <div className="exam-listening-hero__tags" aria-label="听力模块特点">
-            <span className="exam-listening-hero__tag">分题型练习</span>
-            <span className="exam-listening-hero__tag">逐项强化听力</span>
-            <span className="exam-listening-hero__tag">适合考前集中复习</span>
-          </div>
         </div>
       </section>
 

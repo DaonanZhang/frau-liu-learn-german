@@ -57,11 +57,6 @@ export default function ExamPreparationWritingPage() {
           <p className="writing-hero__copy">
             考试时间 30 分钟。根据朋友或机构发来的电子邮件完成回复，必须涵盖题目给出的 4 个提示要点（Leitpunkte），并注意书信格式、恰当语体与逻辑连贯性。
           </p>
-          <div className="writing-hero__tags" aria-label="写作模块特点">
-            <span className="writing-hero__tag">书面表达训练</span>
-            <span className="writing-hero__tag">按题目进入</span>
-            <span className="writing-hero__tag">适合考前练习</span>
-          </div>
         </div>
       </section>
 

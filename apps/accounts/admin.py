@@ -11,6 +11,7 @@ from apps.accounts.models.purchase_offer import PurchaseOffer
 from apps.accounts.models import (
     ActivationCodeRecord,
     AlipayWebsitePayment,
+    BugReport,
     PaymentDiscountApplication,
     PaymentGrantTask,
     PromotionCodeRecord,
@@ -19,6 +20,27 @@ from apps.accounts.models import (
 from apps.accounts.models.user_data import UserData, UserActiveDay
 
 User = get_user_model()
+
+
+@admin.register(BugReport)
+class BugReportAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "ip_address", "page_url", "created_at")
+    list_filter = ("created_at",)
+    search_fields = ("report", "user__telephone", "ip_address", "page_url", "user_agent")
+    readonly_fields = (
+        "user",
+        "report",
+        "ip_address",
+        "page_url",
+        "user_agent",
+        "browser_info",
+        "console_errors",
+        "consented_at",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
 
 
 def _all_user_fields():

@@ -18,11 +18,6 @@ export default function ExamPreparationSprachbausteinePage() {
           <p className="exam-sprach-hero__copy">
             完整训练 telc B1 Sprachbausteine 的两个部分，通过语法选择和备选词填空巩固语法结构、词汇搭配与上下文理解。
           </p>
-          <div className="exam-sprach-hero__tags" aria-label="语法模块特点">
-            <span className="exam-sprach-hero__tag">词汇语法训练</span>
-            <span className="exam-sprach-hero__tag">提升搭配判断</span>
-            <span className="exam-sprach-hero__tag">强化上下文理解</span>
-          </div>
         </div>
       </section>
 

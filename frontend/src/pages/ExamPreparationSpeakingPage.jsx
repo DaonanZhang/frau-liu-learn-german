@@ -16,13 +16,11 @@ export default function ExamPreparationSpeakingPage() {
           <p className="exam-speaking-hero__eyebrow">Sprechen</p>
           <h1 className="exam-speaking-hero__title">口语模块</h1>
           <p className="exam-speaking-hero__copy">
-            准备时间 20 分钟：在单独的准备室可使用空白纸张做笔记，但不能使用手机或词典。随后完成互相认识、主题讨论和共同策划三个部分。
+            Vorbereitungszeit: 20 Min. 在单独的准备室，可查阅空白纸张做笔记，但不能使用手机或词典。
           </p>
-          <div className="exam-speaking-hero__tags" aria-label="口语模块特点">
-            <span className="exam-speaking-hero__tag">口头表达训练</span>
-            <span className="exam-speaking-hero__tag">提升组织能力</span>
-            <span className="exam-speaking-hero__tag">适合考前强化</span>
-          </div>
+          <p className="exam-speaking-hero__copy">
+            随后完成互相认识、主题讨论和共同策划三个部分。
+          </p>
         </div>
       </section>
 

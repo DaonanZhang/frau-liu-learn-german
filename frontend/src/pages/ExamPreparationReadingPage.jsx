@@ -18,11 +18,6 @@ export default function ExamPreparationReadingPage() {
           <p className="exam-reading-hero__copy">
             完整训练 telc B1 阅读的三个部分：短文本标题匹配、长文理解选择，以及生活情境与分类广告匹配。
           </p>
-          <div className="exam-reading-hero__tags" aria-label="阅读模块特点">
-            <span className="exam-reading-hero__tag">按题型练习</span>
-            <span className="exam-reading-hero__tag">提升阅读速度</span>
-            <span className="exam-reading-hero__tag">强化理解与判断</span>
-          </div>
         </div>
       </section>
 

@@ -1,25 +1,31 @@
 # Promotion Code Operations
 
-Promotion and activation codes are database-backed. Redis is not a source of
-truth for either code type.
+Promotion and activation codes are database-backed. Activation codes also keep
+Redis compatibility so codes created before the database ledger was introduced
+remain redeemable.
 
-## Activation-Code Secret and Promotion-Code Storage
+## Plaintext Code Storage
 
-`ACTIVATION_CODE_HASH_KEY` is a server-side secret used to create the keyed
-lookup hash and encrypted database copy for activation codes. Users do not
-enter this key; they only enter the activation code printed by the generation
-command.
+Activation codes and promotion codes both use normalized uppercase plaintext
+storage:
 
-- Set the same stable key on every backend and admin-command host.
-- Do not rotate it while unredeemed activation codes exist.
-- Activation-code generation prints the plaintext to stdout and stores only
-  `code_hash` plus `code_ciphertext`.
-- Promotion codes deliberately use a different policy: the normalized
-  uppercase plaintext is stored directly in `PromotionCodeRecord.code` and no
-  promotion-code hash or ciphertext fields exist.
-- Migration `accounts.0023` needs the existing key once to decrypt any
-  promotion codes created before this storage-policy change. It stops without
-  deleting the old fields if any existing record cannot be decrypted.
+- activation codes are stored in the unique `ActivationCodeRecord.code` field
+- promotion codes are stored in the unique `PromotionCodeRecord.code` field
+- generation, lookup, redemption, revocation, admin search, and operational
+  listing all use these plaintext fields directly
+- new activation codes are written to PostgreSQL and mirrored to Redis
+- lookup checks PostgreSQL first and falls back to the legacy
+  `activation_code:<CODE>` Redis entry only when no database row exists
+- on first redemption, a Redis-only code is copied into PostgreSQL and consumed
+  there; Redis is deleted only after the database transaction commits
+- an existing consumed, revoked, or expired PostgreSQL row always wins over a
+  stale Redis entry, so Redis cannot reactivate a used code
+- promotion codes remain PostgreSQL-only
+
+Migration `accounts.0026` only exists to recover development or staging
+databases that previously ran the abandoned hash-based branch. A normal
+production upgrade from `main` already has plaintext activation codes and does
+not need any conversion.
 
 Example activation-code generation (plaintext is printed below the summary):
 
@@ -48,7 +54,7 @@ Generate ten CNY 10 coupons for one institution and one offer:
 
 The plaintext codes are printed to stdout and stored directly in the unique,
 indexed `PromotionCodeRecord.code` field. Staff with database or Django-admin
-access can therefore read them without decryption.
+access can therefore read them directly.
 
 Use `--remark` for the batch recipient or distribution purpose, for example
 `--remark "发给刘老师的 2026 秋季学员"`. The remark is copied to every code in

@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-import hashlib
-import hmac
-import base64
 import secrets
 import string
+import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Optional
 
 from django.apps import apps
-from django.conf import settings
-from django.db import IntegrityError
+from django.core.cache import cache
+from django.db import IntegrityError, transaction
 from django.utils import timezone
-from cryptography.fernet import Fernet, InvalidToken
+
+
+logger = logging.getLogger(__name__)
 
 
 # ============================
@@ -137,53 +137,70 @@ class ActivationPayload:
 # ============================
 
 DEFAULT_TTL_SECONDS = 60 * 60 * 24 * 720  # 720 days
-def activation_code_hash(code: str) -> str:
-    """Return the keyed normalized lookup digest for an activation code.
-
-    Args:
-        code: Plaintext activation code supplied by an operator or user.
-
-    Returns:
-        Lowercase SHA-256 hexadecimal digest.
-    """
-
-    normalized_code = str(code or "").strip().upper()
-    hash_key = str(settings.ACTIVATION_CODE_HASH_KEY).encode("utf-8")
-    return hmac.new(
-        hash_key,
-        normalized_code.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
 
 
-def _activation_code_fernet() -> Fernet:
-    digest = hashlib.sha256(str(settings.ACTIVATION_CODE_HASH_KEY).encode("utf-8")).digest()
-    return Fernet(base64.urlsafe_b64encode(digest))
+def _redis_key(code: str) -> str:
+    return f"activation_code:{code}"
 
 
-def encrypt_activation_code(code: str) -> str:
-    normalized_code = str(code or "").strip().upper()
-    return _activation_code_fernet().encrypt(normalized_code.encode("utf-8")).decode("ascii")
-
-
-def decrypt_activation_code(ciphertext: str) -> str:
-    if not ciphertext:
-        return ""
+def _read_redis_payload(code: str) -> Optional[ActivationPayload]:
     try:
-        return _activation_code_fernet().decrypt(ciphertext.encode("ascii")).decode("utf-8")
-    except (InvalidToken, ValueError):
-        return ""
+        raw = cache.get(_redis_key(code))
+    except Exception:
+        logger.warning("Could not read legacy activation code from Redis", exc_info=True)
+        return None
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return ActivationPayload.from_dict(raw)
+    except ValueError:
+        return None
+
+
+def _redis_ttl_seconds(code: str) -> Optional[int]:
+    ttl_getter = getattr(cache, "ttl", None)
+    if not callable(ttl_getter):
+        return DEFAULT_TTL_SECONDS
+    try:
+        ttl = ttl_getter(_redis_key(code))
+    except Exception:
+        logger.warning("Could not read legacy activation-code TTL from Redis", exc_info=True)
+        return DEFAULT_TTL_SECONDS
+    if ttl is None:
+        return None
+    return ttl if isinstance(ttl, int) and ttl > 0 else DEFAULT_TTL_SECONDS
+
+
+def _write_redis_payload(code: str, payload: dict[str, Any], ttl_seconds: int) -> None:
+    try:
+        cache.set(_redis_key(code), payload, timeout=ttl_seconds)
+    except Exception:
+        logger.warning("Could not mirror activation code to Redis", exc_info=True)
+
+
+def _delete_redis_code(code: str) -> bool:
+    try:
+        return bool(cache.delete(_redis_key(code)))
+    except Exception:
+        logger.warning("Could not delete activation code from Redis", exc_info=True)
+        return False
+
+
+def delete_redis_code_on_commit(code: str) -> None:
+    transaction.on_commit(lambda: _delete_redis_code(code))
 
 
 def activation_code_exists(code: str) -> bool:
-    """Return whether a normalized activation code has a persisted ledger record."""
+    """Return whether a code exists in the database or legacy Redis storage."""
     normalized_code = str(code or "").strip().upper()
     if not normalized_code:
         return False
     ActivationCodeRecord = apps.get_model("accounts", "ActivationCodeRecord")
-    return ActivationCodeRecord.objects.filter(
-        code_hash=activation_code_hash(normalized_code)
-    ).exists()
+    if ActivationCodeRecord.objects.filter(code=normalized_code).exists():
+        return True
+    return _read_redis_payload(normalized_code) is not None
 
 
 def generate_activation_code(length: int = 8) -> str:
@@ -224,8 +241,7 @@ def store_activation_code(
         raise ValueError("Code already exists as a promotion code")
     try:
         ActivationCodeRecord.objects.create(
-            code_hash=activation_code_hash(normalized_code),
-            code_ciphertext=encrypt_activation_code(normalized_code),
+            code=normalized_code,
             remark=payload.remark,
             payload=payload_data,
             ttl_seconds=ttl_seconds,
@@ -233,41 +249,66 @@ def store_activation_code(
         )
     except IntegrityError as exc:
         raise ValueError("Activation code already exists") from exc
+    transaction.on_commit(
+        lambda: _write_redis_payload(normalized_code, payload_data, ttl_seconds)
+    )
 
 
 def verify_activation_code(code: str) -> Optional[ActivationPayload]:
     """
     Verify activation code and return parsed payload if valid.
     """
-    from apps.accounts.models import ActivationCodeRecord, Entitlement
+    from apps.accounts.models import ActivationCodeRecord
 
     normalized_code = str(code or "").strip().upper()
     if not normalized_code:
         return None
-    code_hash = activation_code_hash(normalized_code)
-    if Entitlement.objects.filter(
-        external_ref__in=[
-            f"activation_code:{code_hash}",
-            f"activation_code:{code_hash[:16]}",
-        ]
-    ).exists():
-        return None
-    record = ActivationCodeRecord.objects.filter(code_hash=code_hash).first()
-    if record is None:
-        return None
-    if record.status != ActivationCodeRecord.Status.ACTIVE:
-        return None
-    if record.expires_at <= timezone.now():
-        ActivationCodeRecord.objects.filter(
-            pk=record.pk,
-            status=ActivationCodeRecord.Status.ACTIVE,
-        ).update(status=ActivationCodeRecord.Status.EXPIRED)
-        return None
+    record = ActivationCodeRecord.objects.filter(code=normalized_code).first()
+    if record is not None:
+        if record.status != ActivationCodeRecord.Status.ACTIVE:
+            return None
+        if record.expires_at <= timezone.now():
+            ActivationCodeRecord.objects.filter(
+                pk=record.pk,
+                status=ActivationCodeRecord.Status.ACTIVE,
+            ).update(status=ActivationCodeRecord.Status.EXPIRED)
+            return None
 
-    try:
-        return ActivationPayload.from_dict(record.payload)
-    except ValueError:
+        try:
+            return ActivationPayload.from_dict(record.payload)
+        except ValueError:
+            return None
+
+    return _read_redis_payload(normalized_code)
+
+
+def persist_legacy_redis_activation_code(code: str):
+    """Copy one Redis-only legacy code into the durable plaintext ledger."""
+    normalized_code = str(code or "").strip().upper()
+    if not normalized_code:
         return None
+    ActivationCodeRecord = apps.get_model("accounts", "ActivationCodeRecord")
+    existing = ActivationCodeRecord.objects.filter(code=normalized_code).first()
+    if existing is not None:
+        return existing
+
+    payload = _read_redis_payload(normalized_code)
+    if payload is None:
+        return None
+    ttl_seconds = _redis_ttl_seconds(normalized_code)
+    if ttl_seconds is None:
+        return None
+    try:
+        with transaction.atomic():
+            return ActivationCodeRecord.objects.create(
+                code=normalized_code,
+                remark=payload.remark,
+                payload=payload.to_dict(),
+                ttl_seconds=ttl_seconds,
+                expires_at=timezone.now() + timedelta(seconds=ttl_seconds),
+            )
+    except IntegrityError:
+        return ActivationCodeRecord.objects.filter(code=normalized_code).first()
 
 
 def consume_activation_code(code: str, *, user=None) -> None:
@@ -279,13 +320,14 @@ def consume_activation_code(code: str, *, user=None) -> None:
         return
     ActivationCodeRecord = apps.get_model("accounts", "ActivationCodeRecord")
     ActivationCodeRecord.objects.filter(
-        code_hash=activation_code_hash(normalized_code),
+        code=normalized_code,
         status=ActivationCodeRecord.Status.ACTIVE,
     ).update(
         status=ActivationCodeRecord.Status.CONSUMED,
         consumed_at=timezone.now(),
         consumed_by_user_id=getattr(user, "id", None),
     )
+    delete_redis_code_on_commit(normalized_code)
 
 
 def revoke_activation_code(code: str) -> bool:
@@ -295,8 +337,9 @@ def revoke_activation_code(code: str) -> bool:
         return False
     ActivationCodeRecord = apps.get_model("accounts", "ActivationCodeRecord")
     updated = ActivationCodeRecord.objects.filter(
-        code_hash=activation_code_hash(normalized_code),
+        code=normalized_code,
     ).exclude(
         status=ActivationCodeRecord.Status.CONSUMED,
     ).update(status=ActivationCodeRecord.Status.REVOKED)
-    return bool(updated)
+    deleted_from_redis = _delete_redis_code(normalized_code)
+    return bool(updated or deleted_from_redis)

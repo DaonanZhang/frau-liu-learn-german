@@ -148,11 +148,12 @@ Before first server use of `exam_preparation`:
    systemd timer that runs the same management command every 15 minutes.
    Automatic payment/grant recovery requires a scheduler, but does not require
    Celery specifically.
-10. Activation codes are stored in PostgreSQL and do not require Redis,
-    while the database redemption ledger is the final one-time-use authority.
-11. Keep `ACTIVATION_CODE_HASH_KEY` stable and identical on every backend
-    instance. It defaults to `DJANGO_SECRET_KEY`; setting a dedicated secret is
-    recommended before the first production code is generated.
+10. Keep the existing production Redis configured and reachable. Activation
+    codes use PostgreSQL as the final one-time-use authority, but Redis fallback
+    remains enabled so historical Redis-only codes can still be redeemed and
+    migrated into PostgreSQL on first use.
+11. Activation codes and promotion codes are stored as normalized uppercase
+    plaintext in PostgreSQL; no separate code hash key is required.
 
 ## Complete production rollout checklist
 
@@ -193,8 +194,8 @@ uv run python manage.py showmigrations accounts exam_preparation
 uv run python manage.py migrate --noinput
 ```
 
-`accounts.0017` refuses to reverse when payment, grant-task, or activation-code
-data exists. Once users start paying or redeeming codes, rollback must be a
+`accounts.0017` refuses to reverse when payment or grant-task data exists. Once
+users start paying, rollback must be a
 forward corrective migration or a coordinated restore of the database backup
 and the previous application commit. Do not rely on migrating accounts back to
 an older number.
@@ -204,18 +205,11 @@ segmented-prompt tables. This is harmless on a clean first install. If a server
 has already run an older version of this branch and those tables contain data,
 inspect and export the data before migration.
 
-Set `ACTIVATION_CODE_HASH_KEY` before migration. Migration `accounts.0017` uses
-the effective key if it converts an older plaintext activation-code table, and
-the same key continues to protect activation codes. Migration `accounts.0023`
-also needs the existing value once to convert previously encrypted promotion
-codes to their new plaintext `code` field.
-
-- Use one strong, stable value on the web process, workers, beat, and all hosts.
-- Back it up securely.
-- If production previously used the default derived from `DJANGO_SECRET_KEY`,
-  preserve the same effective value.
-- Do not rotate it while unredeemed codes exist unless all codes will be
-  reissued.
+Activation codes remain in their existing plaintext `code` column throughout
+the normal production migration. Migration `accounts.0026` is a guarded
+recovery path only for development or staging databases that previously ran
+the abandoned hash-based branch. It aborts instead of replacing a code with an
+unusable digest when plaintext cannot be recovered.
 
 ### Production environment gate
 
@@ -228,8 +222,6 @@ DJANGO_USE_HTTPS=true
 DJANGO_CSRF_TRUSTED_ORIGINS=https://<frontend-domain>
 CORS_ALLOWED_ORIGINS=https://<frontend-domain>
 FRONTEND_BASE_URL=https://<frontend-domain>
-
-ACTIVATION_CODE_HASH_KEY=<stable secret>
 
 ALIPAY_APP_ID=<production app id>
 ALIPAY_GATEWAY_URL=https://openapi.alipay.com/gateway.do
@@ -364,8 +356,7 @@ Expected active offers:
 | `exam-preparation-60d` | `m2` | CNY 49.90 |
 | `exam-preparation-90d` | `m3` | CNY 69.90 |
 
-Do not generate activation or promotion codes until this output and
-`ACTIVATION_CODE_HASH_KEY` are confirmed.
+Do not generate activation or promotion codes until this output is confirmed.
 
 ### Import execution
 
@@ -519,9 +510,10 @@ After the coupon-wallet work, the rollout also includes
 `accounts.0022_flatten_promotion_campaign`, and
 `accounts.0023_promotion_code_plaintext`, followed by
 `accounts.0024_optional_coupon_expiry`. Apply them before serving the new
-checkout UI. Migration `0023` deliberately stops if an existing promotion code
-cannot be decrypted with the configured `ACTIVATION_CODE_HASH_KEY`. Migration
-`0024` makes newly issued coupons permanent by default while preserving any
+checkout UI. Activation and promotion codes use plaintext `code` columns;
+`accounts.0026_restore_plaintext_codes` safely reconciles databases that had
+already run the abandoned hash-based development migration. Migration `0024`
+makes newly issued coupons permanent by default while preserving any
 expiration dates already stored on existing coupons.
 
 The local checks did not use the production PostgreSQL database or public

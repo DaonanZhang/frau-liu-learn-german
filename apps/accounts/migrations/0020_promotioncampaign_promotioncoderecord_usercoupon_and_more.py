@@ -29,8 +29,7 @@ class Migration(migrations.Migration):
             name='PromotionCodeRecord',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code_hash', models.CharField(max_length=64, unique=True)),
-                ('code_ciphertext', models.TextField(blank=True, default='')),
+                ('code', models.CharField(max_length=32, unique=True)),
                 ('remark', models.CharField(blank=True, default='', max_length=255)),
                 ('discount_amount', models.DecimalField(decimal_places=2, max_digits=10)),
                 ('minimum_order_amount', models.DecimalField(decimal_places=2, default=0, max_digits=10)),

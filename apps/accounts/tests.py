@@ -28,8 +28,6 @@ from apps.accounts.services.activation_codes import (
     revoke_activation_code,
     store_activation_code,
     verify_activation_code,
-    activation_code_hash,
-    decrypt_activation_code,
 )
 from apps.accounts.services.email_service import send_password_reset_email
 from apps.accounts.services.password_reset_codes import verify_password_reset_code
@@ -208,6 +206,23 @@ class ActivationCodeApiTests(APITestCase):
         )
         store_activation_code(code=code, payload=payload)
 
+    @staticmethod
+    def _store_redis_only_code(code: str, season_number: int) -> None:
+        payload = ActivationPayload(
+            entitlements=[
+                ActivationEntitlementItem(
+                    module_key="learning_by_video",
+                    plan=ActivationPlan.LIFETIME,
+                    season_number=season_number,
+                )
+            ]
+        )
+        cache.set(
+            f"activation_code:{code}",
+            payload.to_dict(),
+            timeout=3600,
+        )
+
     def test_verify_activation_code_endpoint_returns_payload(self) -> None:
         self._store_code("SEASON1A", season_number=1)
 
@@ -240,6 +255,68 @@ class ActivationCodeApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["detail"], "激活码无效或已过期。")
+
+    def test_new_database_code_is_also_mirrored_to_redis(self) -> None:
+        with self.captureOnCommitCallbacks(execute=True):
+            self._store_code("DUALSTORE", season_number=1)
+
+        self.assertEqual(
+            cache.get("activation_code:DUALSTORE"),
+            {
+                "entitlements": [
+                    {
+                        "module": "learning_by_video",
+                        "plan": "lifetime",
+                        "season_number": 1,
+                    }
+                ]
+            },
+        )
+
+    def test_redis_only_legacy_code_can_be_previewed(self) -> None:
+        self._store_redis_only_code("REDISPREVIEW", season_number=1)
+
+        response = self.client.post(
+            "/api/accounts/auth/register/verify-code/",
+            {"code": "redispreview"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(ActivationCodeRecord.objects.filter(code="REDISPREVIEW").exists())
+
+    def test_redis_only_legacy_code_is_persisted_and_consumed(self) -> None:
+        self._store_redis_only_code("REDISLEGACY", season_number=4)
+        self.client.force_authenticate(user=self.user)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/accounts/auth/redeem-code/",
+                {"code": "redislegacy"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["type"], "activation")
+        record = ActivationCodeRecord.objects.get(code="REDISLEGACY")
+        self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
+        self.assertEqual(record.consumed_by_user_id, self.user.id)
+        self.assertIsNone(cache.get("activation_code:REDISLEGACY"))
+
+    def test_failed_redis_only_redemption_keeps_legacy_code(self) -> None:
+        self._store_redis_only_code("REDISROLLBACK", season_number=1)
+
+        with patch(
+            "apps.accounts.security.activation.grant_or_extend_entitlement",
+            side_effect=ValueError("database grant failed"),
+        ):
+            with self.assertRaisesRegex(ValueError, "database grant failed"):
+                apply_activation_code_for_user(user=self.user, code="redisrollback")
+
+        self.assertFalse(
+            ActivationCodeRecord.objects.filter(code="REDISROLLBACK").exists()
+        )
+        self.assertIsNotNone(cache.get("activation_code:REDISROLLBACK"))
 
     def test_apply_activation_code_creates_season_entitlement_and_consumes_code(self) -> None:
         self._store_code("SEASON4A", season_number=4)
@@ -289,19 +366,18 @@ class ActivationCodeApiTests(APITestCase):
         self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(second.data["detail"], "Invalid or expired activation code")
 
-        record = ActivationCodeRecord.objects.get(code_hash=activation_code_hash("ONETIME1"))
+        record = ActivationCodeRecord.objects.get(code="ONETIME1")
         self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
         self.assertEqual(record.consumed_by_user_id, self.user.id)
 
-    def test_persisted_activation_code_uses_hash_instead_of_plaintext(self) -> None:
+    def test_persisted_activation_code_uses_normalized_plaintext(self) -> None:
         self._store_code("TRACK001", season_number=1)
 
-        record = ActivationCodeRecord.objects.get(
-            code_hash=activation_code_hash("TRACK001")
-        )
+        record = ActivationCodeRecord.objects.get(code="TRACK001")
 
-        self.assertFalse(hasattr(record, "code"))
-        self.assertEqual(decrypt_activation_code(record.code_ciphertext), "TRACK001")
+        self.assertEqual(record.code, "TRACK001")
+        self.assertFalse(hasattr(record, "code_hash"))
+        self.assertFalse(hasattr(record, "code_ciphertext"))
         self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
 
     def test_activation_code_remark_is_kept_in_durable_record(self) -> None:
@@ -318,7 +394,7 @@ class ActivationCodeApiTests(APITestCase):
         store_activation_code(code="REMARK01", payload=payload)
 
         verified = verify_activation_code("REMARK01")
-        record = ActivationCodeRecord.objects.get(code_hash=activation_code_hash("REMARK01"))
+        record = ActivationCodeRecord.objects.get(code="REMARK01")
         self.assertEqual(verified.remark, "2026 秋季渠道 A")
         self.assertEqual(record.remark, "2026 秋季渠道 A")
 
@@ -326,35 +402,31 @@ class ActivationCodeApiTests(APITestCase):
         record.refresh_from_db()
         self.assertEqual(record.consumed_by_user, self.user)
         self.assertIsNotNone(record.consumed_at)
-        self.assertEqual(decrypt_activation_code(record.code_ciphertext), "REMARK01")
+        self.assertEqual(record.code, "REMARK01")
 
-    def test_compatible_consume_service_marks_hash_record(self) -> None:
+    def test_compatible_consume_service_marks_plaintext_record(self) -> None:
         self._store_code("CONSUME1", season_number=1)
 
         consume_activation_code("consume1", user=self.user)
 
-        record = ActivationCodeRecord.objects.get(
-            code_hash=activation_code_hash("CONSUME1")
-        )
+        record = ActivationCodeRecord.objects.get(code="CONSUME1")
         self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
         self.assertEqual(record.consumed_by_user_id, self.user.id)
         self.assertIsNone(verify_activation_code("CONSUME1"))
 
-    def test_revoke_activation_code_command_uses_hash_lookup(self) -> None:
+    def test_revoke_activation_code_command_uses_plaintext_lookup(self) -> None:
         self._store_code("REVOKE01", season_number=1)
         output = StringIO()
 
         call_command("revoke_activation_code", "revoke01", stdout=output)
 
-        record = ActivationCodeRecord.objects.get(
-            code_hash=activation_code_hash("REVOKE01")
-        )
+        record = ActivationCodeRecord.objects.get(code="REVOKE01")
         self.assertEqual(record.status, ActivationCodeRecord.Status.REVOKED)
         self.assertIsNone(verify_activation_code("REVOKE01"))
         self.assertIn("Revoked activation code: revoke01", output.getvalue())
         self.assertTrue(revoke_activation_code("REVOKE01"))
 
-    def test_list_activation_codes_filters_by_plaintext_without_exposing_it(self) -> None:
+    def test_list_activation_codes_filters_and_displays_plaintext(self) -> None:
         self._store_code("LISTCODE1", season_number=1)
         output = StringIO()
 
@@ -365,9 +437,8 @@ class ActivationCodeApiTests(APITestCase):
         )
 
         rendered = output.getvalue()
-        self.assertIn(f"code_hash={activation_code_hash('LISTCODE1')}", rendered)
+        self.assertIn("code=LISTCODE1", rendered)
         self.assertIn("status=active", rendered)
-        self.assertNotIn("LISTCODE1", rendered)
 
     def test_database_status_blocks_reuse_of_redeemed_code(self) -> None:
         self._store_code("LEDGER01", season_number=1)
@@ -387,7 +458,7 @@ class ActivationCodeApiTests(APITestCase):
             with self.assertRaisesRegex(ValueError, "database grant failed"):
                 apply_activation_code_for_user(user=self.user, code="ROLLBACK1")
 
-        record = ActivationCodeRecord.objects.get(code_hash=activation_code_hash("ROLLBACK1"))
+        record = ActivationCodeRecord.objects.get(code="ROLLBACK1")
         self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
         self.assertIsNotNone(verify_activation_code("ROLLBACK1"))
 

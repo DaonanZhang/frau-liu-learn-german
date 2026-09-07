@@ -28,7 +28,6 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 SECRET_KEY = env("DJANGO_SECRET_KEY")
-ACTIVATION_CODE_HASH_KEY = env("ACTIVATION_CODE_HASH_KEY", default=SECRET_KEY)
 
 allowed_hosts_raw = env("DJANGO_ALLOWED_HOSTS", default="")
 ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_raw.split(",") if host.strip()]

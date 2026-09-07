@@ -5,9 +5,6 @@ import json
 from django.core.management.base import BaseCommand
 
 from apps.accounts.models import ActivationCodeRecord
-from apps.accounts.services.activation_codes import activation_code_hash, decrypt_activation_code
-
-
 class Command(BaseCommand):
     help = "List persisted activation code records."
 
@@ -20,11 +17,6 @@ class Command(BaseCommand):
             help="Filter by persisted status",
         )
         parser.add_argument(
-            "--show-code",
-            action="store_true",
-            help="Decrypt and print the original code for authorized operational review",
-        )
-        parser.add_argument(
             "--limit",
             type=int,
             default=100,
@@ -34,7 +26,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         queryset = ActivationCodeRecord.objects.select_related("consumed_by_user").order_by(
             "-created_at",
-            "code_hash",
+            "code",
         )
 
         code = options.get("code")
@@ -42,7 +34,7 @@ class Command(BaseCommand):
         limit = max(1, options["limit"])
 
         if code:
-            queryset = queryset.filter(code_hash=activation_code_hash(code))
+            queryset = queryset.filter(code=str(code).strip().upper())
         if status:
             queryset = queryset.filter(status=status)
 
@@ -58,11 +50,9 @@ class Command(BaseCommand):
                 if record.consumed_by_user_id
                 else "-"
             )
-            code_label = decrypt_activation_code(record.code_ciphertext) if options["show_code"] else "[hidden]"
             self.stdout.write(
                 (
-                    f"code={code_label} "
-                    f"code_hash={record.code_hash} "
+                    f"code={record.code} "
                     f"remark={record.remark or '-'} "
                     f"status={record.status} "
                     f"created_at={record.created_at.isoformat()} "

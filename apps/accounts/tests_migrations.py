@@ -1,19 +1,16 @@
-import hashlib
-import hmac
 from datetime import timedelta
 
-from django.conf import settings
 from django.db import connection
-from django.db.migrations.exceptions import IrreversibleError
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 from django.utils import timezone
+
 
 class ActivationCodeLedgerMigrationTests(TransactionTestCase):
     common_parent = ("accounts", "0012_purchaseoffer_paymentgranttask_offer")
     migrate_from = ("accounts", "0016_seed_exam_preparation_offers")
     legacy_parent = ("accounts", "0013_activationcoderecord")
-    migrate_to = ("accounts", "0017_payment_lifecycle_activation_ledger")
+    migrate_to = ("accounts", "0026_restore_plaintext_codes")
 
     def setUp(self) -> None:
         super().setUp()
@@ -21,27 +18,11 @@ class ActivationCodeLedgerMigrationTests(TransactionTestCase):
 
     def tearDown(self) -> None:
         MigrationExecutor(connection).migrate(
-            [("accounts", "0019_activation_code_remark_ciphertext")]
+            [("accounts", "0026_restore_plaintext_codes")]
         )
         super().tearDown()
 
-    def test_reverse_is_blocked_when_it_would_make_ledger_data_unusable(self) -> None:
-        executor = MigrationExecutor(connection)
-        historical_apps = executor.loader.project_state([self.migrate_to]).apps
-        ActivationCodeRecord = historical_apps.get_model("accounts", "ActivationCodeRecord")
-        record = ActivationCodeRecord.objects.create(
-            code_hash="a" * 64,
-            payload={"entitlements": []},
-            ttl_seconds=3600,
-            expires_at=timezone.now() + timedelta(hours=1),
-        )
-
-        with self.assertRaises(IrreversibleError):
-            executor.migrate([self.migrate_from, self.legacy_parent])
-
-        self.assertTrue(ActivationCodeRecord.objects.filter(pk=record.pk).exists())
-
-    def test_legacy_activation_code_rows_are_preserved_and_hashed(self) -> None:
+    def test_legacy_activation_code_rows_remain_plaintext(self) -> None:
         executor = MigrationExecutor(connection)
         executor.migrate([self.common_parent])
         executor = MigrationExecutor(connection)
@@ -97,11 +78,23 @@ class ActivationCodeLedgerMigrationTests(TransactionTestCase):
             processed_at=timezone.now(),
         )
 
-        for code, status in (("LEGACY01", "consumed"), ("LEGACY02", "revoked")):
+        for code, status in (
+            ("LEGACY01", "consumed"),
+            ("LEGACY02", "revoked"),
+            ("LEGACY03", "active"),
+        ):
             LegacyActivationCodeRecord.objects.create(
                 code=code,
                 status=status,
-                payload={"entitlements": []},
+                payload={
+                    "entitlements": [
+                        {
+                            "module": "migration-safety-module",
+                            "plan": "m1",
+                            "season_number": None,
+                        }
+                    ]
+                },
                 ttl_seconds=3600,
                 expires_at=timezone.now() + timedelta(hours=1),
             )
@@ -124,23 +117,16 @@ class ActivationCodeLedgerMigrationTests(TransactionTestCase):
                     table_name,
                 )
             }
-        self.assertIn("code_hash", columns)
-        self.assertNotIn("code", columns)
-        self.assertEqual(ActivationCodeRecord.objects.count(), 2)
+        self.assertIn("code", columns)
+        self.assertNotIn("code_hash", columns)
+        self.assertEqual(ActivationCodeRecord.objects.count(), 3)
         self.assertEqual(
-            set(ActivationCodeRecord.objects.values_list("code_hash", flat=True)),
-            {
-                hmac.new(
-                    str(settings.ACTIVATION_CODE_HASH_KEY).encode("utf-8"),
-                    code.encode("utf-8"),
-                    hashlib.sha256,
-                ).hexdigest()
-                for code in ("LEGACY01", "LEGACY02")
-            },
+            set(ActivationCodeRecord.objects.values_list("code", flat=True)),
+            {"LEGACY01", "LEGACY02", "LEGACY03"},
         )
         self.assertEqual(
             set(ActivationCodeRecord.objects.values_list("status", flat=True)),
-            {"consumed", "revoked"},
+            {"active", "consumed", "revoked"},
         )
         self.assertEqual(
             MigratedUser.objects.get(pk=user.pk).telephone,
@@ -172,3 +158,25 @@ class ActivationCodeLedgerMigrationTests(TransactionTestCase):
         self.assertEqual(migrated_grant_task.status, "succeeded")
         self.assertEqual(migrated_grant_task.attempt_count, 1)
         self.assertIsNone(migrated_grant_task.idempotency_key)
+
+        from apps.accounts.models import User as CurrentUser
+        from apps.accounts.security.activation import apply_activation_code_for_user
+
+        redemption_user = CurrentUser.objects.create(
+            telephone="13900000018",
+            username="migration-redemption-user",
+        )
+        granted = apply_activation_code_for_user(
+            user=redemption_user,
+            code="legacy03",
+        )
+        self.assertEqual(len(granted), 1)
+        self.assertEqual(granted[0].plan, "m1")
+        self.assertEqual(
+            granted[0].external_ref,
+            "activation_code:LEGACY03",
+        )
+        self.assertEqual(
+            ActivationCodeRecord.objects.get(code="LEGACY03").status,
+            "consumed",
+        )

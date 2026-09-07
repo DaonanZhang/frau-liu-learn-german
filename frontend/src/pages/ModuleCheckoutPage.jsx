@@ -428,6 +428,7 @@ export default function ModuleCheckoutPage() {
                 const selectedChoice = couponBundle?.choices?.find(
                   (item) => item?.coupon?.id === selectedCouponId
                 );
+                const hasAvailableCoupons = Number(couponBundle?.available_count) > 0;
                 const selectedPricing = selectedCouponId === null
                   ? couponBundle?.no_coupon_pricing
                   : selectedChoice?.pricing;
@@ -517,32 +518,29 @@ export default function ModuleCheckoutPage() {
                             ) : null}
                           </div>
 
-                          <button
-                            className="module-checkout-page__couponSelector"
-                            type="button"
-                            disabled={!couponBundle}
-                            onClick={() => setCouponSheetOfferCode(offer.code)}
-                          >
-                            <span className="module-checkout-page__couponSelectorIcon" aria-hidden="true">券</span>
-                            <span className="module-checkout-page__couponSelectorText">
-                              <strong>优惠券</strong>
-                              <small>
-                                {selectedChoice
-                                  ? `已选优惠券 · 本单减 ¥${formatPromoPrice(selectedChoice.pricing?.promotion_discount_amount)}`
-                                  : selectedCouponId === null
-                                    ? "不使用优惠券"
-                                    : couponBundle
-                                      ? "暂无适用优惠券"
-                                      : "正在匹配最优优惠"}
-                              </small>
-                            </span>
-                            {couponBundle?.available_count > 0 ? (
+                          {hasAvailableCoupons ? (
+                            <button
+                              className="module-checkout-page__couponSelector"
+                              type="button"
+                              onClick={() => setCouponSheetOfferCode(offer.code)}
+                            >
+                              <span className="module-checkout-page__couponSelectorIcon" aria-hidden="true">券</span>
+                              <span className="module-checkout-page__couponSelectorText">
+                                <strong>优惠券</strong>
+                                <small>
+                                  {selectedChoice
+                                    ? `已选优惠券 · 本单减 ¥${formatPromoPrice(selectedChoice.pricing?.promotion_discount_amount)}`
+                                    : selectedCouponId === null
+                                      ? "不使用优惠券"
+                                      : "选择可用优惠券"}
+                                </small>
+                              </span>
                               <span className="module-checkout-page__couponSelectorCount">
                                 {couponBundle.available_count} 张可用
                               </span>
-                            ) : null}
-                            <span className="module-checkout-page__couponSelectorArrow" aria-hidden="true">›</span>
-                          </button>
+                              <span className="module-checkout-page__couponSelectorArrow" aria-hidden="true">›</span>
+                            </button>
+                          ) : null}
 
                           <button
                             className="module-checkout-page__pay"
@@ -587,7 +585,8 @@ export default function ModuleCheckoutPage() {
         </button>
       </div>
 
-      {couponSheetOfferCode ? (() => {
+      {couponSheetOfferCode
+        && Number(couponChoicesByOffer[couponSheetOfferCode]?.available_count) > 0 ? (() => {
         const couponBundle = couponChoicesByOffer[couponSheetOfferCode];
         const activeOffer = offers.find((offer) => offer.code === couponSheetOfferCode);
         const selectedCouponId = Object.prototype.hasOwnProperty.call(

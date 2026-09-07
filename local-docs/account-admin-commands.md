@@ -10,7 +10,7 @@ All commands assume project root as current directory.
 - `plan="lifetime"` means permanent access and maps to `expires_at=None`.
 - Season-scoped entitlement requires both `module` and `season_number`.
 - Module-wide entitlement applies to all seasons of that module when `season=None`.
-- Activation codes are stored only in the durable database ledger. The original code is encrypted at rest; remarks, consumer, and consumption time remain available after redemption.
+- Activation codes are stored as normalized uppercase plaintext in the durable database ledger; remarks, consumer, and consumption time remain available after redemption.
 - For operator runs, prefer printing codes directly to terminal on the server instead of writing files.
 
 ## Check User By Telephone

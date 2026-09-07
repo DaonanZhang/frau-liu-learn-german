@@ -9,13 +9,12 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 from apps.accounts.models import (
-    ActivationCodeRecord,
     AlipayWebsitePayment,
     PaymentDiscountApplication,
     PromotionCodeRecord,
     UserCoupon,
 )
-from apps.accounts.services.activation_codes import activation_code_hash
+from apps.accounts.services.activation_codes import activation_code_exists
 
 
 def promotion_code_exists(code: str) -> bool:
@@ -29,8 +28,9 @@ def generate_promotion_code(length: int = 10) -> str:
     alphabet = string.ascii_uppercase + string.digits
     for _ in range(100):
         code = "".join(secrets.choice(alphabet) for _ in range(length))
-        code_hash = activation_code_hash(code)
-        if not PromotionCodeRecord.objects.filter(code=code).exists() and not ActivationCodeRecord.objects.filter(code_hash=code_hash).exists():
+        if not PromotionCodeRecord.objects.filter(
+            code=code
+        ).exists() and not activation_code_exists(code):
             return code
     raise RuntimeError("Failed to generate a unique promotion code")
 
@@ -39,7 +39,7 @@ def store_promotion_code(*, code: str, **values) -> PromotionCodeRecord:
     normalized = str(code or "").strip().upper()
     if not normalized:
         raise ValueError("Promotion code cannot be empty")
-    if ActivationCodeRecord.objects.filter(code_hash=activation_code_hash(normalized)).exists():
+    if activation_code_exists(normalized):
         raise ValueError("Code already exists as an activation code")
     try:
         record = PromotionCodeRecord(

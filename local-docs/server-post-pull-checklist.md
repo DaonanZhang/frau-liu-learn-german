@@ -186,10 +186,8 @@ Run a one-off reconciliation after deployment:
 .venv/bin/python manage.py reconcile_alipay_payments --limit 100
 ```
 
-For activation-code lookup, keep `ACTIVATION_CODE_HASH_KEY` stable and the same
-on every backend instance. It defaults to `DJANGO_SECRET_KEY`; do not rotate it
-while unredeemed activation codes still exist unless those codes will be
-reissued.
+Activation codes and promotion codes are stored and looked up as normalized
+uppercase plaintext in PostgreSQL. No separate hash key is required.
 
 ### 7. Configure Alipay callback URLs correctly
 

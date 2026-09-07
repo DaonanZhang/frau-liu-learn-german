@@ -149,15 +149,10 @@ class PurchaseOfferAdmin(admin.ModelAdmin):
 
 @admin.register(ActivationCodeRecord)
 class ActivationCodeRecordAdmin(admin.ModelAdmin):
-    list_display = ("id", "code_preview", "remark", "status", "consumed_by_user", "consumed_at", "created_at")
+    list_display = ("id", "code", "remark", "status", "consumed_by_user", "consumed_at", "created_at")
     list_filter = ("status", "created_at", "consumed_at")
-    search_fields = ("code_hash", "remark", "consumed_by_user__telephone")
-    readonly_fields = ("code_hash", "code_ciphertext", "status", "payload", "ttl_seconds", "expires_at", "consumed_by_user", "consumed_at", "created_at", "updated_at")
-
-    @admin.display(description="Code")
-    def code_preview(self, obj):
-        from apps.accounts.services.activation_codes import decrypt_activation_code
-        return decrypt_activation_code(obj.code_ciphertext) or f"legacy:{obj.code_hash[:12]}"
+    search_fields = ("code", "remark", "consumed_by_user__telephone")
+    readonly_fields = ("code", "status", "payload", "ttl_seconds", "expires_at", "consumed_by_user", "consumed_at", "created_at", "updated_at")
 
     def has_delete_permission(self, request, obj=None):
         return False

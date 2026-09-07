@@ -4,9 +4,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.services.activation_codes import (
-    verify_activation_code,
-    activation_code_hash,
     ActivationPlan,
+    delete_redis_code_on_commit,
+    persist_legacy_redis_activation_code,
+    verify_activation_code,
 )
 from apps.accounts.models import (
     ActivationCodeRecord,
@@ -24,11 +25,14 @@ def apply_activation_code_for_user(*, user, code: str):
     Apply an activation code to an existing user and grant entitlements.
     """
     normalized_code = str(code or "").strip().upper()
-    code_ref = activation_code_hash(normalized_code)
-    try:
-        record = ActivationCodeRecord.objects.select_for_update().get(code_hash=code_ref)
-    except ActivationCodeRecord.DoesNotExist as exc:
-        raise ValueError("Invalid or expired activation code") from exc
+    record = ActivationCodeRecord.objects.select_for_update().filter(
+        code=normalized_code
+    ).first()
+    if record is None:
+        record = persist_legacy_redis_activation_code(normalized_code)
+        if record is None:
+            raise ValueError("Invalid or expired activation code")
+        record = ActivationCodeRecord.objects.select_for_update().get(pk=record.pk)
     if (
         record.status != ActivationCodeRecord.Status.ACTIVE
         or record.expires_at <= timezone.now()
@@ -68,7 +72,7 @@ def apply_activation_code_for_user(*, user, code: str):
                 module=module,
                 season=season,
                 plan=item.plan,
-                external_ref=f"activation_code:{code_ref}",
+                external_ref=f"activation_code:{normalized_code}",
                 reject_if_lifetime=True,
             )
         )
@@ -77,4 +81,5 @@ def apply_activation_code_for_user(*, user, code: str):
     record.consumed_by_user = user
     record.consumed_at = timezone.now()
     record.save(update_fields=["status", "consumed_by_user", "consumed_at", "updated_at"])
+    delete_redis_code_on_commit(normalized_code)
     return created

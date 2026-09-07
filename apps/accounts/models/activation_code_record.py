@@ -14,8 +14,7 @@ class ActivationCodeRecord(models.Model):
         EXPIRED = "expired", "Expired"
         REVOKED = "revoked", "Revoked"
 
-    code_hash = models.CharField(max_length=64, unique=True)
-    code_ciphertext = models.TextField(blank=True, default="")
+    code = models.CharField(max_length=32, unique=True, db_index=True)
     remark = models.CharField(max_length=255, blank=True, default="")
     payload = models.JSONField(default=dict)
     status = models.CharField(
@@ -44,7 +43,7 @@ class ActivationCodeRecord(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"ActivationCodeRecord<hash={self.code_hash[:12]} status={self.status}>"
+        return f"ActivationCodeRecord<code={self.code} status={self.status}>"
 
     def is_expired_now(self, *, at=None) -> bool:
         at = at or timezone.now()

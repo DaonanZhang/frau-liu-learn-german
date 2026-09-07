@@ -7,11 +7,10 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from apps.accounts.models import ActivationCodeRecord
 from apps.accounts.security.activation import apply_activation_code_for_user
 from apps.accounts.serializers.activation import ActivationCodeApplySerializer
 from apps.accounts.serializers.entitlement import EntitlementReadSerializer
-from apps.accounts.services.activation_codes import activation_code_hash
+from apps.accounts.services.activation_codes import activation_code_exists
 from apps.accounts.services.promotion_codes import redeem_promotion_code
 
 
@@ -28,7 +27,7 @@ class RedeemCodeAPIView(APIView):
         code = serializer.validated_data["code"]
 
         try:
-            if ActivationCodeRecord.objects.filter(code_hash=activation_code_hash(code)).exists():
+            if activation_code_exists(code):
                 entitlements = apply_activation_code_for_user(user=request.user, code=code)
                 return Response(
                     {

@@ -276,24 +276,27 @@ preserve the same path, including the `resources/` prefix:
 resources/ExamPreparation/exam_preparation_audio/Teil1/Teil1_001.mp3
 ```
 
-After placing audio on the server, dry-run and then synchronize all resources
-to both the Shanghai and Frankfurt buckets:
+After placing audio on the server, dry-run and then synchronize only the
+exam-preparation listening audio to both the Shanghai and Frankfurt buckets:
 
 ```bash
-scripts/run_learning_video_pipeline.sh \
-  --sync-resources-to-cos \
-  --dedupe-etag \
+scripts/sync_exam_preparation_audio_to_both_cos.sh \
   --dry-run
 
-scripts/run_learning_video_pipeline.sh \
-  --sync-resources-to-cos \
-  --dedupe-etag
+scripts/sync_exam_preparation_audio_to_both_cos.sh
 ```
 
 The real sync is successful only when both regional statuses are zero. Test at
 least one public `/resources/ExamPreparation/...mp3` URL after syncing. The
 application process needs write access to workbook folders for file moves; the
 web server only needs read access to media.
+
+Do not use `--dedupe-etag` for listening audio. Every database URL depends on
+its exact COS object key, even when two local files happen to have identical
+content.
+
+Use `scripts/sync_resources_to_both_cos.sh` only when an intentional full
+`frontend/public/resources/` reconciliation is required.
 
 ### Recommended first-rollout sequence
 
@@ -493,13 +496,14 @@ is insufficient when schema or payment behavior changed.
 
 ### Current local validation snapshot
 
-Review performed on 2026-09-02:
+Review updated on 2026-09-07:
 
 - Django model/migration check passed (`No changes detected`).
 - Django system check passed.
-- All 59 discovered Django tests passed.
+- All 73 discovered Django tests passed with the SQLite test settings. The
+  default PostgreSQL test run requires permission to create a test database.
 - The production Vite build passed.
-- The generated main JavaScript chunk is about 1.58 MB (about 466 KB gzip), so
+- The generated main JavaScript chunk is about 1.59 MB (about 472 KB gzip), so
   first-load performance should be monitored and code splitting planned.
 - Frontend lint currently fails on two React effect-state rules and reports one
   hook dependency warning. Vite still builds, but lint is not a green release

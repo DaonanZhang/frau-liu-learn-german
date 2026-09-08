@@ -7,6 +7,8 @@ from .activation_code_record import ActivationCodeRecord
 from .purchase_offer import PurchaseOffer
 from .alipay_payment import AlipayWebsitePayment
 from .payment_grant_task import PaymentGrantTask
+from .promotion import PromotionCodeRecord, UserCoupon, PaymentDiscountApplication
+from .bug_report import BugReport
 
 __all__ = [
     "User",
@@ -18,4 +20,8 @@ __all__ = [
     "PurchaseOffer",
     "AlipayWebsitePayment",
     "PaymentGrantTask",
+    "PromotionCodeRecord",
+    "UserCoupon",
+    "PaymentDiscountApplication",
+    "BugReport",
 ]

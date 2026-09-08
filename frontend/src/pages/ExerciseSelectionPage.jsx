@@ -1,0 +1,153 @@
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
+import "./ExerciseSelectionPage.css";
+
+export default function ExerciseSelectionPage({
+  backTo,
+  backLabel,
+  eyebrow,
+  title,
+  description,
+  fetchExercises,
+  buildExerciseHref,
+  buildCardTitle,
+  cardDescription = "Öffne diese Aufgabe und beginne direkt mit dem Training.",
+  cardCta = "Übung öffnen",
+  emptyMessage = "Zurzeit sind keine Aufgaben verfügbar.",
+}) {
+  const navigate = useNavigate();
+  const [exercises, setExercises] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorText, setErrorText] = useState("");
+
+  useEffect(() => {
+    let aborted = false;
+
+    async function loadExercises() {
+      try {
+        setLoading(true);
+        setErrorText("");
+        const data = await fetchExercises();
+        if (!aborted) {
+          setExercises(Array.isArray(data?.results) ? data.results : []);
+        }
+      } catch (error) {
+        if (!aborted) {
+          setErrorText(error?.message || "Aufgaben konnten nicht geladen werden.");
+        }
+      } finally {
+        if (!aborted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadExercises();
+    return () => {
+      aborted = true;
+    };
+  }, [fetchExercises]);
+
+  return (
+    <div className="exercise-selection-page">
+      <div className="exercise-selection-topbar">
+        <Link to={backTo} className="exercise-selection-topbar__back">
+          {backLabel}
+        </Link>
+      </div>
+
+      <section className="exercise-selection-hero">
+        <div>
+          <p className="exercise-selection-hero__eyebrow">{eyebrow}</p>
+          <h1 className="exercise-selection-hero__title">{title}</h1>
+          <p className="exercise-selection-hero__copy">{description}</p>
+        </div>
+      </section>
+
+      {loading ? <p className="exercise-selection-state">Aufgaben werden geladen...</p> : null}
+      {errorText ? <p className="exercise-selection-state exercise-selection-state--error">{errorText}</p> : null}
+
+      {!loading && !errorText && exercises.length > 0 ? (
+        <section className="exercise-selection-grid" aria-label="Aufgabenliste">
+          {exercises.map((exercise, index) => {
+            const cardTitle =
+              buildCardTitle?.(exercise, index) ||
+              exercise?.exercise_base?.title?.trim() ||
+              `Übung ${index + 1}`;
+            const isRealExam = Boolean(exercise?.exercise_base?.is_real_exam);
+            const examType = exercise?.exercise_base?.exam_type?.trim();
+            const isLocked = Boolean(exercise?.is_locked);
+            const showFreeTrialBadge = Boolean(exercise?.show_free_trial_badge);
+
+            const cardContent = (
+              <>
+                <div className="exercise-selection-card__top">
+                  <div className="exercise-selection-card__meta">
+                    <div className="exercise-selection-card__meta-left">
+                      {examType ? (
+                        <span
+                          className="exercise-selection-card__badge exercise-selection-card__badge--exam-type"
+                          title="Prüfungsformat"
+                        >
+                          {examType}
+                        </span>
+                      ) : null}
+                      {isRealExam ? (
+                        <span className="exercise-selection-card__badge exercise-selection-card__badge--real">
+                          真题
+                        </span>
+                      ) : null}
+                      {showFreeTrialBadge ? (
+                        <span
+                          className="exercise-selection-card__badge exercise-selection-card__badge--free-trial"
+                          aria-label="免费试用"
+                        >
+                          免费试用
+                        </span>
+                      ) : null}
+                    </div>
+                    <span className="exercise-selection-card__index">#{index + 1}</span>
+                  </div>
+                  <h2 className="exercise-selection-card__title">{cardTitle}</h2>
+                </div>
+                {isLocked ? (
+                  <span className="exercise-selection-card__lock" aria-hidden="true">🔒</span>
+                ) : null}
+                <p className="exercise-selection-card__description">{cardDescription}</p>
+                <div className="exercise-selection-card__bottom">
+                  <span className="exercise-selection-card__cta">
+                    {isLocked ? "购买后解锁" : cardCta}
+                  </span>
+                </div>
+              </>
+            );
+
+            return isLocked ? (
+              <button
+                key={exercise.id || index}
+                type="button"
+                className="exercise-selection-card exercise-selection-card--locked"
+                onClick={() => showExamPreparationPurchasePrompt(navigate)}
+              >
+                {cardContent}
+              </button>
+            ) : (
+              <Link
+                key={exercise.id || index}
+                to={buildExerciseHref(exercise)}
+                className="exercise-selection-card"
+              >
+                {cardContent}
+              </Link>
+            );
+          })}
+        </section>
+      ) : null}
+
+      {!loading && !errorText && exercises.length === 0 ? (
+        <p className="exercise-selection-state">{emptyMessage}</p>
+      ) : null}
+    </div>
+  );
+}

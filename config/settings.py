@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "apps.accounts.apps.AccountsConfig",
     "apps.learning_by_video.apps.LearningConfig",
+    "apps.exam_preparation.apps.ExamPreparationConfig",
     "apps.lexicon.apps.LexiconConfig",
     "apps.announcement.apps.AnnouncementConfig",
 ]
@@ -56,9 +57,23 @@ REST_FRAMEWORK = {
         "apps.accounts.authentication.MaintenanceAwareJWTAuthentication",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_RATES": {
+        "activation_code_verify": "10/min",
+        "activation_code_redeem": "5/min",
+        "alipay_purchase_create": "10/min",
+        "alipay_payment_status": "60/min",
+    },
 }
 
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
+
+# Temporary release gate for the exam-preparation module. When enabled, only
+# the dedicated preview account can enter or activate this module.
+EXAM_PREPARATION_COMING_SOON_ENABLED = env.bool(
+    "EXAM_PREPARATION_COMING_SOON_ENABLED",
+    default=False,
+)
+EXAM_PREPARATION_PREVIEW_TELEPHONE = "110"
 
 CACHES = {
     "default": {
@@ -209,6 +224,17 @@ ALIPAY_SELLER_ID = env("ALIPAY_SELLER_ID", default="")
 ALIPAY_SIGN_TYPE = env("ALIPAY_SIGN_TYPE", default="RSA2")
 ALIPAY_TIMEOUT_EXPRESS = env("ALIPAY_TIMEOUT_EXPRESS", default="15m")
 ALIPAY_API_TIMEOUT_SECONDS = env.float("ALIPAY_API_TIMEOUT_SECONDS", default=3.0)
+ALIPAY_TIME_ZONE = env("ALIPAY_TIME_ZONE", default="Asia/Shanghai")
+ALIPAY_RECONCILE_INTERVAL_SECONDS = env.int("ALIPAY_RECONCILE_INTERVAL_SECONDS", default=900)
+ALIPAY_RECONCILE_HISTORY_DAYS = env.int("ALIPAY_RECONCILE_HISTORY_DAYS", default=400)
+ALIPAY_NOTIFY_RETENTION_DAYS = env.int("ALIPAY_NOTIFY_RETENTION_DAYS", default=90)
+
+CELERY_BEAT_SCHEDULE = {
+    "reconcile-alipay-payments": {
+        "task": "apps.accounts.tasks.reconcile_alipay_payments",
+        "schedule": ALIPAY_RECONCILE_INTERVAL_SECONDS,
+    },
+}
 
 # =========================
 # Maintenance mode
@@ -218,6 +244,10 @@ MAINTENANCE_MODE_ENABLED = env.bool("MAINTENANCE_MODE_ENABLED", default=False)
 MAINTENANCE_ALLOWED_TELEPHONE = env(
     "MAINTENANCE_ALLOWED_TELEPHONE",
     default="110",
+)
+MAINTENANCE_ALLOWED_TELEPHONES = env(
+    "MAINTENANCE_ALLOWED_TELEPHONES",
+    default=MAINTENANCE_ALLOWED_TELEPHONE,
 )
 MAINTENANCE_MESSAGE = env(
     "MAINTENANCE_MESSAGE",

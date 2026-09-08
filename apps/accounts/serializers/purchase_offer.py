@@ -4,6 +4,8 @@ from rest_framework import serializers
 
 from apps.accounts.models.purchase_offer import PurchaseOffer
 from apps.accounts.services import get_purchase_pricing
+from apps.accounts.security.entitlement_factory import get_plan_duration_days
+from apps.accounts.services.entitlement_grant_service import estimate_entitlement_expiry
 
 
 class PurchaseOfferReadSerializer(serializers.ModelSerializer):
@@ -17,6 +19,9 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
     discount_amount = serializers.SerializerMethodField()
     discount_label = serializers.SerializerMethodField()
     is_discounted_for_user = serializers.SerializerMethodField()
+    access_duration_days = serializers.SerializerMethodField()
+    estimated_expires_at = serializers.SerializerMethodField()
+    promotion_coupon_id = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOffer
@@ -36,6 +41,9 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
             "discount_amount",
             "discount_label",
             "is_discounted_for_user",
+            "access_duration_days",
+            "estimated_expires_at",
+            "promotion_coupon_id",
             "currency",
         )
         read_only_fields = fields
@@ -49,9 +57,15 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
         return obj.get_plan_display()
 
     def _get_pricing(self, obj: PurchaseOffer):
+        cache = getattr(self, "_pricing_cache", None)
+        if cache is None:
+            cache = self._pricing_cache = {}
+        if obj.pk in cache:
+            return cache[obj.pk]
         request = self.context.get("request")
         user = getattr(request, "user", None)
-        return get_purchase_pricing(user=user, offer=obj)
+        cache[obj.pk] = get_purchase_pricing(user=user, offer=obj)
+        return cache[obj.pk]
 
     def get_final_price_amount(self, obj: PurchaseOffer) -> str:
         return f"{self._get_pricing(obj).final_amount:.2f}"
@@ -67,3 +81,23 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
 
     def get_is_discounted_for_user(self, obj: PurchaseOffer) -> bool:
         return self._get_pricing(obj).is_discounted
+
+    def get_promotion_coupon_id(self, obj: PurchaseOffer) -> int | None:
+        coupon = self._get_pricing(obj).coupon
+        return coupon.id if coupon is not None else None
+
+    def get_access_duration_days(self, obj: PurchaseOffer) -> int | None:
+        return get_plan_duration_days(obj.plan)
+
+    def get_estimated_expires_at(self, obj: PurchaseOffer) -> str | None:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return None
+        expires_at = estimate_entitlement_expiry(
+            user=user,
+            module=obj.module,
+            season=obj.season,
+            plan=obj.plan,
+        )
+        return expires_at.isoformat() if expires_at is not None else None

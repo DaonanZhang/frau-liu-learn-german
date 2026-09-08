@@ -31,8 +31,8 @@ function buildPurchaseModalHtml(module) {
   const image = module?.image
     ? `<img class="module-purchase-modal__image" src="${escapeHtml(module.image)}" alt="${escapeHtml(module.title)}" />`
     : "";
-  const labels = Array.isArray(module?.purchaseLabels) && module.purchaseLabels.length
-    ? `<div class="module-purchase-modal__labels">${module.purchaseLabels
+  const labels = Array.isArray(module?.stats) && module.stats.length
+    ? `<div class="module-purchase-modal__labels">${module.stats
         .map((item) => `<span class="module-purchase-modal__label">${escapeHtml(item)}</span>`)
         .join("")}</div>`
     : "";
@@ -44,6 +44,9 @@ function buildPurchaseModalHtml(module) {
         .map((item) => `<li>${escapeHtml(item)}</li>`)
         .join("")}</ul>`
     : "";
+  const notice = module?.purchaseNotice
+    ? `<p class="module-purchase-modal__notice">${escapeHtml(module.purchaseNotice)}</p>`
+    : "";
 
   return `
     <div class="module-purchase-modal">
@@ -51,6 +54,7 @@ function buildPurchaseModalHtml(module) {
       ${labels}
       ${description}
       ${features}
+      ${notice}
     </div>
   `;
 }
@@ -65,7 +69,7 @@ function formatPromoPrice(amount) {
   if (!Number.isFinite(numeric)) {
     return "";
   }
-  return String(numeric.toFixed(1)).replace(/\.0$/, "");
+  return numeric.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 }
 
 function getDisplayPrice(offer) {
@@ -79,15 +83,19 @@ function getDisplayPrice(offer) {
 function buildCheckoutModalHtml(module, offers) {
   const cards = offers.map((offer) => {
     const originalPrice = Number(module?.originalPrice);
+    const displayPrice = getDisplayPrice(offer);
     const originalPriceHtml = Number.isFinite(originalPrice)
       ? `<span class="module-checkout-modal__price-original">¥${escapeHtml(formatPromoPrice(originalPrice))}</span>`
       : "";
     const hasDiscount = Boolean(offer?.is_discounted_for_user) && Number(offer?.discount_amount) > 0;
+    const displayedSavings = Number.isFinite(originalPrice) && Number.isFinite(displayPrice)
+      ? Math.max(0, Number((originalPrice - displayPrice).toFixed(2)))
+      : 0;
     const discountBadgeHtml = hasDiscount
-      ? `<div class="module-checkout-modal__discount-badge">${escapeHtml(offer?.discount_label || "品牌挚友专享")}</div>`
+      ? `<div class="module-checkout-modal__discount-badge">${escapeHtml(offer?.discount_label || "优惠券优惠")}</div>`
       : "";
     const discountNoteHtml = hasDiscount
-      ? `<div class="module-checkout-modal__discount-note">已减 ¥${escapeHtml(formatPromoPrice(offer?.discount_amount))}</div>`
+      ? `<div class="module-checkout-modal__discount-note">已减 ¥${escapeHtml(formatPromoPrice(displayedSavings))}</div>`
       : "";
 
     return `
@@ -101,7 +109,7 @@ function buildCheckoutModalHtml(module, offers) {
           <div class="module-checkout-modal__price-block">
             <div class="module-checkout-modal__price-row">
               ${originalPriceHtml}
-              <span class="module-checkout-modal__price-sale${hasDiscount ? " module-checkout-modal__price-sale--discount" : ""}">¥${escapeHtml(formatPromoPrice(getDisplayPrice(offer)))}</span>
+              <span class="module-checkout-modal__price-sale${hasDiscount ? " module-checkout-modal__price-sale--discount" : ""}">¥${escapeHtml(formatPromoPrice(displayPrice))}</span>
             </div>
             ${discountNoteHtml}
           </div>
@@ -146,6 +154,11 @@ export default function ModuleEntryCard({ module }) {
       return;
     }
 
+    if (offers.length > 1 && module?.id) {
+      navigate(`/modules/${module.id}/purchase`);
+      return;
+    }
+
     const [offer] = offers;
     const result = await Swal.fire({
       title: module?.title || "立刻购买",
@@ -174,6 +187,7 @@ export default function ModuleEntryCard({ module }) {
 
         const order = await createAlipayPurchase({
           offerCode: offer.code,
+          couponId: offer?.promotion_coupon_id,
         });
         savePendingPaymentContext(order?.merchant_order_no, {
           returnPath: window.location.pathname + window.location.search + window.location.hash,
@@ -308,9 +322,23 @@ export default function ModuleEntryCard({ module }) {
           ))}
         </div>
 
-        <div className="module-entry-card__cta">
-          <span>{canEnterModule ? "进入模块" : "立刻查看"}</span>
-          <span aria-hidden="true">→</span>
+        <div className="module-entry-card__actions">
+          <div className="module-entry-card__cta">
+            <span>{canEnterModule ? "进入模块" : "立刻查看"}</span>
+            <span aria-hidden="true">→</span>
+          </div>
+          {canEnterModule && module?.id === "exam-preparation" ? (
+            <button
+              className="module-entry-card__renew"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(`/modules/${module.id}/purchase`);
+              }}
+            >
+              延长有效期
+            </button>
+          ) : null}
         </div>
       </div>
     </article>

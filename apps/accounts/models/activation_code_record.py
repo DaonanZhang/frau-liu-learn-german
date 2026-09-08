@@ -6,6 +6,8 @@ from django.utils import timezone
 
 
 class ActivationCodeRecord(models.Model):
+    """Durable database record for one-time activation codes."""
+
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
         CONSUMED = "consumed", "Consumed"
@@ -13,16 +15,16 @@ class ActivationCodeRecord(models.Model):
         REVOKED = "revoked", "Revoked"
 
     code = models.CharField(max_length=32, unique=True, db_index=True)
+    remark = models.CharField(max_length=255, blank=True, default="")
+    payload = models.JSONField(default=dict)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
         default=Status.ACTIVE,
         db_index=True,
     )
-    payload = models.JSONField(default=dict)
     ttl_seconds = models.PositiveIntegerField()
     expires_at = models.DateTimeField(db_index=True)
-    consumed_at = models.DateTimeField(null=True, blank=True)
     consumed_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -30,6 +32,7 @@ class ActivationCodeRecord(models.Model):
         on_delete=models.SET_NULL,
         related_name="consumed_activation_codes",
     )
+    consumed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

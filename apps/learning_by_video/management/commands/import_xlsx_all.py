@@ -193,90 +193,114 @@ class Command(BaseCommand):
                 season_number=season_number,
             )
 
+        succeeded: list[str] = []
+        failed: list[tuple[str, str]] = []
+
         for xlsx_path in xlsx_files:
             if not xlsx_path.exists():
-                raise FileNotFoundError(str(xlsx_path))
+                msg = f"File not found: {xlsx_path}"
+                failed.append((xlsx_path.name, msg))
+                self.stderr.write(self.style.ERROR(msg))
+                continue
 
             self.stdout.write(f"=== Import pipeline start: {xlsx_path.name} ===")
+            try:
+                # One file = one atomic transaction
+                with transaction.atomic():
+                    # 1) Import video description (do NOT move file inside sub-command)
+                    call_command(
+                        "import_videos",
+                        file=str(xlsx_path),
+                        no_move=True,
+                        module_key=module_key,
+                        season_number=season_number,
+                        no_ensure_season=no_ensure_season,
+                        force_season=force_season,
+                        no_bind_access_season=no_bind_access_season,
+                    )
 
-            # One file = one atomic transaction
-            with transaction.atomic():
-                # 1) Import video description (do NOT move file inside sub-command)
-                call_command(
-                    "import_videos",
-                    file=str(xlsx_path),
-                    no_move=True,
-                    module_key=module_key,
-                    season_number=season_number,
-                    no_ensure_season=no_ensure_season,
-                    force_season=force_season,
-                    no_bind_access_season=no_bind_access_season,
+                    # 2) Resolve video id based on the imported video row
+                    video_id = _resolve_video_id_from_xlsx(
+                        xlsx_path,
+                        season_id=getattr(target_season, "id", None),
+                    )
+
+                    # 3) Import subtitles
+                    call_command(
+                        "import_subtitles",
+                        file=str(xlsx_path),
+                        video_id=video_id,
+                        sheet=subtitles_sheet,
+                        no_move=True,
+                    )
+
+                    # 4) Import exercises (allow alternate sheet names like "EXERCISES")
+                    resolved_exercise_sheet = _resolve_sheet_name(
+                        xlsx_path,
+                        exercise_sheet,
+                        fallbacks=["EXERCISES", "Exercises"],
+                    )
+                    call_command(
+                        "import_exercises",
+                        file=str(xlsx_path),
+                        video_id=video_id,
+                        sheet=resolved_exercise_sheet,
+                        no_move=True,
+                    )
+
+                    # 5) Import expressions
+                    call_command(
+                        "import_expressions",
+                        file=str(xlsx_path),
+                        video_id=video_id,
+                        sheet=expression_sheet,
+                        no_move=True,
+                    )
+
+                    # 6) Import words
+                    call_command(
+                        "import_words",
+                        file=str(xlsx_path),
+                        video_id=video_id,
+                        sheet=word_sheet,
+                        no_move=True,
+                    )
+
+                    # 7) Rebuild aggregated full subtitles for the imported video.
+                    # Use --all semantics for this specific video so reruns refresh
+                    # the aggregate fields even when they were already filled before.
+                    call_command(
+                        "backfill_video_full_subtitles",
+                        video_id=[video_id],
+                        all=True,
+                    )
+
+                    # Move only after successful commit
+                    def _move_after_commit() -> None:
+                        target = processed_dir / xlsx_path.name
+                        xlsx_path.rename(target)
+
+                    transaction.on_commit(_move_after_commit)
+            except Exception as exc:
+                failed.append((xlsx_path.name, str(exc)))
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"FAILED: {xlsx_path.name} rolled back and skipped. error={exc}"
+                    )
                 )
+                self.stdout.write(f"=== Import pipeline end: {xlsx_path.name} ===")
+                continue
 
-                # 2) Resolve video id based on the imported video row
-                video_id = _resolve_video_id_from_xlsx(
-                    xlsx_path,
-                    season_id=getattr(target_season, "id", None),
-                )
-
-                # 3) Import subtitles
-                call_command(
-                    "import_subtitles",
-                    file=str(xlsx_path),
-                    video_id=video_id,
-                    sheet=subtitles_sheet,
-                    no_move=True,
-                )
-
-                # 4) Import exercises (allow alternate sheet names like "EXERCISES")
-                resolved_exercise_sheet = _resolve_sheet_name(
-                    xlsx_path,
-                    exercise_sheet,
-                    fallbacks=["EXERCISES", "Exercises"],
-                )
-                call_command(
-                    "import_exercises",
-                    file=str(xlsx_path),
-                    video_id=video_id,
-                    sheet=resolved_exercise_sheet,
-                    no_move=True,
-                )
-
-                # 5) Import expressions
-                call_command(
-                    "import_expressions",
-                    file=str(xlsx_path),
-                    video_id=video_id,
-                    sheet=expression_sheet,
-                    no_move=True,
-                )
-
-                # 6) Import words
-                call_command(
-                    "import_words",
-                    file=str(xlsx_path),
-                    video_id=video_id,
-                    sheet=word_sheet,
-                    no_move=True,
-                )
-
-                # 7) Rebuild aggregated full subtitles for the imported video.
-                # Use --all semantics for this specific video so reruns refresh
-                # the aggregate fields even when they were already filled before.
-                call_command(
-                    "backfill_video_full_subtitles",
-                    video_id=[video_id],
-                    all=True,
-                )
-
-                # Move only after successful commit
-                def _move_after_commit() -> None:
-                    target = processed_dir / xlsx_path.name
-                    xlsx_path.rename(target)
-
-                transaction.on_commit(_move_after_commit)
-
+            succeeded.append(xlsx_path.name)
             self.stdout.write(self.style.SUCCESS(
                 f"OK: {xlsx_path.name} imported successfully -> moved to processed/"
             ))
             self.stdout.write(f"=== Import pipeline end: {xlsx_path.name} ===")
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Import summary: ok={len(succeeded)} failed={len(failed)} total={len(xlsx_files)}"
+            )
+        )
+        for filename, error in failed:
+            self.stderr.write(self.style.ERROR(f"FAILED FILE: {filename} | {error}"))

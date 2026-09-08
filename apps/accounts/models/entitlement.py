@@ -22,8 +22,9 @@ class Entitlement(models.Model):
 
     class Plan(models.TextChoices):
         TRIAL_7D = "trial_7d", "Trial (7 days)"
-        MONTH_1 = "m1", "1 month"
-        MONTH_3 = "m3", "3 months"
+        MONTH_1 = "m1", "30 days"
+        MONTH_2 = "m2", "60 days"
+        MONTH_3 = "m3", "90 days"
         MONTH_6 = "m6", "6 months"
         MONTH_12 = "m12", "12 months"
         LIFETIME = "lifetime", "Lifetime"
@@ -81,12 +82,6 @@ class Entitlement(models.Model):
             models.Index(fields=["user", "status"], name="idx_ent_user_status"),
             models.Index(fields=["module", "status"], name="idx_ent_module_status"),
             models.Index(fields=["user", "expires_at"], name="idx_ent_user_expires"),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "module", "season", "plan", "starts_at"],
-                name="uniq_ent_user_scope_plan_start",
-            )
         ]
 
     def __str__(self) -> str:

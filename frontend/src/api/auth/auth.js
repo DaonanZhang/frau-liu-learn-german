@@ -193,6 +193,14 @@ export async function applyActivationCode(code) {
   }
 }
 
+/** Redeem either an access code or a promotion code for the signed-in user. */
+export async function redeemCode(code) {
+  return apiFetch("/accounts/auth/redeem-code/", {
+    method: "POST",
+    body: { code },
+  });
+}
+
 export async function requestPasswordReset(email) {
   try {
     const data = await apiFetch("/accounts/auth/password-reset/request/", {

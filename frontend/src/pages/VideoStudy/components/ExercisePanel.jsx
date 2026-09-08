@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./ExercisePanel.css";
 import { fetchExerciseQuestionsByVideo } from "../../../api/learning_by_video/exercise_questions.js";
+import FormattedExplanation from "../../../components/examPreparation/FormattedExplanation.jsx";
 
 const EXERCISE_MODES = [
   {
@@ -530,7 +531,9 @@ export default function ExercisePanel({ isOpen, onClose, videoId, seasonNumber =
                           <div className={["exPanelFeedback", option.is_correct ? "isCorrect" : "isWrong"].join(" ")}>
                             <div className="exPanelFeedbackHeader">{getOptionResultLabel(option)}</div>
                             {String(option.explanation || "").trim() ? (
-                              <div className="exPanelFeedbackText">{option.explanation}</div>
+                              <div className="exPanelFeedbackText">
+                                <FormattedExplanation text={option.explanation} fallback="" />
+                              </div>
                             ) : null}
                           </div>
                         )}
@@ -642,7 +645,9 @@ export default function ExercisePanel({ isOpen, onClose, videoId, seasonNumber =
                       ) : null}
 
                       {getGrammarExplanation(activeQuestion) ? (
-                        <div className="exPanelFeedbackText">{getGrammarExplanation(activeQuestion)}</div>
+                        <div className="exPanelFeedbackText">
+                          <FormattedExplanation text={getGrammarExplanation(activeQuestion)} fallback="" />
+                        </div>
                       ) : null}
                     </div>
                   ) : null}

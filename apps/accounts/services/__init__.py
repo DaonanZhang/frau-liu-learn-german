@@ -16,6 +16,14 @@ from .purchase_pricing import (
     PurchasePricing,
     get_purchase_pricing,
 )
+from .entitlement_grant_service import (
+    ExistingLifetimeAccessError,
+    estimate_entitlement_expiry,
+    get_entitlement_extension_start,
+    grant_or_extend_entitlement,
+    revoke_and_compact_payment_entitlement,
+)
+from .promotion_codes import create_promotion_code_batch
 
 __all__ = [
     "AlipayClientConfig",
@@ -30,4 +38,10 @@ __all__ = [
     "process_payment_grant_task_by_id",
     "PurchasePricing",
     "get_purchase_pricing",
+    "estimate_entitlement_expiry",
+    "ExistingLifetimeAccessError",
+    "get_entitlement_extension_start",
+    "grant_or_extend_entitlement",
+    "revoke_and_compact_payment_entitlement",
+    "create_promotion_code_batch",
 ]

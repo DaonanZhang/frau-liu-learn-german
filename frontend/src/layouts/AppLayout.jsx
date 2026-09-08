@@ -17,10 +17,10 @@ export default function AppLayout() {
     if (!isAuthenticated) {
       navigate("/login", {
         replace: true,
-        state: { from: location.pathname },
+        state: { returnTo: `${location.pathname}${location.search}${location.hash}` },
       });
     }
-  }, [loading, isAuthenticated, navigate, location.pathname]);
+  }, [loading, isAuthenticated, navigate, location.hash, location.pathname, location.search]);
 
   if (loading) {
     return null;

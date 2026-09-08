@@ -45,9 +45,10 @@ Use this when you need Django shell commands for account administration in this 
 - checking one user's current flags and entitlement rows by telephone number
 
 ### Core References
-- `ACCOUNT_ADMIN_COMMANDS.md`
+- `local-docs/account-admin-commands.md`
 - `.codex/skills/account-admin-ops/SKILL.md`
 
 ### Primary Template
-- Start from the reusable `manage.py shell -c` entitlement template in `ACCOUNT_ADMIN_COMMANDS.md`.
+- Start from the reusable `manage.py shell -c` entitlement template in
+  `local-docs/account-admin-commands.md`.
 - For permanent access, use `Entitlement.Plan.LIFETIME` and `expires_at=None`.

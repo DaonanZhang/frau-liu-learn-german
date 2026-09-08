@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.throttling import ScopedRateThrottle
 
 from apps.accounts.security.activation import apply_activation_code_for_user
 from apps.accounts.serializers.activation import ActivationCodeApplySerializer
@@ -17,6 +18,8 @@ class ActivationCodeApplyAPIView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "activation_code_redeem"
 
     def post(self, request: Request) -> Response:
         serializer = ActivationCodeApplySerializer(data=request.data)

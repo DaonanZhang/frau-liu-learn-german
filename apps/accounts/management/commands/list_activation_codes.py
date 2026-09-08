@@ -5,8 +5,6 @@ import json
 from django.core.management.base import BaseCommand
 
 from apps.accounts.models import ActivationCodeRecord
-
-
 class Command(BaseCommand):
     help = "List persisted activation code records."
 
@@ -36,7 +34,7 @@ class Command(BaseCommand):
         limit = max(1, options["limit"])
 
         if code:
-            queryset = queryset.filter(code=code)
+            queryset = queryset.filter(code=str(code).strip().upper())
         if status:
             queryset = queryset.filter(status=status)
 
@@ -55,6 +53,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 (
                     f"code={record.code} "
+                    f"remark={record.remark or '-'} "
                     f"status={record.status} "
                     f"created_at={record.created_at.isoformat()} "
                     f"expires_at={record.expires_at.isoformat()} "

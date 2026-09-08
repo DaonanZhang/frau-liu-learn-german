@@ -10,12 +10,14 @@ from apps.accounts.views import (
     PurchaseOfferViewSet,
     UserDataViewSet,
     UserViewSet,
+    UserCouponViewSet,
 )
 from apps.accounts.views.registration import (
     RegisterVerifyCodeAPIView,
     RegisterAPIView,
 )
 from apps.accounts.views.activation import ActivationCodeApplyAPIView
+from apps.accounts.views.code_redemption import RedeemCodeAPIView
 from apps.accounts.views.payment import (
     AlipayNotifyAPIView,
     AlipayPaymentStatusAPIView,
@@ -29,6 +31,7 @@ from apps.accounts.views.password_reset import (
     PasswordResetRequestAPIView,
 )
 from apps.accounts.views.public_status import PublicStatusAPIView
+from apps.accounts.views.bug_report import BugReportCreateAPIView
 
 
 router = DefaultRouter()
@@ -38,6 +41,7 @@ router.register(r"entitlements", EntitlementViewSet, basename="entitlement")
 router.register(r"module-seasons", ModuleSeasonViewSet, basename="module-season")
 router.register(r"homepage-settings", HomepageSettingViewSet, basename="homepage-setting")
 router.register(r"purchase-offers", PurchaseOfferViewSet, basename="purchase-offer")
+router.register(r"coupons", UserCouponViewSet, basename="coupon")
 
 urlpatterns = [
     path("", include(router.urls)),
@@ -61,11 +65,21 @@ urlpatterns += [
         ActivationCodeApplyAPIView.as_view(),
         name="activate-code",
     ),
+    path(
+        "auth/redeem-code/",
+        RedeemCodeAPIView.as_view(),
+        name="redeem-code",
+    ),
 ]
 
 
 # Login Urls
 urlpatterns += [
+    path(
+        "bug-reports/",
+        BugReportCreateAPIView.as_view(),
+        name="bug-report-create",
+    ),
     path(
         "public/status/",
         PublicStatusAPIView.as_view(),

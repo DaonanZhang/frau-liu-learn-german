@@ -6,6 +6,7 @@ from .password_reset import PasswordResetRequestAPIView, PasswordResetConfirmAPI
 from .homepage_setting import HomepageSettingViewSet
 from .purchase_offer import PurchaseOfferViewSet
 from .public_status import PublicStatusAPIView
+from .coupon import UserCouponViewSet
 
 __all__ = [
     "UserViewSet",
@@ -15,6 +16,7 @@ __all__ = [
     "HomepageSettingViewSet",
     "PurchaseOfferViewSet",
     "PublicStatusAPIView",
+    "UserCouponViewSet",
     "PasswordResetRequestAPIView",
     "PasswordResetConfirmAPIView",
 ]

@@ -550,155 +550,164 @@ class Command(BaseCommand):
         updated = 0
         season_updated = 0
         unresolved: list[str] = []
+        failed_updates: list[str] = []
 
-        with transaction.atomic():
-            for v in videos:
-                changed_fields: list[str] = []
-                picked_video_filename = ""
-                has_existing_video_file = _local_url_points_to_existing_file(
-                    raw_url=v.video_url,
-                    prefix=video_url_prefix,
-                    folder=video_dir,
-                )
-                has_existing_cover_file = _local_url_points_to_existing_file(
-                    raw_url=v.cover_letter_url,
-                    prefix=cover_url_prefix,
-                    folder=cover_dir,
-                )
-
-                is_video_empty = not (v.video_url or "").strip()
-                is_cover_empty = not (v.cover_letter_url or "").strip()
-                if only_missing and empty_only:
-                    need_video_url = is_video_empty
-                    need_cover_url = is_cover_empty
-                else:
-                    need_video_url = (
-                        (not only_missing)
-                        or is_video_empty
-                        or (_has_unsafe_filename_chars(v.video_url) and not has_existing_video_file)
+        for v in videos:
+            try:
+                with transaction.atomic():
+                    changed_fields: list[str] = []
+                    picked_video_filename = ""
+                    has_existing_video_file = _local_url_points_to_existing_file(
+                        raw_url=v.video_url,
+                        prefix=video_url_prefix,
+                        folder=video_dir,
                     )
-                    need_cover_url = (
-                        (not only_missing)
-                        or is_cover_empty
-                        or (_has_unsafe_filename_chars(v.cover_letter_url) and not has_existing_cover_file)
+                    has_existing_cover_file = _local_url_points_to_existing_file(
+                        raw_url=v.cover_letter_url,
+                        prefix=cover_url_prefix,
+                        folder=cover_dir,
                     )
 
-                if need_video_url:
-                    video_filename = ""
-                    candidate_titles: list[str] = []
-                    for t in [v.title] + title_hints.get(v.id, []):
-                        for x in _expand_title_candidates(t):
-                            if x not in candidate_titles:
-                                candidate_titles.append(x)
-                    for t in candidate_titles:
-                        video_filename = _find_filename(
-                            t,
-                            video_map,
-                            file_map_ascii=video_map_ascii,
-                        )
-                        if video_filename:
-                            # If the exact-title match landed on a raw MOV while an
-                            # ASCII-normalized HLS playlist also exists, prefer HLS.
-                            if Path(video_filename).suffix.lower() != ".m3u8":
-                                hls_filename = _find_filename(
-                                    t,
-                                    video_map_hls,
-                                    file_map_ascii=video_map_hls_ascii,
-                                )
-                                if hls_filename:
-                                    video_filename = hls_filename
-                            break
-                    # If chosen HLS filename is unsafe (e.g. contains '?'),
-                    # prefer a safe-named HLS alias when present;
-                    # otherwise fallback to MP4 to avoid broken segment URI parsing.
-                    if video_filename and Path(video_filename).suffix.lower() == ".m3u8" and _has_unsafe_hls_name(video_filename):
-                        safe_hls_alias = f"{_sanitize_stem_for_alias(Path(video_filename).stem)}.m3u8"
-                        if (video_dir / safe_hls_alias).exists():
-                            video_filename = safe_hls_alias
-                        else:
-                            key = _normalize_media_key(Path(video_filename).stem)
-                            mp4_filename = video_map_mp4.get(key, "")
-                            if not mp4_filename:
-                                key_ascii = _normalize_ascii_media_key(Path(video_filename).stem)
-                                mp4_filename = video_map_mp4_ascii.get(key_ascii, "")
-                            if mp4_filename:
-                                video_filename = mp4_filename
-                    if video_filename:
-                        video_filename = _ensure_safe_alias_filename(
-                            folder=video_dir,
-                            filename=video_filename,
-                            mode=mode,
-                            create_missing_alias=True,
-                        )
-                        picked_video_filename = video_filename
-                        new_video_url = _build_media_url(
-                            video_url_prefix,
-                            video_filename,
-                        )
-                        if v.video_url != new_video_url:
-                            v.video_url = new_video_url
-                            changed_fields.append("video_url")
+                    is_video_empty = not (v.video_url or "").strip()
+                    is_cover_empty = not (v.cover_letter_url or "").strip()
+                    if only_missing and empty_only:
+                        need_video_url = is_video_empty
+                        need_cover_url = is_cover_empty
                     else:
-                        unresolved.append(
-                            f"[video_url] id={v.id} title={v.title} | no matching file in {video_dir}"
+                        need_video_url = (
+                            (not only_missing)
+                            or is_video_empty
+                            or (_has_unsafe_filename_chars(v.video_url) and not has_existing_video_file)
+                        )
+                        need_cover_url = (
+                            (not only_missing)
+                            or is_cover_empty
+                            or (_has_unsafe_filename_chars(v.cover_letter_url) and not has_existing_cover_file)
                         )
 
-                if need_cover_url:
-                    # Prefer exact same stem as picked video file.
-                    cover_filename = ""
-                    if picked_video_filename:
-                        same_stem_key = _normalize_media_key(Path(picked_video_filename).stem)
-                        cover_filename = cover_map.get(same_stem_key, "")
-                        if not cover_filename:
-                            same_stem_key_ascii = _normalize_ascii_media_key(
-                                Path(picked_video_filename).stem
-                            )
-                            cover_filename = cover_map_ascii.get(same_stem_key_ascii, "")
-                    if not cover_filename:
-                        candidate_titles = []
+                    if need_video_url:
+                        video_filename = ""
+                        candidate_titles: list[str] = []
                         for t in [v.title] + title_hints.get(v.id, []):
                             for x in _expand_title_candidates(t):
                                 if x not in candidate_titles:
                                     candidate_titles.append(x)
                         for t in candidate_titles:
-                            cover_filename = _find_filename(
+                            video_filename = _find_filename(
                                 t,
-                                cover_map,
-                                file_map_ascii=cover_map_ascii,
+                                video_map,
+                                file_map_ascii=video_map_ascii,
                             )
-                            if cover_filename:
+                            if video_filename:
+                                # If the exact-title match landed on a raw MOV while an
+                                # ASCII-normalized HLS playlist also exists, prefer HLS.
+                                if Path(video_filename).suffix.lower() != ".m3u8":
+                                    hls_filename = _find_filename(
+                                        t,
+                                        video_map_hls,
+                                        file_map_ascii=video_map_hls_ascii,
+                                    )
+                                    if hls_filename:
+                                        video_filename = hls_filename
                                 break
-                    if cover_filename:
-                        cover_filename = _ensure_safe_alias_filename(
-                            folder=cover_dir,
-                            filename=cover_filename,
-                            mode=mode,
-                            create_missing_alias=True,
-                        )
-                        new_cover_url = _build_media_url(
-                            cover_url_prefix,
-                            cover_filename,
-                        )
-                        if v.cover_letter_url != new_cover_url:
-                            v.cover_letter_url = new_cover_url
-                            changed_fields.append("cover_letter_url")
-                    else:
-                        unresolved.append(
-                            f"[cover_letter_url] id={v.id} title={v.title} | no matching file in {cover_dir}"
-                        )
+                        # If chosen HLS filename is unsafe (e.g. contains '?'),
+                        # prefer a safe-named HLS alias when present;
+                        # otherwise fallback to MP4 to avoid broken segment URI parsing.
+                        if video_filename and Path(video_filename).suffix.lower() == ".m3u8" and _has_unsafe_hls_name(video_filename):
+                            safe_hls_alias = f"{_sanitize_stem_for_alias(Path(video_filename).stem)}.m3u8"
+                            if (video_dir / safe_hls_alias).exists():
+                                video_filename = safe_hls_alias
+                            else:
+                                key = _normalize_media_key(Path(video_filename).stem)
+                                mp4_filename = video_map_mp4.get(key, "")
+                                if not mp4_filename:
+                                    key_ascii = _normalize_ascii_media_key(Path(video_filename).stem)
+                                    mp4_filename = video_map_mp4_ascii.get(key_ascii, "")
+                                if mp4_filename:
+                                    video_filename = mp4_filename
+                        if video_filename:
+                            video_filename = _ensure_safe_alias_filename(
+                                folder=video_dir,
+                                filename=video_filename,
+                                mode=mode,
+                                create_missing_alias=True,
+                            )
+                            picked_video_filename = video_filename
+                            new_video_url = _build_media_url(
+                                video_url_prefix,
+                                video_filename,
+                            )
+                            if v.video_url != new_video_url:
+                                v.video_url = new_video_url
+                                changed_fields.append("video_url")
+                        else:
+                            unresolved.append(
+                                f"[video_url] id={v.id} title={v.title} | no matching file in {video_dir}"
+                            )
 
-                if ensure_season and target_season and v.season_id is None:
-                    # For this batch, add season restriction only when missing.
-                    v.season = target_season
-                    changed_fields.append("season")
-                    season_updated += 1
+                    if need_cover_url:
+                        # Prefer exact same stem as picked video file.
+                        cover_filename = ""
+                        if picked_video_filename:
+                            same_stem_key = _normalize_media_key(Path(picked_video_filename).stem)
+                            cover_filename = cover_map.get(same_stem_key, "")
+                            if not cover_filename:
+                                same_stem_key_ascii = _normalize_ascii_media_key(
+                                    Path(picked_video_filename).stem
+                                )
+                                cover_filename = cover_map_ascii.get(same_stem_key_ascii, "")
+                        if not cover_filename:
+                            candidate_titles = []
+                            for t in [v.title] + title_hints.get(v.id, []):
+                                for x in _expand_title_candidates(t):
+                                    if x not in candidate_titles:
+                                        candidate_titles.append(x)
+                            for t in candidate_titles:
+                                cover_filename = _find_filename(
+                                    t,
+                                    cover_map,
+                                    file_map_ascii=cover_map_ascii,
+                                )
+                                if cover_filename:
+                                    break
+                        if cover_filename:
+                            cover_filename = _ensure_safe_alias_filename(
+                                folder=cover_dir,
+                                filename=cover_filename,
+                                mode=mode,
+                                create_missing_alias=True,
+                            )
+                            new_cover_url = _build_media_url(
+                                cover_url_prefix,
+                                cover_filename,
+                            )
+                            if v.cover_letter_url != new_cover_url:
+                                v.cover_letter_url = new_cover_url
+                                changed_fields.append("cover_letter_url")
+                        else:
+                            unresolved.append(
+                                f"[cover_letter_url] id={v.id} title={v.title} | no matching file in {cover_dir}"
+                            )
 
-                if changed_fields:
-                    v.save(update_fields=sorted(set(changed_fields)))
-                    updated += 1
+                    if ensure_season and target_season and v.season_id is None:
+                        # For this batch, add season restriction only when missing.
+                        v.season = target_season
+                        changed_fields.append("season")
+                        season_updated += 1
 
-            if mode == "validate":
-                transaction.set_rollback(True)
+                    if changed_fields:
+                        v.save(update_fields=sorted(set(changed_fields)))
+                        updated += 1
+                    if mode == "validate":
+                        transaction.set_rollback(True)
+            except Exception as exc:
+                failed_updates.append(f"id={v.id} title={v.title} | {exc}")
+                self.stderr.write(
+                    self.style.ERROR(
+                        f"FAILED VIDEO: id={v.id} title={v.title} rolled back and skipped. error={exc}"
+                    )
+                )
+                continue
 
         self.stdout.write(f"mode={mode}")
         self.stdout.write(f"videos scanned: {len(videos)}")
@@ -709,6 +718,7 @@ class Command(BaseCommand):
         self.stdout.write(f"resource dir cover exists: {cover_dir.exists()} | files indexed={len(cover_map)}")
         self.stdout.write(f"videos updated: {updated}")
         self.stdout.write(f"season updated: {season_updated}")
+        self.stdout.write(f"videos failed: {len(failed_updates)}")
 
         self.stdout.write("\n=== video_url location stats ===")
         for k, c in sorted(url_stats.items(), key=lambda x: (-x[1], x[0])):
@@ -717,6 +727,11 @@ class Command(BaseCommand):
         self.stdout.write("\n=== cover_letter_url location stats ===")
         for k, c in sorted(cover_stats.items(), key=lambda x: (-x[1], x[0])):
             self.stdout.write(f"{k}: {c}")
+
+        if failed_updates:
+            self.stdout.write("\n=== failed video updates ===")
+            for item in failed_updates:
+                self.stderr.write(self.style.ERROR(item))
 
         self.stdout.write("\n=== unresolved (manual check) ===")
         if not unresolved:

@@ -163,18 +163,31 @@ npm run build
 
 If your deployment uses a different frontend release workflow, follow that workflow instead.
 
-### 6. Restart backend and worker processes
+### 6. Restart backend and payment-recovery processes
 
 Restart whichever processes are used in your deployment:
 
 - Django / Gunicorn / Uvicorn
-- Celery worker
-- Celery beat, if applicable
+- Celery worker and Celery beat, if this deployment uses Celery
+- otherwise, the cron job or systemd timer that periodically runs
+  `manage.py reconcile_alipay_payments --limit 100`
 
 This is important because:
 
 - new payment/status routes must be served by the updated backend
 - payment entitlement grants still rely on `PaymentGrantTask` processing
+- the Alipay callback processes grants synchronously, while the periodic runner
+  is the recovery path for pending/paid/refunded orders and failed grants
+- Celery beat is one supported scheduler, but Celery itself is optional
+
+Run a one-off reconciliation after deployment:
+
+```bash
+.venv/bin/python manage.py reconcile_alipay_payments --limit 100
+```
+
+Activation codes and promotion codes are stored and looked up as normalized
+uppercase plaintext in PostgreSQL. No separate hash key is required.
 
 ### 7. Configure Alipay callback URLs correctly
 

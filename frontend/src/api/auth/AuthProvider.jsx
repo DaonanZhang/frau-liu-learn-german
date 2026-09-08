@@ -8,28 +8,23 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const [tokenPresent, setTokenPresent] = useState(
-    () => Boolean(localStorage.getItem("accessToken"))
-  );
-
   const hasToken = useCallback(() => Boolean(localStorage.getItem("accessToken")), []);
 
   const reloadMe = useCallback(async () => {
     if (!hasToken()) {
       setUser(null);
-      setTokenPresent(false);
       return null;
     }
 
     try {
       const me = await apiFetch("/accounts/users/me/");
       setUser(me);
-      setTokenPresent(true);
       return me;
-    } catch {
-      clearAuthTokens();
-      setUser(null);
-      setTokenPresent(false);
+    } catch (error) {
+      if (error?.status === 401) {
+        clearAuthTokens();
+        setUser(null);
+      }
       return null;
     } finally {
       // keep loading as a bootstrap-only flag
@@ -37,29 +32,56 @@ export function AuthProvider({ children }) {
   }, [hasToken]);
 
   useEffect(() => {
-    const token = hasToken();
-    setTokenPresent(token);
-    setLoading(false);
-    if (!user && token) {
-      reloadMe();
-    }
-  }, [user, hasToken, reloadMe]);
+    let cancelled = false;
 
-  const notifyLogin = useCallback(() => {
-    setTokenPresent(true);
-    reloadMe();
+    async function bootstrapAuthentication() {
+      await reloadMe();
+      if (!cancelled) {
+        setLoading(false);
+      }
+    }
+
+    bootstrapAuthentication();
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadMe]);
+
+  useEffect(() => {
+    function refreshVisibleSession() {
+      if (document.visibilityState === "visible" && hasToken()) {
+        reloadMe();
+      }
+    }
+
+    const timer = window.setInterval(refreshVisibleSession, 300000);
+    window.addEventListener("focus", refreshVisibleSession);
+    document.addEventListener("visibilitychange", refreshVisibleSession);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshVisibleSession);
+      document.removeEventListener("visibilitychange", refreshVisibleSession);
+    };
+  }, [hasToken, reloadMe]);
+
+  const notifyLogin = useCallback(async () => {
+    setLoading(true);
+    try {
+      return await reloadMe();
+    } finally {
+      setLoading(false);
+    }
   }, [reloadMe]);
 
   const value = {
     user,
     loading,
-    isAuthenticated: Boolean(user) || tokenPresent,
+    isAuthenticated: Boolean(user),
     reloadMe,
     notifyLogin,
     logout: () => {
       clearAuthTokens();
       setUser(null);
-      setTokenPresent(false);
       setLoading(false);
     },
   };

@@ -21,13 +21,15 @@ class Command(BaseCommand):
             default=10,
             help="Number of activation codes to generate",
         )
+        parser.add_argument("--remark", type=str, default="")
 
     def handle(self, *args, **options):
         count = options["count"]
 
         self.stdout.write("🔐 Generating activation codes...\n")
 
-        for i in range(count):
+        created = 0
+        while created < count:
             code = generate_activation_code()
 
             payload = ActivationPayload(
@@ -37,15 +39,20 @@ class Command(BaseCommand):
                         plan=ActivationPlan.LIFETIME,
                         season_number=None,
                     )
-                ]
+                ],
+                remark=options["remark"].strip(),
             )
 
-            store_activation_code(
-                code=code,
-                payload=payload,
-            )
+            try:
+                store_activation_code(
+                    code=code,
+                    payload=payload,
+                )
+            except ValueError:
+                continue
 
-            self.stdout.write(f"✅ {i+1}. {code}")
+            created += 1
+            self.stdout.write(f"✅ {created}. {code}")
 
         self.stdout.write(
             self.style.SUCCESS(f"\n🎉 Generated {count} activation codes.")

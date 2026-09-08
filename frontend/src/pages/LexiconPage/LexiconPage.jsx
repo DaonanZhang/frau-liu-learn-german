@@ -433,8 +433,8 @@ function buildPurchaseModalHtml(module) {
   const image = module?.image
     ? `<img class="module-purchase-modal__image" src="${escapeHtml(module.image)}" alt="${escapeHtml(module.title)}" />`
     : "";
-  const labels = Array.isArray(module?.purchaseLabels) && module.purchaseLabels.length
-    ? `<div class="module-purchase-modal__labels">${module.purchaseLabels
+  const labels = Array.isArray(module?.stats) && module.stats.length
+    ? `<div class="module-purchase-modal__labels">${module.stats
         .map((item) => `<span class="module-purchase-modal__label">${escapeHtml(item)}</span>`)
         .join("")}</div>`
     : "";
@@ -446,6 +446,9 @@ function buildPurchaseModalHtml(module) {
         .map((item) => `<li>${escapeHtml(item)}</li>`)
         .join("")}</ul>`
     : "";
+  const notice = module?.purchaseNotice
+    ? `<p class="module-purchase-modal__notice">${escapeHtml(module.purchaseNotice)}</p>`
+    : "";
 
   return `
     <div class="module-purchase-modal">
@@ -453,6 +456,7 @@ function buildPurchaseModalHtml(module) {
       ${labels}
       ${description}
       ${features}
+      ${notice}
     </div>
   `;
 }

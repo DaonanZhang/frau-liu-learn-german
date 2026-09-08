@@ -8,51 +8,16 @@ import useBodyScrollLock from "../hooks/useBodyScrollLock";
 import useMaxWidth from "../hooks/useMaxWidth.js";
 import HomeSidebarContent from "./Homepage/HomeSidebarContent.jsx";
 import {
+  EXAM_PREPARATION_MODULE,
   SCIENCE_SEASON_MODULE,
   VLOG_SEASON_MODULE,
   buildStats,
   toSafeNumber,
 } from "./Homepage/homeShared.js";
+import { hasModuleAccess } from "../utils/moduleAccess.js";
 
 import "./Home.css";
 import "./Homepage/ModuleEntryCard.css";
-
-function hasModuleAccess(user, module) {
-  if (!user || !module?.moduleKey) {
-    return false;
-  }
-
-  if (user.is_staff || user.is_superuser) {
-    return true;
-  }
-
-  const entitlements = Array.isArray(user.entitlements) ? user.entitlements : [];
-  const allowedSeasonNumbers = Array.isArray(module?.seasonNumbers)
-    ? module.seasonNumbers.map((item) => Number(item)).filter(Number.isFinite)
-    : [Number(module?.seasonNumber)].filter(Number.isFinite);
-
-  return entitlements.some((item) => {
-    if (!item?.is_valid_now) {
-      return false;
-    }
-
-    const scope = String(item.scope || "");
-    if (scope === "platform") {
-      return true;
-    }
-
-    const moduleKey = item?.module?.key;
-    if (moduleKey !== module.moduleKey) {
-      return false;
-    }
-
-    if (!item?.season) {
-      return true;
-    }
-
-    return allowedSeasonNumbers.includes(Number(item.season?.season_number));
-  });
-}
 
 function buildCoverCandidates(src) {
   const normalized = typeof src === "string" ? src.trim() : "";
@@ -78,8 +43,8 @@ function buildPurchaseModalHtml(module) {
   const image = module?.image
     ? `<img class="module-purchase-modal__image" src="${escapeHtml(module.image)}" alt="${escapeHtml(module.title)}" />`
     : "";
-  const labels = Array.isArray(module?.purchaseLabels) && module.purchaseLabels.length
-    ? `<div class="module-purchase-modal__labels">${module.purchaseLabels
+  const labels = Array.isArray(module?.stats) && module.stats.length
+    ? `<div class="module-purchase-modal__labels">${module.stats
         .map((item) => `<span class="module-purchase-modal__label">${escapeHtml(item)}</span>`)
         .join("")}</div>`
     : "";
@@ -91,6 +56,9 @@ function buildPurchaseModalHtml(module) {
         .map((item) => `<li>${escapeHtml(item)}</li>`)
         .join("")}</ul>`
     : "";
+  const notice = module?.purchaseNotice
+    ? `<p class="module-purchase-modal__notice">${escapeHtml(module.purchaseNotice)}</p>`
+    : "";
 
   return `
     <div class="module-purchase-modal">
@@ -98,6 +66,7 @@ function buildPurchaseModalHtml(module) {
       ${labels}
       ${description}
       ${features}
+      ${notice}
     </div>
   `;
 }
@@ -112,12 +81,6 @@ export default function Home() {
   const isMobileView = useMaxWidth(990);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   useBodyScrollLock(isMobileView && isMobileSidebarOpen);
-
-  useEffect(() => {
-    if (!isMobileView) {
-      setIsMobileSidebarOpen(false);
-    }
-  }, [isMobileView]);
 
   useEffect(() => {
     let aborted = false;
@@ -170,7 +133,7 @@ export default function Home() {
   }, [completedVideos, activeDays]);
 
   const modules = useMemo(() => {
-    return [SCIENCE_SEASON_MODULE, VLOG_SEASON_MODULE];
+    return [SCIENCE_SEASON_MODULE, VLOG_SEASON_MODULE, EXAM_PREPARATION_MODULE];
   }, []);
 
   return (
@@ -236,16 +199,32 @@ export default function Home() {
             <div className="home-module-grid">
               {modules.map((module) => {
                 const canEnterModule = hasModuleAccess(user, module);
+                const isExamPreparationComingSoon =
+                  module.id === "exam-preparation"
+                  && user?.exam_preparation_release_access === false;
                 const coverCandidates = buildCoverCandidates(module?.image);
                 const coverSrc = coverCandidates.find((item) => !failedSources[item]) || "";
 
                 return (
                   <article
                     key={module.id}
-                    className="module-entry-card"
+                    className={`module-entry-card${
+                      isExamPreparationComingSoon
+                        ? " module-entry-card--coming-soon"
+                        : ""
+                    }`}
                     role="button"
                     tabIndex={0}
                     onClick={async () => {
+                      if (isExamPreparationComingSoon) {
+                        await Swal.fire({
+                          icon: "info",
+                          title: "Coming Soon",
+                          text: "备考季正在准备中，敬请期待。",
+                          confirmButtonText: "知道了",
+                        });
+                        return;
+                      }
                       if (canEnterModule && module?.route) {
                         navigate(module.route);
                         return;
@@ -305,7 +284,11 @@ export default function Home() {
                         <div className="module-entry-card__image module-entry-card__image--placeholder" />
                       )}
                       <div className="module-entry-card__overlay" />
-                      {module?.badge ? <span className="module-entry-card__badge">{module.badge}</span> : null}
+                      {isExamPreparationComingSoon ? (
+                        <span className="module-entry-card__badge">Coming Soon</span>
+                      ) : module?.badge ? (
+                        <span className="module-entry-card__badge">{module.badge}</span>
+                      ) : null}
                     </div>
 
                     <div className="module-entry-card__body">
@@ -329,7 +312,13 @@ export default function Home() {
                       </div>
 
                       <div className="module-entry-card__cta">
-                        <span>{canEnterModule ? "进入模块" : "立刻查看"}</span>
+                        <span>
+                          {isExamPreparationComingSoon
+                            ? "Coming Soon"
+                            : canEnterModule
+                              ? "进入模块"
+                              : "立刻查看"}
+                        </span>
                         <span aria-hidden="true">→</span>
                       </div>
                     </div>

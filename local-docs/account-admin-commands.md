@@ -10,7 +10,7 @@ All commands assume project root as current directory.
 - `plan="lifetime"` means permanent access and maps to `expires_at=None`.
 - Season-scoped entitlement requires both `module` and `season_number`.
 - Module-wide entitlement applies to all seasons of that module when `season=None`.
-- Activation codes are stored in cache/Redis and currently default to 720-day TTL.
+- Activation codes are stored as normalized uppercase plaintext in the durable database ledger; remarks, consumer, and consumption time remain available after redemption.
 - For operator runs, prefer printing codes directly to terminal on the server instead of writing files.
 
 ## Check User By Telephone
@@ -99,6 +99,7 @@ Replace:
 Supported `PLAN_CONST` values:
 - `Entitlement.Plan.TRIAL_7D`
 - `Entitlement.Plan.MONTH_1`
+- `Entitlement.Plan.MONTH_2`
 - `Entitlement.Plan.MONTH_3`
 - `Entitlement.Plan.MONTH_6`
 - `Entitlement.Plan.MONTH_12`
@@ -169,7 +170,7 @@ else:
 
 ## Generate Season Activation Codes In Bulk
 
-This prints codes directly to the terminal and stores them in Redis-backed cache.
+This prints codes directly to the terminal and stores them in the database.
 Adjust `SEASON_NUMBER`, `SEASON_TITLE`, and `COUNT` as needed.
 
 ```bash
@@ -224,6 +225,28 @@ for code in codes:
     print(code)
 '
 ```
+
+## Generate Exam Preparation Timed Activation Codes
+
+These commands store module-wide `exam_preparation` codes in the database and
+print the plaintext codes once to stdout. Codes inherit the current 720-day
+database expiry. Redeeming a code extends
+the user's current latest expiry instead of replacing it. A day is an exact
+24-hour access period.
+
+```bash
+.venv/bin/python manage.py generate_exam_preparation_codes --days 30 --count 10 --remark "渠道/批次备注"
+.venv/bin/python manage.py generate_exam_preparation_codes --days 60 --count 10 --remark "渠道/批次备注"
+.venv/bin/python manage.py generate_exam_preparation_codes --days 90 --count 10 --remark "渠道/批次备注"
+```
+
+Inspect the durable redemption ledger. Omit `--show-code` to keep original codes hidden:
+
+```bash
+.venv/bin/python manage.py list_activation_codes --status consumed --show-code
+```
+
+Supported durations are exactly `30`, `60`, and `90` days.
 
 ## Generate Season 1 And Season 4 Activation Codes In One Run
 

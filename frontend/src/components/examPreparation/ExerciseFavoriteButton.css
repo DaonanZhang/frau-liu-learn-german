@@ -1,0 +1,35 @@
+.exam-favorite-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border: 1px solid #d8c5af;
+  border-radius: 999px;
+  background: #fffaf4;
+  color: #8f5321;
+  cursor: pointer;
+  transition: transform 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+.exam-favorite-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: #cf6327;
+  background: #fff1e6;
+}
+
+.exam-favorite-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.exam-favorite-btn.is-favorited {
+  border-color: #cf6327;
+  background: #fff1e6;
+  color: #cf6327;
+}
+
+.exam-favorite-btn__star {
+  font-size: 1.2rem;
+  line-height: 1;
+}

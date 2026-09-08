@@ -7,8 +7,15 @@ def maintenance_mode_enabled() -> bool:
     return bool(getattr(settings, "MAINTENANCE_MODE_ENABLED", False))
 
 
-def allowed_telephone() -> str:
-    return str(getattr(settings, "MAINTENANCE_ALLOWED_TELEPHONE", "110")).strip()
+def allowed_telephones() -> set[str]:
+    raw_value = getattr(settings, "MAINTENANCE_ALLOWED_TELEPHONES", None)
+    if raw_value is None:
+        raw_value = getattr(settings, "MAINTENANCE_ALLOWED_TELEPHONE", "110")
+    return {
+        telephone.strip()
+        for telephone in str(raw_value).split(",")
+        if telephone.strip()
+    }
 
 
 def maintenance_message() -> str:
@@ -26,4 +33,4 @@ def user_allowed_during_maintenance(user) -> bool:
         return True
     if not getattr(user, "is_authenticated", False):
         return True
-    return str(getattr(user, "telephone", "")).strip() == allowed_telephone()
+    return str(getattr(user, "telephone", "")).strip() in allowed_telephones()

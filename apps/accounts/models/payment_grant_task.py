@@ -60,8 +60,9 @@ class PaymentGrantTask(models.Model):
         max_length=16,
         choices=[
             ("trial_7d", "Trial (7 days)"),
-            ("m1", "1 month"),
-            ("m3", "3 months"),
+            ("m1", "30 days"),
+            ("m2", "60 days"),
+            ("m3", "90 days"),
             ("m6", "6 months"),
             ("m12", "12 months"),
             ("lifetime", "Lifetime"),
@@ -88,6 +89,13 @@ class PaymentGrantTask(models.Model):
         null=True,
         blank=True,
         help_text="Timestamp when the task was successfully processed.",
+    )
+    idempotency_key = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        unique=True,
+        help_text="Client-generated purchase intent key used to deduplicate order creation.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

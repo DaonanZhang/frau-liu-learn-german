@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
 import { login, useAuth } from "../api/auth";
 import { fetchPublicStatus } from "../api/auth/publicStatus.js";
@@ -29,13 +29,18 @@ export default function LoginPage() {
   const [maintenanceNotice, setMaintenanceNotice] = useState("");
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { notifyLogin, loading, isAuthenticated } = useAuth();
+  const requestedReturnTo = String(location.state?.returnTo || "");
+  const returnTo = requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//")
+    ? requestedReturnTo
+    : "/";
 
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      navigate("/", { replace: true });
+      navigate(returnTo, { replace: true });
     }
-  }, [loading, isAuthenticated, navigate]);
+  }, [loading, isAuthenticated, navigate, returnTo]);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,7 +75,7 @@ export default function LoginPage() {
 
     const result = await login(phone, password, countryCode);
     if (result.ok) {
-      notifyLogin();
+      await notifyLogin();
     }
   };
 

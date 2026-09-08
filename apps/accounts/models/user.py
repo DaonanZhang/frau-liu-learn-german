@@ -77,6 +77,11 @@ class User(AbstractUser):
         default="+86",
     )
 
+    has_seen_schreiben_guide = models.BooleanField(
+        default=False,
+        verbose_name="has seen Schreiben guide",
+    )
+
     objects = CustomUserManager()
 
     USERNAME_FIELD = "telephone"

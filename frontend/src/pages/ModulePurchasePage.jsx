@@ -2,6 +2,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../api/auth/useAuth.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
 import { hasModuleAccess } from "../utils/moduleAccess.js";
+import PurchaseFeatureList from "../components/PurchaseFeatureList.jsx";
 import "./ModulePurchasePage.css";
 
 export default function ModulePurchasePage() {
@@ -42,7 +43,7 @@ export default function ModulePurchasePage() {
           <h1 className="module-purchase-page__title">{module.title}</h1>
 
           <div className="module-purchase-page__labels">
-            {(module.purchaseLabels || []).map((item) => (
+            {(module.stats || []).map((item) => (
               <span key={item} className="module-purchase-page__label">
                 {item}
               </span>
@@ -51,11 +52,14 @@ export default function ModulePurchasePage() {
 
           <p className="module-purchase-page__description">{module.purchaseDescription}</p>
 
-          <ul className="module-purchase-page__list">
-            {(module.purchaseFeatures || []).map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+          <PurchaseFeatureList
+            features={module.purchaseFeatures}
+            className="module-purchase-page__list"
+          />
+
+          {module.purchaseNotice ? (
+            <p className="module-purchase-page__notice">{module.purchaseNotice}</p>
+          ) : null}
         </div>
       </section>
 

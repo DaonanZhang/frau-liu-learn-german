@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from apps.accounts.feature_flags import user_allowed_exam_preparation_preview
 from apps.accounts.models.user import User
 from apps.accounts.serializers.entitlement import EntitlementReadSerializer
 from apps.accounts.serializers.user_data import UserDataReadSerializer
@@ -17,6 +18,10 @@ class UserMeReadSerializer(serializers.ModelSerializer):
     user_data = UserDataReadSerializer(read_only=True)
     entitlements = EntitlementReadSerializer(many=True, read_only=True)
     has_platform_wide_access = serializers.BooleanField(read_only=True)
+    exam_preparation_release_access = serializers.SerializerMethodField()
+
+    def get_exam_preparation_release_access(self, user: User) -> bool:
+        return user_allowed_exam_preparation_preview(user)
 
     class Meta:
         model = User
@@ -30,6 +35,7 @@ class UserMeReadSerializer(serializers.ModelSerializer):
             "is_superuser",
             "has_seen_schreiben_guide",
             "has_platform_wide_access",
+            "exam_preparation_release_access",
             "user_data",
             "entitlements",
         )

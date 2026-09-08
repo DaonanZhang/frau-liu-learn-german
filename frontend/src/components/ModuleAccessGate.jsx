@@ -23,6 +23,12 @@ export default function ModuleAccessGate({ moduleId, children }) {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+  if (
+    moduleId === "exam-preparation"
+    && user?.exam_preparation_release_access === false
+  ) {
+    return <Navigate to="/" replace />;
+  }
   const allowsExamPreparationTrial =
     moduleId === "exam-preparation"
     && location.pathname.startsWith("/modules/exam-preparation");

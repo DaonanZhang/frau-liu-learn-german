@@ -74,6 +74,60 @@ class AlipayPaymentApiTests(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
 
+    def test_exam_preparation_offers_use_launch_pricing(self) -> None:
+        response = self.client.get(
+            "/api/accounts/purchase-offers/",
+            {"module": "exam_preparation"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [
+                (
+                    offer["code"],
+                    offer["plan"],
+                    offer["price_amount"],
+                    offer["access_duration_days"],
+                )
+                for offer in response.data
+            ],
+            [
+                ("exam-preparation-30d", "m1", "59.90", 30),
+                ("exam-preparation-90d", "m3", "99.90", 90),
+                ("exam-preparation-180d", "m6", "169.90", 180),
+            ],
+        )
+
+    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    def test_coming_soon_gate_blocks_exam_purchase_before_creating_order(self) -> None:
+        exam_module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        exam_offer = PurchaseOffer.objects.create(
+            code="exam-preview-gated-offer",
+            title="Exam preview gated offer",
+            module=exam_module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            price_amount=Decimal("29.90"),
+            currency="CNY",
+            is_active=True,
+        )
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {
+                "offer_code": exam_offer.code,
+                "idempotency_key": "00000000-0000-4000-8000-000000000099",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["detail"][0], "备考季即将上线，敬请期待。")
+        self.assertFalse(AlipayWebsitePayment.objects.exists())
+
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_same_purchase_intent_reuses_existing_pending_payment(self, mock_get_alipay_service: Mock) -> None:
         mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"
@@ -379,6 +433,51 @@ class AlipayPaymentApiTests(APITestCase):
                 external_ref=f"alipay_payment:{payment.merchant_order_no}",
             ).exists()
         )
+
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_notify_accepts_valid_payment_when_seller_id_is_not_configured(
+        self,
+        mock_get_alipay_service: Mock,
+    ) -> None:
+        service = Mock()
+        service.verify_notify_signature.return_value = True
+        service.config.app_id = "test-app-id"
+        service.config.seller_id = ""
+        mock_get_alipay_service.return_value = service
+
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-notify-optional-seller-001",
+            subject="Science Season 1 Monthly",
+            total_amount=Decimal("29.90"),
+            status=AlipayWebsitePayment.Status.PENDING,
+        )
+        PaymentGrantTask.objects.create(
+            payment=payment,
+            offer=self.offer,
+            user=self.user,
+            module=self.module,
+            season=self.season,
+            plan=Entitlement.Plan.MONTH_1,
+            status=PaymentGrantTask.Status.PENDING,
+        )
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/notify/",
+            {
+                "out_trade_no": payment.merchant_order_no,
+                "trade_no": "202605120088",
+                "trade_status": "TRADE_SUCCESS",
+                "total_amount": "29.90",
+                "app_id": "test-app-id",
+                "seller_id": "2088000000000000",
+                "sign": "mock-signature",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, AlipayWebsitePayment.Status.PAID)
         self.assertNotIn("sign", payment.raw_notify_payload)
 
     def test_paid_purchase_extends_existing_access_once(self) -> None:

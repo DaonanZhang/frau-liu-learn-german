@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.db import transaction
 from django.utils import timezone
 
+from apps.accounts.feature_flags import user_allowed_exam_preparation_preview
 from apps.accounts.services.activation_codes import (
     ActivationPlan,
     delete_redis_code_on_commit,
@@ -41,6 +42,11 @@ def apply_activation_code_for_user(*, user, code: str):
     payload = verify_activation_code(normalized_code)
     if not payload or record.payload != payload.to_dict():
         raise ValueError("Invalid or expired activation code")
+    if (
+        any(item.module_key == "exam_preparation" for item in payload.entitlements)
+        and not user_allowed_exam_preparation_preview(user)
+    ):
+        raise ValueError("备考季即将上线，敬请期待。")
 
     created = []
     for item in payload.entitlements:

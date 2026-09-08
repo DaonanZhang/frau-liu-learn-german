@@ -23,6 +23,38 @@
     0 10px 20px rgba(15, 23, 42, 0.06);
 }
 
+.module-entry-card--coming-soon {
+  background: linear-gradient(135deg, #eceff1, #f7f7f7);
+  border-color: #d3d8dc;
+  box-shadow: 0 12px 28px rgba(55, 65, 81, 0.08);
+}
+
+.module-entry-card--coming-soon:hover {
+  border-color: #b9c0c6;
+  box-shadow: 0 16px 32px rgba(55, 65, 81, 0.11);
+}
+
+.module-entry-card--coming-soon .module-entry-card__image {
+  filter: grayscale(1);
+  opacity: 0.58;
+}
+
+.module-entry-card--coming-soon .module-entry-card__overlay {
+  background: rgba(75, 85, 99, 0.28);
+}
+
+.module-entry-card--coming-soon .module-entry-card__badge,
+.module-entry-card--coming-soon .module-entry-card__chip {
+  background: #e5e7eb;
+  border-color: #cbd0d6;
+  color: #59616b;
+}
+
+.module-entry-card--coming-soon .module-entry-card__cta {
+  background: #747d87;
+  box-shadow: none;
+}
+
 .module-entry-card__media {
   position: relative;
   min-height: 18rem;

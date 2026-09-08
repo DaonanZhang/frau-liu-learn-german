@@ -11,7 +11,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet, ViewSet
 
-from apps.accounts.permissions import HasValidEntitlement, IsAdminOrReadOnly
+from apps.accounts.permissions import (
+    HasExamPreparationReleaseAccess,
+    HasValidEntitlement,
+    IsAdminOrReadOnly,
+)
 from apps.exam_preparation.access import get_parent_exercise, user_can_access_exercise
 
 from apps.exam_preparation.models import (
@@ -92,7 +96,12 @@ from apps.exam_preparation.serializers import (
 
 
 class BaseExamPreparationViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticated, HasValidEntitlement, IsAdminOrReadOnly]
+    permission_classes = [
+        IsAuthenticated,
+        HasExamPreparationReleaseAccess,
+        HasValidEntitlement,
+        IsAdminOrReadOnly,
+    ]
     required_module_key = "exam_preparation"
     filter_backends = [DjangoFilterBackend, OrderingFilter, SearchFilter]
     ordering = ["id"]
@@ -100,7 +109,11 @@ class BaseExamPreparationViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.trial_access_enabled and self.action in {"list", "retrieve"}:
-            return [IsAuthenticated(), IsAdminOrReadOnly()]
+            return [
+                IsAuthenticated(),
+                HasExamPreparationReleaseAccess(),
+                IsAdminOrReadOnly(),
+            ]
         return super().get_permissions()
 
     def retrieve(self, request, *args, **kwargs):
@@ -117,7 +130,7 @@ class BaseExamPreparationViewSet(ModelViewSet):
 
 
 class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HasExamPreparationReleaseAccess]
     state_lookup_field = ""
     state_lookup_fields = ()
     ordering = ["-updated_at", "id"]
@@ -434,7 +447,11 @@ class SpeakingTeilExerciseViewSet(BaseExamPreparationViewSet):
 class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
     queryset = UserExerciseFavorite.objects.select_related("user", "exercise").all()
     serializer_class = UserExerciseFavoriteSerializer
-    permission_classes = [IsAuthenticated, HasValidEntitlement]
+    permission_classes = [
+        IsAuthenticated,
+        HasExamPreparationReleaseAccess,
+        HasValidEntitlement,
+    ]
     filterset_fields = ["exercise"]
     search_fields = ["exercise__exam_type", "exercise__external_id", "exercise__title"]
     ordering_fields = ["id", "created_at"]
@@ -450,7 +467,11 @@ class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
 class FavoriteQuestionViewSet(ViewSet):
     """Return every favorited exam-preparation item in one normalized list."""
 
-    permission_classes = [IsAuthenticated, HasValidEntitlement]
+    permission_classes = [
+        IsAuthenticated,
+        HasExamPreparationReleaseAccess,
+        HasValidEntitlement,
+    ]
     required_module_key = "exam_preparation"
 
     @staticmethod

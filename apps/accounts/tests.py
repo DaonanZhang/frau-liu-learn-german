@@ -48,6 +48,23 @@ class UserGuideStateApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["has_seen_schreiben_guide"])
+        self.assertTrue(response.data["exam_preparation_release_access"])
+
+    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    def test_me_only_exposes_exam_preparation_preview_to_telephone_110(self) -> None:
+        response = self.client.get("/api/accounts/users/me/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["exam_preparation_release_access"])
+
+        preview_user = get_user_model().objects.create_user(
+            telephone="110",
+            country_code="+86",
+            password="pass-123456",
+        )
+        self.client.force_authenticate(user=preview_user)
+        preview_response = self.client.get("/api/accounts/users/me/")
+        self.assertEqual(preview_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(preview_response.data["exam_preparation_release_access"])
 
     def test_me_can_mark_schreiben_guide_as_seen(self) -> None:
         response = self.client.patch(
@@ -60,6 +77,56 @@ class UserGuideStateApiTests(APITestCase):
         self.assertTrue(response.data["has_seen_schreiben_guide"])
         self.user.refresh_from_db()
         self.assertTrue(self.user.has_seen_schreiben_guide)
+
+
+@override_settings(
+    MAINTENANCE_MODE_ENABLED=True,
+    MAINTENANCE_ALLOWED_TELEPHONES="110,11223344551",
+)
+class MaintenanceModeAllowlistTests(APITestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.allowed_user = get_user_model().objects.create_user(
+            telephone="11223344551",
+            country_code="+86",
+            password="pass-123456",
+        )
+        self.blocked_user = get_user_model().objects.create_user(
+            telephone="13800138088",
+            country_code="+86",
+            password="pass-123456",
+        )
+
+    def test_second_allowlisted_telephone_can_login_and_use_authenticated_api(self) -> None:
+        login_response = self.client.post(
+            "/api/accounts/auth/login/",
+            {
+                "telephone": self.allowed_user.telephone,
+                "country_code": "+86",
+                "password": "pass-123456",
+            },
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}"
+        )
+        me_response = self.client.get("/api/accounts/users/me/")
+        self.assertEqual(me_response.status_code, status.HTTP_200_OK)
+
+    def test_non_allowlisted_telephone_cannot_login(self) -> None:
+        response = self.client.post(
+            "/api/accounts/auth/login/",
+            {
+                "telephone": self.blocked_user.telephone,
+                "country_code": "+86",
+                "password": "pass-123456",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 @override_settings(
@@ -317,6 +384,31 @@ class ActivationCodeApiTests(APITestCase):
             ActivationCodeRecord.objects.filter(code="REDISROLLBACK").exists()
         )
         self.assertIsNotNone(cache.get("activation_code:REDISROLLBACK"))
+
+    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    def test_exam_preview_gate_rejects_other_users_without_consuming_code(self) -> None:
+        Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        payload = ActivationPayload(
+            entitlements=[
+                ActivationEntitlementItem(
+                    module_key="exam_preparation",
+                    plan=ActivationPlan.LIFETIME,
+                )
+            ]
+        )
+        store_activation_code(code="EXAMPREVIEW", payload=payload)
+
+        with self.assertRaisesRegex(ValueError, "备考季即将上线"):
+            apply_activation_code_for_user(user=self.user, code="EXAMPREVIEW")
+
+        record = ActivationCodeRecord.objects.get(code="EXAMPREVIEW")
+        self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
+        self.assertFalse(
+            Entitlement.objects.filter(user=self.user, module__key="exam_preparation").exists()
+        )
 
     def test_apply_activation_code_creates_season_entitlement_and_consumes_code(self) -> None:
         self._store_code("SEASON4A", season_number=4)

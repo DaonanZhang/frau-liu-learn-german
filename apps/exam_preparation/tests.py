@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -261,6 +262,41 @@ class ExamPreparationPermissionTests(APITestCase):
             format="json",
         )
         self.assertEqual(write_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    def test_coming_soon_gate_blocks_entitled_non_preview_user(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "exam_preparation_coming_soon")
+
+    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    def test_coming_soon_gate_allows_preview_user_with_existing_entitlement(self):
+        preview_user = get_user_model().objects.create_user(
+            telephone="110",
+            password="test-password",
+        )
+        Entitlement.objects.create(
+            user=preview_user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.client.force_authenticate(preview_user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class ExamPreparationFreeTrialTests(APITestCase):

@@ -447,6 +447,10 @@ export default function ModuleCheckoutPage() {
                   ? displayedSavings
                   : Math.max(0, Number.isFinite(totalDiscount) ? totalDiscount : 0);
                 const hasDiscount = effectiveSavings > 0;
+                const showOfferPriceBeforeCoupon =
+                  Number.isFinite(originalPrice)
+                  && Number.isFinite(displayPrice)
+                  && Math.abs(originalPrice - displayPrice) > 0.005;
                 return (
                   <article key={offer.code} className="module-checkout-page__offer">
                     <div className="module-checkout-page__offer-shell">
@@ -500,7 +504,7 @@ export default function ModuleCheckoutPage() {
                                   ¥{formatPromoPrice(referenceOriginalPrice)}
                                 </span>
                               ) : null}
-                              {Number.isFinite(originalPrice) ? (
+                              {Number.isFinite(originalPrice) && (!hasDiscount || showOfferPriceBeforeCoupon) ? (
                                 <span className={`module-checkout-page__price-original${hasDiscount ? " module-checkout-page__price-original--discounted" : ""}`}>
                                   ¥{formatPromoPrice(originalPrice)}
                                 </span>

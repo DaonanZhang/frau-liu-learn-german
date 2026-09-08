@@ -199,16 +199,32 @@ export default function Home() {
             <div className="home-module-grid">
               {modules.map((module) => {
                 const canEnterModule = hasModuleAccess(user, module);
+                const isExamPreparationComingSoon =
+                  module.id === "exam-preparation"
+                  && user?.exam_preparation_release_access === false;
                 const coverCandidates = buildCoverCandidates(module?.image);
                 const coverSrc = coverCandidates.find((item) => !failedSources[item]) || "";
 
                 return (
                   <article
                     key={module.id}
-                    className="module-entry-card"
+                    className={`module-entry-card${
+                      isExamPreparationComingSoon
+                        ? " module-entry-card--coming-soon"
+                        : ""
+                    }`}
                     role="button"
                     tabIndex={0}
                     onClick={async () => {
+                      if (isExamPreparationComingSoon) {
+                        await Swal.fire({
+                          icon: "info",
+                          title: "Coming Soon",
+                          text: "备考季正在准备中，敬请期待。",
+                          confirmButtonText: "知道了",
+                        });
+                        return;
+                      }
                       if (canEnterModule && module?.route) {
                         navigate(module.route);
                         return;
@@ -268,7 +284,11 @@ export default function Home() {
                         <div className="module-entry-card__image module-entry-card__image--placeholder" />
                       )}
                       <div className="module-entry-card__overlay" />
-                      {module?.badge ? <span className="module-entry-card__badge">{module.badge}</span> : null}
+                      {isExamPreparationComingSoon ? (
+                        <span className="module-entry-card__badge">Coming Soon</span>
+                      ) : module?.badge ? (
+                        <span className="module-entry-card__badge">{module.badge}</span>
+                      ) : null}
                     </div>
 
                     <div className="module-entry-card__body">
@@ -292,7 +312,13 @@ export default function Home() {
                       </div>
 
                       <div className="module-entry-card__cta">
-                        <span>{canEnterModule ? "进入模块" : "立刻查看"}</span>
+                        <span>
+                          {isExamPreparationComingSoon
+                            ? "Coming Soon"
+                            : canEnterModule
+                              ? "进入模块"
+                              : "立刻查看"}
+                        </span>
                         <span aria-hidden="true">→</span>
                       </div>
                     </div>

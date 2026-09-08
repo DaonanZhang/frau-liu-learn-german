@@ -61,6 +61,11 @@ class ImportErrorWithContext(Exception):
 
 LISTENING_AUDIO_ROOT = REPO_ROOT / "frontend/public/resources/ExamPreparation/exam_preparation_audio"
 LISTENING_AUDIO_SUBFOLDERS = {
+    ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP: "telc_b1_teil1",
+    ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE: "telc_b1_teil2",
+    ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE: "telc_b1_teil3",
+}
+LISTENING_AUDIO_FILE_PREFIXES = {
     ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP: "Teil1",
     ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE: "Teil2",
     ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE: "Teil3",
@@ -191,13 +196,14 @@ def resolve_listening_audio(
     audio_dir = LISTENING_AUDIO_ROOT / subfolder
     audio_dir.mkdir(parents=True, exist_ok=True)
 
-    exact_stems = {f"{subfolder}_{audio_file_id}"}
+    file_prefix = LISTENING_AUDIO_FILE_PREFIXES[listening_type]
+    exact_stems = {f"{file_prefix}_{audio_file_id}"}
     normalized_id = normalize_link_id(audio_file_id)
     if normalized_id:
-        exact_stems.add(f"{subfolder}_{normalized_id}")
+        exact_stems.add(f"{file_prefix}_{normalized_id}")
     filename_match = re.search(r"_(\d+)$", xlsx_path.stem)
     if filename_match and normalized_id.isdigit():
-        exact_stems.add(f"{subfolder}_{normalized_id.zfill(len(filename_match.group(1)))}")
+        exact_stems.add(f"{file_prefix}_{normalized_id.zfill(len(filename_match.group(1)))}")
 
     matches = sorted(
         path
@@ -205,7 +211,7 @@ def resolve_listening_audio(
         if path.is_file() and path.stem in exact_stems
     )
     if not matches:
-        expected = f"{subfolder}_{audio_file_id}.*"
+        expected = f"{file_prefix}_{audio_file_id}.*"
         raise ImportErrorWithContext(
             f"{xlsx_path.name}: local listening audio not found: "
             f"{audio_dir / expected}"
@@ -213,7 +219,7 @@ def resolve_listening_audio(
     if len(matches) > 1:
         raise ImportErrorWithContext(
             f"{xlsx_path.name}: multiple local listening audio files match "
-            f"{subfolder}_{audio_file_id}: {[path.name for path in matches]}"
+            f"{file_prefix}_{audio_file_id}: {[path.name for path in matches]}"
         )
 
     audio_path = matches[0]

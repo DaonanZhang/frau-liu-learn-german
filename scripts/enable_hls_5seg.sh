@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/load_cos_env.sh"
+load_cos_env_file "${COS_ENV_FILE:-$(cd "$SCRIPT_DIR/.." && pwd)/.env}"
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -295,16 +299,16 @@ upload_hls_to_cos() {
 
   local cos_target_names=("Shanghai" "Frankfurt")
   local cos_target_buckets=(
-    "${COS_SHANGHAI_BUCKET:-frauliu-1335740446}"
-    "${COS_FRANKFURT_BUCKET:-frauliu-eu-1335740446}"
+    "${COS_SHANGHAI_BUCKET:-${COS_SH_BUCKET:-frauliu-1335740446}}"
+    "${COS_FRANKFURT_BUCKET:-${COS_EU_BUCKET:-frauliu-eu-1335740446}}"
   )
   local cos_target_regions=(
-    "${COS_SHANGHAI_REGION:-ap-shanghai}"
-    "${COS_FRANKFURT_REGION:-eu-frankfurt}"
+    "${COS_SHANGHAI_REGION:-${COS_SH_REGION:-ap-shanghai}}"
+    "${COS_FRANKFURT_REGION:-${COS_EU_REGION:-eu-frankfurt}}"
   )
   local cos_target_domains=(
-    "${COS_SHANGHAI_DOMAIN:-https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com}"
-    "${COS_FRANKFURT_DOMAIN:-https://frauliu-eu-1335740446.cos.eu-frankfurt.myqcloud.com}"
+    "${COS_SHANGHAI_DOMAIN:-${COS_SH_DOMAIN:-https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com}}"
+    "${COS_FRANKFURT_DOMAIN:-${COS_EU_DOMAIN:-https://frauliu-eu-1335740446.cos.eu-frankfurt.myqcloud.com}}"
   )
   local cos_upload_successes=0
   local cos_upload_failures=0

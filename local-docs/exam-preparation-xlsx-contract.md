@@ -124,9 +124,9 @@ Mapping:
   `frontend/public/resources/ExamPreparation/exam_preparation_audio/`
   after the workbook data is read
 - listening type determines the local subfolder:
-  - `short_text_true_false_with_prep` -> `Teil1`
-  - `short_text_true_false_once` -> `Teil2`
-  - `dialog_true_false_twice` -> `Teil3`
+  - `short_text_true_false_with_prep` -> `telc_b1_teil1`
+  - `short_text_true_false_once` -> `telc_b1_teil2`
+  - `dialog_true_false_twice` -> `telc_b1_teil3`
 - the local audio file must have the exact stem
   `TeilX_<音频文件_ID>`; for example, `Teil1_001.mp3`
 - `ListeningExercise.audio_file_identifier` -> the matched local audio file stem
@@ -147,7 +147,8 @@ Notes:
 - For compatibility, the importer accepts either `是否真题` or the legacy
   `什么真题` column name for the real-exam flag. If both are present,
   `是否真题` takes precedence.
-- The importer creates missing `Teil1`, `Teil2`, or `Teil3` directories, but a
+- The importer creates missing `telc_b1_teil1`, `telc_b1_teil2`, or
+  `telc_b1_teil3` directories, but a
   missing matching audio file is an import error. The workbook transaction is
   rolled back and the workbook is moved to `failed/`.
 

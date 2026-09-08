@@ -2,6 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/load_cos_env.sh"
+load_cos_env_file "${COS_ENV_FILE:-$ROOT_DIR/.env}"
+
 SYNC_SCRIPT="${COS_SYNC_HELPER:-$ROOT_DIR/scripts/sync_vlog_to_frankfurt_cos.sh}"
 SOURCE_DIR="${COS_SYNC_SOURCE_DIR:-$ROOT_DIR/frontend/public/resources}"
 
@@ -39,9 +42,9 @@ frankfurt_status=0
 
 if run_target \
   "Shanghai" \
-  "${COS_SHANGHAI_BUCKET:-frauliu-1335740446}" \
-  "${COS_SHANGHAI_REGION:-ap-shanghai}" \
-  "${COS_SHANGHAI_DOMAIN:-https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com}" \
+  "${COS_SHANGHAI_BUCKET:-${COS_SH_BUCKET:-frauliu-1335740446}}" \
+  "${COS_SHANGHAI_REGION:-${COS_SH_REGION:-ap-shanghai}}" \
+  "${COS_SHANGHAI_DOMAIN:-${COS_SH_DOMAIN:-https://frauliu-1335740446.cos.ap-shanghai.myqcloud.com}}" \
   "$@"; then
   :
 else
@@ -51,9 +54,9 @@ fi
 
 if run_target \
   "Frankfurt" \
-  "${COS_FRANKFURT_BUCKET:-frauliu-eu-1335740446}" \
-  "${COS_FRANKFURT_REGION:-eu-frankfurt}" \
-  "${COS_FRANKFURT_DOMAIN:-https://frauliu-eu-1335740446.cos.eu-frankfurt.myqcloud.com}" \
+  "${COS_FRANKFURT_BUCKET:-${COS_EU_BUCKET:-frauliu-eu-1335740446}}" \
+  "${COS_FRANKFURT_REGION:-${COS_EU_REGION:-eu-frankfurt}}" \
+  "${COS_FRANKFURT_DOMAIN:-${COS_EU_DOMAIN:-https://frauliu-eu-1335740446.cos.eu-frankfurt.myqcloud.com}}" \
   "$@"; then
   :
 else

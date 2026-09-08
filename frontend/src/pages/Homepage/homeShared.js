@@ -62,9 +62,9 @@ export const EXAM_PREPARATION_MODULE = {
   stats: ["telc B1", "全题型交互", "答案详解"],
   image: "/images/exam_cover.png",
   originalPricesByDuration: {
-    30: 40,
-    60: 80,
-    90: 120,
+    30: 99.9,
+    90: 199.9,
+    180: 299.9,
   },
   purchaseDescription:
     "“源于真题，高于真题”——我们的题库由符号刘博士团队精心打磨，紧扣官方大纲。用真题和模拟题复刻考试难度与命题规律，让你在考场上游刃有余、拒绝慌乱。",

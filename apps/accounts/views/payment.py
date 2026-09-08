@@ -232,7 +232,7 @@ def _query_and_sync_payment_status(
 
     configured_seller_id = alipay_service.config.seller_id
     queried_seller_id = str(query_response.get("seller_id") or "").strip()
-    if queried_seller_id != configured_seller_id:
+    if configured_seller_id and queried_seller_id != configured_seller_id:
         raise AlipayGatewayError("Queried seller_id does not match configured seller_id.")
 
     queried_total_amount_raw = str(query_response.get("total_amount") or "").strip()
@@ -943,7 +943,7 @@ class AlipayNotifyAPIView(APIView):
 
             configured_seller_id = alipay_service.config.seller_id
             notify_seller_id = payload.get("seller_id", "").strip()
-            if notify_seller_id != configured_seller_id:
+            if configured_seller_id and notify_seller_id != configured_seller_id:
                 return HttpResponse("failure", status=400, content_type="text/plain")
 
             try:

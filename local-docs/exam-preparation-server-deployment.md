@@ -81,9 +81,9 @@ apps/exam_preparation/data/imports/
 
 frontend/public/resources/ExamPreparation/
 └── exam_preparation_audio/
-    ├── Teil1/
-    ├── Teil2/
-    └── Teil3/
+    ├── telc_b1_teil1/
+    ├── telc_b1_teil2/
+    └── telc_b1_teil3/
 ```
 
 The importer creates these three subdirectories when needed. Each listening
@@ -137,11 +137,13 @@ Before first server use of `exam_preparation`:
 2. Install or sync Python dependencies.
 3. Run Django migrations.
 4. Create the import directories listed above.
-5. Create `frontend/public/resources/ExamPreparation/exam_preparation_audio/` for listening audio assets, or let the importer create `Teil1`, `Teil2`, and `Teil3` when importing.
+5. Create `frontend/public/resources/ExamPreparation/exam_preparation_audio/` for listening audio assets, or let the importer create the `telc_b1_teil1`, `telc_b1_teil2`, and `telc_b1_teil3` directories when importing.
 6. Verify the account migrations created the `exam_preparation` module and the
    30/60/90-day Alipay offers at CNY 29.90/49.90/69.90.
-7. Confirm `ALIPAY_SELLER_ID` and `ALIPAY_NOTIFY_URL` are configured and
+7. Confirm `ALIPAY_NOTIFY_URL` is configured and
    `ALIPAY_LOCAL_SIMULATE_SUCCESS=false` before enabling purchases.
+   `ALIPAY_SELLER_ID` is optional; when configured, callbacks and reconciliation
+   responses must match it.
 8. Confirm the application process has permission to read and write these folders.
 9. Run `manage.py reconcile_alipay_payments --limit 100`, then configure one
    periodic recovery runner: either Celery worker + Celery beat, or cron / a
@@ -227,7 +229,7 @@ ALIPAY_APP_ID=<production app id>
 ALIPAY_GATEWAY_URL=https://openapi.alipay.com/gateway.do
 ALIPAY_APP_PRIVATE_KEY=<production private key>
 ALIPAY_PUBLIC_KEY=<Alipay public key>
-ALIPAY_SELLER_ID=<production seller id>
+ALIPAY_SELLER_ID=<optional production seller id; omit or leave empty if unknown>
 ALIPAY_NOTIFY_URL=https://<backend-domain>/api/accounts/payments/alipay/notify/
 ALIPAY_RETURN_URL=https://<frontend-domain>/payments/alipay/return
 ALIPAY_LOCAL_SIMULATE_SUCCESS=false
@@ -258,14 +260,14 @@ The importer finds a local file named
 `TeilX_<音频文件_ID>.<extension>` and stores a stable database URL such as:
 
 ```text
-/resources/ExamPreparation/exam_preparation_audio/Teil1/Teil1_001.mp3
+/resources/ExamPreparation/exam_preparation_audio/telc_b1_teil1/Teil1_001.mp3
 ```
 
 Keep the `/resources/...` URL in the database. The matching COS object key must
 preserve the same path, including the `resources/` prefix:
 
 ```text
-resources/ExamPreparation/exam_preparation_audio/Teil1/Teil1_001.mp3
+resources/ExamPreparation/exam_preparation_audio/telc_b1_teil1/Teil1_001.mp3
 ```
 
 After placing audio on the server, dry-run and then synchronize only the
@@ -282,6 +284,12 @@ The real sync is successful only when both regional statuses are zero. Test at
 least one public `/resources/ExamPreparation/...mp3` URL after syncing. The
 application process needs write access to workbook folders for file moves; the
 web server only needs read access to media.
+
+The sync scripts read the project `.env` directly and support the existing
+`COS_SH_BUCKET` / `COS_SH_REGION` / `COS_SH_DOMAIN` and
+`COS_EU_BUCKET` / `COS_EU_REGION` / `COS_EU_DOMAIN` names. No production env
+rename is required. The longer `COS_SHANGHAI_*` / `COS_FRANKFURT_*` names are
+also supported and take precedence when explicitly exported.
 
 Do not use `--dedupe-etag` for listening audio. Every database URL depends on
 its exact COS object key, even when two local files happen to have identical

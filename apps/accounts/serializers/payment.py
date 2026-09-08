@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.utils import timezone
+from apps.accounts.feature_flags import user_allowed_exam_preparation_preview
 from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.models.purchase_offer import PurchaseOffer
 from apps.accounts.models.payment_grant_task import PaymentGrantTask
@@ -72,6 +73,13 @@ class CreateAlipayPurchaseSerializer(serializers.Serializer):
 
         request = self.context.get("request")
         user = getattr(request, "user", None)
+        if (
+            offer.module.key == "exam_preparation"
+            and not user_allowed_exam_preparation_preview(user)
+        ):
+            raise serializers.ValidationError(
+                {"detail": "备考季即将上线，敬请期待。"}
+            )
         if self._has_nonexpiring_access(
             user=user,
             offer=offer,

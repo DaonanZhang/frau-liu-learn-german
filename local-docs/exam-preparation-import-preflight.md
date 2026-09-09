@@ -98,6 +98,8 @@ For every exercise type:
 ### Reading understanding
 
 - each `(exercise_id, question_id)` group has exactly one correct answer
+- if the correct-answer row has an empty `explanation`, the question group may
+  contain at most one distinct non-empty explanation on its other rows
 
 ### Reading ad matching
 

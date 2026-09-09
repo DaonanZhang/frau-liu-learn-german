@@ -399,6 +399,27 @@ should be empty. One workbook is one database transaction, so a later failure
 does not undo earlier successful imports. Reconcile filesystem counts with
 database counts before release.
 
+If Lesen Teil 2 was imported before misplaced XLSX explanations were handled,
+preview the uniquely misplaced explanations already present on incorrect
+database options:
+
+```bash
+uv run python scripts/backfill_reading_understanding_explanations.py
+```
+
+Review the planned exercise/question pairs, then apply only those missing
+values:
+
+```bash
+uv run python scripts/backfill_reading_understanding_explanations.py --apply
+```
+
+The backfill does not read the processed workbooks and never overwrites a
+non-empty correct-answer explanation. It moves an explanation only when the
+correct option is empty and the incorrect options contain exactly one unique
+non-empty explanation. The source incorrect-option field is cleared in the
+same transaction. Ambiguous questions stop the run without writing.
+
 Never clear the entire project database to retry an import. If a clean exam
 import is explicitly required, delete only `ExerciseBase` rows and their
 `exam_preparation` cascades after taking a backup and confirming the scope.

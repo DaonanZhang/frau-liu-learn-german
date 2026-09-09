@@ -325,6 +325,12 @@ Mapping after that adjustment:
 Importer behavior:
 
 - `option_key` should be generated as `a`, `b`, `c` or `A`, `B`, `C`.
+- The explanation displayed after checking comes from the correct answer option.
+  If that row has no `explanation` but the question group contains exactly one
+  non-empty explanation on another row, the importer assigns that explanation
+  only to the correct option rather than retaining it on the incorrect option.
+  Multiple different explanations with none on the correct row are ambiguous
+  and must fail the workbook import.
 
 ### 2.3 Reading Ad Matching
 

@@ -276,6 +276,33 @@ def iter_records(df: pd.DataFrame) -> Iterable[dict[str, str]]:
         yield {key: clean_text(value) for key, value in row.to_dict().items()}
 
 
+def resolve_correct_answer_explanation(
+    rows: list[dict[str, str]],
+    *,
+    context: str,
+) -> str:
+    correct_rows = [row for row in rows if parse_bool(row["is_correct"])]
+    if len(correct_rows) != 1:
+        raise ImportErrorWithContext(
+            f"{context} must have exactly one correct answer; found {len(correct_rows)}."
+        )
+
+    correct_explanation = clean_text(correct_rows[0]["explanation"])
+    if correct_explanation:
+        return correct_explanation
+
+    explanations: list[str] = []
+    for row in rows:
+        explanation = clean_text(row["explanation"])
+        if explanation and explanation not in explanations:
+            explanations.append(explanation)
+    if len(explanations) > 1:
+        raise ImportErrorWithContext(
+            f"{context} has multiple explanations but none is attached to the correct answer."
+        )
+    return explanations[0] if explanations else ""
+
+
 def upsert_base(
     *,
     level: str,
@@ -510,26 +537,39 @@ def import_reading_understanding(xlsx_path: Path) -> int:
             grouped_questions[parse_int(row["question_id"], "question_id")].append(row)
         for question_number in sorted(grouped_questions):
             rows = grouped_questions[question_number]
+            correct_row_has_explanation = any(
+                parse_bool(row["is_correct"]) and clean_text(row["explanation"])
+                for row in rows
+            )
+            correct_explanation = resolve_correct_answer_explanation(
+                rows,
+                context=(
+                    f"{xlsx_path.name}: question_id {question_number} "
+                    f"in exercise {external_id}"
+                ),
+            )
             question = ReadingUnderstandingQuestion.objects.create(
                 exercise=exercise,
                 question_number=question_number,
                 question_text=clean_text(rows[0]["question"]),
             )
-            correct_count = 0
             for index, row in enumerate(rows):
                 is_correct = parse_bool(row["is_correct"])
-                correct_count += int(is_correct)
                 ReadingUnderstandingAnswerOption.objects.create(
                     question=question,
                     option_key=option_key_from_index(index),
                     option_text=clean_text(row["answer"]),
                     is_correct=is_correct,
-                    explanation=clean_text(row["explanation"]),
+                    explanation=(
+                        correct_explanation
+                        if is_correct
+                        else (
+                            clean_text(row["explanation"])
+                            if correct_row_has_explanation
+                            else ""
+                        )
+                    ),
                     sort_order=index + 1,
-                )
-            if correct_count != 1:
-                raise ImportErrorWithContext(
-                    f"{xlsx_path.name}: question_id {question_number} in exercise {external_id} must have exactly one correct answer."
                 )
         imported_count += 1
     return imported_count

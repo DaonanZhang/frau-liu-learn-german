@@ -202,6 +202,22 @@
     0 12px 24px rgba(17, 24, 39, 0.08);
 }
 
+.reading-ad-card__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  margin-bottom: 0.85rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: #c86126;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .reading-ad-card__line {
   margin: 0;
   color: #111827;
@@ -453,6 +469,10 @@
   border-color: rgba(220, 38, 38, 0.36);
   background: #fef2f2;
   box-shadow: 0 10px 18px rgba(220, 38, 38, 0.12);
+}
+
+.reading-ad-option--locked {
+  cursor: default;
 }
 
 .reading-ad-feedback {

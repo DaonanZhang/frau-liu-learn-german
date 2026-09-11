@@ -91,6 +91,10 @@ export default function ReadingAdMatchingPage() {
     return Array.isArray(exercise?.ads) ? exercise.ads : [];
   }, [exercise]);
 
+  const displayAds = useMemo(() => {
+    return ads.filter((ad) => !isNoMatchOption(ad));
+  }, [ads]);
+
   const items = useMemo(() => {
     return Array.isArray(exercise?.items) ? exercise.items : [];
   }, [exercise]);
@@ -130,11 +134,11 @@ export default function ReadingAdMatchingPage() {
 
   const adPages = useMemo(() => {
     const pages = [];
-    for (let i = 0; i < ads.length; i += adsPerPage) {
-      pages.push(ads.slice(i, i + adsPerPage));
+    for (let i = 0; i < displayAds.length; i += adsPerPage) {
+      pages.push(displayAds.slice(i, i + adsPerPage));
     }
     return pages;
-  }, [ads, adsPerPage]);
+  }, [displayAds, adsPerPage]);
 
   useEffect(() => {
     setActiveAdPage((previous) => {
@@ -268,6 +272,7 @@ export default function ReadingAdMatchingPage() {
                 return (
                   <article
                     key={ad.id}
+                    aria-label={`Anzeige ${String(ad.ad_key || "").toLocaleUpperCase()}`}
                     className={[
                       "reading-ad-card",
                       isSelected ? "reading-ad-card--selected" : "",
@@ -275,6 +280,9 @@ export default function ReadingAdMatchingPage() {
                       .filter(Boolean)
                       .join(" ")}
                   >
+                    <span className="reading-ad-card__number">
+                      Anzeige {String(ad.ad_key || "").toLocaleUpperCase()}
+                    </span>
                     {lines.map((line, index) => (
                       <p
                         key={index}
@@ -417,6 +425,7 @@ export default function ReadingAdMatchingPage() {
                         checked && !isChecked ? "reading-ad-option--selected" : "",
                         shouldRevealCorrect ? "reading-ad-option--correct" : "",
                         isWrongSelected ? "reading-ad-option--wrong" : "",
+                        isChecked ? "reading-ad-option--locked" : "",
                       ]
                         .filter(Boolean)
                         .join(" ")}
@@ -426,9 +435,10 @@ export default function ReadingAdMatchingPage() {
                         name={`item-${currentItem.id}`}
                         value={ad.ad_key}
                         checked={checked}
+                        disabled={isChecked}
                         onChange={() => {
                           if (isChecked) {
-                            setIsChecked(false);
+                            return;
                           }
                           setAnswers((previous) => ({
                             ...previous,

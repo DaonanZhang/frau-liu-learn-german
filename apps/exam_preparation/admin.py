@@ -51,9 +51,9 @@ class ListeningExerciseAdmin(admin.ModelAdmin):
 
 @admin.register(ListeningQuestion)
 class ListeningQuestionAdmin(admin.ModelAdmin):
-    list_display = ("id", "listening_exercise", "question_number", "question_type", "updated_at")
-    list_filter = ("question_type",)
-    search_fields = ("question_text", "listening_exercise__exercise_base__external_id")
+    list_display = ("id", "listening_exercise", "question_number", "question_type", "explanation_scope", "updated_at")
+    list_filter = ("question_type", "explanation_scope")
+    search_fields = ("question_text", "explanation", "listening_exercise__exercise_base__external_id")
 
 
 @admin.register(ListeningAnswerOption)
@@ -89,8 +89,9 @@ class ReadingUnderstandingExerciseAdmin(admin.ModelAdmin):
 
 @admin.register(ReadingUnderstandingQuestion)
 class ReadingUnderstandingQuestionAdmin(admin.ModelAdmin):
-    list_display = ("id", "exercise", "question_number", "updated_at")
-    search_fields = ("question_text", "exercise__exercise_base__external_id")
+    list_display = ("id", "exercise", "question_number", "explanation_scope", "updated_at")
+    list_filter = ("explanation_scope",)
+    search_fields = ("question_text", "explanation", "exercise__exercise_base__external_id")
 
 
 @admin.register(ReadingUnderstandingAnswerOption)
@@ -127,8 +128,9 @@ class ClozeChoiceExerciseAdmin(admin.ModelAdmin):
 
 @admin.register(ClozeChoiceBlank)
 class ClozeChoiceBlankAdmin(admin.ModelAdmin):
-    list_display = ("id", "exercise", "blank_key", "blank_number")
-    search_fields = ("blank_key", "exercise__exercise_base__external_id")
+    list_display = ("id", "exercise", "blank_key", "blank_number", "explanation_scope")
+    list_filter = ("explanation_scope",)
+    search_fields = ("blank_key", "explanation", "exercise__exercise_base__external_id")
 
 
 @admin.register(ClozeChoiceOption)

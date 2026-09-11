@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -12,6 +12,23 @@ from apps.exam_preparation.models import (
     WritingExercise,
     SpeakingTeilExercise,
 )
+from apps.exam_preparation.serializers import (
+    ClozeChoiceBlankDetailSerializer,
+    ListeningQuestionDetailSerializer,
+    ReadingUnderstandingQuestionDetailSerializer,
+)
+
+
+class QuestionLevelExplanationSerializerTests(SimpleTestCase):
+    def test_detail_serializers_expose_explanation_scope(self):
+        for serializer_class in (
+            ListeningQuestionDetailSerializer,
+            ReadingUnderstandingQuestionDetailSerializer,
+            ClozeChoiceBlankDetailSerializer,
+        ):
+            fields = serializer_class().fields
+            self.assertIn("explanation", fields)
+            self.assertIn("explanation_scope", fields)
 
 
 class WritingExampleTextFavoriteApiTests(APITestCase):

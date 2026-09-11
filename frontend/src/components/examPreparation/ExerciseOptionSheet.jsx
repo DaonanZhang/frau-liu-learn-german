@@ -21,7 +21,7 @@ export default function ExerciseOptionSheet({
     }
 
     function updatePosition() {
-      const anchor = anchorRef.current?.parentElement;
+      const anchor = anchorRef.current?.previousElementSibling || anchorRef.current?.parentElement;
       if (!anchor) {
         return;
       }
@@ -29,12 +29,20 @@ export default function ExerciseOptionSheet({
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       const margin = viewportWidth <= 720 ? 8 : 16;
+      const gap = viewportWidth <= 720 ? 6 : 9;
       const sheetWidth = Math.min(448, viewportWidth - margin * 2);
-      const estimatedHeight = Math.min(options.length * 80 + 28, 416, viewportHeight * 0.6);
+      const sheetHeight = panelRef.current?.getBoundingClientRect().height
+        || Math.min(options.length * 80 + 28, 416, viewportHeight * 0.6);
+      const spaceAbove = rect.top - margin;
       const spaceBelow = viewportHeight - rect.bottom - margin;
-      const top = spaceBelow >= estimatedHeight
-        ? rect.bottom + 9
-        : Math.max(margin, rect.top - estimatedHeight - 9);
+      const placeBelow = spaceBelow >= sheetHeight || spaceBelow >= spaceAbove;
+      const preferredTop = placeBelow
+        ? rect.bottom + gap
+        : rect.top - sheetHeight - gap;
+      const top = Math.min(
+        Math.max(preferredTop, margin),
+        Math.max(margin, viewportHeight - sheetHeight - margin),
+      );
       const left = Math.min(
         Math.max(rect.left, margin),
         viewportWidth - sheetWidth - margin
@@ -43,9 +51,14 @@ export default function ExerciseOptionSheet({
     }
 
     updatePosition();
+    const resizeObserver = typeof ResizeObserver !== "undefined" && panelRef.current
+      ? new ResizeObserver(updatePosition)
+      : null;
+    resizeObserver?.observe(panelRef.current);
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
+      resizeObserver?.disconnect();
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };

@@ -24,9 +24,13 @@ function splitExplanation(text) {
 
 export default function FormattedExplanation({
   text,
-  fallback = "Keine zusätzliche Erklärung.",
+  fallback = "",
 }) {
   const value = String(text || "").trim() ? String(text) : fallback;
+
+  if (!String(value || "").trim()) {
+    return null;
+  }
 
   return (
     <span className="formatted-explanation">

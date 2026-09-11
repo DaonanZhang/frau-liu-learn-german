@@ -98,8 +98,8 @@ For every exercise type:
 ### Reading understanding
 
 - each `(exercise_id, question_id)` group has exactly one correct answer
-- if the correct-answer row has an empty `explanation`, the question group may
-  contain at most one distinct non-empty explanation on its other rows
+- zero or one populated `explanation` cell is treated as question-level
+- two or more populated `explanation` cells are retained as option-level
 
 ### Reading ad matching
 
@@ -122,6 +122,8 @@ Interpret the flat `exercise` sheet as follows:
 
 - every `(exercise_id, blank_key, blank_number)` group has exactly one correct
   option
+- zero or one populated `explanation` cell is treated as question-level
+- two or more populated `explanation` cells are retained as option-level
 
 ### Cloze matching
 
@@ -139,6 +141,9 @@ Interpret the flat `exercise` sheet as follows:
 ### Listening and speaking
 
 - apply the same structural, ID-link, boolean, and integer checks
+- listening question groups must have exactly one correct answer; zero or one
+  populated `Explanation` cell is question-level, while two or more populated
+  cells are retained as option-level
 - speaking Teil 1: require one sheet with `ID`, `Role`, and `内容`; every
   dialogue row must have a role
 - speaking Teil 2: require one matching row in `meta` and `example`, two

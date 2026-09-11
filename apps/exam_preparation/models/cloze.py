@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from django.db import models
 
+from .base import ExplanationScope
+
 
 class ClozeChoiceExercise(models.Model):
     exercise_base = models.OneToOneField(
@@ -29,6 +31,13 @@ class ClozeChoiceBlank(models.Model):
     )
     blank_key = models.CharField(max_length=64, verbose_name="blank key")
     blank_number = models.PositiveIntegerField(verbose_name="blank number")
+    explanation = models.TextField(blank=True, default="", verbose_name="explanation")
+    explanation_scope = models.CharField(
+        max_length=16,
+        choices=ExplanationScope.choices,
+        default=ExplanationScope.QUESTION,
+        verbose_name="explanation scope",
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")
 
@@ -163,4 +172,3 @@ class ClozeMatchingBlankAnswer(models.Model):
 
     def __str__(self) -> str:
         return f"ClozeMatchingBlankAnswer<exercise={self.exercise_id} key={self.blank_key}>"
-

@@ -484,9 +484,11 @@ export default function ReadingAdMatchingPage() {
                     Richtige Antwort:{" "}
                     {String(currentItem.correct_ad?.ad_key || "").toLocaleUpperCase()}
                   </p>
-                  <p className="reading-ad-feedback__line">
-                    Erklärung: <FormattedExplanation text={currentItem.explanation} />
-                  </p>
+                  {String(currentItem.explanation || "").trim() ? (
+                    <p className="reading-ad-feedback__line">
+                      Erklärung: <FormattedExplanation text={currentItem.explanation} />
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </article>

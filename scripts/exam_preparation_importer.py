@@ -26,6 +26,7 @@ django.setup()
 from django.db import transaction  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
+from apps.exam_preparation.explanations import resolve_explanations  # noqa: E402
 from apps.exam_preparation.models import (  # noqa: E402
     ClozeChoiceBlank,
     ClozeChoiceExercise,
@@ -276,31 +277,16 @@ def iter_records(df: pd.DataFrame) -> Iterable[dict[str, str]]:
         yield {key: clean_text(value) for key, value in row.to_dict().items()}
 
 
-def resolve_correct_answer_explanation(
+def require_exactly_one_correct_answer(
     rows: list[dict[str, str]],
     *,
     context: str,
-) -> str:
+) -> None:
     correct_rows = [row for row in rows if parse_bool(row["is_correct"])]
     if len(correct_rows) != 1:
         raise ImportErrorWithContext(
             f"{context} must have exactly one correct answer; found {len(correct_rows)}."
         )
-
-    correct_explanation = clean_text(correct_rows[0]["explanation"])
-    if correct_explanation:
-        return correct_explanation
-
-    explanations: list[str] = []
-    for row in rows:
-        explanation = clean_text(row["explanation"])
-        if explanation and explanation not in explanations:
-            explanations.append(explanation)
-    if len(explanations) > 1:
-        raise ImportErrorWithContext(
-            f"{context} has multiple explanations but none is attached to the correct answer."
-        )
-    return explanations[0] if explanations else ""
 
 
 def upsert_base(
@@ -413,11 +399,21 @@ def import_listening(xlsx_path: Path) -> int:
             grouped_questions[parse_int(row["question_id"], "question_id")].append(row)
         for question_number in sorted(grouped_questions):
             rows = grouped_questions[question_number]
+            context = (
+                f"{xlsx_path.name}: question_id {question_number} "
+                f"in exercise {external_id}"
+            )
+            require_exactly_one_correct_answer(rows, context=context)
+            explanation_resolution = resolve_explanations(
+                row["Explanation"] for row in rows
+            )
             question = ListeningQuestion.objects.create(
                 listening_exercise=exercise,
                 question_number=question_number,
                 question_type=clean_text(rows[0]["question_type"]) or ListeningQuestion.QuestionType.SINGLE_CHOICE,
                 question_text=clean_text(rows[0]["question"]),
+                explanation=explanation_resolution.question_explanation,
+                explanation_scope=explanation_resolution.scope,
             )
             for index, row in enumerate(rows):
                 ListeningAnswerOption.objects.create(
@@ -425,7 +421,7 @@ def import_listening(xlsx_path: Path) -> int:
                     option_key=option_key_from_index(index),
                     option_text=clean_text(row["answer"]),
                     is_correct=parse_bool(row["is_correct"]),
-                    explanation=clean_text(row["Explanation"]),
+                    explanation=explanation_resolution.option_explanations[index],
                     sort_order=index + 1,
                 )
         imported_count += 1
@@ -537,21 +533,20 @@ def import_reading_understanding(xlsx_path: Path) -> int:
             grouped_questions[parse_int(row["question_id"], "question_id")].append(row)
         for question_number in sorted(grouped_questions):
             rows = grouped_questions[question_number]
-            correct_row_has_explanation = any(
-                parse_bool(row["is_correct"]) and clean_text(row["explanation"])
-                for row in rows
+            context = (
+                f"{xlsx_path.name}: question_id {question_number} "
+                f"in exercise {external_id}"
             )
-            correct_explanation = resolve_correct_answer_explanation(
-                rows,
-                context=(
-                    f"{xlsx_path.name}: question_id {question_number} "
-                    f"in exercise {external_id}"
-                ),
+            require_exactly_one_correct_answer(rows, context=context)
+            explanation_resolution = resolve_explanations(
+                row["explanation"] for row in rows
             )
             question = ReadingUnderstandingQuestion.objects.create(
                 exercise=exercise,
                 question_number=question_number,
                 question_text=clean_text(rows[0]["question"]),
+                explanation=explanation_resolution.question_explanation,
+                explanation_scope=explanation_resolution.scope,
             )
             for index, row in enumerate(rows):
                 is_correct = parse_bool(row["is_correct"])
@@ -560,15 +555,7 @@ def import_reading_understanding(xlsx_path: Path) -> int:
                     option_key=option_key_from_index(index),
                     option_text=clean_text(row["answer"]),
                     is_correct=is_correct,
-                    explanation=(
-                        correct_explanation
-                        if is_correct
-                        else (
-                            clean_text(row["explanation"])
-                            if correct_row_has_explanation
-                            else ""
-                        )
-                    ),
+                    explanation=explanation_resolution.option_explanations[index],
                     sort_order=index + 1,
                 )
         imported_count += 1
@@ -692,10 +679,15 @@ def import_cloze_choice(xlsx_path: Path) -> int:
             grouped_blanks[key].append(row)
         for index, (key, rows) in enumerate(sorted(grouped_blanks.items(), key=lambda item: item[0][1]), start=1):
             blank_key, blank_number = key
+            explanation_resolution = resolve_explanations(
+                row["explanation"] for row in rows
+            )
             blank = ClozeChoiceBlank.objects.create(
                 exercise=exercise,
                 blank_key=blank_key,
                 blank_number=blank_number,
+                explanation=explanation_resolution.question_explanation,
+                explanation_scope=explanation_resolution.scope,
             )
             correct_count = 0
             for option_index, row in enumerate(rows):
@@ -706,7 +698,7 @@ def import_cloze_choice(xlsx_path: Path) -> int:
                     option_key=option_key_from_index(option_index),
                     option_text=clean_text(row["Option"]),
                     is_correct=is_correct,
-                    explanation=clean_text(row["explanation"]),
+                    explanation=explanation_resolution.option_explanations[option_index],
                     sort_order=option_index + 1,
                 )
             if correct_count != 1:

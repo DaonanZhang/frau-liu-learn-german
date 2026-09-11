@@ -173,11 +173,16 @@ Mapping:
 - each answer row -> one `ListeningAnswerOption`
 - `answer` -> `ListeningAnswerOption.option_text`
 - `is_correct` -> `ListeningAnswerOption.is_correct`
-- `Explanation` -> `ListeningAnswerOption.explanation`
+- one populated `Explanation` in a question group -> `ListeningQuestion.explanation`
+- two or more populated `Explanation` cells in a question group -> the
+  corresponding `ListeningAnswerOption.explanation` fields
 
 Importer behavior:
 
 - `option_key` is not provided in the XLSX; importer should generate it from row order, for example `A`, `B`, `C`, `D`.
+- A group with zero or one populated explanation uses question scope. A group
+  with explanations on two or more option rows uses option scope and preserves
+  every populated option explanation.
 
 ## 2. Reading
 
@@ -320,17 +325,19 @@ Mapping after that adjustment:
 - each answer row -> one `ReadingUnderstandingAnswerOption`
 - `answer` -> `ReadingUnderstandingAnswerOption.option_text`
 - `is_correct` -> `ReadingUnderstandingAnswerOption.is_correct`
-- `explanation` -> `ReadingUnderstandingAnswerOption.explanation`
+- one populated `explanation` in a question group ->
+  `ReadingUnderstandingQuestion.explanation`
+- two or more populated `explanation` cells in a question group -> the
+  corresponding `ReadingUnderstandingAnswerOption.explanation` fields
 
 Importer behavior:
 
 - `option_key` should be generated as `a`, `b`, `c` or `A`, `B`, `C`.
-- The explanation displayed after checking comes from the correct answer option.
-  If that row has no `explanation` but the question group contains exactly one
-  non-empty explanation on another row, the importer assigns that explanation
-  only to the correct option rather than retaining it on the incorrect option.
-  Multiple different explanations with none on the correct row are ambiguous
-  and must fail the workbook import.
+- A group with zero or one populated explanation uses question scope. After
+  checking, the same question explanation is shown regardless of the selected
+  answer. A group with explanations on two or more option rows uses option
+  scope; every populated option explanation is retained and shown after
+  checking.
 
 ### 2.3 Reading Ad Matching
 
@@ -453,11 +460,16 @@ Mapping:
 - each option row -> one `ClozeChoiceOption`
 - `Option` -> `ClozeChoiceOption.option_text`
 - `is_correct` -> `ClozeChoiceOption.is_correct`
-- `explanation` -> `ClozeChoiceOption.explanation`
+- one populated `explanation` in a blank group -> `ClozeChoiceBlank.explanation`
+- two or more populated `explanation` cells in a blank group -> the
+  corresponding `ClozeChoiceOption.explanation` fields
 
 Importer behavior:
 
 - `option_key` is not supplied; generate `A`, `B`, `C`, ...
+- A blank group with zero or one populated explanation uses question scope. A
+  group with explanations on two or more option rows uses option scope and
+  preserves every populated option explanation.
 
 ### 3.2 Cloze Matching
 

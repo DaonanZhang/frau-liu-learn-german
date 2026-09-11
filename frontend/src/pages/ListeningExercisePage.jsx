@@ -9,16 +9,17 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
-import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
+import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
+import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import "./ListeningExercisePage.css";
 
 const INSTRUCTION_BY_TYPE = {
   short_text_true_false_with_prep:
     "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Sie hören diese Texte nur einmal. Entscheiden Sie beim Hören, ob die Aussagen 1 - 5 richtig oder falsch sind. Lesen Sie jetzt die Aufgaben 1 - 5. Sie haben dazu 30 Sekunden Zeit.",
   short_text_true_false_once:
-    "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
-  dialog_true_false_twice:
     "Sie hören nun ein Gespräch. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch zweimal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
+  dialog_true_false_twice:
+    "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Sie hören diese Texte nur einmal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
 };
 
 const EYEBROW_BY_TYPE = {
@@ -28,6 +29,13 @@ const EYEBROW_BY_TYPE = {
 };
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2];
+
+function formatAudioTime(seconds) {
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
 
 export default function ListeningExercisePage({
   listeningType,
@@ -45,6 +53,8 @@ export default function ListeningExercisePage({
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [repeatEnabled, setRepeatEnabled] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
 
   useEffect(() => {
     let aborted = false;
@@ -109,25 +119,19 @@ export default function ListeningExercisePage({
 
     audioElement.playbackRate = playbackRate;
     audioElement.loop = repeatEnabled;
+    return undefined;
+  }, [exercise?.audio_file_url, playbackRate, repeatEnabled]);
 
-    function handlePlay() {
-      setIsPlaying(true);
-    }
+  function syncAudioProgress(audioElement) {
+    setCurrentTime(Number.isFinite(audioElement.currentTime) ? audioElement.currentTime : 0);
+    setDuration(Number.isFinite(audioElement.duration) ? audioElement.duration : 0);
+  }
 
-    function handlePause() {
-      setIsPlaying(false);
-    }
-
-    audioElement.addEventListener("play", handlePlay);
-    audioElement.addEventListener("pause", handlePause);
-    audioElement.addEventListener("ended", handlePause);
-
-    return () => {
-      audioElement.removeEventListener("play", handlePlay);
-      audioElement.removeEventListener("pause", handlePause);
-      audioElement.removeEventListener("ended", handlePause);
-    };
-  }, [playbackRate, repeatEnabled]);
+  function resetAudioProgress() {
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+  }
 
   const questions = useMemo(() => {
     return Array.isArray(exercise?.questions) ? exercise.questions : [];
@@ -168,9 +172,21 @@ export default function ListeningExercisePage({
       return;
     }
     audioElement.currentTime = 0;
+    setCurrentTime(0);
     audioElement.play().catch((error) => {
       setErrorText(error?.message || "Audio playback failed.");
     });
+  }
+
+  function seekAudio(event) {
+    const audioElement = audioRef.current;
+    if (!audioElement) {
+      return;
+    }
+
+    const nextTime = Number(event.target.value);
+    audioElement.currentTime = nextTime;
+    setCurrentTime(nextTime);
   }
 
   async function toggleFavorite(question) {
@@ -298,11 +314,34 @@ export default function ListeningExercisePage({
 
           <div className="listening-exercise-audio-player">
             <audio
+              key={exercise?.audio_file_url || "no-audio"}
               ref={audioRef}
               src={exercise?.audio_file_url || ""}
               preload="metadata"
-              controls
-              controlsList="nodownload noremoteplayback"
+              onLoadStart={resetAudioProgress}
+              onLoadedMetadata={(event) => {
+                syncAudioProgress(event.currentTarget);
+              }}
+              onDurationChange={(event) => {
+                syncAudioProgress(event.currentTarget);
+              }}
+              onTimeUpdate={(event) => {
+                syncAudioProgress(event.currentTarget);
+              }}
+              onSeeked={(event) => {
+                syncAudioProgress(event.currentTarget);
+              }}
+              onPlay={() => {
+                setIsPlaying(true);
+              }}
+              onPause={() => {
+                setIsPlaying(false);
+              }}
+              onEnded={(event) => {
+                setIsPlaying(false);
+                syncAudioProgress(event.currentTarget);
+              }}
+              onEmptied={resetAudioProgress}
               onContextMenu={(event) => {
                 event.preventDefault();
               }}
@@ -310,16 +349,42 @@ export default function ListeningExercisePage({
                 event.preventDefault();
               }}
             />
+            <button
+              type="button"
+              className="listening-exercise-timeline__play"
+              onClick={togglePlayback}
+              aria-label={isPlaying ? "Audio pausieren" : "Audio abspielen"}
+              title={isPlaying ? "Pause" : "Abspielen"}
+            >
+              <span
+                className={isPlaying ? "" : "listening-exercise-timeline__play-icon"}
+                aria-hidden="true"
+              >
+                {isPlaying ? "Ⅱ" : "▶"}
+              </span>
+            </button>
+            <label className="listening-exercise-timeline">
+              <span className="listening-exercise-timeline__meta">
+                <span>Wiedergabeposition</span>
+                <span>{formatAudioTime(currentTime)} / {formatAudioTime(duration)}</span>
+              </span>
+              <input
+                type="range"
+                min="0"
+                max={duration || 0}
+                step="0.1"
+                value={Math.min(currentTime, duration || 0)}
+                disabled={!duration}
+                onChange={seekAudio}
+                aria-label="Wiedergabeposition"
+                style={{
+                  "--listening-audio-progress": `${Math.min(100, duration ? (currentTime / duration) * 100 : 0)}%`,
+                }}
+              />
+            </label>
           </div>
 
           <div className="listening-exercise-controls" aria-label="Audiosteuerung">
-            <button
-              type="button"
-              className="listening-exercise-control-btn"
-              onClick={togglePlayback}
-            >
-              {isPlaying ? "Pause" : "Abspielen"}
-            </button>
             <button
               type="button"
               className="listening-exercise-control-btn listening-exercise-control-btn--secondary"
@@ -447,9 +512,15 @@ export default function ListeningExercisePage({
                       <p className="listening-exercise-feedback__line">
                         Richtige Antwort: {correctOption?.option_text || "-"}
                       </p>
-                      <p className="listening-exercise-feedback__line">
-                        Erklärung: <FormattedExplanation text={correctOption?.explanation} />
-                      </p>
+                      {hasScopedExplanation(question.explanation, question.answer_options || []) ? (
+                        <p className="listening-exercise-feedback__line">
+                          Erklärung: <ScopedExplanation
+                            explanation={question.explanation}
+                            explanationScope={question.explanation_scope}
+                            options={question.answer_options || []}
+                          />
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
                 </article>

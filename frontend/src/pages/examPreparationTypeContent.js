@@ -16,7 +16,7 @@ export const LISTENING_TYPES = [
   {
     key: "dialog-twice",
     title: "Teil 3",
-    description: "听 5 段广播或公共场所的短广播、通知，录音播放两次，判断 5 个陈述句的正误。共 5 道正误判断题。",
+    description: "听 5 段广播或公共场所的短广播、通知，录音只播放一次，判断 5 个陈述句的正误。共 5 道正误判断题。",
     to: "/modules/exam-preparation/hoeren/dialog-twice",
     cta: "进入这一题型",
   },

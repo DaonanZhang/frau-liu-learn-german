@@ -315,6 +315,36 @@
   color: #17713c;
 }
 
+.cloze-choice-inline-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.cloze-choice-inline-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  max-width: min(34rem, 80vw);
+  line-height: 1.55;
+}
+
+.cloze-choice-inline-explanation {
+  color: #4b5563;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.cloze-choice-inline-result .exam-favorite-btn {
+  width: 1.65rem;
+  height: 1.65rem;
+}
+
+.cloze-choice-inline-result .exam-favorite-btn__star {
+  font-size: 0.9rem;
+}
+
 .cloze-feedback-list {
   display: grid;
   gap: 0.8rem;
@@ -422,6 +452,11 @@
     display: flex;
     width: 100%;
     margin: 0.35rem 0;
+  }
+
+  .cloze-choice-inline-details {
+    width: 100%;
+    max-width: none;
   }
 
   .cloze-drop-slot {

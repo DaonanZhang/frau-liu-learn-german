@@ -3,6 +3,11 @@ from __future__ import annotations
 from django.db import models
 
 
+class ExplanationScope(models.TextChoices):
+    QUESTION = "question", "Question"
+    OPTION = "option", "Option"
+
+
 class ExerciseBase(models.Model):
     class Level(models.TextChoices):
         A1 = "A1", "A1"

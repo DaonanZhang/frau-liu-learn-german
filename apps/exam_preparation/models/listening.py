@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from django.db import models
 
+from .base import ExplanationScope
+
 
 class ListeningExercise(models.Model):
     class ListeningType(models.TextChoices):
@@ -50,6 +52,13 @@ class ListeningQuestion(models.Model):
     question_number = models.PositiveIntegerField(verbose_name="question number")
     question_type = models.CharField(max_length=32, choices=QuestionType.choices, verbose_name="question type")
     question_text = models.TextField(verbose_name="question text")
+    explanation = models.TextField(blank=True, default="", verbose_name="explanation")
+    explanation_scope = models.CharField(
+        max_length=16,
+        choices=ExplanationScope.choices,
+        default=ExplanationScope.QUESTION,
+        verbose_name="explanation scope",
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")
 

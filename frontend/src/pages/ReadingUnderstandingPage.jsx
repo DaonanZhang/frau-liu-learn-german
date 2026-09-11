@@ -9,7 +9,8 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
-import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
+import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
+import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import "./ReadingUnderstandingPage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -303,11 +304,15 @@ export default function ReadingUnderstandingPage() {
                       {(question.answer_options || []).find((option) => option.is_correct)?.option_key} -{" "}
                       {(question.answer_options || []).find((option) => option.is_correct)?.option_text}
                     </p>
-                    <p className="reading-understanding-feedback__line">
-                      Erklärung: <FormattedExplanation
-                        text={(question.answer_options || []).find((option) => option.is_correct)?.explanation}
-                      />
-                    </p>
+                    {hasScopedExplanation(question.explanation, question.answer_options || []) ? (
+                      <p className="reading-understanding-feedback__line">
+                        Erklärung: <ScopedExplanation
+                          explanation={question.explanation}
+                          explanationScope={question.explanation_scope}
+                          options={question.answer_options || []}
+                        />
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </article>

@@ -175,7 +175,7 @@ const router = createBrowserRouter([
             description={LISTENING_TYPES[1].description}
             fetchExercises={() => fetchListeningExercises("short_text_true_false_once")}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/hoeren/short-text-once/${exercise.id}`}
-            cardDescription="Öffne diese Hörübung und entscheide beim ersten Hören, welche Aussagen richtig oder falsch sind."
+            cardDescription="Öffne diese Hörübung und entscheide nach zweimaligem Hören des Gesprächs, welche Aussagen richtig oder falsch sind."
           />
         ),
       },
@@ -199,7 +199,7 @@ const router = createBrowserRouter([
             description={LISTENING_TYPES[2].description}
             fetchExercises={() => fetchListeningExercises("dialog_true_false_twice")}
             buildExerciseHref={(exercise) => `/modules/exam-preparation/hoeren/dialog-twice/${exercise.id}`}
-            cardDescription="Öffne diese Dialogübung und bearbeite die Aussagen nach dem Hören des Gesprächs."
+            cardDescription="Öffne diese Hörübung und entscheide beim einmaligen Hören der kurzen Texte, welche Aussagen richtig oder falsch sind."
           />
         ),
       },
@@ -279,6 +279,9 @@ const router = createBrowserRouter([
               description={SPEAKING_TYPES[teil - 1].description}
               fetchExercises={() => fetchSpeakingTeilExercises(teil)}
               buildExerciseHref={(exercise) => `/modules/exam-preparation/sprechen/teil-${teil}/${exercise.id}`}
+              buildCardTitle={teil === 1
+                ? (exercise, index) => `${exercise?.exercise_base?.title?.trim() || "Einander kennenlernen"} Beispiel ${index + 1}`
+                : undefined}
               cardDescription="Öffne diese Aufgabe und sprich sie anhand der angegebenen Stichpunkte durch."
             />
           ),

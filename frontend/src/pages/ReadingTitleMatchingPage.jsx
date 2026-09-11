@@ -277,9 +277,11 @@ export default function ReadingTitleMatchingPage() {
                       <p className="reading-title-feedback__line">
                         Richtige Antwort: {item.correct_option?.option_key} - {item.correct_option?.option_text}
                       </p>
-                      <p className="reading-title-feedback__line">
-                        Erklärung: <FormattedExplanation text={item.explanation} />
-                      </p>
+                      {String(item.explanation || "").trim() ? (
+                        <p className="reading-title-feedback__line">
+                          Erklärung: <FormattedExplanation text={item.explanation} />
+                        </p>
+                      ) : null}
                     </div>
                   ) : null}
                 </article>

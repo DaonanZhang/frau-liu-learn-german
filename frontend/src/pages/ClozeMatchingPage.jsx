@@ -519,7 +519,9 @@ export default function ClozeMatchingPage() {
                   </div>
                   <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
                   <p>Richtige Antwort: {correctOption?.option_text || "-"}</p>
-                  <p>Erklärung: <FormattedExplanation text={blank.explanation} /></p>
+                  {String(blank.explanation || "").trim() ? (
+                    <p>Erklärung: <FormattedExplanation text={blank.explanation} /></p>
+                  ) : null}
                 </article>
               );
             })}

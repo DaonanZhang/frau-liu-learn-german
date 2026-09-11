@@ -1,4 +1,4 @@
-from .base import ExerciseBase
+from .base import ExerciseBase, ExplanationScope
 from .cloze import (
     ClozeChoiceBlank,
     ClozeChoiceExercise,
@@ -40,6 +40,7 @@ from .writing import WritingExampleText, WritingExercise
 
 __all__ = [
     "ExerciseBase",
+    "ExplanationScope",
     "ListeningExercise",
     "ListeningQuestion",
     "ListeningAnswerOption",

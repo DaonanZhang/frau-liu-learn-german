@@ -1,0 +1,27 @@
+.scoped-explanation-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.scoped-explanation-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.scoped-explanation-option__label {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .scoped-explanation-option {
+    padding: 0.65rem 0.7rem;
+  }
+}

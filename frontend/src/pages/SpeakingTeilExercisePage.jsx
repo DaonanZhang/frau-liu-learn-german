@@ -11,6 +11,28 @@ const TITLES = { 1: "Einander kennenlernen", 2: "Über ein Thema sprechen", 3: "
 const turnKey = (turn) => `turn:${turn.sequence}`;
 const orderStateKey = (key) => key === "all" ? "dialogue-order:all" : `dialogue-order:section:${key}`;
 
+function SectionArrowNavigation({ activeSection, sectionCount, onSelect, position }) {
+  return (
+    <div className={`speaking-detail-carousel-nav speaking-detail-carousel-nav--${position}`}>
+      <button
+        type="button"
+        onClick={() => onSelect(activeSection - 1)}
+        disabled={activeSection === 0}
+      >
+        ← Zurück
+      </button>
+      <button
+        type="button"
+        className="speaking-detail-carousel-next"
+        onClick={() => onSelect(activeSection + 1)}
+        disabled={activeSection === sectionCount - 1}
+      >
+        Weiter →
+      </button>
+    </div>
+  );
+}
+
 function shuffledTurns(turns) {
   if (turns.length < 2) return [...turns];
   const next = [...turns].reverse();
@@ -427,6 +449,12 @@ export default function SpeakingTeilExercisePage({ teil }) {
   const sections = useMemo(() => Array.isArray(content.sections) ? content.sections : [], [content.sections]);
   const topics = Array.isArray(content.topics) ? content.topics : [];
   const base = exercise?.exercise_base || {};
+  const isTeil3Complete = sections.length > 0 && sections.every((section, index) => {
+    const sectionTurns = Array.isArray(section.turns) ? section.turns : [];
+    return sectionTurns.length > 0
+      && (orders[index] || []).length === sectionTurns.length
+      && Boolean(checked[index]);
+  });
 
   async function toggleFavorite(turn) {
     const key = turnKey(turn);
@@ -468,6 +496,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
   }
 
   async function resetSection(key) {
+    setShowAll(false);
     setOrders((previous) => ({ ...previous, [key]: [] }));
     setChecked((previous) => ({ ...previous, [key]: false }));
     try {
@@ -521,13 +550,26 @@ export default function SpeakingTeilExercisePage({ teil }) {
               {currentSection.type}
               <span>{activeSection + 1} / {sections.length}</span>
             </h2>
-            <div className="speaking-detail-carousel-nav">
-              <button type="button" onClick={() => setActiveSection((current) => current - 1)} disabled={activeSection === 0}>← Zurück</button>
-              <button type="button" className="speaking-detail-carousel-next" onClick={() => setActiveSection((current) => current + 1)} disabled={activeSection === sections.length - 1}>Weiter →</button>
-            </div>
           </div>
-          <DialogueBuilder key={activeSection} turns={currentSection.turns || []} value={orders[activeSection] || []} onChange={(value) => { setOrders((previous) => ({ ...previous, [activeSection]: value })); setChecked((previous) => ({ ...previous, [activeSection]: false })); }} checked={Boolean(checked[activeSection])} recorderPrefix={`teil-3-${exerciseId}-${activeSection}`} favoriteForTurn={favoriteForTurn} />
-          <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked[activeSection]) || !(currentSection.turns || []).length || (orders[activeSection] || []).length !== (currentSection.turns || []).length} onClick={() => checkSection(activeSection, currentSection.turns || [])} />{checked[activeSection] ? <ExamActionButton className="speaking-detail-reset-btn" label="Wiederholen" icon="rotate" onClick={() => resetSection(activeSection)} /> : null}<button type="button" className="speaking-detail-toggle-all" onClick={() => setShowAll((value) => !value)}>{showAll ? "完整对话收起" : "展示全部完整对话"}</button></div>
+          <SectionArrowNavigation activeSection={activeSection} sectionCount={sections.length} onSelect={setActiveSection} position="top" />
+          <nav className="speaking-detail-section-nav" aria-label="对话段落导航">
+            {sections.map((section, index) => (
+              <button
+                key={`${section.type}-${index}`}
+                type="button"
+                className={index === activeSection ? "is-active" : ""}
+                aria-current={index === activeSection ? "step" : undefined}
+                aria-label={`进入第 ${index + 1} 个对话段落：${section.type}`}
+                title={section.type}
+                onClick={() => setActiveSection(index)}
+              >
+                {index + 1}
+              </button>
+            ))}
+          </nav>
+          <DialogueBuilder key={activeSection} turns={currentSection.turns || []} value={orders[activeSection] || []} onChange={(value) => { setShowAll(false); setOrders((previous) => ({ ...previous, [activeSection]: value })); setChecked((previous) => ({ ...previous, [activeSection]: false })); }} checked={Boolean(checked[activeSection])} recorderPrefix={`teil-3-${exerciseId}-${activeSection}`} favoriteForTurn={favoriteForTurn} />
+          <SectionArrowNavigation activeSection={activeSection} sectionCount={sections.length} onSelect={setActiveSection} position="bottom" />
+          <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked[activeSection]) || !(currentSection.turns || []).length || (orders[activeSection] || []).length !== (currentSection.turns || []).length} onClick={() => checkSection(activeSection, currentSection.turns || [])} />{checked[activeSection] ? <ExamActionButton className="speaking-detail-reset-btn" label="Wiederholen" icon="rotate" onClick={() => resetSection(activeSection)} /> : null}<button type="button" className="speaking-detail-toggle-all" disabled={!isTeil3Complete} onClick={() => setShowAll((value) => !value)}>{showAll ? "完整对话收起" : "展示全部完整对话"}</button></div>
           {showAll ? <div className="speaking-detail-full-dialogue"><h3>Vollständiger Dialog</h3>{sections.map((section) => <section key={section.type}><h4>{section.type}</h4><div className="speaking-detail-dialogue">{(section.turns || []).map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} />)}</div></section>)}</div> : null}
         </section>
       ) : null}

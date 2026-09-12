@@ -47,7 +47,7 @@ Generate ten CNY 10 coupons for one institution and one offer:
   --discount 10 \
   --count 10 \
   --offer exam-preparation-30d \
-  --expires-days 180 \
+  --expires-days 360 \
   --minimum-order 20 \
   --remark "2026 秋季批次"
 ```
@@ -63,8 +63,12 @@ audit record when a coupon is used.
 
 Use `--module` and optional `--season` instead of `--offer` for a broader
 scope. Omit all three options for a coupon valid across every active offer.
-Add `--stackable` only when the coupon may combine with automatic member
-discounts.
+Promotion coupons always apply after any automatic member discount. For
+example, a ¥100 offer with a 50% member discount and a ¥5 coupon costs ¥45.
+
+Promotion codes expire after 360 days by default. Pass `--no-expiry` when the
+unredeemed promotion code itself should remain redeemable indefinitely. This
+is separate from `--coupon-valid-days`.
 
 Issued coupons are permanent by default: omit `--coupon-valid-days` and
 `UserCoupon.expires_at` remains `NULL`. Pass a positive value such as

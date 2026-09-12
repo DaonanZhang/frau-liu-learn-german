@@ -17,7 +17,6 @@ class UserCouponReadSerializer(serializers.ModelSerializer):
             "id",
             "discount_amount",
             "minimum_order_amount",
-            "is_stackable",
             "status",
             "effective_status",
             "scope",

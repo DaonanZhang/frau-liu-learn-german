@@ -18,13 +18,17 @@ class Command(BaseCommand):
         parser.add_argument("--organization", default="")
         parser.add_argument("--discount", required=True, type=Decimal)
         parser.add_argument("--count", type=int, default=1)
-        parser.add_argument("--expires-days", type=int, default=180)
+        parser.add_argument("--expires-days", type=int, default=360)
+        parser.add_argument(
+            "--no-expiry",
+            action="store_true",
+            help="Keep the unredeemed promotion code valid indefinitely.",
+        )
         parser.add_argument("--coupon-valid-days", type=int)
         parser.add_argument("--minimum-order", type=Decimal, default=Decimal("0.00"))
         parser.add_argument("--module", dest="module_key")
         parser.add_argument("--season", dest="season_number", type=int)
         parser.add_argument("--offer", dest="offer_code")
-        parser.add_argument("--stackable", action="store_true")
         parser.add_argument("--remark", default="")
         parser.add_argument("--length", type=int, default=10)
 
@@ -80,15 +84,22 @@ class Command(BaseCommand):
                 applicable_module=module,
                 applicable_season=season,
                 applicable_offer=offer,
-                is_stackable=options["stackable"],
                 coupon_valid_days=options["coupon_valid_days"],
-                expires_at=timezone.now() + timedelta(days=options["expires_days"]),
+                expires_at=(
+                    None
+                    if options["no_expiry"]
+                    else timezone.now() + timedelta(days=options["expires_days"])
+                ),
             )
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
 
+        code_expires = (
+            "unlimited" if options["no_expiry"] else f"{options['expires_days']}d"
+        )
         self.stdout.write(
             f"# campaign_name={options['campaign_name']} count={len(codes)} discount={options['discount']:.2f} "
+            f"code_expires={code_expires} "
             f"coupon_valid_days={options['coupon_valid_days'] or 'unlimited'}"
         )
         for code in codes:

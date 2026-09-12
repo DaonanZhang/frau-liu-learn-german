@@ -162,12 +162,7 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
 
     best = automatic
     for candidate in coupons:
-        if candidate.is_stackable:
-            base_amount = automatic.final_amount
-            automatic_discount = automatic.automatic_discount_amount
-        else:
-            base_amount = automatic.original_amount
-            automatic_discount = Decimal("0.00")
+        base_amount = automatic.final_amount
         candidate_final = max(base_amount - candidate.discount_amount, Decimal("0.01"))
         if candidate_final >= best.final_amount:
             continue
@@ -176,9 +171,13 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
             original_amount=automatic.original_amount,
             final_amount=candidate_final,
             discount_amount=automatic.original_amount - candidate_final,
-            discount_label="优惠券优惠",
+            discount_label=" + ".join(
+                label
+                for label in (automatic.discount_label, "优惠券优惠")
+                if label
+            ),
             is_discounted=True,
-            automatic_discount_amount=automatic_discount,
+            automatic_discount_amount=automatic.automatic_discount_amount,
             promotion_discount_amount=promotion_discount,
             coupon=candidate,
         )

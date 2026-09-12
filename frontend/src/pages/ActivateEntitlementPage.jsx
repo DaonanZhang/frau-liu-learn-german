@@ -63,10 +63,12 @@ export default function ActivateEntitlementPage() {
         });
         return;
       }
+      const errorDetail = err?.data?.detail || "兑换码无效或已过期";
+      const isExpiredPromotionCode = errorDetail === "推广码已过期";
       await Swal.fire({
         icon: "error",
-        title: "兑换码无效",
-        text: err?.data?.detail || "兑换码无效或已过期",
+        title: isExpiredPromotionCode ? "推广码已过期" : "兑换码无效",
+        text: errorDetail,
       });
     } finally {
       setLoading(false);

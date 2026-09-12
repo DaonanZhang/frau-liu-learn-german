@@ -66,7 +66,6 @@ def create_promotion_code_batch(
     applicable_module,
     applicable_season,
     applicable_offer,
-    is_stackable: bool,
     coupon_valid_days: int | None,
     expires_at,
 ) -> list[str]:
@@ -95,7 +94,6 @@ def create_promotion_code_batch(
             applicable_module=applicable_module,
             applicable_season=applicable_season,
             applicable_offer=applicable_offer,
-            is_stackable=is_stackable,
             coupon_valid_days=coupon_valid_days,
             expires_at=expires_at,
         )
@@ -107,7 +105,7 @@ def create_promotion_code_batch(
 def redeem_promotion_code(*, user, code: str) -> UserCoupon:
     normalized = str(code or "").strip().upper()
     if not normalized:
-        raise ValueError("推广码无效或已过期")
+        raise ValueError("推广码无效")
     try:
         record = (
             PromotionCodeRecord.objects
@@ -115,14 +113,17 @@ def redeem_promotion_code(*, user, code: str) -> UserCoupon:
             .get(code=normalized)
         )
     except PromotionCodeRecord.DoesNotExist as exc:
-        raise ValueError("推广码无效或已过期") from exc
+        raise ValueError("推广码无效") from exc
 
     now = timezone.now()
-    if record.status != PromotionCodeRecord.Status.ACTIVE or record.expires_at <= now:
-        if record.status == PromotionCodeRecord.Status.ACTIVE and record.expires_at <= now:
+    has_expired = record.expires_at is not None and record.expires_at <= now
+    if record.status == PromotionCodeRecord.Status.EXPIRED or has_expired:
+        if record.status == PromotionCodeRecord.Status.ACTIVE and has_expired:
             record.status = PromotionCodeRecord.Status.EXPIRED
             record.save(update_fields=["status", "updated_at"])
-        raise ValueError("推广码无效或已过期")
+        raise ValueError("推广码已过期")
+    if record.status != PromotionCodeRecord.Status.ACTIVE:
+        raise ValueError("推广码无效或已使用")
     coupon = UserCoupon.objects.create(
         user=user,
         promotion_code=record,
@@ -131,7 +132,6 @@ def redeem_promotion_code(*, user, code: str) -> UserCoupon:
         applicable_module_id=record.applicable_module_id,
         applicable_season_id=record.applicable_season_id,
         applicable_offer_id=record.applicable_offer_id,
-        is_stackable=record.is_stackable,
         expires_at=(
             now + timedelta(days=record.coupon_valid_days)
             if record.coupon_valid_days is not None

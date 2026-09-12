@@ -40,7 +40,6 @@ class PromotionCodeRecord(models.Model):
         on_delete=models.PROTECT,
         related_name="promotion_codes",
     )
-    is_stackable = models.BooleanField(default=False)
     coupon_valid_days = models.PositiveIntegerField(null=True, blank=True, default=None)
     status = models.CharField(
         max_length=16,
@@ -48,7 +47,7 @@ class PromotionCodeRecord(models.Model):
         default=Status.ACTIVE,
         db_index=True,
     )
-    expires_at = models.DateTimeField(db_index=True)
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     consumed_by_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -118,7 +117,6 @@ class UserCoupon(models.Model):
     applicable_offer = models.ForeignKey(
         "accounts.PurchaseOffer", null=True, blank=True, on_delete=models.PROTECT, related_name="promotion_coupons"
     )
-    is_stackable = models.BooleanField(default=False)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,

@@ -223,7 +223,7 @@ class PromotionCodeRecordAdmin(admin.ModelAdmin):
         "id", "code", "campaign_name", "organization_name", "remark", "discount_amount", "status",
         "consumed_by_user", "consumed_at", "expires_at",
     )
-    list_filter = ("campaign_name", "organization_name", "status", "is_stackable", "consumed_at", "created_at")
+    list_filter = ("campaign_name", "organization_name", "status", "consumed_at", "created_at")
     search_fields = ("code", "remark", "campaign_name", "organization_name", "consumed_by_user__telephone")
     readonly_fields = (
         "code", "status", "consumed_by_user", "consumed_at",
@@ -240,7 +240,7 @@ class UserCouponAdmin(admin.ModelAdmin):
         "id", "user", "campaign_name", "organization_name", "discount_amount", "status", "expires_at",
         "reserved_payment", "used_payment", "used_at",
     )
-    list_filter = ("promotion_code__campaign_name", "promotion_code__organization_name", "status", "is_stackable", "issued_at", "used_at")
+    list_filter = ("promotion_code__campaign_name", "promotion_code__organization_name", "status", "issued_at", "used_at")
     search_fields = (
         "user__telephone", "promotion_code__campaign_name", "promotion_code__organization_name", "promotion_code__code",
         "reserved_payment__merchant_order_no", "used_payment__merchant_order_no",

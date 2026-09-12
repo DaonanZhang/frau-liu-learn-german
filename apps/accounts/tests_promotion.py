@@ -119,6 +119,27 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(UserCoupon.objects.count(), 1)
 
+    def test_redeem_expired_promotion_code_returns_specific_message(self) -> None:
+        expired_record = store_promotion_code(
+            code="EXPIRED001",
+            campaign_name="过期提示测试",
+            organization_name="机构 A",
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+
+        response = self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": expired_record.code},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["detail"], "推广码已过期")
+        self.assertFalse(UserCoupon.objects.filter(promotion_code=expired_record).exists())
+
     def test_batch_generation_stores_plaintext_and_persists_operator_remark(self) -> None:
         codes = create_promotion_code_batch(
             campaign_name=self.campaign_name,
@@ -131,7 +152,6 @@ class PromotionCodeTests(APITestCase):
             applicable_module=self.module,
             applicable_season=self.season,
             applicable_offer=self.offer,
-            is_stackable=False,
             coupon_valid_days=30,
             expires_at=timezone.now() + timedelta(days=90),
         )
@@ -215,7 +235,56 @@ class PromotionCodeTests(APITestCase):
 
         generated = PromotionCodeRecord.objects.get(campaign_name="默认长期券")
         self.assertIsNone(generated.coupon_valid_days)
+        self.assertGreater(
+            generated.expires_at,
+            timezone.now() + timedelta(days=359, hours=23),
+        )
+        self.assertLess(
+            generated.expires_at,
+            timezone.now() + timedelta(days=360, minutes=1),
+        )
+        self.assertIn("code_expires=360d", output.getvalue())
         self.assertIn("coupon_valid_days=unlimited", output.getvalue())
+
+    def test_generation_command_can_create_global_no_expiry_codes(self) -> None:
+        output = StringIO()
+        call_command(
+            "generate_promotion_codes",
+            campaign_name="全模块5元无门槛测试",
+            organization="内部测试",
+            discount=Decimal("5.00"),
+            minimum_order=Decimal("0.00"),
+            count=2,
+            no_expiry=True,
+            remark="线上支付测试",
+            stdout=output,
+        )
+
+        records = PromotionCodeRecord.objects.filter(
+            campaign_name="全模块5元无门槛测试"
+        ).order_by("id")
+        self.assertEqual(records.count(), 2)
+        self.assertEqual(len({record.code for record in records}), 2)
+        for record in records:
+            self.assertEqual(record.discount_amount, Decimal("5.00"))
+            self.assertEqual(record.minimum_order_amount, Decimal("0.00"))
+            self.assertIsNone(record.applicable_module_id)
+            self.assertIsNone(record.applicable_season_id)
+            self.assertIsNone(record.applicable_offer_id)
+            self.assertIsNone(record.expires_at)
+            self.assertIsNone(record.coupon_valid_days)
+        self.assertIn("code_expires=unlimited", output.getvalue())
+
+        redeemed = self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": records[0].code},
+            format="json",
+        )
+        self.assertEqual(redeemed.status_code, status.HTTP_200_OK)
+        self.assertEqual(redeemed.data["type"], "promotion")
+        self.assertEqual(redeemed.data["coupon"]["discount_amount"], "5.00")
+        self.assertEqual(redeemed.data["coupon"]["minimum_order_amount"], "0.00")
+        self.assertIsNone(redeemed.data["coupon"]["expires_at"])
 
     def test_coupon_choices_default_to_the_largest_effective_discount(self) -> None:
         best_coupon_id = self.redeem().data["coupon"]["id"]
@@ -246,6 +315,84 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(response.data["available_count"], 2)
         self.assertEqual(response.data["choices"][0]["pricing"]["final_amount"], "29.90")
         self.assertEqual(smaller_record.remark, "较小面额测试券")
+
+    @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True, DEBUG=True)
+    def test_coupon_is_applied_after_automatic_discount(self) -> None:
+        video_module, _ = Module.objects.get_or_create(
+            key="learning_by_video",
+            defaults={"name": "Learning by Video", "is_active": True},
+        )
+        exam_module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        discounted_offer = PurchaseOffer.objects.create(
+            code="coupon-after-automatic-discount",
+            title="叠加优惠测试商品",
+            module=video_module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            price_amount=Decimal("100.00"),
+            currency="CNY",
+        )
+        Entitlement.objects.create(
+            user=self.user,
+            module=exam_module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+            starts_at=timezone.now(),
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+        promotion = store_promotion_code(
+            code="STACKAFTER",
+            campaign_name="叠加优惠测试",
+            organization_name="内部测试",
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=timezone.now() + timedelta(days=360),
+        )
+        coupon_id = self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": promotion.code},
+            format="json",
+        ).data["coupon"]["id"]
+
+        choices = self.client.get(
+            "/api/accounts/coupons/choices/",
+            {"offer_code": discounted_offer.code},
+        )
+        self.assertEqual(choices.status_code, status.HTTP_200_OK)
+        selected = next(
+            choice for choice in choices.data["choices"]
+            if choice["coupon"]["id"] == coupon_id
+        )
+        self.assertTrue(selected["is_applicable"])
+        self.assertEqual(selected["pricing"]["original_amount"], "100.00")
+        self.assertEqual(selected["pricing"]["automatic_discount_amount"], "50.00")
+        self.assertEqual(selected["pricing"]["promotion_discount_amount"], "5.00")
+        self.assertEqual(selected["pricing"]["final_amount"], "45.00")
+
+        purchase = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {
+                "offer_code": discounted_offer.code,
+                "coupon_id": coupon_id,
+                "use_coupon": True,
+                "idempotency_key": "00000000-0000-4000-8000-000000000109",
+            },
+            format="json",
+        )
+        self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(purchase.data["amount"], "45.00")
+        application = PaymentDiscountApplication.objects.get(
+            payment_id=purchase.data["payment_id"]
+        )
+        self.assertEqual(application.original_amount, Decimal("100.00"))
+        self.assertEqual(application.automatic_discount_amount, Decimal("50.00"))
+        self.assertEqual(application.promotion_discount_amount, Decimal("5.00"))
+        self.assertEqual(application.final_amount, Decimal("45.00"))
 
     def test_user_cannot_apply_another_users_coupon(self) -> None:
         coupon_id = self.redeem().data["coupon"]["id"]

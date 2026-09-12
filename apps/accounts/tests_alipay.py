@@ -128,6 +128,49 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(response.data["detail"][0], "备考季即将上线，敬请期待。")
         self.assertFalse(AlipayWebsitePayment.objects.exists())
 
+    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_payment_test_account_can_create_exam_purchase_while_coming_soon(
+        self,
+        mock_get_alipay_service: Mock,
+    ) -> None:
+        payment_test_user = get_user_model().objects.create_user(
+            telephone="11223344551",
+            country_code="+86",
+            password="pass-123456",
+        )
+        self.client.force_authenticate(user=payment_test_user)
+        exam_module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        exam_offer = PurchaseOffer.objects.create(
+            code="exam-payment-test-offer",
+            title="Exam payment test offer",
+            module=exam_module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            price_amount=Decimal("0.01"),
+            currency="CNY",
+            is_active=True,
+        )
+        mock_get_alipay_service.return_value.build_page_pay_url.return_value = (
+            "https://alipay.test/pay"
+        )
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {
+                "offer_code": exam_offer.code,
+                "idempotency_key": "00000000-0000-4000-8000-000000000098",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["offer_code"], exam_offer.code)
+        self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
+
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_same_purchase_intent_reuses_existing_pending_payment(self, mock_get_alipay_service: Mock) -> None:
         mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"

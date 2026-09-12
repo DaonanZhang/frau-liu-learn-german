@@ -51,20 +51,30 @@ class UserGuideStateApiTests(APITestCase):
         self.assertTrue(response.data["exam_preparation_release_access"])
 
     @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
-    def test_me_only_exposes_exam_preparation_preview_to_telephone_110(self) -> None:
+    def test_me_only_exposes_exam_preparation_preview_to_allowlisted_telephones(self) -> None:
         response = self.client.get("/api/accounts/users/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["exam_preparation_release_access"])
 
-        preview_user = get_user_model().objects.create_user(
+        preview_user_110 = get_user_model().objects.create_user(
             telephone="110",
             country_code="+86",
             password="pass-123456",
         )
-        self.client.force_authenticate(user=preview_user)
+        self.client.force_authenticate(user=preview_user_110)
         preview_response = self.client.get("/api/accounts/users/me/")
         self.assertEqual(preview_response.status_code, status.HTTP_200_OK)
         self.assertTrue(preview_response.data["exam_preparation_release_access"])
+
+        payment_test_user = get_user_model().objects.create_user(
+            telephone="11223344551",
+            country_code="+86",
+            password="pass-123456",
+        )
+        self.client.force_authenticate(user=payment_test_user)
+        payment_test_response = self.client.get("/api/accounts/users/me/")
+        self.assertEqual(payment_test_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(payment_test_response.data["exam_preparation_release_access"])
 
     def test_me_can_mark_schreiben_guide_as_seen(self) -> None:
         response = self.client.patch(

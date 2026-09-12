@@ -68,12 +68,12 @@ REST_FRAMEWORK = {
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
 # Temporary release gate for the exam-preparation module. When enabled, only
-# the dedicated preview account can enter or activate this module.
+# the dedicated preview accounts can enter, activate, or purchase this module.
 EXAM_PREPARATION_COMING_SOON_ENABLED = env.bool(
     "EXAM_PREPARATION_COMING_SOON_ENABLED",
     default=False,
 )
-EXAM_PREPARATION_PREVIEW_TELEPHONE = "110"
+EXAM_PREPARATION_PREVIEW_TELEPHONES = ("110", "11223344551")
 
 CACHES = {
     "default": {

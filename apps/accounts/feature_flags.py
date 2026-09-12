@@ -12,7 +12,13 @@ def user_allowed_exam_preparation_preview(user) -> bool:
         return True
     if not getattr(user, "is_authenticated", False):
         return False
-    allowed_telephone = str(
-        getattr(settings, "EXAM_PREPARATION_PREVIEW_TELEPHONE", "110")
-    ).strip()
-    return str(getattr(user, "telephone", "")).strip() == allowed_telephone
+    allowed_telephones = {
+        str(telephone).strip()
+        for telephone in getattr(
+            settings,
+            "EXAM_PREPARATION_PREVIEW_TELEPHONES",
+            ("110", "11223344551"),
+        )
+        if str(telephone).strip()
+    }
+    return str(getattr(user, "telephone", "")).strip() in allowed_telephones

@@ -275,6 +275,12 @@
   width: fit-content;
 }
 
+.module-checkout-page__offer-badge--brand-friend {
+  border-color: #a7d9d2;
+  background: #edfdf7;
+  color: var(--checkout-accent);
+}
+
 .module-checkout-page__price-block {
   display: flex;
   flex-direction: column;
@@ -322,6 +328,11 @@
 
 .module-checkout-page__price-sale--discount {
   color: #dc2626;
+}
+
+.module-checkout-page__price-sale--brand-friend,
+.module-checkout-page__discount-note--brand-friend {
+  color: var(--checkout-accent);
 }
 
 .module-checkout-page__discount-note {

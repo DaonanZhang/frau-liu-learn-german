@@ -63,8 +63,10 @@ audit record when a coupon is used.
 
 Use `--module` and optional `--season` instead of `--offer` for a broader
 scope. Omit all three options for a coupon valid across every active offer.
-Promotion coupons always apply after any automatic member discount. For
-example, a ¥100 offer with a 50% member discount and a ¥5 coupon costs ¥45.
+Promotion coupons always apply after any automatic member discount. An active
+entitlement for another module gives a ¥5 “品牌挚友专享” discount when buying
+exam preparation. For example, a ¥59.90 exam-preparation offer with that
+discount and a ¥10 coupon costs ¥44.90.
 
 Promotion codes expire after 360 days by default. Pass `--no-expiry` when the
 unredeemed promotion code itself should remain redeemable indefinitely. This

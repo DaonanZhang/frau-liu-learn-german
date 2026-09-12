@@ -329,16 +329,15 @@ class PromotionCodeTests(APITestCase):
         discounted_offer = PurchaseOffer.objects.create(
             code="coupon-after-automatic-discount",
             title="叠加优惠测试商品",
-            module=video_module,
+            module=exam_module,
             season=None,
             plan=Entitlement.Plan.MONTH_1,
-            price_amount=Decimal("100.00"),
+            price_amount=Decimal("59.90"),
             currency="CNY",
         )
         Entitlement.objects.create(
             user=self.user,
-            module=exam_module,
-            season=None,
+            module=video_module,
             plan=Entitlement.Plan.MONTH_1,
             status=Entitlement.Status.ACTIVE,
             starts_at=timezone.now(),
@@ -348,7 +347,7 @@ class PromotionCodeTests(APITestCase):
             code="STACKAFTER",
             campaign_name="叠加优惠测试",
             organization_name="内部测试",
-            discount_amount=Decimal("5.00"),
+            discount_amount=Decimal("10.00"),
             minimum_order_amount=Decimal("0.00"),
             coupon_valid_days=None,
             expires_at=timezone.now() + timedelta(days=360),
@@ -369,10 +368,10 @@ class PromotionCodeTests(APITestCase):
             if choice["coupon"]["id"] == coupon_id
         )
         self.assertTrue(selected["is_applicable"])
-        self.assertEqual(selected["pricing"]["original_amount"], "100.00")
-        self.assertEqual(selected["pricing"]["automatic_discount_amount"], "50.00")
-        self.assertEqual(selected["pricing"]["promotion_discount_amount"], "5.00")
-        self.assertEqual(selected["pricing"]["final_amount"], "45.00")
+        self.assertEqual(selected["pricing"]["original_amount"], "59.90")
+        self.assertEqual(selected["pricing"]["automatic_discount_amount"], "5.00")
+        self.assertEqual(selected["pricing"]["promotion_discount_amount"], "10.00")
+        self.assertEqual(selected["pricing"]["final_amount"], "44.90")
 
         purchase = self.client.post(
             "/api/accounts/payments/alipay/create/",
@@ -385,14 +384,14 @@ class PromotionCodeTests(APITestCase):
             format="json",
         )
         self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(purchase.data["amount"], "45.00")
+        self.assertEqual(purchase.data["amount"], "44.90")
         application = PaymentDiscountApplication.objects.get(
             payment_id=purchase.data["payment_id"]
         )
-        self.assertEqual(application.original_amount, Decimal("100.00"))
-        self.assertEqual(application.automatic_discount_amount, Decimal("50.00"))
-        self.assertEqual(application.promotion_discount_amount, Decimal("5.00"))
-        self.assertEqual(application.final_amount, Decimal("45.00"))
+        self.assertEqual(application.original_amount, Decimal("59.90"))
+        self.assertEqual(application.automatic_discount_amount, Decimal("5.00"))
+        self.assertEqual(application.promotion_discount_amount, Decimal("10.00"))
+        self.assertEqual(application.final_amount, Decimal("44.90"))
 
     def test_user_cannot_apply_another_users_coupon(self) -> None:
         coupon_id = self.redeem().data["coupon"]["id"]

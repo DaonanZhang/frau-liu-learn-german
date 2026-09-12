@@ -10,8 +10,8 @@ from apps.accounts.models import Entitlement, PurchaseOffer
 
 UPGRADE_DISCOUNT_AMOUNT = Decimal("5.00")
 UPGRADE_DISCOUNT_LABEL = "品牌挚友专享"
-EXAM_PREPARATION_VIDEO_DISCOUNT_AMOUNT = Decimal("10.00")
-EXAM_PREPARATION_VIDEO_DISCOUNT_LABEL = "品牌挚友专享"
+EXAM_PREPARATION_OTHER_MODULE_DISCOUNT_AMOUNT = Decimal("5.00")
+EXAM_PREPARATION_OTHER_MODULE_DISCOUNT_LABEL = "品牌挚友专享"
 VIDEO_EXAM_PREPARATION_DISCOUNT_LABEL = "备考季专享"
 UPGRADE_DISCOUNT_RULES = {
     "science-season-lifetime": {2},
@@ -58,7 +58,9 @@ def _user_has_upgrade_discount(*, user, offer: PurchaseOffer) -> bool:
     ).exists()
 
 
-def _user_has_exam_preparation_video_discount(*, user, offer: PurchaseOffer) -> bool:
+def _user_has_exam_preparation_other_module_discount(
+    *, user, offer: PurchaseOffer
+) -> bool:
     if (
         not user
         or not getattr(user, "is_authenticated", False)
@@ -69,10 +71,10 @@ def _user_has_exam_preparation_video_discount(*, user, offer: PurchaseOffer) -> 
     now = timezone.now()
     return Entitlement.objects.filter(
         user=user,
-        module__key="learning_by_video",
+        module__isnull=False,
         status=Entitlement.Status.ACTIVE,
         starts_at__lte=now,
-    ).filter(
+    ).exclude(module=offer.module).filter(
         models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
     ).exists()
 
@@ -120,9 +122,9 @@ def _get_automatic_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
     if _user_has_upgrade_discount(user=user, offer=offer):
         discount_amount += UPGRADE_DISCOUNT_AMOUNT
         discount_labels.append(UPGRADE_DISCOUNT_LABEL)
-    if _user_has_exam_preparation_video_discount(user=user, offer=offer):
-        discount_amount += EXAM_PREPARATION_VIDEO_DISCOUNT_AMOUNT
-        discount_labels.append(EXAM_PREPARATION_VIDEO_DISCOUNT_LABEL)
+    if _user_has_exam_preparation_other_module_discount(user=user, offer=offer):
+        discount_amount += EXAM_PREPARATION_OTHER_MODULE_DISCOUNT_AMOUNT
+        discount_labels.append(EXAM_PREPARATION_OTHER_MODULE_DISCOUNT_LABEL)
 
     if discount_amount <= 0:
         return PurchasePricing(

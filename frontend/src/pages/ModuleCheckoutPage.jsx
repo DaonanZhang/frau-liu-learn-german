@@ -422,6 +422,14 @@ export default function ModuleCheckoutPage() {
                   ? displayedSavings
                   : Math.max(0, Number.isFinite(totalDiscount) ? totalDiscount : 0);
                 const hasDiscount = effectiveSavings > 0;
+                const automaticDiscountLabel = String(
+                  couponBundle?.no_coupon_pricing?.discount_label
+                    || offer?.discount_label
+                    || ""
+                );
+                const hasBrandFriendDiscount =
+                  isExamPreparation
+                  && automaticDiscountLabel.includes("品牌挚友专享");
                 const showOfferPriceBeforeCoupon =
                   Number.isFinite(originalPrice)
                   && Number.isFinite(displayPrice)
@@ -468,8 +476,8 @@ export default function ModuleCheckoutPage() {
                         <div className="module-checkout-page__price-card">
                           <div className="module-checkout-page__price-caption">当前支付金额</div>
                           {hasDiscount ? (
-                            <div className="module-checkout-page__offer-badge module-checkout-page__offer-badge--inline">
-                              优惠
+                            <div className={`module-checkout-page__offer-badge module-checkout-page__offer-badge--inline${hasBrandFriendDiscount ? " module-checkout-page__offer-badge--brand-friend" : ""}`}>
+                              {hasBrandFriendDiscount ? "品牌挚友专享" : "优惠"}
                             </div>
                           ) : null}
                           <div className="module-checkout-page__price-block">
@@ -485,13 +493,13 @@ export default function ModuleCheckoutPage() {
                                 </span>
                               ) : null}
                               {hasDiscount ? (
-                                <span className="module-checkout-page__price-sale module-checkout-page__price-sale--discount">
+                                <span className={`module-checkout-page__price-sale module-checkout-page__price-sale--discount${hasBrandFriendDiscount ? " module-checkout-page__price-sale--brand-friend" : ""}`}>
                                   ¥{formatPromoPrice(displayPrice)}
                                 </span>
                               ) : null}
                             </div>
                             {hasDiscount ? (
-                              <div className="module-checkout-page__discount-note">
+                              <div className={`module-checkout-page__discount-note${hasBrandFriendDiscount ? " module-checkout-page__discount-note--brand-friend" : ""}`}>
                                 已减 ¥{formatPromoPrice(effectiveSavings)}
                               </div>
                             ) : null}

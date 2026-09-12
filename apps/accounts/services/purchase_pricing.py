@@ -8,10 +8,8 @@ from django.utils import timezone
 
 from apps.accounts.models import Entitlement, PurchaseOffer
 
-UPGRADE_DISCOUNT_AMOUNT = Decimal("5.00")
-UPGRADE_DISCOUNT_LABEL = "品牌挚友专享"
-EXAM_PREPARATION_OTHER_MODULE_DISCOUNT_AMOUNT = Decimal("5.00")
-EXAM_PREPARATION_OTHER_MODULE_DISCOUNT_LABEL = "品牌挚友专享"
+BRAND_FRIEND_COUPON_DISCOUNT_AMOUNT = Decimal("5.00")
+BRAND_FRIEND_COUPON_LABEL = "品牌挚友优惠券"
 VIDEO_EXAM_PREPARATION_DISCOUNT_LABEL = "备考季专享"
 UPGRADE_DISCOUNT_RULES = {
     "science-season-lifetime": {2},
@@ -27,6 +25,7 @@ class PurchasePricing:
     discount_label: str
     is_discounted: bool
     automatic_discount_amount: Decimal = Decimal("0.00")
+    brand_friend_coupon_discount_amount: Decimal = Decimal("0.00")
     promotion_discount_amount: Decimal = Decimal("0.00")
     coupon: object | None = None
 
@@ -120,11 +119,11 @@ def _get_automatic_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
     discount_labels = []
 
     if _user_has_upgrade_discount(user=user, offer=offer):
-        discount_amount += UPGRADE_DISCOUNT_AMOUNT
-        discount_labels.append(UPGRADE_DISCOUNT_LABEL)
+        discount_amount += BRAND_FRIEND_COUPON_DISCOUNT_AMOUNT
+        discount_labels.append(BRAND_FRIEND_COUPON_LABEL)
     if _user_has_exam_preparation_other_module_discount(user=user, offer=offer):
-        discount_amount += EXAM_PREPARATION_OTHER_MODULE_DISCOUNT_AMOUNT
-        discount_labels.append(EXAM_PREPARATION_OTHER_MODULE_DISCOUNT_LABEL)
+        discount_amount += BRAND_FRIEND_COUPON_DISCOUNT_AMOUNT
+        discount_labels.append(BRAND_FRIEND_COUPON_LABEL)
 
     if discount_amount <= 0:
         return PurchasePricing(
@@ -145,6 +144,7 @@ def _get_automatic_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
         discount_label=" + ".join(discount_labels) if discount_amount > 0 else "",
         is_discounted=discount_amount > 0,
         automatic_discount_amount=discount_amount,
+        brand_friend_coupon_discount_amount=discount_amount,
     )
 
 
@@ -180,6 +180,9 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
             ),
             is_discounted=True,
             automatic_discount_amount=automatic.automatic_discount_amount,
+            brand_friend_coupon_discount_amount=(
+                automatic.brand_friend_coupon_discount_amount
+            ),
             promotion_discount_amount=promotion_discount,
             coupon=candidate,
         )

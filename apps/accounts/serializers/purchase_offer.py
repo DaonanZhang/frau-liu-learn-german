@@ -17,6 +17,7 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
     final_price_amount = serializers.SerializerMethodField()
     original_price_amount = serializers.SerializerMethodField()
     discount_amount = serializers.SerializerMethodField()
+    brand_friend_coupon_discount_amount = serializers.SerializerMethodField()
     discount_label = serializers.SerializerMethodField()
     is_discounted_for_user = serializers.SerializerMethodField()
     access_duration_days = serializers.SerializerMethodField()
@@ -39,6 +40,7 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
             "original_price_amount",
             "final_price_amount",
             "discount_amount",
+            "brand_friend_coupon_discount_amount",
             "discount_label",
             "is_discounted_for_user",
             "access_duration_days",
@@ -75,6 +77,9 @@ class PurchaseOfferReadSerializer(serializers.ModelSerializer):
 
     def get_discount_amount(self, obj: PurchaseOffer) -> str:
         return f"{self._get_pricing(obj).discount_amount:.2f}"
+
+    def get_brand_friend_coupon_discount_amount(self, obj: PurchaseOffer) -> str:
+        return f"{self._get_pricing(obj).brand_friend_coupon_discount_amount:.2f}"
 
     def get_discount_label(self, obj: PurchaseOffer) -> str:
         return self._get_pricing(obj).discount_label

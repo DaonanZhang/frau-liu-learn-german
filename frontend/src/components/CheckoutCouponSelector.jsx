@@ -46,7 +46,12 @@ export default function CheckoutCouponSelector({
   onSelectNone,
 }) {
   const choices = Array.isArray(couponBundle?.choices) ? couponBundle.choices : [];
-  const availableCount = Number(couponBundle?.available_count) || 0;
+  const brandFriendCouponDiscount = Number(
+    couponBundle?.no_coupon_pricing?.brand_friend_coupon_discount_amount
+  ) || 0;
+  const hasBrandFriendCoupon = brandFriendCouponDiscount > 0;
+  const availableCount = (Number(couponBundle?.available_count) || 0)
+    + (hasBrandFriendCoupon ? 1 : 0);
   const selectedChoice = choices.find(
     (choice) => choice?.coupon?.id === selectedCouponId
   );
@@ -64,9 +69,11 @@ export default function CheckoutCouponSelector({
           <strong>优惠券</strong>
           <small>
             {selectedChoice
-              ? `已选优惠券 · 本单减 ¥${formatAmount(selectedChoice.pricing?.promotion_discount_amount)}`
+              ? `${hasBrandFriendCoupon ? "品牌挚友券 + " : ""}已选优惠券 · 最终优惠 ¥${formatAmount(selectedChoice.pricing?.total_discount_amount)}`
               : selectedCouponId === null && couponBundle
-                ? "不使用优惠券"
+                ? hasBrandFriendCoupon
+                  ? `品牌挚友优惠券已自动使用 · 本单减 ¥${formatAmount(brandFriendCouponDiscount)}`
+                  : "不使用优惠券"
                 : couponBundle
                   ? "暂无适用优惠券"
                   : "正在匹配可用优惠券"}
@@ -99,12 +106,31 @@ export default function CheckoutCouponSelector({
               <div>
                 <div className="module-checkout-page__couponSheetEyebrow">SMART SAVINGS</div>
                 <h2 id="coupon-sheet-title">选择优惠券</h2>
-                <p>{offerTitle || "当前商品"} · 可选择使用或不使用优惠券</p>
+                <p>
+                  {offerTitle || "当前商品"} · {hasBrandFriendCoupon
+                    ? "品牌挚友优惠券已自动叠加，可再选择其他优惠券"
+                    : "可选择使用或不使用优惠券"}
+                </p>
               </div>
               <button type="button" onClick={onClose} aria-label="关闭">×</button>
             </div>
 
             <div className="module-checkout-page__couponChoices">
+              {hasBrandFriendCoupon ? (
+                <div className="module-checkout-page__couponChoice module-checkout-page__couponChoice--brandFriend is-selected">
+                  <span className="module-checkout-page__couponChoiceValue">
+                    <strong><small>¥</small>{formatAmount(brandFriendCouponDiscount)}</strong>
+                    <small>无门槛</small>
+                  </span>
+                  <span className="module-checkout-page__couponChoiceBody">
+                    <strong>品牌挚友优惠券</strong>
+                    <small>长期有效 · 每笔订单自动使用</small>
+                    <em>可与其他优惠券叠加</em>
+                  </span>
+                  <span className="module-checkout-page__couponRadio" aria-hidden="true">✓</span>
+                </div>
+              ) : null}
+
               {choices.map((choice) => {
                 const coupon = choice.coupon;
                 const checked = selectedCouponId === coupon.id;
@@ -138,8 +164,12 @@ export default function CheckoutCouponSelector({
               >
                 <span className="module-checkout-page__couponChoiceNoneIcon" aria-hidden="true">—</span>
                 <span className="module-checkout-page__couponChoiceBody">
-                  <strong>不使用优惠券</strong>
-                  <small>仅保留当前账号自动享有的优惠</small>
+                  <strong>{hasBrandFriendCoupon ? "不使用其他优惠券" : "不使用优惠券"}</strong>
+                  <small>
+                    {hasBrandFriendCoupon
+                      ? "品牌挚友优惠券仍会自动使用"
+                      : "仅保留当前账号自动享有的优惠"}
+                  </small>
                 </span>
                 <span className="module-checkout-page__couponRadio" aria-hidden="true">{selectedCouponId === null ? "✓" : ""}</span>
               </button>

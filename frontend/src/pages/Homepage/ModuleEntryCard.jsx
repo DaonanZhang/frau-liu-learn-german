@@ -82,20 +82,13 @@ function getDisplayPrice(offer) {
 
 function buildCheckoutModalHtml(module, offers) {
   const cards = offers.map((offer) => {
-    const originalPrice = Number(module?.originalPrice);
+    const originalPrice = Number(offer?.original_price_amount ?? offer?.price_amount);
     const displayPrice = getDisplayPrice(offer);
-    const originalPriceHtml = Number.isFinite(originalPrice)
+    const hasDiscount = Number.isFinite(originalPrice)
+      && Number.isFinite(displayPrice)
+      && Math.abs(originalPrice - displayPrice) > 0.005;
+    const originalPriceHtml = hasDiscount
       ? `<span class="module-checkout-modal__price-original">¥${escapeHtml(formatPromoPrice(originalPrice))}</span>`
-      : "";
-    const hasDiscount = Boolean(offer?.is_discounted_for_user) && Number(offer?.discount_amount) > 0;
-    const displayedSavings = Number.isFinite(originalPrice) && Number.isFinite(displayPrice)
-      ? Math.max(0, Number((originalPrice - displayPrice).toFixed(2)))
-      : 0;
-    const discountBadgeHtml = hasDiscount
-      ? `<div class="module-checkout-modal__discount-badge">${escapeHtml(offer?.discount_label || "优惠券优惠")}</div>`
-      : "";
-    const discountNoteHtml = hasDiscount
-      ? `<div class="module-checkout-modal__discount-note">已减 ¥${escapeHtml(formatPromoPrice(displayedSavings))}</div>`
       : "";
 
     return `
@@ -104,14 +97,12 @@ function buildCheckoutModalHtml(module, offers) {
           <div>
             <h3 class="module-checkout-modal__offer-title">${escapeHtml(module?.title || offer?.title || "")}</h3>
             <p class="module-checkout-modal__offer-meta">一经购买，终身有效</p>
-            ${discountBadgeHtml}
           </div>
           <div class="module-checkout-modal__price-block">
-            <div class="module-checkout-modal__price-row">
+            <div class="module-checkout-modal__price-row${hasDiscount ? " module-checkout-modal__price-row--discounted" : ""}">
               ${originalPriceHtml}
               <span class="module-checkout-modal__price-sale${hasDiscount ? " module-checkout-modal__price-sale--discount" : ""}">¥${escapeHtml(formatPromoPrice(displayPrice))}</span>
             </div>
-            ${discountNoteHtml}
           </div>
         </div>
         <p class="module-checkout-modal__offer-description">解锁 ${escapeHtml(module?.title || "")} 全部正式学习内容、工具与后续学习体验。</p>

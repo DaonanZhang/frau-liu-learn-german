@@ -716,7 +716,8 @@ class AlipayPaymentApiTests(APITestCase):
         offer_data = next(item for item in response.data if item["code"] == exam_offer.code)
         self.assertEqual(offer_data["discount_amount"], "5.00")
         self.assertEqual(offer_data["final_price_amount"], "24.90")
-        self.assertEqual(offer_data["discount_label"], "品牌挚友专享")
+        self.assertEqual(offer_data["discount_label"], "品牌挚友优惠券")
+        self.assertEqual(offer_data["brand_friend_coupon_discount_amount"], "5.00")
 
         purchase = self.client.post(
             "/api/accounts/payments/alipay/create/",

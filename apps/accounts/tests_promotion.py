@@ -370,6 +370,10 @@ class PromotionCodeTests(APITestCase):
         self.assertTrue(selected["is_applicable"])
         self.assertEqual(selected["pricing"]["original_amount"], "59.90")
         self.assertEqual(selected["pricing"]["automatic_discount_amount"], "5.00")
+        self.assertEqual(
+            selected["pricing"]["brand_friend_coupon_discount_amount"],
+            "5.00",
+        )
         self.assertEqual(selected["pricing"]["promotion_discount_amount"], "10.00")
         self.assertEqual(selected["pricing"]["final_amount"], "44.90")
 

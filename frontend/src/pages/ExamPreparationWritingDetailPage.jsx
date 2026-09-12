@@ -15,8 +15,8 @@ import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./ExamPreparationWritingDetailPage.css";
 
-function renderStoredLineBreaks(text, fallback) {
-  return String(text || fallback).split(/<br\s*\/?>/gi).map((part, index) => (
+function renderStoredLineBreaks(text, fallback = "") {
+  return String(text || fallback).split(/<br\s*\/?>|\r\n?|\n/gi).map((part, index) => (
     <span key={`${index}-${part}`}>
       {index > 0 ? <br /> : null}{part}
     </span>
@@ -419,7 +419,7 @@ export default function ExamPreparationWritingDetailPage() {
                   onClick={toggleFavorite}
                 />
               </div>
-              <p>{draftText || "你还没有输入内容。"}</p>
+              <p>{renderStoredLineBreaks(draftText, "你还没有输入内容。")}</p>
             </article>
 
             {exampleTexts.map((example, index) => (
@@ -438,7 +438,7 @@ export default function ExamPreparationWritingDetailPage() {
                     label="收藏 Mustertext"
                   />
                 </div>
-                <p>{example.example_text}</p>
+                <p>{renderStoredLineBreaks(example.example_text)}</p>
               </article>
             ))}
           </section>

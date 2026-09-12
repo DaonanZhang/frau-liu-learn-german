@@ -255,32 +255,6 @@
   font-weight: 800;
 }
 
-.module-checkout-page__offer-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 0.6rem;
-  padding: 0.38rem 0.76rem;
-  border-radius: 999px;
-  background: #fff1f2;
-  border: 1px solid #fecdd3;
-  color: #dc2626;
-  font-size: 0.76rem;
-  font-weight: 900;
-}
-
-.module-checkout-page__offer-badge--inline {
-  margin-top: 0;
-  margin-right: auto;
-  margin-left: auto;
-  width: fit-content;
-}
-
-.module-checkout-page__offer-badge--brand-friend {
-  border-color: #a7d9d2;
-  background: #edfdf7;
-  color: var(--checkout-accent);
-}
-
 .module-checkout-page__price-block {
   display: flex;
   flex-direction: column;
@@ -294,22 +268,15 @@
   align-items: baseline;
   justify-content: center;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  width: 100%;
 }
 
-.module-checkout-page__price-list {
-  color: #111827;
-  font-size: 0.95rem;
-  font-weight: 700;
-  text-decoration: line-through;
-  text-decoration-thickness: 1.5px;
-  text-decoration-color: rgba(17, 24, 39, 0.55);
+.module-checkout-page__price-row--discounted {
+  justify-content: space-between;
 }
 
 .module-checkout-page__price-original {
-  color: #dc2626;
-  font-size: 1.45rem;
-  font-weight: 900;
+  color: #64748b;
 }
 
 .module-checkout-page__price-original--discounted {
@@ -328,19 +295,6 @@
 
 .module-checkout-page__price-sale--discount {
   color: #dc2626;
-}
-
-.module-checkout-page__price-sale--brand-friend,
-.module-checkout-page__discount-note--brand-friend {
-  color: var(--checkout-accent);
-}
-
-.module-checkout-page__discount-note {
-  margin-top: 0.32rem;
-  color: #dc2626;
-  font-size: 0.82rem;
-  font-weight: 900;
-  text-align: center;
 }
 
 .module-checkout-page__offer-description {
@@ -639,6 +593,21 @@
   filter: grayscale(0.75);
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.module-checkout-page__couponChoice--brandFriend {
+  border-color: #9fd8cf;
+  background: #f3fbf9;
+  cursor: default;
+}
+
+.module-checkout-page__couponChoice--brandFriend .module-checkout-page__couponChoiceValue {
+  background: #e2f5f1;
+  color: #17766d;
+}
+
+.module-checkout-page__couponChoice--brandFriend .module-checkout-page__couponChoiceBody em {
+  color: #17766d;
 }
 
 .module-checkout-page__couponChoiceValue {

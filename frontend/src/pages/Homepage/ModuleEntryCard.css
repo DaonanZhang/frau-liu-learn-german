@@ -354,19 +354,6 @@
   font-weight: 700;
 }
 
-.module-checkout-modal__discount-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 0.55rem;
-  padding: 0.34rem 0.7rem;
-  border-radius: 999px;
-  background: #edfdf3;
-  border: 1px solid #9be2b4;
-  color: #157347;
-  font-size: 0.76rem;
-  font-weight: 800;
-}
-
 .module-checkout-modal__price-block {
   display: flex;
   flex-direction: column;
@@ -377,7 +364,13 @@
 .module-checkout-modal__price-row {
   display: flex;
   align-items: baseline;
+  justify-content: flex-end;
   gap: 0.5rem;
+  min-width: 9rem;
+}
+
+.module-checkout-modal__price-row--discounted {
+  justify-content: space-between;
 }
 
 .module-checkout-modal__price-original {
@@ -395,13 +388,6 @@
 
 .module-checkout-modal__price-sale--discount {
   color: #15803d;
-}
-
-.module-checkout-modal__discount-note {
-  margin-top: 0.28rem;
-  color: #15803d;
-  font-size: 0.8rem;
-  font-weight: 800;
 }
 
 .module-checkout-modal__offer-description {

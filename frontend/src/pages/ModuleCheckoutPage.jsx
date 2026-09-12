@@ -20,16 +20,6 @@ function formatPromoPrice(amount) {
   return numeric.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 }
 
-function getDisplayedSavings({ referenceOriginalPrice, originalPrice, displayPrice }) {
-  const displayedOriginalPrice = Number.isFinite(referenceOriginalPrice)
-    ? referenceOriginalPrice
-    : originalPrice;
-  if (!Number.isFinite(displayedOriginalPrice) || !Number.isFinite(displayPrice)) {
-    return 0;
-  }
-  return Math.max(0, Number((displayedOriginalPrice - displayPrice).toFixed(2)));
-}
-
 function getDisplayPrice(offer) {
   const finalPrice = Number(offer?.final_price_amount);
   if (Number.isFinite(finalPrice)) {
@@ -44,15 +34,6 @@ function getOriginalPrice(offer) {
     return originalPrice;
   }
   return Number(offer?.price_amount);
-}
-
-function getReferenceOriginalPrice(module, offer) {
-  const durationDays = Number(offer?.access_duration_days);
-  const durationPrice = Number(module?.originalPricesByDuration?.[durationDays]);
-  if (Number.isFinite(durationPrice)) {
-    return durationPrice;
-  }
-  return Number(module?.originalPrice);
 }
 
 function getCurrentModuleExpiry(user, module) {
@@ -409,28 +390,7 @@ export default function ModuleCheckoutPage() {
                   : selectedChoice?.pricing;
                 const displayPrice = Number(selectedPricing?.final_amount ?? getDisplayPrice(offer));
                 const originalPrice = Number(selectedPricing?.original_amount ?? getOriginalPrice(offer));
-                const referenceOriginalPrice = getReferenceOriginalPrice(module, offer);
-                const totalDiscount = Number(
-                  selectedPricing?.total_discount_amount ?? offer?.discount_amount
-                );
-                const displayedSavings = getDisplayedSavings({
-                  referenceOriginalPrice,
-                  originalPrice,
-                  displayPrice,
-                });
-                const effectiveSavings = displayedSavings > 0
-                  ? displayedSavings
-                  : Math.max(0, Number.isFinite(totalDiscount) ? totalDiscount : 0);
-                const hasDiscount = effectiveSavings > 0;
-                const automaticDiscountLabel = String(
-                  couponBundle?.no_coupon_pricing?.discount_label
-                    || offer?.discount_label
-                    || ""
-                );
-                const hasBrandFriendDiscount =
-                  isExamPreparation
-                  && automaticDiscountLabel.includes("品牌挚友专享");
-                const showOfferPriceBeforeCoupon =
+                const hasDiscount =
                   Number.isFinite(originalPrice)
                   && Number.isFinite(displayPrice)
                   && Math.abs(originalPrice - displayPrice) > 0.005;
@@ -475,34 +435,19 @@ export default function ModuleCheckoutPage() {
                       <aside className="module-checkout-page__offer-aside">
                         <div className="module-checkout-page__price-card">
                           <div className="module-checkout-page__price-caption">当前支付金额</div>
-                          {hasDiscount ? (
-                            <div className={`module-checkout-page__offer-badge module-checkout-page__offer-badge--inline${hasBrandFriendDiscount ? " module-checkout-page__offer-badge--brand-friend" : ""}`}>
-                              {hasBrandFriendDiscount ? "品牌挚友专享" : "优惠"}
-                            </div>
-                          ) : null}
                           <div className="module-checkout-page__price-block">
-                            <div className="module-checkout-page__price-row">
-                              {Number.isFinite(referenceOriginalPrice) ? (
-                                <span className="module-checkout-page__price-list">
-                                  ¥{formatPromoPrice(referenceOriginalPrice)}
-                                </span>
-                              ) : null}
-                              {Number.isFinite(originalPrice) && (!hasDiscount || showOfferPriceBeforeCoupon) ? (
-                                <span className={`module-checkout-page__price-original${hasDiscount ? " module-checkout-page__price-original--discounted" : ""}`}>
+                            <div className={`module-checkout-page__price-row${hasDiscount ? " module-checkout-page__price-row--discounted" : ""}`}>
+                              {hasDiscount ? (
+                                <span className="module-checkout-page__price-original module-checkout-page__price-original--discounted">
                                   ¥{formatPromoPrice(originalPrice)}
                                 </span>
                               ) : null}
-                              {hasDiscount ? (
-                                <span className={`module-checkout-page__price-sale module-checkout-page__price-sale--discount${hasBrandFriendDiscount ? " module-checkout-page__price-sale--brand-friend" : ""}`}>
+                              {Number.isFinite(displayPrice) ? (
+                                <span className={`module-checkout-page__price-sale${hasDiscount ? " module-checkout-page__price-sale--discount" : ""}`}>
                                   ¥{formatPromoPrice(displayPrice)}
                                 </span>
                               ) : null}
                             </div>
-                            {hasDiscount ? (
-                              <div className={`module-checkout-page__discount-note${hasBrandFriendDiscount ? " module-checkout-page__discount-note--brand-friend" : ""}`}>
-                                已减 ¥{formatPromoPrice(effectiveSavings)}
-                              </div>
-                            ) : null}
                           </div>
 
                           {isAuthenticated ? (

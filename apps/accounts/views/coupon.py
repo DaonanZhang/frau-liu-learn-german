@@ -19,6 +19,9 @@ def _pricing_payload(pricing) -> dict[str, str]:
         "final_amount": f"{pricing.final_amount:.2f}",
         "total_discount_amount": f"{pricing.discount_amount:.2f}",
         "automatic_discount_amount": f"{pricing.automatic_discount_amount:.2f}",
+        "brand_friend_coupon_discount_amount": (
+            f"{pricing.brand_friend_coupon_discount_amount:.2f}"
+        ),
         "promotion_discount_amount": f"{pricing.promotion_discount_amount:.2f}",
         "discount_label": pricing.discount_label,
     }

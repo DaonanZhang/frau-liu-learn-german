@@ -95,7 +95,7 @@ export default function SiteFooter({ className = "" }) {
               className="site-footer__reportBtn"
               onClick={openBugReport}
             >
-              汇报错误
+              发现错误
             </button>
           </>
         ) : null}

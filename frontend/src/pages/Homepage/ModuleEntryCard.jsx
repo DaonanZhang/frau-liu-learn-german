@@ -87,8 +87,8 @@ function buildCheckoutModalHtml(module, offers) {
     const hasDiscount = Number.isFinite(originalPrice)
       && Number.isFinite(displayPrice)
       && Math.abs(originalPrice - displayPrice) > 0.005;
-    const originalPriceHtml = hasDiscount
-      ? `<span class="module-checkout-modal__price-original">¥${escapeHtml(formatPromoPrice(originalPrice))}</span>`
+    const originalPriceHtml = Number.isFinite(originalPrice)
+      ? `<span class="module-checkout-modal__price-original${hasDiscount ? " module-checkout-modal__price-original--discounted" : ""}">¥${escapeHtml(formatPromoPrice(originalPrice))}</span>`
       : "";
 
     return `
@@ -99,7 +99,7 @@ function buildCheckoutModalHtml(module, offers) {
             <p class="module-checkout-modal__offer-meta">一经购买，终身有效</p>
           </div>
           <div class="module-checkout-modal__price-block">
-            <div class="module-checkout-modal__price-row${hasDiscount ? " module-checkout-modal__price-row--discounted" : ""}">
+            <div class="module-checkout-modal__price-row">
               ${originalPriceHtml}
               <span class="module-checkout-modal__price-sale${hasDiscount ? " module-checkout-modal__price-sale--discount" : ""}">¥${escapeHtml(formatPromoPrice(displayPrice))}</span>
             </div>

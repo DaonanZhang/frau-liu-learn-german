@@ -266,22 +266,18 @@
 .module-checkout-page__price-row {
   display: flex;
   align-items: baseline;
-  justify-content: center;
+  justify-content: space-between;
   gap: 0.5rem;
   width: 100%;
 }
 
-.module-checkout-page__price-row--discounted {
-  justify-content: space-between;
-}
-
 .module-checkout-page__price-original {
   color: #64748b;
+  font-size: 1.02rem;
+  font-weight: 800;
 }
 
 .module-checkout-page__price-original--discounted {
-  font-size: 1.02rem;
-  font-weight: 800;
   text-decoration: line-through;
   text-decoration-thickness: 2px;
   text-decoration-color: rgba(220, 38, 38, 0.75);

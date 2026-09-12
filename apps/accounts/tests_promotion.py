@@ -550,6 +550,18 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(application.promotion_discount_amount, Decimal("10.00"))
         self.assertEqual(application.final_amount, Decimal("29.90"))
 
+        wallet = self.client.get("/api/accounts/coupons/")
+        choices = self.client.get(
+            "/api/accounts/coupons/choices/",
+            {"offer_code": self.offer.code},
+        )
+        self.assertEqual(wallet.status_code, status.HTTP_200_OK)
+        self.assertEqual(wallet.data, [])
+        self.assertEqual(choices.status_code, status.HTTP_200_OK)
+        self.assertEqual(choices.data["choices"], [])
+        self.assertEqual(choices.data["available_count"], 0)
+        self.assertIsNone(choices.data["default_coupon_id"])
+
     @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=False)
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_closed_payment_releases_reserved_coupon(self, mock_get_alipay_service: Mock) -> None:

@@ -25,14 +25,12 @@ const COUNTRY_CODE_OPTIONS = [
 
 const COUPON_FILTERS = [
   { key: "available", label: "可使用" },
-  { key: "used", label: "已使用" },
   { key: "expired", label: "已失效" },
 ];
 
 const COUPON_STATUS_LABELS = {
   available: "可使用",
   reserved: "订单占用中",
-  used: "已使用",
   expired: "已过期",
   revoked: "已失效",
 };
@@ -44,7 +42,7 @@ function couponFilterKey(coupon) {
   if (status === "available" || status === "reserved") {
     return "available";
   }
-  return status === "used" ? "used" : "expired";
+  return "expired";
 }
 
 function formatCouponDate(value) {
@@ -229,7 +227,11 @@ export default function ProfilePage() {
         setCouponError("");
         const data = await fetchMyCoupons();
         if (!aborted) {
-          setCoupons(Array.isArray(data) ? data : []);
+          setCoupons(
+            Array.isArray(data)
+              ? data.filter((coupon) => coupon?.status !== "used")
+              : []
+          );
         }
       } catch (error) {
         if (!aborted) {

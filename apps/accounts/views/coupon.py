@@ -40,6 +40,7 @@ class UserCouponViewSet(ReadOnlyModelViewSet):
         ).order_by("-created_at")
         return (
             UserCoupon.objects.filter(user=self.request.user)
+            .exclude(status=UserCoupon.Status.USED)
             .select_related(
                 "promotion_code",
                 "applicable_module",

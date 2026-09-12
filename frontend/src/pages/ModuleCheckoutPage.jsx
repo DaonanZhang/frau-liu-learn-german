@@ -389,7 +389,7 @@ export default function ModuleCheckoutPage() {
                   ? couponBundle?.no_coupon_pricing
                   : selectedChoice?.pricing;
                 const displayPrice = Number(selectedPricing?.final_amount ?? getDisplayPrice(offer));
-                const originalPrice = Number(selectedPricing?.original_amount ?? getOriginalPrice(offer));
+                const originalPrice = getOriginalPrice(offer);
                 const hasDiscount =
                   Number.isFinite(originalPrice)
                   && Number.isFinite(displayPrice)
@@ -436,9 +436,9 @@ export default function ModuleCheckoutPage() {
                         <div className="module-checkout-page__price-card">
                           <div className="module-checkout-page__price-caption">当前支付金额</div>
                           <div className="module-checkout-page__price-block">
-                            <div className={`module-checkout-page__price-row${hasDiscount ? " module-checkout-page__price-row--discounted" : ""}`}>
-                              {hasDiscount ? (
-                                <span className="module-checkout-page__price-original module-checkout-page__price-original--discounted">
+                            <div className="module-checkout-page__price-row">
+                              {Number.isFinite(originalPrice) ? (
+                                <span className={`module-checkout-page__price-original${hasDiscount ? " module-checkout-page__price-original--discounted" : ""}`}>
                                   ¥{formatPromoPrice(originalPrice)}
                                 </span>
                               ) : null}

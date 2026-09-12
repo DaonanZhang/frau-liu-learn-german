@@ -563,7 +563,7 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
         payment_id = purchase.data["payment_id"]
         coupon = UserCoupon.objects.get(pk=coupon_id)
-        self.assertEqual(coupon.status, UserCoupon.Status.RESERVED)
+        self.assertEqual(coupon.status, UserCoupon.Status.AVAILABLE)
 
         _mark_open_payment_closed(payment_id=payment_id)
 
@@ -572,6 +572,38 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(coupon.status, UserCoupon.Status.AVAILABLE)
         self.assertIsNone(coupon.reserved_payment_id)
         self.assertEqual(application.status, PaymentDiscountApplication.Status.RELEASED)
+
+    @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=False)
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_pending_payment_does_not_reserve_coupon(
+        self,
+        mock_get_alipay_service: Mock,
+    ) -> None:
+        mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"
+        coupon_id = self.redeem().data["coupon"]["id"]
+        purchase = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {
+                "offer_code": self.offer.code,
+                "coupon_id": coupon_id,
+                "idempotency_key": "00000000-0000-4000-8000-000000000109",
+            },
+            format="json",
+        )
+        payment = AlipayWebsitePayment.objects.get(pk=purchase.data["payment_id"])
+
+        response = self.client.get(
+            "/api/accounts/coupons/choices/",
+            {"offer_code": self.offer.code},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["available_count"], 1)
+        coupon = UserCoupon.objects.get(pk=coupon_id)
+        application = PaymentDiscountApplication.objects.get(payment=payment)
+        self.assertEqual(coupon.status, UserCoupon.Status.AVAILABLE)
+        self.assertIsNone(coupon.reserved_payment_id)
+        self.assertEqual(application.status, PaymentDiscountApplication.Status.RESERVED)
 
     @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True, DEBUG=True)
     def test_same_coupon_purchase_intent_is_idempotent(self) -> None:

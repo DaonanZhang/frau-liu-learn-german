@@ -229,11 +229,25 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
             application.status = PaymentDiscountApplication.Status.APPLIED
             application.applied_at = payment.paid_at or now
             application.save(update_fields=["status", "applied_at", "updated_at"])
-        if coupon.status == UserCoupon.Status.RESERVED and coupon.reserved_payment_id == payment.id:
+        if coupon.status in {
+            UserCoupon.Status.AVAILABLE,
+            UserCoupon.Status.RESERVED,
+        }:
             coupon.status = UserCoupon.Status.USED
+            coupon.reserved_payment = None
+            coupon.reserved_at = None
             coupon.used_payment = payment
             coupon.used_at = payment.paid_at or now
-            coupon.save(update_fields=["status", "used_payment", "used_at", "updated_at"])
+            coupon.save(
+                update_fields=[
+                    "status",
+                    "reserved_payment",
+                    "reserved_at",
+                    "used_payment",
+                    "used_at",
+                    "updated_at",
+                ]
+            )
         return
 
     if payment.status == AlipayWebsitePayment.Status.REFUNDED:
@@ -254,10 +268,11 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
     if payment.status in {
         AlipayWebsitePayment.Status.CLOSED,
         AlipayWebsitePayment.Status.FAILED,
-    } and application.status == PaymentDiscountApplication.Status.RESERVED:
-        application.status = PaymentDiscountApplication.Status.RELEASED
-        application.released_at = now
-        application.save(update_fields=["status", "released_at", "updated_at"])
+    }:
+        if application.status == PaymentDiscountApplication.Status.RESERVED:
+            application.status = PaymentDiscountApplication.Status.RELEASED
+            application.released_at = now
+            application.save(update_fields=["status", "released_at", "updated_at"])
         if coupon.status == UserCoupon.Status.RESERVED and coupon.reserved_payment_id == payment.id:
             coupon.status = (
                 UserCoupon.Status.AVAILABLE

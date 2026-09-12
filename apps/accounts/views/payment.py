@@ -847,13 +847,6 @@ class CreateAlipayPurchaseAPIView(APIView):
                     campaign_organization_snapshot=pricing.coupon.promotion_code.organization_name,
                     promotion_code_remark_snapshot=pricing.coupon.promotion_code.remark,
                 )
-                pricing.coupon.status = UserCoupon.Status.RESERVED
-                pricing.coupon.reserved_payment = payment
-                pricing.coupon.reserved_at = timezone.now()
-                pricing.coupon.save(
-                    update_fields=["status", "reserved_payment", "reserved_at", "updated_at"]
-                )
-
         if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
             try:
                 pay_url = _simulate_local_paid_purchase(

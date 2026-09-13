@@ -40,10 +40,31 @@ function getLoginErrorPresentation(err) {
     };
   }
 
+  if (errorCode === "concurrent_session_limit") {
+    return {
+      title: "登录设备已达上限",
+      text: errorMessage || "该账号最多可同时在 3 个设备登录，请先在其他设备退出。",
+    };
+  }
+
   return {
     title: "暂时无法登录",
     text: "服务器暂时出现问题，请稍后再试。",
   };
+}
+
+function getOrCreateDeviceId() {
+  const storageKey = "accountDeviceId";
+  const existing = localStorage.getItem(storageKey);
+  if (existing) {
+    return existing;
+  }
+
+  const deviceId = globalThis.crypto?.randomUUID
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  localStorage.setItem(storageKey, deviceId);
+  return deviceId;
 }
 
 /**
@@ -60,6 +81,7 @@ export async function login(telephone, password, countryCode) {
         telephone,
         country_code: countryCode,
         password,
+        device_id: getOrCreateDeviceId(),
       },
     });
 
@@ -97,13 +119,29 @@ export async function login(telephone, password, countryCode) {
   }
 }
 
-/**
- * Logout (client-side only).
- * Server-side blacklist can be added later if needed.
- */
-export function logout() {
+/** Revoke the current server-side login session and clear local tokens. */
+export async function logout() {
+  const refreshToken = localStorage.getItem("refreshToken");
   localStorage.removeItem("accessToken");
   localStorage.removeItem("refreshToken");
+
+  if (!refreshToken) {
+    return;
+  }
+
+  try {
+    await fetch("/api/accounts/auth/logout/", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ refresh: refreshToken }),
+      credentials: "include",
+    });
+  } catch (error) {
+    console.error("[logout] failed:", error);
+  }
 }
 
 /* =========================================================

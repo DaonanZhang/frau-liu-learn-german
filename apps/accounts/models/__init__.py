@@ -9,6 +9,7 @@ from .alipay_payment import AlipayWebsitePayment
 from .payment_grant_task import PaymentGrantTask
 from .promotion import PromotionCodeRecord, UserCoupon, PaymentDiscountApplication
 from .bug_report import BugReport
+from .login_session import AccountLoginSession
 
 __all__ = [
     "User",
@@ -24,4 +25,5 @@ __all__ = [
     "UserCoupon",
     "PaymentDiscountApplication",
     "BugReport",
+    "AccountLoginSession",
 ]

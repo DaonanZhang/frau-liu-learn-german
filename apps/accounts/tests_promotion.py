@@ -11,7 +11,6 @@ from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
-from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import (
     AlipayWebsitePayment,
@@ -83,7 +82,17 @@ class PromotionCodeTests(APITestCase):
 
     def test_redeem_accepts_the_same_bearer_jwt_used_by_the_frontend(self) -> None:
         self.client.force_authenticate(user=None)
-        access_token = str(RefreshToken.for_user(self.user).access_token)
+        login_response = self.client.post(
+            "/api/accounts/auth/login/",
+            {
+                "telephone": self.user.telephone,
+                "country_code": self.user.country_code,
+                "password": "pass-123456",
+                "device_id": "promotion-test-device",
+            },
+            format="json",
+        )
+        access_token = login_response.data["access"]
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
 
         response = self.client.post(

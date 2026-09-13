@@ -300,3 +300,8 @@ SIMPLE_JWT = {
         days=env.int("JWT_REFRESH_DAYS", default=14)
     ),
 }
+
+MAX_CONCURRENT_LOGIN_SESSIONS = env.int(
+    "MAX_CONCURRENT_LOGIN_SESSIONS",
+    default=3,
+)

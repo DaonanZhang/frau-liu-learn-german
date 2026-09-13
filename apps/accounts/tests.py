@@ -18,7 +18,13 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import ActivationCodeRecord, Entitlement, Module, ModuleSeason
+from apps.accounts.models import (
+    AccountLoginSession,
+    ActivationCodeRecord,
+    Entitlement,
+    Module,
+    ModuleSeason,
+)
 from apps.accounts.security.activation import apply_activation_code_for_user
 from apps.accounts.services.activation_codes import (
     ActivationEntitlementItem,
@@ -137,6 +143,83 @@ class MaintenanceModeAllowlistTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+@override_settings(MAX_CONCURRENT_LOGIN_SESSIONS=3)
+class ConcurrentLoginSessionTests(APITestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.user = get_user_model().objects.create_user(
+            telephone="13900139000",
+            country_code="+86",
+            password="pass-123456",
+        )
+
+    def login(self, device_id: str):
+        return self.client.post(
+            "/api/accounts/auth/login/",
+            {
+                "telephone": self.user.telephone,
+                "country_code": "+86",
+                "password": "pass-123456",
+                "device_id": device_id,
+            },
+            format="json",
+        )
+
+    def test_fourth_device_is_rejected(self) -> None:
+        for device_number in range(1, 4):
+            response = self.login(f"device-{device_number}")
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        response = self.login("device-4")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["code"], "concurrent_session_limit")
+        self.assertEqual(AccountLoginSession.objects.filter(user=self.user).count(), 3)
+
+    def test_relogin_on_same_device_replaces_its_tokens_without_using_another_slot(self) -> None:
+        first_response = self.login("same-device")
+        second_response = self.login("same-device")
+
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(AccountLoginSession.objects.filter(user=self.user).count(), 1)
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {first_response.data['access']}"
+        )
+        old_token_response = self.client.get("/api/accounts/users/me/")
+        self.assertEqual(old_token_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {second_response.data['access']}"
+        )
+        current_token_response = self.client.get("/api/accounts/users/me/")
+        self.assertEqual(current_token_response.status_code, status.HTTP_200_OK)
+
+    def test_logout_releases_a_device_slot_and_blocks_refresh(self) -> None:
+        first_response = self.login("device-1")
+        self.login("device-2")
+        self.login("device-3")
+
+        logout_response = self.client.post(
+            "/api/accounts/auth/logout/",
+            {"refresh": first_response.data["refresh"]},
+            format="json",
+        )
+        self.assertEqual(logout_response.status_code, status.HTTP_204_NO_CONTENT)
+
+        refresh_response = self.client.post(
+            "/api/accounts/auth/refresh/",
+            {"refresh": first_response.data["refresh"]},
+            format="json",
+        )
+        self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(refresh_response.data["code"], "login_session_invalid")
+
+        self.client.credentials()
+        replacement_response = self.login("device-4")
+        self.assertEqual(replacement_response.status_code, status.HTTP_200_OK)
 
 
 @override_settings(

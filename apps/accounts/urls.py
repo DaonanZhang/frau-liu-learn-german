@@ -25,7 +25,7 @@ from apps.accounts.views.payment import (
     CreateAlipayDebugPaymentAPIView,
 )
 
-from apps.accounts.views.auth import LoginAPIView, RefreshAPIView
+from apps.accounts.views.auth import LoginAPIView, LogoutAPIView, RefreshAPIView
 from apps.accounts.views.password_reset import (
     PasswordResetConfirmAPIView,
     PasswordResetRequestAPIView,
@@ -94,6 +94,11 @@ urlpatterns += [
         "auth/refresh/",
         RefreshAPIView.as_view(),
         name="token-refresh",
+    ),
+    path(
+        "auth/logout/",
+        LogoutAPIView.as_view(),
+        name="logout",
     ),
     path(
         "auth/password-reset/request/",

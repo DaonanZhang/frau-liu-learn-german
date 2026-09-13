@@ -16,11 +16,12 @@ PLAN_BY_DAYS = {
     30: ActivationPlan.M1,
     60: ActivationPlan.M2,
     90: ActivationPlan.M3,
+    180: ActivationPlan.M6,
 }
 
 
 class Command(BaseCommand):
-    help = "Generate database-backed 30/60/90-day activation codes for exam_preparation."
+    help = "Generate database-backed 30/60/90/180-day activation codes for exam_preparation."
 
     def add_arguments(self, parser):
         parser.add_argument("--days", type=int, choices=PLAN_BY_DAYS, required=True)

@@ -222,18 +222,22 @@ class PromotionCodeTests(APITestCase):
             )
         )
 
-    def test_generation_command_defaults_to_unlimited_coupon(self) -> None:
+    def test_generation_command_uses_global_five_yuan_defaults(self) -> None:
         output = StringIO()
         call_command(
             "generate_promotion_codes",
             campaign_name="默认长期券",
             organization="机构 A",
-            discount=Decimal("3.00"),
             count=1,
             stdout=output,
         )
 
         generated = PromotionCodeRecord.objects.get(campaign_name="默认长期券")
+        self.assertEqual(generated.discount_amount, Decimal("5.00"))
+        self.assertEqual(generated.minimum_order_amount, Decimal("0.00"))
+        self.assertIsNone(generated.applicable_module_id)
+        self.assertIsNone(generated.applicable_season_id)
+        self.assertIsNone(generated.applicable_offer_id)
         self.assertIsNone(generated.coupon_valid_days)
         self.assertGreater(
             generated.expires_at,

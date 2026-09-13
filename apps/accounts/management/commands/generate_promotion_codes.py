@@ -16,7 +16,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser) -> None:
         parser.add_argument("--campaign-name", required=True)
         parser.add_argument("--organization", default="")
-        parser.add_argument("--discount", required=True, type=Decimal)
+        parser.add_argument("--discount", type=Decimal, default=Decimal("5.00"))
         parser.add_argument("--count", type=int, default=1)
         parser.add_argument("--expires-days", type=int, default=360)
         parser.add_argument(

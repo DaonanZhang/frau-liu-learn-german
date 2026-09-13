@@ -611,23 +611,25 @@ class ActivationCodeApiTests(APITestCase):
             key="exam_preparation",
             defaults={"name": "备考季", "is_active": True},
         )
-        output = StringIO()
+        for days, expected_plan in ((90, ActivationPlan.M3), (180, ActivationPlan.M6)):
+            with self.subTest(days=days):
+                output = StringIO()
 
-        call_command(
-            "generate_exam_preparation_codes",
-            days=90,
-            count=2,
-            stdout=output,
-        )
+                call_command(
+                    "generate_exam_preparation_codes",
+                    days=days,
+                    count=2,
+                    stdout=output,
+                )
 
-        codes = [line for line in output.getvalue().splitlines() if not line.startswith("#")]
-        self.assertEqual(len(codes), 2)
-        self.assertNotEqual(codes[0], codes[1])
-        for code in codes:
-            payload = verify_activation_code(code)
-            self.assertIsNotNone(payload)
-            self.assertEqual(payload.entitlements[0].module_key, "exam_preparation")
-            self.assertEqual(payload.entitlements[0].plan, ActivationPlan.M3)
+                codes = [line for line in output.getvalue().splitlines() if not line.startswith("#")]
+                self.assertEqual(len(codes), 2)
+                self.assertNotEqual(codes[0], codes[1])
+                for code in codes:
+                    payload = verify_activation_code(code)
+                    self.assertIsNotNone(payload)
+                    self.assertEqual(payload.entitlements[0].module_key, "exam_preparation")
+                    self.assertEqual(payload.entitlements[0].plan, expected_plan)
 
 
 class HomepageSettingApiTests(APITestCase):

@@ -238,6 +238,7 @@ the user's current latest expiry instead of replacing it. A day is an exact
 .venv/bin/python manage.py generate_exam_preparation_codes --days 30 --count 10 --remark "渠道/批次备注"
 .venv/bin/python manage.py generate_exam_preparation_codes --days 60 --count 10 --remark "渠道/批次备注"
 .venv/bin/python manage.py generate_exam_preparation_codes --days 90 --count 10 --remark "渠道/批次备注"
+.venv/bin/python manage.py generate_exam_preparation_codes --days 180 --count 10 --remark "渠道/批次备注"
 ```
 
 Inspect the durable redemption ledger. Omit `--show-code` to keep original codes hidden:
@@ -246,7 +247,7 @@ Inspect the durable redemption ledger. Omit `--show-code` to keep original codes
 .venv/bin/python manage.py list_activation_codes --status consumed --show-code
 ```
 
-Supported durations are exactly `30`, `60`, and `90` days.
+Supported durations are exactly `30`, `60`, `90`, and `180` days.
 
 ## Generate Season 1 And Season 4 Activation Codes In One Run
 

@@ -38,6 +38,20 @@ Example activation-code generation (plaintext is printed below the summary):
 
 ## Generate Promotion Codes
 
+The command defaults to one global CNY 5 coupon with no minimum order. The
+unredeemed promotion code expires after 360 days, while the coupon issued on
+redemption has no separate expiry. Omit `--module`, `--season`, and `--offer`
+to keep the coupon valid for every module and active offer.
+
+Generate one default global code for a channel partner:
+
+```bash
+.venv/bin/python manage.py generate_promotion_codes \
+  --campaign-name "渠道名称" \
+  --organization "渠道账号" \
+  --remark "合作博主"
+```
+
 Generate ten CNY 10 coupons for one institution and one offer:
 
 ```bash

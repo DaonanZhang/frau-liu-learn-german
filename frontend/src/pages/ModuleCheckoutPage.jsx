@@ -6,7 +6,11 @@ import { fetchPurchaseOffers, createAlipayPurchase, savePendingPaymentContext } 
 import { fetchCouponChoices } from "../api/coupons.js";
 import { useAuth } from "../api/auth/useAuth.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
-import { hasModuleAccess } from "../utils/moduleAccess.js";
+import {
+  formatExpiredDuration,
+  getLatestExpiredModuleExpiry,
+  hasModuleAccess,
+} from "../utils/moduleAccess.js";
 import PurchaseFeatureList from "../components/PurchaseFeatureList.jsx";
 import CheckoutCouponSelector from "../components/CheckoutCouponSelector.jsx";
 
@@ -98,6 +102,12 @@ export default function ModuleCheckoutPage() {
   const alreadyHasAccess = useMemo(() => hasModuleAccess(user, module), [user, module]);
   const currentModuleExpiry = useMemo(() => getCurrentModuleExpiry(user, module), [user, module]);
   const isExamPreparation = module?.id === "exam-preparation";
+  const expiredModuleExpiry = useMemo(
+    () => (isExamPreparation && !alreadyHasAccess
+      ? getLatestExpiredModuleExpiry(user, module)
+      : null),
+    [alreadyHasAccess, isExamPreparation, module, user],
+  );
   const requestedCouponId = useMemo(() => {
     const value = Number(searchParams.get("coupon"));
     return Number.isInteger(value) && value > 0 ? value : null;
@@ -354,6 +364,24 @@ export default function ModuleCheckoutPage() {
             </strong>
             <p className="module-checkout-page__current-access-note">
               再次购买时，所选天数会从当前到期时间继续顺延。
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      {isExamPreparation && expiredModuleExpiry ? (
+        <section
+          className="module-checkout-page__current-access module-checkout-page__current-access--expired"
+          aria-label="备考季权限已过期"
+        >
+          <div className="module-checkout-page__current-access-icon" aria-hidden="true">!</div>
+          <div>
+            <div className="module-checkout-page__current-access-label">备考季权限已过期</div>
+            <strong className="module-checkout-page__current-access-date">
+              {formatExpiredDuration(expiredModuleExpiry)}
+            </strong>
+            <p className="module-checkout-page__current-access-note">
+              当前仅可使用每个题型前 3 道免费试用题；重新购买后即可解锁全部题目。
             </p>
           </div>
         </section>

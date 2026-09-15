@@ -14,7 +14,11 @@ import {
   buildStats,
   toSafeNumber,
 } from "./Homepage/homeShared.js";
-import { hasModuleAccess } from "../utils/moduleAccess.js";
+import {
+  formatExpiredDuration,
+  getLatestExpiredModuleExpiry,
+  hasModuleAccess,
+} from "../utils/moduleAccess.js";
 
 import "./Home.css";
 import "./Homepage/ModuleEntryCard.css";
@@ -39,7 +43,7 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function buildPurchaseModalHtml(module) {
+function buildPurchaseModalHtml(module, expiredAt) {
   const image = module?.image
     ? `<img class="module-purchase-modal__image" src="${escapeHtml(module.image)}" alt="${escapeHtml(module.title)}" />`
     : "";
@@ -59,10 +63,17 @@ function buildPurchaseModalHtml(module) {
   const notice = module?.purchaseNotice
     ? `<p class="module-purchase-modal__notice">${escapeHtml(module.purchaseNotice)}</p>`
     : "";
+  const expiredAccess = expiredAt
+    ? `<div class="module-purchase-modal__expired-access">
+        <strong>备考季权限已过期</strong>
+        <span>${escapeHtml(formatExpiredDuration(expiredAt))}</span>
+      </div>`
+    : "";
 
   return `
     <div class="module-purchase-modal">
       ${image}
+      ${expiredAccess}
       ${labels}
       ${description}
       ${features}
@@ -199,6 +210,9 @@ export default function Home() {
             <div className="home-module-grid">
               {modules.map((module) => {
                 const canEnterModule = hasModuleAccess(user, module);
+                const expiredAt = module.id === "exam-preparation"
+                  ? getLatestExpiredModuleExpiry(user, module)
+                  : null;
                 const isExamPreparationComingSoon =
                   module.id === "exam-preparation"
                   && user?.exam_preparation_release_access === false;
@@ -232,7 +246,7 @@ export default function Home() {
 
                       const result = await Swal.fire({
                         title: module?.title || "立刻查看",
-                        html: buildPurchaseModalHtml(module),
+                        html: buildPurchaseModalHtml(module, expiredAt),
                         showCancelButton: true,
                         showDenyButton: true,
                         confirmButtonText: "立刻购买",

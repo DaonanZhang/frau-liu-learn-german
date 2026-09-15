@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { fetchWritingExercises } from "../api/exam_preparation/writingExercises.js";
+import { useAuth } from "../api/auth/useAuth.js";
 import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
 import "./ExamPreparationWritingPage.css";
 
@@ -10,6 +11,7 @@ function extractPreview(text) {
 
 export default function ExamPreparationWritingPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -114,7 +116,7 @@ export default function ExamPreparationWritingPage() {
                 key={exercise.id || index}
                 type="button"
                 className="writing-entry-card writing-entry-card--locked"
-                onClick={() => showExamPreparationPurchasePrompt(navigate)}
+                onClick={() => showExamPreparationPurchasePrompt(navigate, user)}
               >
                 {cardContent}
               </button>

@@ -289,6 +289,25 @@
   line-height: 1.55;
 }
 
+.module-purchase-modal__expired-access {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #f3c7a8;
+  border-radius: 0.9rem;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.9rem;
+}
+
+.module-purchase-modal__expired-access span {
+  color: #c2410c;
+  font-weight: 700;
+}
+
 .module-purchase-modal-actions {
   width: 100%;
   margin: 20px 0 0 !important;

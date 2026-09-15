@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, override_settings
+from django.utils import timezone
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -415,3 +418,26 @@ class ExamPreparationFreeTrialTests(APITestCase):
             args=[self.exercises[3].pk],
         )
         self.assertEqual(self.client.get(locked_detail_url).status_code, status.HTTP_200_OK)
+
+    def test_expired_entitlement_has_same_access_as_unentitled_user(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+            starts_at=timezone.now() - timedelta(days=31),
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+
+        response = self.client.get(self.list_url)
+        results = response.data.get("results", []) if isinstance(response.data, dict) else response.data
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["is_locked"] for item in results], [False, False, False, True])
+        self.assertEqual([item["show_free_trial_badge"] for item in results], [True, True, True, False])
+        locked_detail_url = reverse(
+            "exam-prep-writing-exercises-detail",
+            args=[self.exercises[3].pk],
+        )
+        self.assertEqual(self.client.get(locked_detail_url).status_code, status.HTTP_403_FORBIDDEN)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../api/auth/useAuth.js";
 import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
 import "./ExerciseSelectionPage.css";
 
@@ -17,6 +18,7 @@ export default function ExerciseSelectionPage({
   emptyMessage = "Zurzeit sind keine Aufgaben verfügbar.",
 }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -128,7 +130,7 @@ export default function ExerciseSelectionPage({
                 key={exercise.id || index}
                 type="button"
                 className="exercise-selection-card exercise-selection-card--locked"
-                onClick={() => showExamPreparationPurchasePrompt(navigate)}
+                onClick={() => showExamPreparationPurchasePrompt(navigate, user)}
               >
                 {cardContent}
               </button>

@@ -1,5 +1,6 @@
 import Swal from "sweetalert2";
 import { EXAM_PREPARATION_MODULE } from "../pages/Homepage/homeShared.js";
+import { formatExpiredDuration, getLatestExpiredModuleExpiry } from "./moduleAccess.js";
 
 function escapeHtml(value) {
   return String(value || "")
@@ -10,7 +11,7 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
-function buildPurchaseModalHtml(module) {
+function buildPurchaseModalHtml(module, expiredAt) {
   const image = module?.image
     ? `<img class="module-purchase-modal__image" src="${escapeHtml(module.image)}" alt="${escapeHtml(module.title)}" />`
     : "";
@@ -30,10 +31,17 @@ function buildPurchaseModalHtml(module) {
   const notice = module?.purchaseNotice
     ? `<p class="module-purchase-modal__notice">${escapeHtml(module.purchaseNotice)}</p>`
     : "";
+  const expiredAccess = expiredAt
+    ? `<div class="module-purchase-modal__expired-access">
+        <strong>备考季权限已过期</strong>
+        <span>${escapeHtml(formatExpiredDuration(expiredAt))}</span>
+      </div>`
+    : "";
 
   return `
     <div class="module-purchase-modal">
       ${image}
+      ${expiredAccess}
       ${labels}
       ${description}
       ${features}
@@ -42,11 +50,12 @@ function buildPurchaseModalHtml(module) {
   `;
 }
 
-export async function showExamPreparationPurchasePrompt(navigate) {
+export async function showExamPreparationPurchasePrompt(navigate, user) {
   const module = EXAM_PREPARATION_MODULE;
+  const expiredAt = getLatestExpiredModuleExpiry(user, module);
   const result = await Swal.fire({
     title: module.title,
-    html: buildPurchaseModalHtml(module),
+    html: buildPurchaseModalHtml(module, expiredAt),
     showDenyButton: true,
     showCancelButton: false,
     confirmButtonText: "立刻购买",

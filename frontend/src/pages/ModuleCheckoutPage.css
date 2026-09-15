@@ -89,6 +89,27 @@
   line-height: 1.5;
 }
 
+.module-checkout-page__current-access--expired {
+  border-color: #f3c7a8;
+  background:
+    radial-gradient(circle at top right, rgba(251, 146, 60, 0.15), transparent 40%),
+    linear-gradient(135deg, #fff7ed 0%, #ffffff 70%);
+}
+
+.module-checkout-page__current-access--expired .module-checkout-page__current-access-icon {
+  background: #c2410c;
+  box-shadow: 0 8px 20px rgba(194, 65, 12, 0.18);
+}
+
+.module-checkout-page__current-access--expired .module-checkout-page__current-access-label,
+.module-checkout-page__current-access--expired .module-checkout-page__current-access-date {
+  color: #9a3412;
+}
+
+.module-checkout-page__current-access--expired .module-checkout-page__current-access-note {
+  color: #7c4a32;
+}
+
 .module-checkout-page__hero {
   overflow: hidden;
   background:

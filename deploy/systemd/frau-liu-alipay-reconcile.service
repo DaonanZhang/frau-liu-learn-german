@@ -1,0 +1,12 @@
+[Unit]
+Description=Frau Liu Alipay payment reconciliation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/srv/projects/frau-liu-learn-german
+ExecStart=/home/ubuntu/.local/bin/uv run python manage.py reconcile_alipay_payments --limit 100
+

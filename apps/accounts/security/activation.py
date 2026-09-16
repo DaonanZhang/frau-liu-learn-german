@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -18,6 +19,48 @@ from apps.accounts.models import (
     PaymentGrantTask,
 )
 from apps.accounts.services.entitlement_grant_service import grant_or_extend_entitlement
+from apps.accounts.services import (
+    AlipayConfigurationError,
+    AlipayGatewayError,
+    get_alipay_service,
+)
+
+
+def _close_open_payments(*, user, module, season) -> None:
+    from apps.accounts.views.payment import _close_unpaid_payment
+
+    open_payments = PaymentGrantTask.objects.select_related("payment").filter(
+        user=user,
+        module=module,
+        payment__status__in=[
+            AlipayWebsitePayment.Status.CREATED,
+            AlipayWebsitePayment.Status.PENDING,
+        ],
+    )
+    if season is not None:
+        open_payments = open_payments.filter(season=season)
+
+    alipay_service = None
+    if open_payments.exists() and not getattr(
+        settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False
+    ):
+        try:
+            alipay_service = get_alipay_service()
+        except AlipayConfigurationError as exc:
+            raise ValueError(
+                "The unpaid order could not be canceled safely. Please retry shortly."
+            ) from exc
+
+    for payment in {task.payment_id: task.payment for task in open_payments}.values():
+        try:
+            _close_unpaid_payment(
+                payment=payment,
+                alipay_service=alipay_service,
+            )
+        except (AlipayConfigurationError, AlipayGatewayError) as exc:
+            raise ValueError(
+                "The unpaid order could not be canceled safely. Please retry shortly."
+            ) from exc
 
 
 @transaction.atomic
@@ -58,20 +101,7 @@ def apply_activation_code_for_user(*, user, code: str):
                 season_number=item.season_number,
             )
         if item.plan == ActivationPlan.LIFETIME:
-            open_payments = PaymentGrantTask.objects.filter(
-                user=user,
-                module=module,
-                payment__status__in=[
-                    AlipayWebsitePayment.Status.CREATED,
-                    AlipayWebsitePayment.Status.PENDING,
-                ],
-            )
-            if season is not None:
-                open_payments = open_payments.filter(season=season)
-            if open_payments.exists():
-                raise ValueError(
-                    "An unpaid order exists for this content. Complete or let it expire before redeeming lifetime access."
-                )
+            _close_open_payments(user=user, module=module, season=season)
         created.append(
             grant_or_extend_entitlement(
                 user=user,

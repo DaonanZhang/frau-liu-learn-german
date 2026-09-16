@@ -21,9 +21,11 @@ from rest_framework.test import APITestCase
 from apps.accounts.models import (
     AccountLoginSession,
     ActivationCodeRecord,
+    AlipayWebsitePayment,
     Entitlement,
     Module,
     ModuleSeason,
+    PaymentGrantTask,
 )
 from apps.accounts.security.activation import apply_activation_code_for_user
 from apps.accounts.services.activation_codes import (
@@ -168,15 +170,57 @@ class ConcurrentLoginSessionTests(APITestCase):
         )
 
     def test_fourth_device_is_rejected(self) -> None:
+        successful_responses = []
         for device_number in range(1, 4):
             response = self.login(f"device-{device_number}")
             self.assertEqual(response.status_code, status.HTTP_200_OK)
+            successful_responses.append(response)
 
         response = self.login("device-4")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data["code"], "concurrent_session_limit")
         self.assertEqual(AccountLoginSession.objects.filter(user=self.user).count(), 3)
+
+        for successful_response in successful_responses:
+            self.client.credentials(
+                HTTP_AUTHORIZATION=f"Bearer {successful_response.data['access']}"
+            )
+            self.assertEqual(
+                self.client.get("/api/accounts/users/me/").status_code,
+                status.HTTP_200_OK,
+            )
+
+    def test_expired_and_revoked_sessions_do_not_use_device_slots(self) -> None:
+        now = timezone.now()
+        AccountLoginSession.objects.create(
+            user=self.user,
+            device_id="expired-device",
+            expires_at=now - timedelta(seconds=1),
+        )
+        AccountLoginSession.objects.create(
+            user=self.user,
+            device_id="revoked-device",
+            expires_at=now + timedelta(days=1),
+            revoked_at=now,
+        )
+
+        for device_number in range(1, 4):
+            response = self.login(f"new-device-{device_number}")
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(
+            AccountLoginSession.objects.filter(
+                user=self.user,
+                revoked_at__isnull=True,
+                expires_at__gt=timezone.now(),
+            ).count(),
+            3,
+        )
+        self.assertEqual(
+            self.login("new-device-4").status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
 
     def test_relogin_on_same_device_replaces_its_tokens_without_using_another_slot(self) -> None:
         first_response = self.login("same-device")
@@ -531,6 +575,46 @@ class ActivationCodeApiTests(APITestCase):
         self.assertTrue(entitlement.external_ref.startswith("activation_code:"))
         self.assertIsNone(entitlement.expires_at)
         self.assertIsNone(verify_activation_code("SEASON4A"))
+
+    @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True)
+    def test_activation_code_closes_matching_unpaid_order_and_redeems(self) -> None:
+        self._store_code("CLOSEPAY", season_number=1)
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="activation-unpaid-001",
+            subject="Learning by Video Season 1",
+            total_amount="29.90",
+            status=AlipayWebsitePayment.Status.PENDING,
+        )
+        PaymentGrantTask.objects.create(
+            payment=payment,
+            user=self.user,
+            module=self.module,
+            season=self.season1,
+            plan=Entitlement.Plan.MONTH_1,
+        )
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": "CLOSEPAY"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["type"], "activation")
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, AlipayWebsitePayment.Status.CLOSED)
+        self.assertTrue(
+            Entitlement.objects.filter(
+                user=self.user,
+                module=self.module,
+                season=self.season1,
+                plan=Entitlement.Plan.LIFETIME,
+                status=Entitlement.Status.ACTIVE,
+            ).exists()
+        )
+        record = ActivationCodeRecord.objects.get(code="CLOSEPAY")
+        self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
 
     def test_apply_activation_code_is_single_use(self) -> None:
         self._store_code("ONETIME1", season_number=1)

@@ -9,8 +9,8 @@ import {
 } from "./index.js";
 
 const DEVICE_TAB_STORAGE_KEY = "accountActiveDeviceTabs";
-const DEVICE_TAB_STALE_MS = 20 * 60 * 1000;
 const DEVICE_HEARTBEAT_MS = 60 * 1000;
+const DEVICE_TAB_STALE_MS = 10 * 60 * 1000;
 
 function readActiveDeviceTabs() {
   try {
@@ -47,7 +47,13 @@ export function AuthProvider({ children }) {
       return me;
     } catch (error) {
       if (error?.status === 401) {
-        clearAuthTokens();
+        await clearAuthTokens();
+        setUser(null);
+      } else if (
+        error?.status === 403 &&
+        error?.data?.code === "concurrent_session_limit"
+      ) {
+        await clearAuthTokens();
         setUser(null);
       }
       return null;

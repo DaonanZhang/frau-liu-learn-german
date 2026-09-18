@@ -46,6 +46,7 @@ class MaintenanceAwareJWTAuthentication(JWTAuthentication):
 
         lease_until = now + timedelta(seconds=settings.DEVICE_SESSION_LEASE_SECONDS)
         if session.active_until is None or session.active_until <= now:
+            device_limit_reached = False
             with transaction.atomic():
                 get_user_model().objects.select_for_update().get(pk=user.pk)
                 session = AccountLoginSession.objects.select_for_update().get(
@@ -62,15 +63,23 @@ class MaintenanceAwareJWTAuthentication(JWTAuthentication):
                         active_other_sessions.count()
                         >= settings.MAX_CONCURRENT_LOGIN_SESSIONS
                     ):
-                        raise PermissionDenied(
-                            detail={
-                                "detail": "当前活跃设备已达上限，请关闭其他设备上的页面后重试。",
-                                "code": "concurrent_session_limit",
-                            },
-                            code="concurrent_session_limit",
+                        session.active_until = now
+                        session.revoked_at = now
+                        session.save(
+                            update_fields=("active_until", "revoked_at")
                         )
-                    session.active_until = lease_until
-                    session.save(update_fields=("active_until",))
+                        device_limit_reached = True
+                    else:
+                        session.active_until = lease_until
+                        session.save(update_fields=("active_until",))
+            if device_limit_reached:
+                raise PermissionDenied(
+                    detail={
+                        "detail": "当前活跃设备已达上限，此设备的登录已失效，请关闭其他设备上的页面后重新登录。",
+                        "code": "concurrent_session_limit",
+                    },
+                    code="concurrent_session_limit",
+                )
         elif session.active_until <= now + timedelta(
             seconds=settings.DEVICE_SESSION_LEASE_SECONDS // 2
         ):

@@ -6,6 +6,7 @@ import re
 from datetime import timedelta
 from io import StringIO
 from pathlib import Path
+from urllib.parse import urlencode
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -273,8 +274,8 @@ class ConcurrentLoginSessionTests(APITestCase):
 
         release_response = self.client.post(
             "/api/accounts/auth/device-release/",
-            {"refresh": first_response.data["refresh"]},
-            format="json",
+            urlencode({"refresh": first_response.data["refresh"]}),
+            content_type="application/x-www-form-urlencoded",
         )
 
         self.assertEqual(release_response.status_code, status.HTTP_204_NO_CONTENT)
@@ -319,7 +320,7 @@ class ConcurrentLoginSessionTests(APITestCase):
             3,
         )
 
-    def test_inactive_device_keeps_token_when_active_slots_are_full(self) -> None:
+    def test_inactive_device_is_revoked_when_active_slots_are_full(self) -> None:
         first_response = self.login("device-1")
         self.client.post(
             "/api/accounts/auth/device-release/",
@@ -340,7 +341,15 @@ class ConcurrentLoginSessionTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data["code"], "concurrent_session_limit")
         released_session = AccountLoginSession.objects.get(device_id="device-1")
-        self.assertIsNone(released_session.revoked_at)
+        self.assertIsNotNone(released_session.revoked_at)
+        self.assertEqual(
+            self.client.post(
+                "/api/accounts/auth/refresh/",
+                {"refresh": first_response.data["refresh"]},
+                format="json",
+            ).status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
 
     def test_heartbeat_extends_active_device_lease(self) -> None:
         login_response = self.login("device-1")

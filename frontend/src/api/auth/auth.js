@@ -156,10 +156,19 @@ export function releaseDeviceSession() {
     return;
   }
 
-  const payload = new Blob([JSON.stringify({ refresh: refreshToken })], {
-    type: "application/json",
-  });
-  navigator.sendBeacon?.("/api/accounts/auth/device-release/", payload);
+  const payload = new URLSearchParams({ refresh: refreshToken });
+  const queued = navigator.sendBeacon?.(
+    "/api/accounts/auth/device-release/",
+    payload
+  );
+  if (!queued) {
+    fetch("/api/accounts/auth/device-release/", {
+      method: "POST",
+      body: payload,
+      credentials: "include",
+      keepalive: true,
+    }).catch(() => {});
+  }
 }
 
 /* =========================================================

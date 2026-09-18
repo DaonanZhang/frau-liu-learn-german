@@ -25,7 +25,13 @@ from apps.accounts.views.payment import (
     CreateAlipayDebugPaymentAPIView,
 )
 
-from apps.accounts.views.auth import LoginAPIView, LogoutAPIView, RefreshAPIView
+from apps.accounts.views.auth import (
+    DeviceHeartbeatAPIView,
+    DeviceReleaseAPIView,
+    LoginAPIView,
+    LogoutAPIView,
+    RefreshAPIView,
+)
 from apps.accounts.views.password_reset import (
     PasswordResetConfirmAPIView,
     PasswordResetRequestAPIView,
@@ -99,6 +105,16 @@ urlpatterns += [
         "auth/logout/",
         LogoutAPIView.as_view(),
         name="logout",
+    ),
+    path(
+        "auth/device-heartbeat/",
+        DeviceHeartbeatAPIView.as_view(),
+        name="device-heartbeat",
+    ),
+    path(
+        "auth/device-release/",
+        DeviceReleaseAPIView.as_view(),
+        name="device-release",
     ),
     path(
         "auth/password-reset/request/",

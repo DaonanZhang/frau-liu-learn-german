@@ -1,3 +1,8 @@
 export { AuthProvider } from "./AuthProvider";
 export { useAuth } from "./useAuth";
-export { login, logout } from "./auth";
+export {
+  heartbeatDeviceSession,
+  login,
+  logout,
+  releaseDeviceSession,
+} from "./auth";

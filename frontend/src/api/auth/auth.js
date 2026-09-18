@@ -144,6 +144,24 @@ export async function logout() {
   }
 }
 
+/** Keep this browser counted toward the concurrent-device limit. */
+export async function heartbeatDeviceSession() {
+  return apiFetch("/accounts/auth/device-heartbeat/", { method: "POST" });
+}
+
+/** Release only the device slot; the stored tokens remain valid. */
+export function releaseDeviceSession() {
+  const refreshToken = localStorage.getItem("refreshToken");
+  if (!refreshToken) {
+    return;
+  }
+
+  const payload = new Blob([JSON.stringify({ refresh: refreshToken })], {
+    type: "application/json",
+  });
+  navigator.sendBeacon?.("/api/accounts/auth/device-release/", payload);
+}
+
 /* =========================================================
  * Registration / activation
  * ========================================================= */

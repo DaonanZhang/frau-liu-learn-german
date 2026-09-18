@@ -17,6 +17,7 @@ from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.accounts.models import (
     AccountLoginSession,
@@ -264,6 +265,100 @@ class ConcurrentLoginSessionTests(APITestCase):
         self.client.credentials()
         replacement_response = self.login("device-4")
         self.assertEqual(replacement_response.status_code, status.HTTP_200_OK)
+
+    def test_device_release_frees_slot_without_revoking_token(self) -> None:
+        first_response = self.login("device-1")
+        self.login("device-2")
+        self.login("device-3")
+
+        release_response = self.client.post(
+            "/api/accounts/auth/device-release/",
+            {"refresh": first_response.data["refresh"]},
+            format="json",
+        )
+
+        self.assertEqual(release_response.status_code, status.HTTP_204_NO_CONTENT)
+        released_session = AccountLoginSession.objects.get(
+            token_id=RefreshToken(first_response.data["refresh"]).get("sid")
+        )
+        self.assertIsNone(released_session.revoked_at)
+        self.assertLessEqual(released_session.active_until, timezone.now())
+        self.assertEqual(
+            self.client.post(
+                "/api/accounts/auth/refresh/",
+                {"refresh": first_response.data["refresh"]},
+                format="json",
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(self.login("device-4").status_code, status.HTTP_200_OK)
+
+    def test_inactive_device_reacquires_slot_when_capacity_is_available(self) -> None:
+        first_response = self.login("device-1")
+        self.client.post(
+            "/api/accounts/auth/device-release/",
+            {"refresh": first_response.data["refresh"]},
+            format="json",
+        )
+        self.login("device-2")
+        self.login("device-3")
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {first_response.data['access']}"
+        )
+        response = self.client.get("/api/accounts/users/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            AccountLoginSession.objects.filter(
+                user=self.user,
+                revoked_at__isnull=True,
+                expires_at__gt=timezone.now(),
+                active_until__gt=timezone.now(),
+            ).count(),
+            3,
+        )
+
+    def test_inactive_device_keeps_token_when_active_slots_are_full(self) -> None:
+        first_response = self.login("device-1")
+        self.client.post(
+            "/api/accounts/auth/device-release/",
+            {"refresh": first_response.data["refresh"]},
+            format="json",
+        )
+        for device_number in range(2, 5):
+            self.assertEqual(
+                self.login(f"device-{device_number}").status_code,
+                status.HTTP_200_OK,
+            )
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {first_response.data['access']}"
+        )
+        response = self.client.get("/api/accounts/users/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "concurrent_session_limit")
+        released_session = AccountLoginSession.objects.get(device_id="device-1")
+        self.assertIsNone(released_session.revoked_at)
+
+    def test_heartbeat_extends_active_device_lease(self) -> None:
+        login_response = self.login("device-1")
+        session = AccountLoginSession.objects.get(device_id="device-1")
+        session.active_until = timezone.now() + timedelta(seconds=1)
+        session.save(update_fields=("active_until",))
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}"
+        )
+        response = self.client.post("/api/accounts/auth/device-heartbeat/")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        session.refresh_from_db()
+        self.assertGreater(
+            session.active_until,
+            timezone.now() + timedelta(minutes=5),
+        )
 
 
 @override_settings(

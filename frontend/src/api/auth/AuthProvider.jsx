@@ -1,12 +1,37 @@
 // src/api/AuthProvider.jsx
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext.jsx";
 import { apiFetch } from "../client.js";
-import { logout as clearAuthTokens } from "./index.js";
+import {
+  heartbeatDeviceSession,
+  logout as clearAuthTokens,
+  releaseDeviceSession,
+} from "./index.js";
+
+const DEVICE_TAB_STORAGE_KEY = "accountActiveDeviceTabs";
+const DEVICE_TAB_STALE_MS = 20 * 60 * 1000;
+const DEVICE_HEARTBEAT_MS = 60 * 1000;
+
+function readActiveDeviceTabs() {
+  try {
+    const tabs = JSON.parse(localStorage.getItem(DEVICE_TAB_STORAGE_KEY) || "{}");
+    return tabs && typeof tabs === "object" ? tabs : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeActiveDeviceTabs(tabs) {
+  localStorage.setItem(DEVICE_TAB_STORAGE_KEY, JSON.stringify(tabs));
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const tabId = useRef(
+    globalThis.crypto?.randomUUID?.() ||
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
 
   const hasToken = useCallback(() => Boolean(localStorage.getItem("accessToken")), []);
 
@@ -63,6 +88,64 @@ export function AuthProvider({ children }) {
       document.removeEventListener("visibilitychange", refreshVisibleSession);
     };
   }, [hasToken, reloadMe]);
+
+  useEffect(() => {
+    if (!user || !hasToken()) {
+      return undefined;
+    }
+    const currentTabId = tabId.current;
+
+    function updateThisTab() {
+      const now = Date.now();
+      const tabs = readActiveDeviceTabs();
+      for (const [id, lastSeenAt] of Object.entries(tabs)) {
+        if (now - Number(lastSeenAt) > DEVICE_TAB_STALE_MS) {
+          delete tabs[id];
+        }
+      }
+      tabs[currentTabId] = now;
+      writeActiveDeviceTabs(tabs);
+    }
+
+    function sendHeartbeat() {
+      updateThisTab();
+      heartbeatDeviceSession().catch(() => {});
+    }
+
+    function releaseIfLastTab() {
+      const now = Date.now();
+      const tabs = readActiveDeviceTabs();
+      delete tabs[currentTabId];
+      for (const [id, lastSeenAt] of Object.entries(tabs)) {
+        if (now - Number(lastSeenAt) > DEVICE_TAB_STALE_MS) {
+          delete tabs[id];
+        }
+      }
+      writeActiveDeviceTabs(tabs);
+      if (Object.keys(tabs).length === 0) {
+        releaseDeviceSession();
+      }
+    }
+
+    function heartbeatWhenVisible() {
+      if (document.visibilityState === "visible") {
+        sendHeartbeat();
+      }
+    }
+
+    sendHeartbeat();
+    const timer = window.setInterval(sendHeartbeat, DEVICE_HEARTBEAT_MS);
+    window.addEventListener("pagehide", releaseIfLastTab);
+    document.addEventListener("visibilitychange", heartbeatWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pagehide", releaseIfLastTab);
+      document.removeEventListener("visibilitychange", heartbeatWhenVisible);
+      const tabs = readActiveDeviceTabs();
+      delete tabs[currentTabId];
+      writeActiveDeviceTabs(tabs);
+    };
+  }, [hasToken, user]);
 
   const notifyLogin = useCallback(async () => {
     setLoading(true);

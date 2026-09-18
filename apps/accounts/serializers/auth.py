@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from uuid import uuid4
 
 from django.conf import settings
@@ -70,6 +71,7 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
             )
 
         now = timezone.now()
+        active_until = now + timedelta(seconds=settings.DEVICE_SESSION_LEASE_SECONDS)
         with transaction.atomic():
             user = User.objects.select_for_update().get(pk=user.pk)
             current_device_session = AccountLoginSession.objects.filter(
@@ -80,11 +82,14 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
                 current_device_session
                 and current_device_session.revoked_at is None
                 and current_device_session.expires_at > now
+                and current_device_session.active_until is not None
+                and current_device_session.active_until > now
             )
             active_other_sessions = AccountLoginSession.objects.filter(
                 user=user,
                 revoked_at__isnull=True,
                 expires_at__gt=now,
+                active_until__gt=now,
             )
             if current_device_session:
                 active_other_sessions = active_other_sessions.exclude(
@@ -104,6 +109,7 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
             session_values = {
                 "token_id": uuid4(),
                 "expires_at": now + api_settings.REFRESH_TOKEN_LIFETIME,
+                "active_until": active_until,
                 "revoked_at": None,
             }
             if current_device_session:
@@ -115,6 +121,7 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
                         "token_id",
                         "created_at",
                         "expires_at",
+                        "active_until",
                         "revoked_at",
                     )
                 )

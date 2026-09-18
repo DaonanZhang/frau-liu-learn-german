@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext.jsx";
 import { apiFetch } from "../client.js";
 import {
+  clearDeviceActivityId,
+  getOrCreateDeviceActivityId,
   heartbeatDeviceSession,
   logout as clearAuthTokens,
   releaseDeviceSession,
@@ -35,6 +37,34 @@ export function AuthProvider({ children }) {
 
   const hasToken = useCallback(() => Boolean(localStorage.getItem("accessToken")), []);
 
+  const ensureDeviceHeartbeat = useCallback(async () => {
+    let activityId = getOrCreateDeviceActivityId();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await heartbeatDeviceSession(activityId);
+        return true;
+      } catch (error) {
+        if (
+          attempt === 0 &&
+          error?.data?.code === "device_activity_closed"
+        ) {
+          clearDeviceActivityId(activityId);
+          activityId = getOrCreateDeviceActivityId();
+          continue;
+        }
+        if (
+          error?.status === 401 ||
+          error?.data?.code === "concurrent_session_limit"
+        ) {
+          await clearAuthTokens();
+          setUser(null);
+        }
+        throw error;
+      }
+    }
+    return false;
+  }, []);
+
   const reloadMe = useCallback(async () => {
     if (!hasToken()) {
       setUser(null);
@@ -66,7 +96,16 @@ export function AuthProvider({ children }) {
     let cancelled = false;
 
     async function bootstrapAuthentication() {
-      await reloadMe();
+      if (hasToken()) {
+        try {
+          await ensureDeviceHeartbeat();
+          await reloadMe();
+        } catch {
+          // Device heartbeat handled any token or device-limit failure above.
+        }
+      } else {
+        await reloadMe();
+      }
       if (!cancelled) {
         setLoading(false);
       }
@@ -76,12 +115,17 @@ export function AuthProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, [reloadMe]);
+  }, [ensureDeviceHeartbeat, hasToken, reloadMe]);
 
   useEffect(() => {
-    function refreshVisibleSession() {
+    async function refreshVisibleSession() {
       if (document.visibilityState === "visible" && hasToken()) {
-        reloadMe();
+        try {
+          await ensureDeviceHeartbeat();
+          await reloadMe();
+        } catch {
+          // Device heartbeat handled any token or device-limit failure above.
+        }
       }
     }
 
@@ -93,7 +137,7 @@ export function AuthProvider({ children }) {
       window.removeEventListener("focus", refreshVisibleSession);
       document.removeEventListener("visibilitychange", refreshVisibleSession);
     };
-  }, [hasToken, reloadMe]);
+  }, [ensureDeviceHeartbeat, hasToken, reloadMe]);
 
   useEffect(() => {
     if (!user || !hasToken()) {
@@ -115,7 +159,7 @@ export function AuthProvider({ children }) {
 
     function sendHeartbeat() {
       updateThisTab();
-      heartbeatDeviceSession().catch(() => {});
+      ensureDeviceHeartbeat().catch(() => {});
     }
 
     function releaseIfLastTab() {
@@ -151,7 +195,7 @@ export function AuthProvider({ children }) {
       delete tabs[currentTabId];
       writeActiveDeviceTabs(tabs);
     };
-  }, [hasToken, user]);
+  }, [ensureDeviceHeartbeat, hasToken, user]);
 
   const notifyLogin = useCallback(async () => {
     setLoading(true);

@@ -39,6 +39,11 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
         trim_whitespace=True,
         required=False,
     )
+    activity_id = serializers.CharField(
+        max_length=64,
+        trim_whitespace=True,
+        required=False,
+    )
     default_error_messages = {
         **TokenObtainPairSerializer.default_error_messages,
         "no_active_account": "账号或密码输入错误。",
@@ -49,6 +54,7 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
         country_code = attrs.get("country_code")
         password = attrs.get("password")
         device_id = attrs.get("device_id") or str(uuid4())
+        activity_id = attrs.get("activity_id") or str(uuid4())
 
         cleaned = "".join(ch for ch in str(telephone or "").strip() if ch.isdigit())
         if not cleaned:
@@ -110,6 +116,8 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
                 "token_id": uuid4(),
                 "expires_at": now + api_settings.REFRESH_TOKEN_LIFETIME,
                 "active_until": active_until,
+                "activity_id": activity_id,
+                "closed_activity_ids": [],
                 "revoked_at": None,
             }
             if current_device_session:
@@ -122,6 +130,8 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
                         "created_at",
                         "expires_at",
                         "active_until",
+                        "activity_id",
+                        "closed_activity_ids",
                         "revoked_at",
                     )
                 )

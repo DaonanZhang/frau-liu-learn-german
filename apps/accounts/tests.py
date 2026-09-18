@@ -167,6 +167,7 @@ class ConcurrentLoginSessionTests(APITestCase):
                 "country_code": "+86",
                 "password": "pass-123456",
                 "device_id": device_id,
+                "activity_id": f"activity-{device_id}",
             },
             format="json",
         )
@@ -274,7 +275,12 @@ class ConcurrentLoginSessionTests(APITestCase):
 
         release_response = self.client.post(
             "/api/accounts/auth/device-release/",
-            urlencode({"refresh": first_response.data["refresh"]}),
+            urlencode(
+                {
+                    "refresh": first_response.data["refresh"],
+                    "activity_id": "activity-device-1",
+                }
+            ),
             content_type="application/x-www-form-urlencoded",
         )
 
@@ -298,12 +304,27 @@ class ConcurrentLoginSessionTests(APITestCase):
         first_response = self.login("device-1")
         self.client.post(
             "/api/accounts/auth/device-release/",
-            {"refresh": first_response.data["refresh"]},
+            {
+                "refresh": first_response.data["refresh"],
+                "activity_id": "activity-device-1",
+            },
             format="json",
         )
         self.login("device-2")
         self.login("device-3")
 
+        heartbeat_response = self.client.post(
+            "/api/accounts/auth/device-heartbeat/",
+            {
+                "refresh": first_response.data["refresh"],
+                "activity_id": "reopened-device-1",
+            },
+            format="json",
+        )
+        self.assertEqual(
+            heartbeat_response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {first_response.data['access']}"
         )
@@ -324,7 +345,10 @@ class ConcurrentLoginSessionTests(APITestCase):
         first_response = self.login("device-1")
         self.client.post(
             "/api/accounts/auth/device-release/",
-            {"refresh": first_response.data["refresh"]},
+            {
+                "refresh": first_response.data["refresh"],
+                "activity_id": "activity-device-1",
+            },
             format="json",
         )
         for device_number in range(2, 5):
@@ -333,10 +357,14 @@ class ConcurrentLoginSessionTests(APITestCase):
                 status.HTTP_200_OK,
             )
 
-        self.client.credentials(
-            HTTP_AUTHORIZATION=f"Bearer {first_response.data['access']}"
+        response = self.client.post(
+            "/api/accounts/auth/device-heartbeat/",
+            {
+                "refresh": first_response.data["refresh"],
+                "activity_id": "reopened-device-1",
+            },
+            format="json",
         )
-        response = self.client.get("/api/accounts/users/me/")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.data["code"], "concurrent_session_limit")
@@ -360,7 +388,14 @@ class ConcurrentLoginSessionTests(APITestCase):
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}"
         )
-        response = self.client.post("/api/accounts/auth/device-heartbeat/")
+        response = self.client.post(
+            "/api/accounts/auth/device-heartbeat/",
+            {
+                "refresh": login_response.data["refresh"],
+                "activity_id": "activity-device-1",
+            },
+            format="json",
+        )
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         session.refresh_from_db()
@@ -368,6 +403,79 @@ class ConcurrentLoginSessionTests(APITestCase):
             session.active_until,
             timezone.now() + timedelta(minutes=5),
         )
+
+    def test_late_heartbeat_from_closed_page_cannot_reactivate_device(self) -> None:
+        login_response = self.login("device-1")
+        self.client.post(
+            "/api/accounts/auth/device-release/",
+            {
+                "refresh": login_response.data["refresh"],
+                "activity_id": "activity-device-1",
+            },
+            format="json",
+        )
+
+        late_heartbeat = self.client.post(
+            "/api/accounts/auth/device-heartbeat/",
+            {
+                "refresh": login_response.data["refresh"],
+                "activity_id": "activity-device-1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(late_heartbeat.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(late_heartbeat.data["code"], "device_activity_closed")
+        session = AccountLoginSession.objects.get(device_id="device-1")
+        self.assertLessEqual(session.active_until, timezone.now())
+        self.assertIsNone(session.revoked_at)
+
+    def test_regular_api_request_cannot_reactivate_closed_device(self) -> None:
+        login_response = self.login("device-1")
+        self.client.post(
+            "/api/accounts/auth/device-release/",
+            {
+                "refresh": login_response.data["refresh"],
+                "activity_id": "activity-device-1",
+            },
+            format="json",
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}"
+        )
+
+        response = self.client.get("/api/accounts/users/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "device_session_inactive")
+        session = AccountLoginSession.objects.get(device_id="device-1")
+        self.assertLessEqual(session.active_until, timezone.now())
+        self.assertIsNone(session.revoked_at)
+
+    def test_delayed_release_from_old_page_cannot_close_reopened_page(self) -> None:
+        login_response = self.login("device-1")
+        self.client.post(
+            "/api/accounts/auth/device-heartbeat/",
+            {
+                "refresh": login_response.data["refresh"],
+                "activity_id": "reopened-device-1",
+            },
+            format="json",
+        )
+
+        delayed_release = self.client.post(
+            "/api/accounts/auth/device-release/",
+            {
+                "refresh": login_response.data["refresh"],
+                "activity_id": "activity-device-1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(delayed_release.status_code, status.HTTP_204_NO_CONTENT)
+        session = AccountLoginSession.objects.get(device_id="device-1")
+        self.assertEqual(session.activity_id, "reopened-device-1")
+        self.assertGreater(session.active_until, timezone.now())
 
 
 @override_settings(

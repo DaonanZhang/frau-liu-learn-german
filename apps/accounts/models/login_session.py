@@ -17,6 +17,8 @@ class AccountLoginSession(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     active_until = models.DateTimeField(blank=True, null=True)
+    activity_id = models.CharField(blank=True, max_length=64, null=True)
+    closed_activity_ids = models.JSONField(default=list)
     revoked_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:

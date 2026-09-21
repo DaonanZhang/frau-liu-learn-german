@@ -103,7 +103,8 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
                 )
 
             if (
-                not current_device_is_active
+                settings.DEVICE_LIMIT_ENABLED
+                and not current_device_is_active
                 and active_other_sessions.count()
                 >= settings.MAX_CONCURRENT_LOGIN_SESSIONS
             ):

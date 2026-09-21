@@ -149,7 +149,7 @@ class MaintenanceModeAllowlistTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-@override_settings(MAX_CONCURRENT_LOGIN_SESSIONS=3)
+@override_settings(DEVICE_LIMIT_ENABLED=True, MAX_CONCURRENT_LOGIN_SESSIONS=3)
 class ConcurrentLoginSessionTests(APITestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -193,6 +193,21 @@ class ConcurrentLoginSessionTests(APITestCase):
                 self.client.get("/api/accounts/users/me/").status_code,
                 status.HTTP_200_OK,
             )
+
+    @override_settings(DEVICE_LIMIT_ENABLED=False)
+    def test_device_limit_can_be_disabled(self) -> None:
+        for device_number in range(1, 5):
+            response = self.login(f"device-{device_number}")
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(
+            AccountLoginSession.objects.filter(
+                user=self.user,
+                revoked_at__isnull=True,
+                active_until__gt=timezone.now(),
+            ).count(),
+            4,
+        )
 
     def test_expired_and_revoked_sessions_do_not_use_device_slots(self) -> None:
         now = timezone.now()
@@ -378,6 +393,37 @@ class ConcurrentLoginSessionTests(APITestCase):
             ).status_code,
             status.HTTP_401_UNAUTHORIZED,
         )
+
+    @override_settings(DEVICE_LIMIT_ENABLED=False)
+    def test_inactive_device_reacquires_slot_when_limit_is_disabled(self) -> None:
+        first_response = self.login("device-1")
+        self.client.post(
+            "/api/accounts/auth/device-release/",
+            {
+                "refresh": first_response.data["refresh"],
+                "activity_id": "activity-device-1",
+            },
+            format="json",
+        )
+        for device_number in range(2, 5):
+            self.assertEqual(
+                self.login(f"device-{device_number}").status_code,
+                status.HTTP_200_OK,
+            )
+
+        response = self.client.post(
+            "/api/accounts/auth/device-heartbeat/",
+            {
+                "refresh": first_response.data["refresh"],
+                "activity_id": "reopened-device-1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        session = AccountLoginSession.objects.get(device_id="device-1")
+        self.assertIsNone(session.revoked_at)
+        self.assertGreater(session.active_until, timezone.now())
 
     def test_heartbeat_extends_active_device_lease(self) -> None:
         login_response = self.login("device-1")

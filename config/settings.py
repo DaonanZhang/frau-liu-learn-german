@@ -301,6 +301,7 @@ SIMPLE_JWT = {
     ),
 }
 
+DEVICE_LIMIT_ENABLED = env.bool("DEVICE_LIMIT_ENABLED", default=True)
 MAX_CONCURRENT_LOGIN_SESSIONS = env.int(
     "MAX_CONCURRENT_LOGIN_SESSIONS",
     default=3,

@@ -32,12 +32,14 @@ export default function Navigator() {
   const isProfileActive = pathname.startsWith("/profile");
   const isExamPreparationActive = pathname.startsWith("/modules/exam-preparation");
   const isExamPreparationPurchaseActive = pathname === "/modules/exam-preparation/purchase";
+  const isExamPreparationRecordsActive = pathname === "/modules/exam-preparation/mock-exams";
 
   const titleText = isMobileView ? "符号刘" : "符号刘的德语素材库";
   const manualText = isMobileView ? "手册" : "操作手册";
   const learningRecordsText = isMobileView ? "记录" : "学习记录";
   const lexiconText = isMobileView ? "卡片" : "德语卡片";
   const favoriteQuestionsText = isMobileView ? "收藏题" : "收藏题目";
+  const examRecordsText = isMobileView ? "考试记录" : "模拟考试记录";
   const redeemText = isMobileView ? "兑换" : "兑换码";
   const hasFullExamAccess = hasModuleAccess(user, EXAM_PREPARATION_MODULE);
   const examRenewText = hasFullExamAccess
@@ -80,6 +82,16 @@ export default function Navigator() {
               }}
             >
               {examRenewText}
+            </button>
+          ) : null}
+
+          {isExamPreparationActive ? (
+            <button
+              className={["nav-btn", isExamPreparationRecordsActive ? "nav-btn--active" : ""].filter(Boolean).join(" ")}
+              type="button"
+              onClick={() => navigate("/modules/exam-preparation/mock-exams")}
+            >
+              {examRecordsText}
             </button>
           ) : null}
 

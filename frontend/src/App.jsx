@@ -28,6 +28,8 @@ import ClozeChoicePage from "./pages/ClozeChoicePage.jsx";
 import ClozeMatchingPage from "./pages/ClozeMatchingPage.jsx";
 import ExamPreparationWritingPage from "./pages/ExamPreparationWritingPage.jsx";
 import ExamPreparationWritingDetailPage from "./pages/ExamPreparationWritingDetailPage.jsx";
+import MockWrittenExamPage from "./pages/MockWrittenExamPage.jsx";
+import MockExamRecordsPage from "./pages/MockExamRecordsPage.jsx";
 import ExerciseSelectionPage from "./pages/ExerciseSelectionPage.jsx";
 import ListeningExercisePage from "./pages/ListeningExercisePage.jsx";
 import ReadingTitleMatchingPage from "./pages/ReadingTitleMatchingPage.jsx";
@@ -97,6 +99,8 @@ const router = createBrowserRouter([
       { path: "/modules/science-season", element: <ModulePage /> },
       { path: "/modules/vlog-season", element: <VlogModulePage /> },
       { path: "/modules/exam-preparation", element: <ExamPreparationModulePage /> },
+      { path: "/modules/exam-preparation/mock-exam", element: <MockWrittenExamPage /> },
+      { path: "/modules/exam-preparation/mock-exams", element: <MockExamRecordsPage /> },
       { path: "/modules/exam-preparation/hoeren", element: <ExamPreparationListeningPage /> },
       { path: "/modules/exam-preparation/sprechen", element: <ExamPreparationSpeakingPage /> },
       { path: "/modules/exam-preparation/sprachbausteine", element: <ExamPreparationSprachbausteinePage /> },

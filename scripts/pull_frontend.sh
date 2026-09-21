@@ -6,10 +6,13 @@ FRONTEND_DIR="$PROJECT_ROOT/frontend"
 DIST_DIR="$FRONTEND_DIR/dist"
 
 MODE="auto" # auto | build | sync-public | no-build
+FROM_REF=""
+TO_REF=""
 
 usage() {
   cat <<'EOF'
 Usage: bash scripts/pull_frontend.sh [--mode auto|build|sync-public|no-build]
+                                     [--from-ref REF --to-ref REF]
 
 Modes:
   auto         Default. Decide automatically:
@@ -19,6 +22,10 @@ Modes:
   build        Force full frontend build.
   sync-public  Force "only sync frontend/public changed files" (requires existing dist).
   no-build     Never run build. If only public changed, sync them; otherwise skip.
+
+Refs:
+  When --from-ref and --to-ref are provided, do not pull. Deploy the changes
+  between those commits. Both options must be provided together.
 EOF
 }
 
@@ -26,6 +33,14 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode)
       MODE="${2:-}"
+      shift 2
+      ;;
+    --from-ref)
+      FROM_REF="${2:-}"
+      shift 2
+      ;;
+    --to-ref)
+      TO_REF="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -46,14 +61,26 @@ if [[ "$MODE" != "auto" && "$MODE" != "build" && "$MODE" != "sync-public" && "$M
   exit 1
 fi
 
+if [[ -n "$FROM_REF" || -n "$TO_REF" ]]; then
+  if [[ -z "$FROM_REF" || -z "$TO_REF" ]]; then
+    echo "Both --from-ref and --to-ref are required together."
+    exit 1
+  fi
+fi
+
 cd "$PROJECT_ROOT"
 
 echo "▶ Frontend pull mode: $MODE"
 
-OLD_HEAD="$(git rev-parse HEAD)"
-echo "▶ git pull"
-git pull
-NEW_HEAD="$(git rev-parse HEAD)"
+if [[ -n "$FROM_REF" ]]; then
+  OLD_HEAD="$(git rev-parse "$FROM_REF")"
+  NEW_HEAD="$(git rev-parse "$TO_REF")"
+else
+  OLD_HEAD="$(git rev-parse HEAD)"
+  echo "▶ git pull --ff-only"
+  git pull --ff-only
+  NEW_HEAD="$(git rev-parse HEAD)"
+fi
 
 if [[ "$OLD_HEAD" == "$NEW_HEAD" ]]; then
   echo "ℹ No new commits."

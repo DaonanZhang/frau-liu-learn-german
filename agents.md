@@ -254,6 +254,7 @@ locations are part of the skill-loading contract.
 - Video subtitle backfill record:
   `local-docs/video-full-subtitle-backfill-local-run.md`
 - Server post-pull checklist: `local-docs/server-post-pull-checklist.md`
+- Server hotfix deployment: `local-docs/server-hotfix-deployment.md`
 - Exam-preparation server deployment:
   `local-docs/exam-preparation-server-deployment.md`
 - Exam-preparation XLSX contract:

@@ -10,6 +10,7 @@ venv/
 /frontend/public/resources/ExamPreparation1/
 /frontend/public/manual
 .codex_tmp
+.deploy/
 
 apps/exam_preparation
 

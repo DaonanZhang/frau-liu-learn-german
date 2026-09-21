@@ -115,12 +115,7 @@ fi
 sudo systemctl is-active --quiet "$BACKEND_SERVICE"
 
 echo "▶ Check backend HTTP endpoint"
-health_host="$(uv run python manage.py shell -c '
-from django.conf import settings
-
-host = next((host for host in settings.ALLOWED_HOSTS if host != "*"), "localhost")
-print(host.lstrip("."))
-')"
+health_host="${BACKEND_HEALTHCHECK_HOST:-127.0.0.1}"
 health_ok=false
 for _ in {1..10}; do
   if curl --fail --silent --show-error \

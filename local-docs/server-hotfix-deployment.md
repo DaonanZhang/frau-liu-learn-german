@@ -76,8 +76,16 @@ resources remain protected even when this flag is present.
 
 `frontend/public/images/wechat-qr.png` is server-managed and Git-ignored. All
 frontend deployment modes skip it and preserve the existing
-`frontend/dist/images/wechat-qr.png`. Update the source and served copies
-through the explicit QR-image operation, not through code deployment.
+`frontend/dist/images/wechat-qr.png`. When intentionally changing the QR code,
+update the server source file and explicitly publish it:
+
+```bash
+install -m 0644 \
+  frontend/public/images/wechat-qr.png \
+  frontend/dist/images/wechat-qr.png
+```
+
+This QR update is deliberately separate from code deployment.
 
 ## First Rollout
 
@@ -117,3 +125,8 @@ The last successful commit is stored in the ignored file:
 
 This allows the next run to retry all undeployed changes when code was fetched
 successfully but a build, migration, reload, or health check failed.
+
+The backend health check connects directly to Gunicorn on `127.0.0.1:8000`
+and uses `127.0.0.1` as the default HTTP Host. Production must therefore keep
+`127.0.0.1` in `DJANGO_ALLOWED_HOSTS`. A different valid host can be supplied
+with `BACKEND_HEALTHCHECK_HOST`.

@@ -9,6 +9,7 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import ListeningTranscript from "../components/examPreparation/ListeningTranscript.jsx";
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import "./ListeningExercisePage.css";
@@ -233,6 +234,8 @@ export default function ListeningExercisePage({
           });
         })
       );
+      const completedExercise = await fetchListeningExerciseDetail(exerciseId);
+      setExercise(completedExercise || exercise);
     } catch (error) {
       setErrorText(error?.message || "Antworten konnten nicht gespeichert werden.");
     }
@@ -419,6 +422,8 @@ export default function ListeningExercisePage({
             </label>
           </div>
         </section>
+
+        {isChecked ? <ListeningTranscript script={exercise?.script} /> : null}
 
         <section className="listening-exercise-questions">
           <div className="listening-exercise-questions__header">

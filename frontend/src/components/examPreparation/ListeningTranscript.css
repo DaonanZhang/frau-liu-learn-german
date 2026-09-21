@@ -1,0 +1,36 @@
+.listening-transcript {
+  padding: clamp(1rem, 2.5vw, 1.35rem);
+  border: 1px solid #d9e5df;
+  border-radius: 1.2rem;
+  background: #f7fbf9;
+  color: #263934;
+}
+
+.listening-transcript__header {
+  margin-bottom: 0.85rem;
+}
+
+.listening-transcript__header span {
+  color: #2f7d62;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.listening-transcript__header h2 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.1rem, 2vw, 1.35rem);
+}
+
+.listening-transcript__body {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.85;
+}
+
+@media (max-width: 640px) {
+  .listening-transcript {
+    border-radius: 1rem;
+  }
+}

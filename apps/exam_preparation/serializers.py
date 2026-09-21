@@ -115,6 +115,11 @@ class ListeningExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data["script"] = ""
+        return data
+
 
 class ListeningQuestionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -168,6 +173,7 @@ class ListeningQuestionDetailSerializer(serializers.ModelSerializer):
 class ListeningExerciseDetailSerializer(serializers.ModelSerializer):
     exercise_base = ExerciseBaseSerializer(read_only=True)
     questions = ListeningQuestionDetailSerializer(many=True, read_only=True)
+    script = serializers.SerializerMethodField()
 
     class Meta:
         model = ListeningExercise
@@ -183,6 +189,26 @@ class ListeningExerciseDetailSerializer(serializers.ModelSerializer):
             "questions",
         ]
         read_only_fields = fields
+
+    def get_script(self, exercise):
+        show_script = self.context.get("show_listening_script")
+        if show_script is not None:
+            return exercise.script if show_script else ""
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not getattr(user, "is_authenticated", False):
+            return ""
+
+        question_count = exercise.questions.count()
+        if question_count == 0:
+            return ""
+        answered_count = UserListeningQuestionState.objects.filter(
+            user=user,
+            question__listening_exercise=exercise,
+            is_correct__isnull=False,
+        ).count()
+        return exercise.script if answered_count == question_count else ""
 
 
 class ReadingTitleMatchingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):

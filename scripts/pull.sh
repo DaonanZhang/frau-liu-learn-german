@@ -6,10 +6,12 @@ STATE_DIR="$PROJECT_DIR/.deploy"
 STATE_FILE="$STATE_DIR/last_successful_commit"
 MODE="auto" # auto | hotfix | full
 DRY_RUN=false
+OVERWRITE_PUBLIC_CONFLICTS=false
 
 usage() {
   cat <<'EOF'
 Usage: bash scripts/pull.sh [--mode auto|hotfix|full] [--dry-run]
+                            [--overwrite-public-conflicts]
 
 Modes:
   auto     Classify changed files and choose the smallest safe deployment.
@@ -19,6 +21,10 @@ Modes:
 
 Options:
   --dry-run  Fetch and print the deployment plan without changing the checkout.
+  --overwrite-public-conflicts
+             Back up local changes below frontend/public/images and
+             frontend/public/manual to git stash, then deploy the Git version.
+             This never applies to frontend/public/resources.
 EOF
 }
 
@@ -30,6 +36,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN=true
+      shift
+      ;;
+    --overwrite-public-conflicts)
+      OVERWRITE_PUBLIC_CONFLICTS=true
       shift
       ;;
     -h|--help)
@@ -52,10 +62,50 @@ fi
 
 cd "$PROJECT_DIR"
 
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-  echo "Tracked files have local changes. Refusing to deploy over them."
-  git status --short --untracked-files=no
+TRACKED_DIRTY_FILES="$({
+  git diff --name-only
+  git diff --cached --name-only
+} | sort -u)"
+PUBLIC_CONFLICTS="$({
+  if [[ -n "$TRACKED_DIRTY_FILES" ]]; then
+    grep -E '^frontend/public/(images|manual)/' <<<"$TRACKED_DIRTY_FILES" || true
+  fi
+  git ls-files --others --exclude-standard -- \
+    frontend/public/images frontend/public/manual
+} | sort -u)"
+OTHER_TRACKED_CHANGES=""
+if [[ -n "$TRACKED_DIRTY_FILES" ]]; then
+  OTHER_TRACKED_CHANGES="$(
+    grep -Ev '^frontend/public/(images|manual)/' <<<"$TRACKED_DIRTY_FILES" || true
+  )"
+fi
+
+if [[ -n "$OTHER_TRACKED_CHANGES" ]]; then
+  echo "Tracked files outside public images/manual have local changes."
+  echo "Refusing to deploy over them:"
+  sed 's/^/  - /' <<<"$OTHER_TRACKED_CHANGES"
   exit 1
+fi
+
+if [[ -n "$PUBLIC_CONFLICTS" ]]; then
+  if [[ "$OVERWRITE_PUBLIC_CONFLICTS" != true ]]; then
+    echo "Local public image/manual conflicts detected:"
+    sed 's/^/  - /' <<<"$PUBLIC_CONFLICTS"
+    echo "Review them, then rerun with --overwrite-public-conflicts to use the Git versions."
+    echo "The local versions will be backed up to git stash first."
+    exit 1
+  fi
+
+  if [[ "$DRY_RUN" == true ]]; then
+    echo "Local public image/manual conflicts would be backed up and overwritten:"
+    sed 's/^/  - /' <<<"$PUBLIC_CONFLICTS"
+  else
+    echo "▶ Back up local public image/manual conflicts to git stash"
+    git stash push --include-untracked \
+      -m "server public conflicts before deploy $(date -u +%Y%m%dT%H%M%SZ)" \
+      -- frontend/public/images frontend/public/manual
+    echo "  Backup: $(git stash list -1 --format='%gd %s')"
+  fi
 fi
 
 CURRENT_HEAD="$(git rev-parse HEAD)"
@@ -94,6 +144,12 @@ matches_changed() {
   local pattern="$1"
   grep -Eq "$pattern" <<<"$CHANGED_FILES"
 }
+
+if matches_changed '^frontend/public/resources/'; then
+  echo "Runtime resources cannot be deployed by scripts/pull.sh."
+  echo "Use the dedicated media/COS workflow for frontend/public/resources."
+  exit 1
+fi
 
 frontend_changed=false
 frontend_public_only=false

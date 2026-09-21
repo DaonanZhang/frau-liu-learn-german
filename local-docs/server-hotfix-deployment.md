@@ -40,7 +40,7 @@ bash scripts/pull.sh --mode full
 ## Classification
 
 - documentation and tests: no runtime action
-- `frontend/public/` only: synchronize changed public files
+- `frontend/public/` only: synchronize changed public files, except resources
 - other `frontend/` files: build the frontend
 - ordinary `apps/`, `config/`, or `manage.py` changes: validate Django and
   gracefully reload Gunicorn workers
@@ -49,6 +49,35 @@ bash scripts/pull.sh --mode full
 
 The classifier is intentionally conservative. A hotfix flag never overrides a
 full-deployment requirement.
+
+## Runtime Resource Isolation
+
+`frontend/public/resources/` is runtime media and is never deployed by the
+frontend build. The frontend deployment:
+
+- disables Vite's automatic copying of the complete `public` directory
+- copies ordinary public files while excluding `public/resources/`
+- updates `frontend/dist/` while preserving the existing `dist/resources/`
+- refuses a deployment whose Git diff contains `frontend/public/resources/`
+
+Use the dedicated media and COS workflows for runtime resources. Do not use
+`pull.sh`, `pull_frontend.sh`, or `deploy_frontend.sh` to update them.
+
+Local server changes below `frontend/public/images/` or
+`frontend/public/manual/` stop the first deployment attempt. After reviewing
+the reported paths, explicitly prefer the Git versions with:
+
+```bash
+bash scripts/pull.sh --mode auto --overwrite-public-conflicts
+```
+
+Before overwriting, the script saves the local versions to Git stash. Runtime
+resources remain protected even when this flag is present.
+
+`frontend/public/images/wechat-qr.png` is server-managed and Git-ignored. All
+frontend deployment modes skip it and preserve the existing
+`frontend/dist/images/wechat-qr.png`. Update the source and served copies
+through the explicit QR-image operation, not through code deployment.
 
 ## First Rollout
 

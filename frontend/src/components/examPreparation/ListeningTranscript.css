@@ -1,16 +1,39 @@
 .listening-transcript {
-  padding: clamp(1rem, 2.5vw, 1.35rem);
   border: 1px solid #d9e5df;
   border-radius: 1.2rem;
   background: #f7fbf9;
   color: #263934;
+  overflow: hidden;
 }
 
-.listening-transcript__header {
-  margin-bottom: 0.85rem;
+.listening-transcript__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: clamp(1rem, 2.5vw, 1.35rem);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
 }
 
-.listening-transcript__header span {
+.listening-transcript__summary::-webkit-details-marker {
+  display: none;
+}
+
+.listening-transcript__summary:focus-visible {
+  outline: 3px solid rgba(47, 125, 98, 0.24);
+  outline-offset: -3px;
+}
+
+.listening-transcript__heading {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.listening-transcript__heading > span {
   color: #2f7d62;
   font-size: 0.76rem;
   font-weight: 800;
@@ -18,12 +41,28 @@
   text-transform: uppercase;
 }
 
-.listening-transcript__header h2 {
-  margin: 0.2rem 0 0;
+.listening-transcript__heading strong {
   font-size: clamp(1.1rem, 2vw, 1.35rem);
 }
 
+.listening-transcript__chevron {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: 0 0 auto;
+  border-right: 2px solid #2f7d62;
+  border-bottom: 2px solid #2f7d62;
+  transform: rotate(45deg) translateY(-0.2rem);
+  transition: transform 160ms ease;
+}
+
+.listening-transcript[open] .listening-transcript__chevron {
+  transform: rotate(225deg) translate(-0.1rem, -0.1rem);
+}
+
 .listening-transcript__body {
+  padding: 0 clamp(1rem, 2.5vw, 1.35rem) clamp(1rem, 2.5vw, 1.35rem);
+  border-top: 1px solid #e2ebe7;
+  padding-top: 1rem;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
   line-height: 1.85;

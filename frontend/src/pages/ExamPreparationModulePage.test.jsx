@@ -4,20 +4,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ExamPreparationModulePage from "./ExamPreparationModulePage.jsx";
 import { fetchSavedMockExams } from "../api/exam_preparation/mockExams.js";
+import Swal from "sweetalert2";
 
-vi.mock("../api/auth/useAuth.js", () => ({
-  useAuth: () => ({
-    user: {
-      id: 7,
-      entitlements: [{
-        status: "active",
-        module: { key: "exam_preparation" },
-        starts_at: "2026-01-01T00:00:00Z",
-        expires_at: "2027-01-01T00:00:00Z",
-      }],
-    },
-  }),
-}));
+const authMocks = vi.hoisted(() => ({ useAuth: vi.fn() }));
+
+vi.mock("../api/auth/useAuth.js", () => ({ useAuth: authMocks.useAuth }));
+vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
+
+function entitledUser(releaseAccess = true) {
+  return {
+    id: 7,
+    exam_preparation_release_access: releaseAccess,
+    entitlements: [{
+      status: "active",
+      module: { key: "exam_preparation" },
+      starts_at: "2026-01-01T00:00:00Z",
+      expires_at: "2027-01-01T00:00:00Z",
+    }],
+  };
+}
+
 vi.mock("../api/exam_preparation/mockExams.js", async (importOriginal) => {
   const actual = await importOriginal();
   return { ...actual, fetchSavedMockExams: vi.fn(), deleteSavedMockExam: vi.fn() };
@@ -41,6 +47,8 @@ describe("exam preparation mock exam entry", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    authMocks.useAuth.mockReturnValue({ user: entitledUser() });
+    Swal.fire.mockReset();
     fetchSavedMockExams.mockResolvedValue({
       count: 4,
       next: "/exam_preparation/saved-mock-exams/?scope=active&page=2&page_size=3",
@@ -76,5 +84,19 @@ describe("exam preparation mock exam entry", () => {
         "/modules/exam-preparation/mock-exam?attempt=31",
       );
     });
+  });
+
+  it("shows Coming Soon instead of loading or opening mock exams for other users", async () => {
+    authMocks.useAuth.mockReturnValue({ user: entitledUser(false) });
+    renderPage();
+
+    const entry = screen.getByLabelText("笔试模拟考试");
+    fireEvent.click(within(entry).getByRole("button", { name: "Coming Soon" }));
+
+    await waitFor(() => expect(Swal.fire).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Coming Soon",
+    })));
+    expect(fetchSavedMockExams).not.toHaveBeenCalled();
+    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation");
   });
 });

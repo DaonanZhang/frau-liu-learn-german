@@ -781,7 +781,7 @@ class ActivationCodeApiTests(APITestCase):
         self.assertIsNotNone(cache.get("activation_code:REDISROLLBACK"))
 
     @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
-    def test_exam_preview_gate_rejects_other_users_without_consuming_code(self) -> None:
+    def test_mock_exam_coming_soon_does_not_block_exam_entitlement_redemption(self) -> None:
         Module.objects.get_or_create(
             key="exam_preparation",
             defaults={"name": "备考季", "is_active": True},
@@ -796,12 +796,11 @@ class ActivationCodeApiTests(APITestCase):
         )
         store_activation_code(code="EXAMPREVIEW", payload=payload)
 
-        with self.assertRaisesRegex(ValueError, "备考季即将上线"):
-            apply_activation_code_for_user(user=self.user, code="EXAMPREVIEW")
+        apply_activation_code_for_user(user=self.user, code="EXAMPREVIEW")
 
         record = ActivationCodeRecord.objects.get(code="EXAMPREVIEW")
-        self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
-        self.assertFalse(
+        self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
+        self.assertTrue(
             Entitlement.objects.filter(user=self.user, module__key="exam_preparation").exists()
         )
 

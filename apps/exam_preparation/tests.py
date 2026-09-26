@@ -295,7 +295,7 @@ class ExamPreparationPermissionTests(APITestCase):
         self.assertEqual(write_response.status_code, status.HTTP_403_FORBIDDEN)
 
     @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
-    def test_coming_soon_gate_blocks_entitled_non_preview_user(self):
+    def test_mock_exam_coming_soon_does_not_block_existing_exam_content(self):
         Entitlement.objects.create(
             user=self.user,
             module=self.module,
@@ -307,11 +307,10 @@ class ExamPreparationPermissionTests(APITestCase):
 
         response = self.client.get(self.url)
 
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(response.data["code"], "exam_preparation_coming_soon")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
-    def test_coming_soon_gate_allows_preview_user_with_existing_entitlement(self):
+    def test_preview_user_can_also_read_existing_exam_content(self):
         preview_user = get_user_model().objects.create_user(
             telephone="110",
             password="test-password",
@@ -591,6 +590,50 @@ class MockExamApiTests(APITestCase):
         response = self.client.post(self.url, {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    def test_coming_soon_blocks_mock_exam_for_regular_paid_user(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+
+        response = self.client.post(self.url, {}, format="json")
+        history_response = self.client.get(reverse("exam-prep-saved-mock-exams-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["code"], "mock_exam_coming_soon")
+        self.assertEqual(response.data["message"], "模拟考试即将上线，敬请期待。")
+        self.assertEqual(history_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(history_response.data["code"], "mock_exam_coming_soon")
+
+    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    def test_coming_soon_allows_both_mock_exam_preview_accounts(self):
+        self.create_question_bank()
+
+        for telephone in ("110", "11223344551"):
+            with self.subTest(telephone=telephone):
+                preview_user = get_user_model().objects.create_user(
+                    telephone=telephone,
+                    password="test-password",
+                )
+                Entitlement.objects.create(
+                    user=preview_user,
+                    module=self.module,
+                    season=None,
+                    plan=Entitlement.Plan.MONTH_1,
+                    status=Entitlement.Status.ACTIVE,
+                )
+                self.client.force_authenticate(preview_user)
+
+                response = self.client.post(self.url, {}, format="json")
+
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+                history_response = self.client.get(reverse("exam-prep-saved-mock-exams-list"))
+                self.assertEqual(history_response.status_code, status.HTTP_200_OK)
 
     def test_paid_user_gets_clear_error_when_question_bank_is_incomplete(self):
         Entitlement.objects.create(

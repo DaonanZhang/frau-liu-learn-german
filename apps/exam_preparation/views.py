@@ -112,7 +112,6 @@ from apps.exam_preparation.serializers import (
 class BaseExamPreparationViewSet(ModelViewSet):
     permission_classes = [
         IsAuthenticated,
-        HasExamPreparationReleaseAccess,
         HasValidEntitlement,
         IsAdminOrReadOnly,
     ]
@@ -125,7 +124,6 @@ class BaseExamPreparationViewSet(ModelViewSet):
         if self.trial_access_enabled and self.action in {"list", "retrieve"}:
             return [
                 IsAuthenticated(),
-                HasExamPreparationReleaseAccess(),
                 IsAdminOrReadOnly(),
             ]
         return super().get_permissions()
@@ -144,7 +142,7 @@ class BaseExamPreparationViewSet(ModelViewSet):
 
 
 class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
-    permission_classes = [IsAuthenticated, HasExamPreparationReleaseAccess]
+    permission_classes = [IsAuthenticated]
     state_lookup_field = ""
     state_lookup_fields = ()
     ordering = ["-updated_at", "id"]
@@ -1228,7 +1226,7 @@ class SpeakingTeilExerciseViewSet(BaseExamPreparationViewSet):
 
     def get_permissions(self):
         if self.action == "turn_audio":
-            return [IsAuthenticated(), HasExamPreparationReleaseAccess(), IsAdminOrReadOnly()]
+            return [IsAuthenticated(), IsAdminOrReadOnly()]
         return super().get_permissions()
 
     @action(detail=True, methods=["get"], url_path=r"turn-audio/(?P<sequence>[0-9]+)")
@@ -1257,7 +1255,6 @@ class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
     serializer_class = UserExerciseFavoriteSerializer
     permission_classes = [
         IsAuthenticated,
-        HasExamPreparationReleaseAccess,
         HasValidEntitlement,
     ]
     filterset_fields = ["exercise"]
@@ -1277,7 +1274,6 @@ class FavoriteQuestionViewSet(ViewSet):
 
     permission_classes = [
         IsAuthenticated,
-        HasExamPreparationReleaseAccess,
         HasValidEntitlement,
     ]
     required_module_key = "exam_preparation"

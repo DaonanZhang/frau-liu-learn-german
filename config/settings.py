@@ -67,8 +67,8 @@ REST_FRAMEWORK = {
 
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
-# Temporary release gate for the exam-preparation module. When enabled, only
-# the dedicated preview accounts can enter, activate, or purchase this module.
+# Temporary release gate for mock exams. Existing exam-preparation features
+# remain available; only the dedicated preview accounts can use mock exams.
 EXAM_PREPARATION_COMING_SOON_ENABLED = env.bool(
     "EXAM_PREPARATION_COMING_SOON_ENABLED",
     default=False,

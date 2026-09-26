@@ -85,7 +85,7 @@ export default function Navigator() {
             </button>
           ) : null}
 
-          {isExamPreparationActive ? (
+          {isExamPreparationActive && user?.exam_preparation_release_access !== false ? (
             <button
               className={["nav-btn", isExamPreparationRecordsActive ? "nav-btn--active" : ""].filter(Boolean).join(" ")}
               type="button"

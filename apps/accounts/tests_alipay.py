@@ -99,7 +99,11 @@ class AlipayPaymentApiTests(APITestCase):
         )
 
     @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
-    def test_coming_soon_gate_blocks_exam_purchase_before_creating_order(self) -> None:
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_mock_exam_coming_soon_does_not_block_exam_purchase(
+        self,
+        mock_get_alipay_service: Mock,
+    ) -> None:
         exam_module, _ = Module.objects.get_or_create(
             key="exam_preparation",
             defaults={"name": "备考季", "is_active": True},
@@ -114,6 +118,9 @@ class AlipayPaymentApiTests(APITestCase):
             currency="CNY",
             is_active=True,
         )
+        mock_get_alipay_service.return_value.build_page_pay_url.return_value = (
+            "https://alipay.test/pay"
+        )
 
         response = self.client.post(
             "/api/accounts/payments/alipay/create/",
@@ -124,9 +131,9 @@ class AlipayPaymentApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["detail"][0], "备考季即将上线，敬请期待。")
-        self.assertFalse(AlipayWebsitePayment.objects.exists())
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["offer_code"], exam_offer.code)
+        self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
 
     @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
     @patch("apps.accounts.views.payment.get_alipay_service")

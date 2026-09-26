@@ -41,6 +41,7 @@
 .mock-exam-kicker { color: #5e756e; font-size: 0.77rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .mock-exam-back { display: block; margin: 0 0 0.3rem; padding: 0; border: 0; background: none; color: #5e756e; cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 750; }
 
+.mock-exam-timer-actions { display: flex; align-items: stretch; gap: 0.5rem; }
 .mock-exam-timer {
   flex: 0 0 auto;
   min-width: 9.2rem;
@@ -53,6 +54,8 @@
 .mock-exam-timer span, .mock-exam-timer small { display: block; opacity: 0.72; font-size: 0.7rem; }
 .mock-exam-timer strong { display: block; margin: 0.08rem 0; font-variant-numeric: tabular-nums; font-size: 1.72rem; letter-spacing: 0.04em; }
 .mock-exam-timer.is-urgent { background: #a63f36; animation: exam-pulse 1.8s ease-in-out infinite; }
+.mock-exam-submit-early { display: inline-flex; align-items: center; justify-content: center; min-height: 2.7rem; padding: 0.65rem 0.9rem; border: 1px solid #a63f36; border-radius: 0.8rem; background: #fff7f6; color: #92362f; cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 850; }
+.mock-exam-submit-early:hover { background: #a63f36; color: white; }
 @keyframes exam-pulse { 50% { box-shadow: 0 0 0 5px rgba(166, 63, 54, 0.15); } }
 
 .mock-exam-part-nav {
@@ -147,6 +150,7 @@
 .mock-exam-state h1, .mock-exam-state p { margin: 0; }
 .mock-exam-state > a:not(.mock-exam-primary) { color: #526b63; }
 .mock-exam-state--collection { max-width: 44rem; min-height: 65vh; margin: auto; border-radius: 2rem; background: radial-gradient(circle at top, #f7ebce, #f6faf7 58%); }
+.mock-exam-collection-timer { display: flex; align-items: center; gap: 1rem; }
 .mock-exam-big-time { font-size: clamp(3.5rem, 10vw, 6.5rem); font-variant-numeric: tabular-nums; }
 .mock-exam-spinner { width: 2.5rem; height: 2.5rem; border: 4px solid #d8e8e0; border-top-color: #176b56; border-radius: 50%; animation: exam-spin 0.85s linear infinite; }
 @keyframes exam-spin { to { transform: rotate(360deg); } }
@@ -175,6 +179,7 @@
 .mock-exam-grade-picker strong { font-size: 1.25rem; }
 .mock-exam-grade-picker span { color: #687a73; font-size: 0.8rem; }
 .mock-exam-grade-picker p { grid-column: 1 / -1; margin: 0.35rem 0 0; color: #52645d; font-size: 0.78rem; line-height: 1.5; }
+.mock-exam-writing-review__actions { display: flex; justify-content: flex-end; gap: 0.65rem; }
 
 .mock-exam-result-modal-backdrop { position: fixed; z-index: 110; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: 1rem; background: rgba(12, 29, 25, 0.76); backdrop-filter: blur(9px); }
 .mock-exam-result-modal { width: min(31rem, 100%); padding: clamp(1.4rem, 5vw, 2.4rem); border-radius: 1.5rem; background: #fff; color: #263a34; text-align: center; box-shadow: 0 30px 80px rgba(4, 17, 13, 0.34); animation: mock-result-card-in 360ms ease-out both; }
@@ -269,6 +274,7 @@
   .mock-exam-header { top: 0.35rem; }
   .mock-exam-header { align-items: flex-start; }
   .mock-exam-header__actions { max-width: 58%; }
+  .mock-exam-timer-actions { flex-wrap: wrap; justify-content: flex-end; }
   .mock-exam-writing-grid, .mock-exam-results { grid-template-columns: 1fr; }
   .mock-exam-writing-field textarea { min-height: 20rem; }
   .mock-exam-options { grid-template-columns: 1fr; }
@@ -280,6 +286,7 @@
   .mock-exam-header { align-items: stretch; padding: 0.8rem; border-radius: 1rem; }
   .mock-exam-header__actions { max-width: none; }
   .mock-exam-utility { flex: 1 1 auto; }
+  .mock-exam-timer-actions { flex: 1 1 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(7rem, auto); }
   .mock-exam-header h1 { font-size: 1.18rem; }
   .mock-exam-timer { min-width: 6.6rem; padding: 0.55rem 0.6rem; }
   .mock-exam-timer strong { font-size: 1.3rem; }
@@ -299,6 +306,9 @@
   .mock-exam-result-grid { grid-template-columns: 1fr; }
   .mock-exam-review-backdrop { padding: 0; }
   .mock-exam-writing-review { min-height: 100%; border-radius: 0; }
+  .mock-exam-writing-review__actions { align-items: stretch; flex-direction: column; }
+  .mock-exam-writing-review__actions button { width: 100%; }
+  .mock-exam-collection-timer { align-items: stretch; flex-direction: column; }
   .mock-answer-sheet { top: auto; right: 0.4rem; bottom: 0.4rem; left: 0.4rem; width: auto; max-height: 80vh; transform: none !important; border-radius: 1rem; }
   .mock-answer-sheet__parts { grid-template-columns: 1fr; }
 }

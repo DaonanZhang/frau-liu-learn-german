@@ -79,14 +79,12 @@ export default function MockExamAnswerSheet({ rows, answers, onAnswer, review, o
                           <strong>{row.number}</strong>
                           <div className="mock-answer-sheet__bubbles">
                             {row.optionKeys.map((optionKey) => {
-                              const selectedCorrect = review && selected === optionKey && optionKey === row.correctKey;
-                              const selectedWrong = review && selected === optionKey && optionKey !== row.correctKey;
                               const correctAnswer = review && optionKey === row.correctKey;
                               return (
                                 <button
                                   type="button"
                                   key={optionKey}
-                                  className={`${selected === optionKey ? "is-selected" : ""}${selectedCorrect || correctAnswer ? " is-correct" : ""}${selectedWrong ? " is-wrong" : ""}`}
+                                  className={`${!review && selected === optionKey ? "is-selected" : ""}${correctAnswer ? " is-correct" : ""}`}
                                   onClick={() => row.editable && onAnswer(row.answerKey, optionKey)}
                                   disabled={!row.editable}
                                   aria-label={`第 ${row.number} 题，答案 ${optionKey}`}
@@ -107,7 +105,7 @@ export default function MockExamAnswerSheet({ rows, answers, onAnswer, review, o
           </section>
         ))}
       </div>
-      <footer><span className="is-answered" />已作答 {review ? <><span className="is-correct" />正确 <span className="is-wrong" />错误</> : null}</footer>
+      <footer><span className="is-answered" />已作答 {review ? <><span className="is-correct" />正确答案 <span className="is-wrong" />错误或未作答</> : null}</footer>
     </aside>
   );
 }

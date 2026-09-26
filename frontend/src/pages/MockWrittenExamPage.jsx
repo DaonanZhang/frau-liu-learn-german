@@ -68,6 +68,12 @@ const EMPTY_WRITING_ASSESSMENT = {
   communicative_design: "",
   formal_accuracy: "",
 };
+const EARLY_SUBMISSION_WRITING_ASSESSMENT = {
+  topic_relevant: true,
+  task_completion: "D",
+  communicative_design: "D",
+  formal_accuracy: "D",
+};
 const WRITING_CRITERIA = [
   {
     key: "task_completion",
@@ -177,7 +183,7 @@ function textBlocks(text) {
 
 function ChoiceField({ value, options, onChange, disabled, review, correctKey, label, variant = "reading", favorite }) {
   const isCorrect = review && value && value === correctKey;
-  const isWrong = review && value && value !== correctKey;
+  const isWrong = review && value !== correctKey;
   const prefix = variant === "listening" ? "listening-exercise" : "reading-understanding";
   return (
     <article className={`${prefix}-question-card mock-exam-choice-field${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}>
@@ -190,13 +196,13 @@ function ChoiceField({ value, options, onChange, disabled, review, correctKey, l
           return (
             <label
               key={optionKey}
-              className={`${prefix}-option${value === optionKey && !review ? ` ${prefix}-option--selected` : ""}${showCorrect ? ` ${prefix}-option--correct` : ""}${review && value === optionKey && !showCorrect ? ` ${prefix}-option--wrong` : ""}`}
+              className={`${prefix}-option${value === optionKey && !review ? ` ${prefix}-option--selected` : ""}${showCorrect ? ` ${prefix}-option--correct` : ""}`}
             >
               <input
                 type="radio"
                 name={label || correctKey}
                 value={optionKey}
-                checked={value === optionKey}
+                checked={review ? showCorrect : value === optionKey}
                 onChange={() => onChange(optionKey)}
                 disabled={disabled}
               />
@@ -208,7 +214,7 @@ function ChoiceField({ value, options, onChange, disabled, review, correctKey, l
       </div>
       {review ? (
         <p className={`mock-exam-feedback ${isCorrect ? "is-correct" : "is-wrong"}`}>
-          {isCorrect ? "回答正确" : `正确答案：${correctKey || "—"}`}
+          {isCorrect ? "回答正确" : `${value ? "回答错误" : "未作答"}，正确答案：${correctKey || "—"}`}
         </p>
       ) : null}
     </article>
@@ -218,21 +224,22 @@ function ChoiceField({ value, options, onChange, disabled, review, correctKey, l
 function MatchingSelect({ value, options, correctKey, onChange, disabled, review, variant = "cloze", title = "", favorite }) {
   const [open, setOpen] = useState(false);
   const stateClass = review ? (value === correctKey ? " is-correct" : " is-wrong") : "";
-  const selected = options.find((option) => option.option_key === value);
+  const displayedValue = review ? correctKey : value;
+  const selected = options.find((option) => option.option_key === displayedValue);
   const buttonClass = variant === "title"
-    ? `reading-title-select reading-title-select-trigger${value && !review ? " reading-title-select--selected" : ""}${review && value === correctKey ? " reading-title-select--correct" : ""}${review && value && value !== correctKey ? " reading-title-select--wrong" : ""}`
-    : `cloze-choice-slot-trigger${value ? " cloze-drop-slot__chip" : " cloze-choice-slot-trigger--empty"}${review && value === correctKey ? " cloze-drop-slot__chip--correct" : ""}${review && value && value !== correctKey ? " cloze-drop-slot__chip--wrong" : ""}`;
+    ? `reading-title-select reading-title-select-trigger${value && !review ? " reading-title-select--selected" : ""}${review ? " reading-title-select--correct" : ""}`
+    : `cloze-choice-slot-trigger${displayedValue ? " cloze-drop-slot__chip" : " cloze-choice-slot-trigger--empty"}${review ? " cloze-drop-slot__chip--correct" : ""}`;
   return (
     <span className={`mock-exam-inline-answer${stateClass}`}>
       <button type="button" className={buttonClass} disabled={disabled} onClick={() => setOpen(true)}
         aria-haspopup="dialog" aria-expanded={open}>
         {selected?.option_text || (variant === "title" ? "Überschrift auswählen" : "请选择")}
       </button>
-      <ExerciseOptionSheet open={open} title={title || "请选择答案"} selectedValue={value || ""}
+      <ExerciseOptionSheet open={open} title={title || "请选择答案"} selectedValue={displayedValue || ""}
         options={options.map((option) => ({ value: option.option_key, label: option.option_text, meta: option.option_key }))}
         onClose={() => setOpen(false)} onSelect={onChange} />
       {favorite ? <ExerciseFavoriteButton {...favorite} /> : null}
-      {review && value !== correctKey ? <small>正确：{correctKey}</small> : null}
+      {review && value !== correctKey ? <small>{value ? "回答错误" : "未作答"}，正确答案：{correctKey || "—"}</small> : null}
     </span>
   );
 }
@@ -468,15 +475,16 @@ export default function MockWrittenExamPage() {
   const [questionFavorites, setQuestionFavorites] = useState({});
   const [questionFavoritePending, setQuestionFavoritePending] = useState({});
   const [resultModalOpen, setResultModalOpen] = useState(false);
+  const [wasEarlySubmitted, setWasEarlySubmitted] = useState(false);
 
   const persist = useCallback((next = {}) => {
-    const snapshot = { exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, ...next };
+    const snapshot = { exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, wasEarlySubmitted, ...next };
     if (snapshot.exam) {
       const serialized = JSON.stringify(snapshot);
       sessionStorage.setItem(sessionKey, serialized);
       localStorage.setItem(sessionKey, serialized);
     }
-  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, sessionKey]);
+  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, wasEarlySubmitted, sessionKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -489,6 +497,7 @@ export default function MockWrittenExamPage() {
           setExam(saved.exam); setAnswers(saved.answers || {}); setWritingText(saved.writing_text || "");
           setWritingAssessment(normalizeWritingAssessment(saved.writing_assessment, saved.writing_grade));
           setAttemptId(saved.id); setIsFavorite(saved.is_favorite); setIsSavedReview(true);
+          setWasEarlySubmitted(!!saved.progress?.early_submitted);
           setPhase("results"); setDeadline(0); setActivePart(READING_PART_KEYS[0]); setNow(Date.now());
           return;
         } catch (error) {
@@ -511,6 +520,7 @@ export default function MockWrittenExamPage() {
           setPhase(progress.phase || "reading"); setDeadline(Number(progress.deadline) || Date.now());
           setActivePart(progress.active_part || READING_PART_KEYS[0]); setAudioStep(Number(progress.audio_step) || 0);
           setAudioStepStartedAt(Number(progress.audio_step_started_at) || Date.now()); setNow(Date.now());
+          setWasEarlySubmitted(!!progress.early_submitted);
           setIsSavedReview(false); localStorage.setItem(activeAttemptKey, String(saved.id));
           return;
         } catch (error) {
@@ -532,6 +542,7 @@ export default function MockWrittenExamPage() {
             setWritingText(restored.writingText || "");
             setWritingAssessment(normalizeWritingAssessment(restored.writingAssessment, restored.writingGrade));
             setAudioStep(restored.audioStep || 0); setAudioStepStartedAt(restored.audioStepStartedAt || Date.now());
+            setWasEarlySubmitted(!!restored.wasEarlySubmitted);
             setAttemptId(restored.attemptId || restored.savedExamId || null); setIsFavorite(!!restored.isFavorite); setIsSavedReview(false);
             return;
           }
@@ -552,7 +563,7 @@ export default function MockWrittenExamPage() {
           setPhase(progress.phase || "reading"); setDeadline(Number(progress.deadline) || Date.now());
           setActivePart(progress.active_part || READING_PART_KEYS[0]); setAudioStep(Number(progress.audio_step) || 0);
           setAudioStepStartedAt(Number(progress.audio_step_started_at) || Date.now()); setNow(Date.now());
-          setIsSavedReview(false);
+          setWasEarlySubmitted(!!progress.early_submitted); setIsSavedReview(false);
           return;
         } catch {
           localStorage.removeItem(activeAttemptKey);
@@ -567,13 +578,13 @@ export default function MockWrittenExamPage() {
         setNow(Date.now());
         setExam(data); setPhase("reading"); setDeadline(nextDeadline); setActivePart(READING_PART_KEYS[0]);
         setAnswers({}); setWritingText(""); setWritingAssessment({ ...EMPTY_WRITING_ASSESSMENT });
-        setAudioStep(0); setAudioStepStartedAt(0);
+        setAudioStep(0); setAudioStepStartedAt(0); setWasEarlySubmitted(false);
         setAttemptId(data.attempt_id); setIsFavorite(false); setIsSavedReview(false); setFavoriteMessage("");
         localStorage.setItem(activeAttemptKey, String(data.attempt_id));
         const initialSnapshot = JSON.stringify({ exam: data, phase: "reading", deadline: nextDeadline,
           activePart: READING_PART_KEYS[0], answers: {}, writingText: "",
           writingAssessment: { ...EMPTY_WRITING_ASSESSMENT }, audioStep: 0,
-          audioStepStartedAt: 0, attemptId: data.attempt_id, isFavorite: false });
+          audioStepStartedAt: 0, attemptId: data.attempt_id, isFavorite: false, wasEarlySubmitted: false });
         sessionStorage.setItem(sessionKey, initialSnapshot);
         localStorage.setItem(sessionKey, initialSnapshot);
       } catch (error) {
@@ -596,7 +607,7 @@ export default function MockWrittenExamPage() {
   useEffect(() => {
     if (!exam || isSavedReview) return;
     persist();
-  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, isSavedReview, persist]);
+  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, wasEarlySubmitted, isSavedReview, persist]);
 
   useEffect(() => {
     if (!attemptId || isSavedReview) return undefined;
@@ -608,14 +619,14 @@ export default function MockWrittenExamPage() {
           writing_assessment: writingAssessment,
           is_completed: phase === "results",
           is_favorite: isFavorite,
-          progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt },
+          progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, early_submitted: wasEarlySubmitted },
         });
       } catch {
         setFavoriteMessage("考试进度保存失败，请检查网络后继续");
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [attemptId, isSavedReview, answers, writingText, writingAssessment, phase, deadline, activePart, audioStep, audioStepStartedAt, isFavorite]);
+  }, [attemptId, isSavedReview, answers, writingText, writingAssessment, phase, deadline, activePart, audioStep, audioStepStartedAt, isFavorite, wasEarlySubmitted]);
 
   useEffect(() => {
     if (phase !== "results" || !exam?.parts) return undefined;
@@ -714,20 +725,30 @@ export default function MockWrittenExamPage() {
   }, [phase, currentAudioAction, audioStepStartedAt, playCurrentAudio, advanceAudioStep]);
 
   function setAnswer(key, value) { setAnswers((previous) => ({ ...previous, [key]: value })); }
-  function finishReadingEarly() { if (window.confirm("确定提前交卷并进入听力部分吗？提交后不能返回修改。")) enterListening(); }
-  function finishListeningEarly() { if (window.confirm("确定提前结束听力并进入写作部分吗？提交后不能返回修改。")) enterWriting(); }
+  function finishReadingEarly() { if (window.confirm("确定结束阅读部分并进入听力吗？进入后不能返回修改阅读答案。")) enterListening(); }
+  function finishListeningEarly() { if (window.confirm("确定结束听力部分并进入写作吗？进入后不能返回修改听力答案。")) enterWriting(); }
   function submitWriting() { if (window.confirm("确定提交写作吗？提交后将展示范文并进行自评。")) { setPhase("writing_review"); setDeadline(0); } }
-  async function finishSelfAssessment() {
-    if (!isWritingAssessmentComplete(writingAssessment)) return;
+  async function completeExam(finalWritingAssessment, earlySubmitted = false) {
+    audioRef.current?.pause();
+    setNeedsAudioGesture(false);
+    setAnswerSheetOpen(false);
+    setWritingAssessment(finalWritingAssessment);
+    setWasEarlySubmitted(earlySubmitted);
     setResultModalOpen(true);
     setPhase("results"); setDeadline(0); setActivePart(READING_PART_KEYS[0]);
-    persist({ phase: "results", deadline: 0, activePart: READING_PART_KEYS[0] });
+    persist({
+      phase: "results",
+      deadline: 0,
+      activePart: READING_PART_KEYS[0],
+      writingAssessment: finalWritingAssessment,
+      wasEarlySubmitted: earlySubmitted,
+    });
     if (attemptId && !isSavedReview) {
       try {
         await updateSavedMockExam(attemptId, {
-          answers, writing_text: writingText, writing_assessment: writingAssessment, is_completed: true,
+          answers, writing_text: writingText, writing_assessment: finalWritingAssessment, is_completed: true,
           is_favorite: isFavorite,
-          progress: { phase: "results", deadline: 0, active_part: READING_PART_KEYS[0], audio_step: audioStep, audio_step_started_at: audioStepStartedAt },
+          progress: { phase: "results", deadline: 0, active_part: READING_PART_KEYS[0], audio_step: audioStep, audio_step_started_at: audioStepStartedAt, early_submitted: earlySubmitted },
         });
         const completed = await fetchSavedMockExam(attemptId);
         if (completed?.is_completed && completed?.exam) {
@@ -738,9 +759,17 @@ export default function MockWrittenExamPage() {
       }
     }
   }
+  function submitExamEarly() {
+    if (!window.confirm("确定提前交卷吗？确认后将立即结算，所有未作答的题目都会按错误计算，且不能继续修改。")) return;
+    completeExam({ ...EARLY_SUBMISSION_WRITING_ASSESSMENT }, true);
+  }
+  async function finishSelfAssessment() {
+    if (!isWritingAssessmentComplete(writingAssessment)) return;
+    await completeExam(writingAssessment, false);
+  }
   function newExam() {
     sessionStorage.removeItem(sessionKey); localStorage.removeItem(sessionKey); localStorage.removeItem(activeAttemptKey);
-    setExam(null); setAttemptId(null); setIsFavorite(false); setIsSavedReview(false);
+    setExam(null); setAttemptId(null); setIsFavorite(false); setIsSavedReview(false); setWasEarlySubmitted(false);
     createRequestIdRef.current = createRequestId();
     if (savedExamParam || attemptParam) navigate("/modules/exam-preparation/mock-exam", { replace: true });
     else setLoadKey((value) => value + 1);
@@ -777,7 +806,7 @@ export default function MockWrittenExamPage() {
         writing_assessment: writingAssessment,
         is_completed: phase === "results",
         is_favorite: true,
-        progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt },
+        progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, early_submitted: wasEarlySubmitted },
       });
       setAttemptId(saved.id); setIsFavorite(true);
       localStorage.setItem(activeAttemptKey, String(saved.id));
@@ -851,7 +880,7 @@ export default function MockWrittenExamPage() {
   if (!exam) return null;
 
   if (phase === "collection") {
-    return <><div className="mock-exam-state mock-exam-state--collection"><span className="mock-exam-kicker">第一部分已收卷</span><h1>答案已锁定</h1><p>听力考试将在倒计时结束后自动开始，请准备好耳机并保持页面开启。</p><strong className="mock-exam-big-time">{formatTime(remainingSeconds)}</strong><button className="mock-exam-primary" onClick={enterListening}>立即进入听力</button><button className="mock-answer-sheet-launch" onClick={() => setAnswerSheetOpen(true)}>打开答题卡</button></div><MockExamAnswerSheet rows={answerSheetRows} answers={answers} onAnswer={setAnswer} review={false} open={answerSheetOpen} onClose={() => setAnswerSheetOpen(false)} /></>;
+    return <><div className="mock-exam-state mock-exam-state--collection"><span className="mock-exam-kicker">第一部分已收卷</span><h1>答案已锁定</h1><p>听力考试将在倒计时结束后自动开始，请准备好耳机并保持页面开启。</p><div className="mock-exam-collection-timer"><strong className="mock-exam-big-time">{formatTime(remainingSeconds)}</strong><button className="mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div><button className="mock-exam-primary" onClick={enterListening}>立即进入听力</button><button className="mock-answer-sheet-launch" onClick={() => setAnswerSheetOpen(true)}>打开答题卡</button></div><MockExamAnswerSheet rows={answerSheetRows} answers={answers} onAnswer={setAnswer} review={false} open={answerSheetOpen} onClose={() => setAnswerSheetOpen(false)} /></>;
   }
 
   if (phase === "writing_review") {
@@ -893,7 +922,10 @@ export default function MockWrittenExamPage() {
               </fieldset>
             ))}
           </div> : null}
-          <button className="mock-exam-primary" disabled={!isWritingAssessmentComplete(writingAssessment)} onClick={finishSelfAssessment}>查看总成绩</button>
+          <div className="mock-exam-writing-review__actions">
+            <button className="mock-exam-submit-early" onClick={submitExamEarly}>跳过自评并立即结算</button>
+            <button className="mock-exam-primary" disabled={!isWritingAssessmentComplete(writingAssessment)} onClick={finishSelfAssessment}>查看总成绩</button>
+          </div>
         </section>
       </div>
     );
@@ -910,7 +942,7 @@ export default function MockWrittenExamPage() {
         <div className="mock-exam-header__actions">
           <button className="mock-exam-utility" onClick={() => setAnswerSheetOpen(true)}>▦ 答题卡</button>
           {isResults ? <button className={`mock-exam-utility${isFavorite ? " is-favorite" : ""}`} disabled={favoritePending} onClick={toggleFavorite}>{isFavorite ? "★ 已收藏" : "☆ 收藏本卷"}</button> : null}
-          {!isResults ? <div className={`mock-exam-timer${remainingSeconds <= 300 ? " is-urgent" : ""}`}><span>剩余时间</span><strong>{formatTime(remainingSeconds)}</strong><small>{phase === "reading" ? "90 分钟" : "30 分钟"}</small></div> : <button className="mock-exam-primary" onClick={newExam}>再考一套</button>}
+          {!isResults ? <div className="mock-exam-timer-actions"><div className={`mock-exam-timer${remainingSeconds <= 300 ? " is-urgent" : ""}`}><span>剩余时间</span><strong>{formatTime(remainingSeconds)}</strong><small>{phase === "reading" ? "90 分钟" : "30 分钟"}</small></div><button className="mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div> : <button className="mock-exam-primary" onClick={newExam}>再考一套</button>}
         </div>
       </header>
       {favoriteMessage ? <p className="mock-exam-save-message" aria-live="polite">{favoriteMessage}</p> : null}
@@ -939,7 +971,7 @@ export default function MockWrittenExamPage() {
             <article><span>Lesen</span><strong>{scores.reading.toFixed(2)} / 75</strong><small>{scores.readingCorrect} / 20 题</small></article>
             <article><span>Sprachbausteine</span><strong>{scores.cloze.toFixed(2)} / 30</strong><small>{scores.clozeCorrect} / 20 题</small></article>
             <article><span>Hören</span><strong>{scores.listening.toFixed(2)} / 75</strong><small>{scores.listeningCorrect} / 20 题</small></article>
-            <article><span>Schreiben</span><strong>{scores.writing} / 45</strong><small>{writingAssessment.topic_relevant === false ? "主题偏离" : "三项自评"}</small></article>
+            <article><span>Schreiben</span><strong>{scores.writing} / 45</strong><small>{wasEarlySubmitted ? (writingText.trim() ? "提前交卷，按 0 分" : "未作答，按 0 分") : writingAssessment.topic_relevant === false ? "主题偏离" : "三项自评"}</small></article>
           </div>
         </section>
       ) : null}
@@ -965,7 +997,7 @@ export default function MockWrittenExamPage() {
         disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
         favoriteFor={favoriteFor} />
 
-      {!isResults ? <footer className="mock-exam-footer"><div><strong>提交后不能返回本部分</strong><span>请确认所有 Teil 的答案。</span></div>{phase === "reading" ? <button onClick={finishReadingEarly}>提前交卷，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>提前结束，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
+      {!isResults ? <footer className="mock-exam-footer"><div><strong>进入下一部分后不能返回</strong><span>如需立刻结算，请使用计时器旁的“提前交卷”。</span></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
       <MockExamAnswerSheet rows={answerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults}
         open={answerSheetOpen} onClose={() => setAnswerSheetOpen(false)} />
     </div>

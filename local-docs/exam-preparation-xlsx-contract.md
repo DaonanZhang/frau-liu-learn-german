@@ -609,6 +609,11 @@ Shared mapping:
   `SPEAKING_TEIL3` exercise type
 - every workbook contains exactly one exercise
 - the normalized payload is stored in `SpeakingTeilExercise.content`
+- each imported dialogue turn receives an `audio_url` under
+  `frontend/public/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/teil1/`,
+  `teil2/`, or `teil3/` according to its fixed exercise type
+- Teil 3 stores the same turn URL in both `content.dialogue[]` and the matching
+  `content.sections[].turns[]` entry
 
 ### 5.2 Teil 1 — Einander kennenlernen
 

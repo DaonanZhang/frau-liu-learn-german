@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  publicDir:
+    process.env.DEPLOY_SKIP_RUNTIME_RESOURCES === "1" ? false : "public",
   server: {
     proxy: {
       "/api": {

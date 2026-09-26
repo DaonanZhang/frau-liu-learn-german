@@ -65,7 +65,7 @@ function DialogueTurn({ turn, recorderId, showPractice = false, favoriteProps = 
       <p>{turn.text}</p>
       {showPractice ? (
         <div className="speaking-detail-turn__practice">
-          <SpeakingPracticeRecorder language="zh" recordingId={recorderId} />
+          <SpeakingPracticeRecorder key={recorderId} language="zh" recordingId={recorderId} audioUrl={turn.audio_url} />
           {favoriteProps ? <ExerciseFavoriteButton {...favoriteProps} /> : null}
         </div>
       ) : null}

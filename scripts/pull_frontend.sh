@@ -4,12 +4,19 @@ set -euo pipefail
 PROJECT_ROOT="/srv/projects/frau-liu-learn-german"
 FRONTEND_DIR="$PROJECT_ROOT/frontend"
 DIST_DIR="$FRONTEND_DIR/dist"
+PUBLIC_DIR="$FRONTEND_DIR/public"
+QR_IMAGE_RELATIVE_PATH="images/wechat-qr.png"
 
 MODE="auto" # auto | build | sync-public | no-build
+FROM_REF=""
+TO_REF=""
+OVERWRITE_PUBLIC_CONFLICTS=false
 
 usage() {
   cat <<'EOF'
 Usage: bash scripts/pull_frontend.sh [--mode auto|build|sync-public|no-build]
+                                     [--from-ref REF --to-ref REF]
+                                     [--overwrite-public-conflicts]
 
 Modes:
   auto         Default. Decide automatically:
@@ -19,6 +26,15 @@ Modes:
   build        Force full frontend build.
   sync-public  Force "only sync frontend/public changed files" (requires existing dist).
   no-build     Never run build. If only public changed, sync them; otherwise skip.
+
+Refs:
+  When --from-ref and --to-ref are provided, do not pull. Deploy the changes
+  between those commits. Both options must be provided together.
+
+Safety:
+  --overwrite-public-conflicts
+      Back up local images/manual changes to Git stash and use Git versions.
+      This never permits changes to frontend/public/resources.
 EOF
 }
 
@@ -27,6 +43,18 @@ while [[ $# -gt 0 ]]; do
     --mode)
       MODE="${2:-}"
       shift 2
+      ;;
+    --from-ref)
+      FROM_REF="${2:-}"
+      shift 2
+      ;;
+    --to-ref)
+      TO_REF="${2:-}"
+      shift 2
+      ;;
+    --overwrite-public-conflicts)
+      OVERWRITE_PUBLIC_CONFLICTS=true
+      shift
       ;;
     -h|--help)
       usage
@@ -46,14 +74,72 @@ if [[ "$MODE" != "auto" && "$MODE" != "build" && "$MODE" != "sync-public" && "$M
   exit 1
 fi
 
+if [[ -n "$FROM_REF" || -n "$TO_REF" ]]; then
+  if [[ -z "$FROM_REF" || -z "$TO_REF" ]]; then
+    echo "Both --from-ref and --to-ref are required together."
+    exit 1
+  fi
+fi
+
 cd "$PROJECT_ROOT"
 
 echo "▶ Frontend pull mode: $MODE"
 
-OLD_HEAD="$(git rev-parse HEAD)"
-echo "▶ git pull"
-git pull
-NEW_HEAD="$(git rev-parse HEAD)"
+TRACKED_DIRTY_FILES="$({
+  git diff --name-only
+  git diff --cached --name-only
+} | sort -u)"
+PUBLIC_CONFLICTS="$({
+  if [[ -n "$TRACKED_DIRTY_FILES" ]]; then
+    grep -E '^frontend/public/(images|manual)/' <<<"$TRACKED_DIRTY_FILES" || true
+  fi
+  git ls-files --others --exclude-standard -- \
+    frontend/public/images frontend/public/manual
+} | sort -u)"
+OTHER_TRACKED_CHANGES=""
+if [[ -n "$TRACKED_DIRTY_FILES" ]]; then
+  OTHER_TRACKED_CHANGES="$(
+    grep -Ev '^frontend/public/(images|manual)/' <<<"$TRACKED_DIRTY_FILES" || true
+  )"
+fi
+
+if [[ -n "$OTHER_TRACKED_CHANGES" ]]; then
+  echo "Tracked files outside public images/manual have local changes."
+  sed 's/^/  - /' <<<"$OTHER_TRACKED_CHANGES"
+  exit 1
+fi
+
+if [[ -n "$PUBLIC_CONFLICTS" ]]; then
+  if [[ "$OVERWRITE_PUBLIC_CONFLICTS" != true ]]; then
+    echo "Local public image/manual conflicts detected:"
+    sed 's/^/  - /' <<<"$PUBLIC_CONFLICTS"
+    echo "Rerun with --overwrite-public-conflicts to use the Git versions."
+    exit 1
+  fi
+
+  echo "▶ Back up local public image/manual conflicts to git stash"
+  git stash push --include-untracked \
+    -m "server public conflicts before frontend deploy $(date -u +%Y%m%dT%H%M%SZ)" \
+    -- frontend/public/images frontend/public/manual
+  echo "  Backup: $(git stash list -1 --format='%gd %s')"
+fi
+
+UPDATE_CHECKOUT=false
+if [[ -n "$FROM_REF" ]]; then
+  OLD_HEAD="$(git rev-parse "$FROM_REF")"
+  NEW_HEAD="$(git rev-parse "$TO_REF")"
+else
+  OLD_HEAD="$(git rev-parse HEAD)"
+  echo "▶ Fetch upstream"
+  git fetch --prune
+  NEW_HEAD="$(git rev-parse '@{upstream}')"
+  UPDATE_CHECKOUT=true
+
+  if ! git merge-base --is-ancestor "$OLD_HEAD" "$NEW_HEAD"; then
+    echo "The remote branch is not a fast-forward of the current checkout."
+    exit 1
+  fi
+fi
 
 if [[ "$OLD_HEAD" == "$NEW_HEAD" ]]; then
   echo "ℹ No new commits."
@@ -61,6 +147,17 @@ fi
 
 CHANGED_FRONTEND="$(git diff --name-only "$OLD_HEAD" "$NEW_HEAD" -- frontend || true)"
 CHANGED_PUBLIC="$(git diff --name-only "$OLD_HEAD" "$NEW_HEAD" -- frontend/public || true)"
+
+if echo "$CHANGED_PUBLIC" | rg -q "^frontend/public/resources/"; then
+  echo "Runtime resources are excluded from frontend deployment."
+  echo "Use the dedicated media/COS workflow instead."
+  exit 1
+fi
+
+if [[ "$UPDATE_CHECKOUT" == true ]]; then
+  echo "▶ Fast-forward checkout after resource safety checks"
+  git merge --ff-only "$NEW_HEAD"
+fi
 
 has_frontend_changes=false
 if [[ -n "$CHANGED_FRONTEND" ]]; then
@@ -89,6 +186,11 @@ sync_public_changes() {
   # Use name-status to handle add/modify/delete/rename.
   while IFS=$'\t' read -r status p1 p2; do
     [[ -z "${status:-}" ]] && continue
+    if [[ "${p1#frontend/public/}" == "$QR_IMAGE_RELATIVE_PATH" || \
+          "${p2#frontend/public/}" == "$QR_IMAGE_RELATIVE_PATH" ]]; then
+      echo "  [SKIP] server-managed QR image"
+      continue
+    fi
     case "$status" in
       D)
         target="$DIST_DIR/${p1#frontend/public/}"
@@ -123,6 +225,11 @@ full_build() {
   echo "▶ Full frontend build"
   cd "$FRONTEND_DIR"
 
+  if ! command -v rsync >/dev/null 2>&1; then
+    echo "❌ rsync is required for a resource-safe frontend deployment"
+    exit 1
+  fi
+
   if [[ ! -d node_modules ]] || echo "$CHANGED_FRONTEND" | rg -q "^frontend/package(-lock)?\\.json$"; then
     echo "  - npm ci"
     npm ci
@@ -130,13 +237,41 @@ full_build() {
     echo "  - skip npm ci (node_modules exists, package files unchanged)"
   fi
 
-  echo "  - npm run build"
-  npm run build
+  next_dist="$(mktemp -d "$FRONTEND_DIR/.dist-build.XXXXXX")"
+  cleanup_next_dist() {
+    rm -rf "$next_dist"
+  }
+  trap cleanup_next_dist EXIT
 
-  if [[ ! -d "$DIST_DIR" ]]; then
-    echo "❌ Build failed: dist/ not found"
+  echo "  - npm run build (runtime resources excluded)"
+  DEPLOY_SKIP_RUNTIME_RESOURCES=1 \
+    npm run build -- --outDir "$next_dist" --emptyOutDir
+
+  echo "  - copy ordinary public files (frontend/public/resources excluded)"
+  rsync -a \
+    --exclude '/resources/' \
+    --exclude "/$QR_IMAGE_RELATIVE_PATH" \
+    "$PUBLIC_DIR/" "$next_dist/"
+
+  if [[ ! -f "$next_dist/index.html" ]]; then
+    echo "❌ Build failed: index.html not found"
     exit 1
   fi
+
+  mkdir -p "$DIST_DIR"
+  echo "  - publish build (existing dist/resources preserved)"
+  rsync -a --delete \
+    --exclude '/resources/' \
+    --exclude "/$QR_IMAGE_RELATIVE_PATH" \
+    "$next_dist/" "$DIST_DIR/"
+
+  if [[ ! -e "$DIST_DIR/resources" && ! -L "$DIST_DIR/resources" ]]; then
+    ln -s ../public/resources "$DIST_DIR/resources"
+    echo "  - linked dist/resources to the runtime resource directory"
+  fi
+
+  cleanup_next_dist
+  trap - EXIT
 
   echo "▶ Reload nginx"
   sudo systemctl reload nginx

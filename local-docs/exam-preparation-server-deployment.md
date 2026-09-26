@@ -81,13 +81,14 @@ apps/exam_preparation/data/imports/
 
 frontend/public/resources/ExamPreparation/
 └── exam_preparation_audio/
-    ├── telc_b1_teil1/
-    ├── telc_b1_teil2/
-    └── telc_b1_teil3/
+    └── telc_b1_speaking/
+        ├── teil1/
+        ├── teil2/
+        └── teil3/
 ```
 
-The importer creates these three subdirectories when needed. Each listening
-workbook must have a matching local audio file named
+The Speaking generator creates these three subdirectories when needed. Each
+listening workbook must have a matching local audio file named
 `TeilX_<音频文件_ID>.<extension>`, for example `Teil1_001.mp3`.
 
 ## Recommended server command
@@ -137,7 +138,10 @@ Before first server use of `exam_preparation`:
 2. Install or sync Python dependencies.
 3. Run Django migrations.
 4. Create the import directories listed above.
-5. Create `frontend/public/resources/ExamPreparation/exam_preparation_audio/` for listening audio assets, or let the importer create the `telc_b1_teil1`, `telc_b1_teil2`, and `telc_b1_teil3` directories when importing.
+5. Create `frontend/public/resources/ExamPreparation/exam_preparation_audio/` for
+   runtime audio assets. The importer creates the listening directories and the
+   Speaking generator creates `telc_b1_speaking/teil1`, `telc_b1_speaking/teil2`, and
+   `telc_b1_speaking/teil3`.
 6. Verify the account migrations created the `exam_preparation` module and the
    30/60/90-day Alipay offers at CNY 29.90/49.90/69.90.
 7. Confirm `ALIPAY_NOTIFY_URL` is configured and
@@ -254,9 +258,9 @@ HSTS should only be enabled after HTTPS is confirmed for every required host.
 HTTP-to-HTTPS redirect may be enforced by nginx instead of Django, but one of
 the two layers must enforce it.
 
-### Listening audio must also be stored in COS
+### Exam-preparation audio must also be stored in COS
 
-The importer finds a local file named
+For listening exercises, the importer finds a local file named
 `TeilX_<音频文件_ID>.<extension>` and stores a stable database URL such as:
 
 ```text
@@ -284,6 +288,37 @@ The real sync is successful only when both regional statuses are zero. Test at
 least one public `/resources/ExamPreparation/...mp3` URL after syncing. The
 application process needs write access to workbook folders for file moves; the
 web server only needs read access to media.
+
+Speaking audio uses a dedicated synchronization command. Its database URLs and
+COS keys keep the per-Teil layout, for example:
+
+```text
+/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/teil1/B1_7_1.mp3
+resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/teil1/B1_7_1.mp3
+```
+
+After deploying this layout, preview and apply the data migration before the
+COS sync:
+
+```bash
+uv run manage.py migrate_speaking_audio
+uv run manage.py migrate_speaking_audio --apply
+```
+
+The migration converts legacy dialogue strings when they include explicit
+speaker labels (`TN1:`, `TN2:`) or paired TN tags. A plain undivided string is
+reported as unsafe and must be corrected from the source data before applying;
+the command never guesses its turn boundaries.
+
+Preview and apply the Speaking-only upload with:
+
+```bash
+scripts/sync_exam_preparation_speaking_audio_to_both_cos.sh --dry-run
+scripts/sync_exam_preparation_speaking_audio_to_both_cos.sh
+```
+
+This uploads the existing `telc_b1_speaking` files only; it does not call
+Azure and does not change database rows or MP3 contents.
 
 The sync scripts read the project `.env` directly and support the existing
 `COS_SH_BUCKET` / `COS_SH_REGION` / `COS_SH_DOMAIN` and

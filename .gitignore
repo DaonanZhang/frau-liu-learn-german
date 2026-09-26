@@ -8,9 +8,12 @@ venv/
 /apps/learning_by_video/data/
 /frontend/public/resources/
 /frontend/public/resources/ExamPreparation1/
+/frontend/public/images/wechat-qr.png
 /frontend/public/manual
 .codex_tmp
+.deploy/
 
-apps/exam_preparation
+/apps/exam_preparation/data/
 
 tmp
+

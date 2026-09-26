@@ -7,12 +7,15 @@ export default function ListeningTranscript({ script }) {
   }
 
   return (
-    <section className="listening-transcript" aria-labelledby="listening-transcript-title">
-      <div className="listening-transcript__header">
-        <span>Transkript</span>
-        <h2 id="listening-transcript-title">录音文本</h2>
-      </div>
+    <details className="listening-transcript" open>
+      <summary className="listening-transcript__summary">
+        <span className="listening-transcript__heading">
+          <span>Transkript</span>
+          <strong>录音文本</strong>
+        </span>
+        <span className="listening-transcript__chevron" aria-hidden="true" />
+      </summary>
       <div className="listening-transcript__body">{transcript}</div>
-    </section>
+    </details>
   );
 }

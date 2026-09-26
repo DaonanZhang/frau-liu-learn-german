@@ -12,7 +12,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
@@ -25,6 +25,7 @@ from apps.accounts.permissions import (
     IsAdminOrReadOnly,
 )
 from apps.exam_preparation.access import get_parent_exercise, user_can_access_exercise
+from apps.exam_preparation.speaking_audio import get_speaking_turn_audio_url
 
 from apps.exam_preparation.models import (
     ClozeChoiceBlank,
@@ -1174,6 +1175,31 @@ class SpeakingTeilExerciseViewSet(BaseExamPreparationViewSet):
     filterset_fields = ["exercise_base", "exercise_base__exercise_type"]
     search_fields = ["instruction", "exercise_base__external_id", "exercise_base__title"]
     ordering_fields = ["id", "created_at", "updated_at"]
+
+    def get_permissions(self):
+        if self.action == "turn_audio":
+            return [IsAuthenticated(), HasExamPreparationReleaseAccess(), IsAdminOrReadOnly()]
+        return super().get_permissions()
+
+    @action(detail=True, methods=["get"], url_path=r"turn-audio/(?P<sequence>[0-9]+)")
+    def turn_audio(self, request, pk=None, sequence=None):
+        exercise = self.get_object()
+        if not user_can_access_exercise(request.user, exercise):
+            raise PermissionDenied({
+                "message": "购买备考季后可解锁该题目。",
+                "code": "exam_preparation_purchase_required",
+            })
+        turn = next(
+            (turn for turn in (exercise.content or {}).get("dialogue", [])
+             if str(turn.get("sequence")) == sequence),
+            None,
+        )
+        if turn is None:
+            raise NotFound("Dialogue turn not found")
+        audio_url = get_speaking_turn_audio_url(exercise, turn)
+        if not audio_url:
+            raise NotFound("Dialogue audio not available")
+        return Response({"exercise_id": exercise.pk, "turn_id": int(sequence), "audio_url": audio_url})
 
 
 class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):

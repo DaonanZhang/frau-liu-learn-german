@@ -3,12 +3,12 @@ from __future__ import annotations
 from django.conf import settings
 
 
-def exam_preparation_coming_soon_enabled() -> bool:
-    return bool(getattr(settings, "EXAM_PREPARATION_COMING_SOON_ENABLED", False))
+def coming_soon_enabled() -> bool:
+    return bool(getattr(settings, "COMING_SOON", False))
 
 
-def user_allowed_exam_preparation_preview(user) -> bool:
-    if not exam_preparation_coming_soon_enabled():
+def user_has_release_access(user) -> bool:
+    if not coming_soon_enabled():
         return True
     if not getattr(user, "is_authenticated", False):
         return False
@@ -16,8 +16,8 @@ def user_allowed_exam_preparation_preview(user) -> bool:
         str(telephone).strip()
         for telephone in getattr(
             settings,
-            "EXAM_PREPARATION_PREVIEW_TELEPHONES",
-            ("110", "11223344551"),
+            "RELEASE_ACCESS_TELEPHONES",
+            ("110",),
         )
         if str(telephone).strip()
     }

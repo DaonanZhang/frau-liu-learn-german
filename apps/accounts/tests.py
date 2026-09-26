@@ -43,6 +43,7 @@ from apps.accounts.services.email_service import send_password_reset_email
 from apps.accounts.services.password_reset_codes import verify_password_reset_code
 
 
+@override_settings(COMING_SOON=False)
 class UserGuideStateApiTests(APITestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -58,13 +59,13 @@ class UserGuideStateApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["has_seen_schreiben_guide"])
-        self.assertTrue(response.data["exam_preparation_release_access"])
+        self.assertTrue(response.data["release_access"])
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
-    def test_me_only_exposes_exam_preparation_preview_to_allowlisted_telephones(self) -> None:
+    @override_settings(COMING_SOON=True)
+    def test_me_only_exposes_release_access_to_allowlisted_telephones(self) -> None:
         response = self.client.get("/api/accounts/users/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertFalse(response.data["exam_preparation_release_access"])
+        self.assertFalse(response.data["release_access"])
 
         preview_user_110 = get_user_model().objects.create_user(
             telephone="110",
@@ -74,7 +75,7 @@ class UserGuideStateApiTests(APITestCase):
         self.client.force_authenticate(user=preview_user_110)
         preview_response = self.client.get("/api/accounts/users/me/")
         self.assertEqual(preview_response.status_code, status.HTTP_200_OK)
-        self.assertTrue(preview_response.data["exam_preparation_release_access"])
+        self.assertTrue(preview_response.data["release_access"])
 
         payment_test_user = get_user_model().objects.create_user(
             telephone="11223344551",
@@ -84,7 +85,7 @@ class UserGuideStateApiTests(APITestCase):
         self.client.force_authenticate(user=payment_test_user)
         payment_test_response = self.client.get("/api/accounts/users/me/")
         self.assertEqual(payment_test_response.status_code, status.HTTP_200_OK)
-        self.assertTrue(payment_test_response.data["exam_preparation_release_access"])
+        self.assertFalse(payment_test_response.data["release_access"])
 
     def test_me_can_mark_schreiben_guide_as_seen(self) -> None:
         response = self.client.patch(
@@ -149,7 +150,7 @@ class MaintenanceModeAllowlistTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
-@override_settings(MAX_CONCURRENT_LOGIN_SESSIONS=3)
+@override_settings(DEVICE_LIMIT_ENABLED=True, MAX_CONCURRENT_LOGIN_SESSIONS=3)
 class ConcurrentLoginSessionTests(APITestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -193,6 +194,21 @@ class ConcurrentLoginSessionTests(APITestCase):
                 self.client.get("/api/accounts/users/me/").status_code,
                 status.HTTP_200_OK,
             )
+
+    @override_settings(DEVICE_LIMIT_ENABLED=False)
+    def test_device_limit_can_be_disabled(self) -> None:
+        for device_number in range(1, 5):
+            response = self.login(f"device-{device_number}")
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(
+            AccountLoginSession.objects.filter(
+                user=self.user,
+                revoked_at__isnull=True,
+                active_until__gt=timezone.now(),
+            ).count(),
+            4,
+        )
 
     def test_expired_and_revoked_sessions_do_not_use_device_slots(self) -> None:
         now = timezone.now()
@@ -378,6 +394,37 @@ class ConcurrentLoginSessionTests(APITestCase):
             ).status_code,
             status.HTTP_401_UNAUTHORIZED,
         )
+
+    @override_settings(DEVICE_LIMIT_ENABLED=False)
+    def test_inactive_device_reacquires_slot_when_limit_is_disabled(self) -> None:
+        first_response = self.login("device-1")
+        self.client.post(
+            "/api/accounts/auth/device-release/",
+            {
+                "refresh": first_response.data["refresh"],
+                "activity_id": "activity-device-1",
+            },
+            format="json",
+        )
+        for device_number in range(2, 5):
+            self.assertEqual(
+                self.login(f"device-{device_number}").status_code,
+                status.HTTP_200_OK,
+            )
+
+        response = self.client.post(
+            "/api/accounts/auth/device-heartbeat/",
+            {
+                "refresh": first_response.data["refresh"],
+                "activity_id": "reopened-device-1",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        session = AccountLoginSession.objects.get(device_id="device-1")
+        self.assertIsNone(session.revoked_at)
+        self.assertGreater(session.active_until, timezone.now())
 
     def test_heartbeat_extends_active_device_lease(self) -> None:
         login_response = self.login("device-1")
@@ -734,8 +781,8 @@ class ActivationCodeApiTests(APITestCase):
         )
         self.assertIsNotNone(cache.get("activation_code:REDISROLLBACK"))
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
-    def test_exam_preview_gate_rejects_other_users_without_consuming_code(self) -> None:
+    @override_settings(COMING_SOON=True)
+    def test_mock_exam_coming_soon_does_not_block_exam_entitlement_redemption(self) -> None:
         Module.objects.get_or_create(
             key="exam_preparation",
             defaults={"name": "备考季", "is_active": True},
@@ -750,12 +797,11 @@ class ActivationCodeApiTests(APITestCase):
         )
         store_activation_code(code="EXAMPREVIEW", payload=payload)
 
-        with self.assertRaisesRegex(ValueError, "备考季即将上线"):
-            apply_activation_code_for_user(user=self.user, code="EXAMPREVIEW")
+        apply_activation_code_for_user(user=self.user, code="EXAMPREVIEW")
 
         record = ActivationCodeRecord.objects.get(code="EXAMPREVIEW")
-        self.assertEqual(record.status, ActivationCodeRecord.Status.ACTIVE)
-        self.assertFalse(
+        self.assertEqual(record.status, ActivationCodeRecord.Status.CONSUMED)
+        self.assertTrue(
             Entitlement.objects.filter(user=self.user, module__key="exam_preparation").exists()
         )
 

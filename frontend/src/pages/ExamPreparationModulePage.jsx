@@ -1,7 +1,15 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 import { useAuth } from "../api/auth/useAuth.js";
 import { EXAM_PREPARATION_MODULE } from "./Homepage/homeShared.js";
 import { hasModuleAccess } from "../utils/moduleAccess.js";
+import {
+  activeMockExamKey,
+  mockExamSessionKey,
+  deleteSavedMockExam,
+  fetchSavedMockExams,
+} from "../api/exam_preparation/mockExams.js";
 import "./ExamPreparationModulePage.css";
 
 const SKILL_CARDS = [
@@ -52,14 +60,105 @@ const SKILL_CARDS = [
   },
 ];
 
+const MOCK_PHASE_LABELS = { reading: "阅读与语言模块", collection: "第一部分收卷", listening: "听力", writing: "写作", writing_review: "写作自评" };
+
 export default function ExamPreparationModulePage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const hasFullAccess = hasModuleAccess(user, EXAM_PREPARATION_MODULE);
+  const hasReleaseAccess = user?.release_access !== false;
+  const activeAttemptKey = activeMockExamKey(user?.id);
+  const sessionKey = mockExamSessionKey(user?.id);
+  const [activeMockExams, setActiveMockExams] = useState([]);
+  const [activeMockExamCount, setActiveMockExamCount] = useState(0);
+  const [recordPending, setRecordPending] = useState(null);
   const currentExpiry = (Array.isArray(user?.entitlements) ? user.entitlements : [])
     .filter((item) => item?.module?.key === "exam_preparation" && item?.status === "active" && item?.expires_at)
     .map((item) => new Date(item.expires_at))
     .filter((item) => !Number.isNaN(item.getTime()))
     .sort((left, right) => right.getTime() - left.getTime())[0];
+
+  useEffect(() => {
+    if (!hasFullAccess || !hasReleaseAccess) return undefined;
+    let cancelled = false;
+    fetchSavedMockExams("active", 1, 3)
+      .then((data) => {
+        if (cancelled) return;
+        setActiveMockExams(Array.isArray(data?.results) ? data.results : []);
+        setActiveMockExamCount(Number(data?.count) || 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setActiveMockExams([]);
+          setActiveMockExamCount(0);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [hasFullAccess, hasReleaseAccess]);
+
+  async function removeInterruptedExam(record) {
+    const result = await Swal.fire({
+      icon: "warning", title: "删除这条考试记录？", text: "试卷、答案和考试进度都会被永久删除。",
+      confirmButtonText: "删除", confirmButtonColor: "#b84f46", showCancelButton: true, cancelButtonText: "取消",
+    });
+    if (!result.isConfirmed) return;
+    setRecordPending(record.id);
+    try {
+      await deleteSavedMockExam(record.id);
+      if (localStorage.getItem(activeAttemptKey) === String(record.id)) {
+        localStorage.removeItem(activeAttemptKey);
+        localStorage.removeItem(sessionKey);
+        sessionStorage.removeItem(sessionKey);
+      }
+      setActiveMockExams((items) => items.filter((item) => item.id !== record.id));
+      setActiveMockExamCount((count) => Math.max(0, count - 1));
+    } catch (error) {
+      await Swal.fire({ icon: "error", title: "删除失败", text: error?.data?.message || "请稍后重试。" });
+    } finally { setRecordPending(null); }
+  }
+
+  async function openMockExam() {
+    if (!hasReleaseAccess) {
+      await Swal.fire({
+        icon: "info",
+        title: "Coming Soon",
+        text: "模拟考试正在准备中，敬请期待。",
+        confirmButtonText: "知道了",
+      });
+      return;
+    }
+    if (hasFullAccess) {
+      sessionStorage.removeItem(sessionKey);
+      localStorage.removeItem(sessionKey);
+      localStorage.removeItem(activeAttemptKey);
+      navigate("/modules/exam-preparation/mock-exam");
+      return;
+    }
+    const result = await Swal.fire({
+      icon: "info",
+      title: "购买备考季以解锁笔试模拟",
+      text: "购买备考季后可参加完整模拟考试并查看考试记录。",
+      confirmButtonText: "购买以解锁",
+      showCancelButton: true,
+      cancelButtonText: "暂不购买",
+      customClass: {
+        popup: "exam-module-mock-modal",
+        confirmButton: "exam-module-mock-modal__confirm",
+      },
+    });
+    if (result.isConfirmed) {
+      navigate("/modules/exam-preparation/purchase");
+    }
+  }
+
+  function continueLatestMockExam() {
+    const latestAttempt = activeMockExams[0];
+    if (!latestAttempt) return;
+    sessionStorage.removeItem(sessionKey);
+    localStorage.removeItem(sessionKey);
+    localStorage.setItem(activeAttemptKey, String(latestAttempt.id));
+    navigate(`/modules/exam-preparation/mock-exam?attempt=${latestAttempt.id}`);
+  }
 
   return (
     <div className="exam-module-page">
@@ -67,13 +166,13 @@ export default function ExamPreparationModulePage() {
         <div className="exam-module-hero__content">
           <h1 className="exam-module-hero__title">备考季</h1>
           <p className="exam-module-hero__copy">
-            <strong>“源于真题，高于真题”</strong>——我们的题库由符号刘博士团队精心打磨，紧扣官方大纲。用真题和模拟题复刻考试难度与命题规律，让你在考场上游刃有余、拒绝慌乱。
+            按考试板块练习听、说、读、写，并完成完整的笔试模拟。
           </p>
           <div className="exam-module-hero__tags" aria-label="核心功能亮点">
-            <span className="exam-module-hero__tag">沉浸式交互学习</span>
-            <span className="exam-module-hero__tag">保姆级答案详解</span>
-            <span className="exam-module-hero__tag">听说读写全维突破</span>
-            <span className="exam-module-hero__tag">智能错题集与复习闭环</span>
+            <span className="exam-module-hero__tag">真题与模拟题</span>
+            <span className="exam-module-hero__tag">答案解析</span>
+            <span className="exam-module-hero__tag">听说读写</span>
+            <span className="exam-module-hero__tag">错题与收藏</span>
           </div>
           <p className="exam-module-hero__notice">
             {EXAM_PREPARATION_MODULE.purchaseNotice}
@@ -99,6 +198,44 @@ export default function ExamPreparationModulePage() {
           </div>
         </div>
       </section>
+
+      <section className={`exam-module-mock${hasFullAccess ? "" : " is-locked"}`} aria-label="笔试模拟考试">
+        <div className="exam-module-mock__icon" aria-hidden="true">
+          <svg viewBox="0 0 48 48" focusable="false">
+            <path d="M11 7.5h20a4 4 0 0 1 4 4v12.25" />
+            <path d="M11 7.5a4 4 0 0 0-4 4v25a4 4 0 0 0 4 4h16.5" />
+            <path d="M15 16h12M15 23h8M15 30h6" />
+            <circle cx="34" cy="34" r="9" />
+            <path d="M34 29v5l3.5 2" />
+          </svg>
+        </div>
+        <div className="exam-module-mock__content">
+          <h2>笔试模拟</h2>
+          <p>按正式考试流程完成一套笔试，检验时间分配和答题情况。</p>
+          <div className="exam-module-mock__actions">
+            {hasFullAccess && hasReleaseAccess && activeMockExams.length ? (
+              <button type="button" onClick={continueLatestMockExam} className="exam-module-mock__button is-secondary">继续考试</button>
+            ) : null}
+            <button type="button" onClick={openMockExam} className="exam-module-mock__button">
+              {!hasReleaseAccess ? "Coming Soon" : hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {hasFullAccess && hasReleaseAccess && activeMockExams.length ? (
+        <section className="exam-module-interrupted" aria-label="未完成的模拟考试">
+          <div className="exam-module-interrupted__heading"><h2>未完成的模拟考试</h2>{activeMockExamCount > 3 ? <Link to="/modules/exam-preparation/mock-exams">查看更多未完成考试</Link> : null}</div>
+          <div className="exam-module-interrupted__list">
+            {activeMockExams.map((record) => (
+              <article key={record.id} className="exam-module-interrupted__card">
+                <div><strong>{record.exam_type} {record.level} · {MOCK_PHASE_LABELS[record.progress?.phase] || "阅读与语言模块"}</strong><small>{new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(record.updated_at))}</small></div>
+                <div><button onClick={() => navigate(`/modules/exam-preparation/mock-exam?attempt=${record.id}`)}>继续考试</button><button className="is-danger" disabled={recordPending === record.id} onClick={() => removeInterruptedExam(record)}>删除</button></div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="exam-module-grid" aria-label="专项入口列表">
         {SKILL_CARDS.map((card) => {

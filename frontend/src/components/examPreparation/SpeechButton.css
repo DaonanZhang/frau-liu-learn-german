@@ -1,0 +1,26 @@
+.speaking-practice-recorder { min-width: 0; max-width: 100%; }
+.speaking-practice-recorder .shadowing-practice-buttons { flex-wrap: wrap; gap: 0.6rem; }
+.speaking-practice-recorder .shadowing-btn { flex: 0 0 44px; }
+.speaking-speech { min-width: 0; max-width: 100%; }
+.speaking-speech__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid #b9d5cb;
+  border-radius: 50%;
+  background: #f1f8f5;
+  color: #24624f;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.speaking-speech__button svg { flex: 0 0 18px; }
+.speaking-speech__button:hover:not(:disabled), .speaking-speech__button.is-speaking { background: #dceee5; border-color: #2f6f5e; }
+.speaking-speech__button:focus-visible { outline: 3px solid #2f6f5e; outline-offset: 3px; }
+.speaking-speech__button:disabled { opacity: 0.4; cursor: not-allowed; }
+.speaking-speech__error { display: block; margin-top: 0.5rem; color: #b42318; font-size: 0.8125rem; overflow-wrap: anywhere; }

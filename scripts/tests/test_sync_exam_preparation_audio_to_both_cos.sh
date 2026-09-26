@@ -7,6 +7,8 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 mkdir -p "$TMP_DIR/audio/telc_b1_teil1"
 printf 'audio' > "$TMP_DIR/audio/telc_b1_teil1/Teil1_001.mp3"
+mkdir -p "$TMP_DIR/audio/telc_b1_speaking/teil1"
+printf 'speaking audio' > "$TMP_DIR/audio/telc_b1_speaking/teil1/B1_7_1.mp3"
 
 FAKE_HELPER="$TMP_DIR/fake-sync-helper.sh"
 LOG_FILE="$TMP_DIR/calls.log"

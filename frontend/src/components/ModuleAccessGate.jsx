@@ -24,7 +24,7 @@ export default function ModuleAccessGate({ moduleId, children }) {
     return <Navigate to="/login" replace />;
   }
   const isMockExamRoute = location.pathname.startsWith("/modules/exam-preparation/mock-exam");
-  if (isMockExamRoute && user?.exam_preparation_release_access === false) {
+  if (isMockExamRoute && user?.release_access === false) {
     return <Navigate to="/modules/exam-preparation" replace />;
   }
   const allowsExamPreparationTrial =

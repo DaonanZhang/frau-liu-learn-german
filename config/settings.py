@@ -67,13 +67,13 @@ REST_FRAMEWORK = {
 
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
-# Temporary release gate for mock exams. Existing exam-preparation features
-# remain available; only the dedicated preview accounts can use mock exams.
+# Temporary one-off release gate. After launch, remove these settings together
+# with the release_access API field and its backend/frontend consumers.
 COMING_SOON = env.bool(
     "COMING_SOON",
     default=False,
 )
-EXAM_PREPARATION_PREVIEW_TELEPHONES = ("110",)
+RELEASE_ACCESS_TELEPHONES = ("110",)
 
 CACHES = {
     "default": {

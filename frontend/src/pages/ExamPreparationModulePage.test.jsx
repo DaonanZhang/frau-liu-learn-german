@@ -14,7 +14,7 @@ vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
 function entitledUser(releaseAccess = true) {
   return {
     id: 7,
-    exam_preparation_release_access: releaseAccess,
+    release_access: releaseAccess,
     entitlements: [{
       status: "active",
       module: { key: "exam_preparation" },

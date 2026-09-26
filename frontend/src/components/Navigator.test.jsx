@@ -14,7 +14,7 @@ describe("mock exam navigation release gate", () => {
     authMocks.useAuth.mockReturnValue({
       user: {
         telephone: "13800138000",
-        exam_preparation_release_access: false,
+        release_access: false,
         entitlements: [{
           status: "active",
           module: { key: "exam_preparation" },

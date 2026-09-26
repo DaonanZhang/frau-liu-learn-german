@@ -30,7 +30,7 @@ function renderProtectedRoute(path) {
 describe("mock exam release gate", () => {
   beforeEach(() => {
     authMocks.useAuth.mockReturnValue({
-      user: { exam_preparation_release_access: false },
+      user: { release_access: false },
       loading: false,
       isAuthenticated: true,
     });

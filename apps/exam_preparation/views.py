@@ -22,7 +22,7 @@ from rest_framework.decorators import action
 from rest_framework.viewsets import ModelViewSet, ViewSet
 
 from apps.accounts.permissions import (
-    HasExamPreparationReleaseAccess,
+    HasReleaseAccess,
     HasValidEntitlement,
     IsAdminOrReadOnly,
 )
@@ -494,7 +494,7 @@ class MockExamViewSet(ViewSet):
 
     permission_classes = [
         IsAuthenticated,
-        HasExamPreparationReleaseAccess,
+        HasReleaseAccess,
         HasValidEntitlement,
     ]
     required_module_key = "exam_preparation"
@@ -571,7 +571,7 @@ class MockExamViewSet(ViewSet):
 
 
 class SavedMockExamViewSet(ViewSet):
-    permission_classes = [IsAuthenticated, HasExamPreparationReleaseAccess, HasValidEntitlement]
+    permission_classes = [IsAuthenticated, HasReleaseAccess, HasValidEntitlement]
     required_module_key = "exam_preparation"
 
     @staticmethod
@@ -878,7 +878,7 @@ class SavedMockExamViewSet(ViewSet):
 class MockExamShareViewSet(ViewSet):
     """Expose explicitly shared mock papers without exposing owner identity."""
 
-    permission_classes = [IsAuthenticated, HasExamPreparationReleaseAccess, HasValidEntitlement]
+    permission_classes = [IsAuthenticated, HasReleaseAccess, HasValidEntitlement]
     required_module_key = "exam_preparation"
     lookup_field = "share_code"
     lookup_value_regex = r"MS-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{12}"

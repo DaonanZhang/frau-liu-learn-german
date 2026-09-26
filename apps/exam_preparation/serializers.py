@@ -6,6 +6,7 @@ from apps.exam_preparation.access import (
     FREE_EXERCISES_PER_TYPE,
     user_has_full_exam_preparation_access,
 )
+from apps.exam_preparation.speaking_audio import get_speaking_turn_audio_url
 from apps.exam_preparation.models import (
     ClozeChoiceBlank,
     ClozeChoiceExercise,
@@ -694,7 +695,23 @@ class SpeakingTeilExerciseSerializer(TrialAwareExerciseSerializerMixin, serializ
     is_locked = serializers.SerializerMethodField()
     show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
+    content = serializers.SerializerMethodField()
     locked_content_fields = ("instruction", "content")
+
+    def get_content(self, exercise):
+        content = exercise.content or {}
+        def with_audio(turn):
+            return {**turn, "audio_url": get_speaking_turn_audio_url(exercise, turn)}
+
+        result = {**content}
+        if isinstance(content.get("dialogue"), list):
+            result["dialogue"] = [with_audio(turn) for turn in content["dialogue"]]
+        if isinstance(content.get("sections"), list):
+            result["sections"] = [
+                {**section, "turns": [with_audio(turn) for turn in section.get("turns", [])]}
+                for section in content["sections"]
+            ]
+        return result
 
     class Meta:
         model = SpeakingTeilExercise

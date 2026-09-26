@@ -27,6 +27,7 @@ from django.db import transaction  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
 from apps.exam_preparation.explanations import resolve_explanations  # noqa: E402
+from apps.exam_preparation.speaking_audio import ensure_speaking_turn_audio  # noqa: E402
 from apps.exam_preparation.models import (  # noqa: E402
     ClozeChoiceBlank,
     ClozeChoiceExercise,
@@ -1073,6 +1074,8 @@ def save_speaking_exercise(
     xlsx_path: Path,
     parsed: dict[str, object],
     exercise_type: str,
+    *,
+    generate_speaking_audio: bool = False,
 ) -> int:
     base = upsert_base(
         level=parsed["level"],
@@ -1084,34 +1087,64 @@ def save_speaking_exercise(
         is_real_exam=parsed["is_real_exam"],
         imported_from_file=xlsx_path.name,
     )
+    content = parsed["content"]
+    if generate_speaking_audio:
+        azure_key = os.getenv("AZURE_SPEECH_KEY", "")
+        azure_region = os.getenv("AZURE_SPEECH_REGION", "")
+        try:
+            dialogue = content.get("dialogue", [])
+            urls_by_sequence = {}
+            for turn in dialogue:
+                audio_url = ensure_speaking_turn_audio(
+                    exercise_type=exercise_type,
+                    level=parsed["level"],
+                    external_id=parsed["external_id"],
+                    sequence=turn["sequence"],
+                    text=turn.get("text", ""),
+                    region=azure_region,
+                    key=azure_key,
+                )
+                if audio_url:
+                    turn["audio_url"] = audio_url
+                    urls_by_sequence[str(turn["sequence"])] = audio_url
+            for section in content.get("sections", []):
+                for turn in section.get("turns", []):
+                    audio_url = urls_by_sequence.get(str(turn.get("sequence")))
+                    if audio_url:
+                        turn["audio_url"] = audio_url
+        except (KeyError, RuntimeError, ValueError) as error:
+            raise ImportErrorWithContext(f"{xlsx_path.name}: speaking audio generation failed: {error}") from error
     SpeakingTeilExercise.objects.update_or_create(
         exercise_base=base,
-        defaults={"instruction": parsed["instruction"], "content": parsed["content"]},
+        defaults={"instruction": parsed["instruction"], "content": content},
     )
     return 1
 
 
-def import_speaking_einander_kennenlernen(xlsx_path: Path) -> int:
+def import_speaking_einander_kennenlernen(xlsx_path: Path, *, generate_speaking_audio: bool = False) -> int:
     return save_speaking_exercise(
         xlsx_path,
         parse_speaking_einander_kennenlernen_workbook(xlsx_path),
         ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+        generate_speaking_audio=generate_speaking_audio,
     )
 
 
-def import_speaking_ueber_ein_thema_sprechen(xlsx_path: Path) -> int:
+def import_speaking_ueber_ein_thema_sprechen(xlsx_path: Path, *, generate_speaking_audio: bool = False) -> int:
     return save_speaking_exercise(
         xlsx_path,
         parse_speaking_ueber_ein_thema_sprechen_workbook(xlsx_path),
         ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+        generate_speaking_audio=generate_speaking_audio,
     )
 
 
-def import_speaking_gemeinsam_etwas_planen(xlsx_path: Path) -> int:
+def import_speaking_gemeinsam_etwas_planen(xlsx_path: Path, *, generate_speaking_audio: bool = False) -> int:
     return save_speaking_exercise(
         xlsx_path,
         parse_speaking_gemeinsam_etwas_planen_workbook(xlsx_path),
         ExerciseBase.ExerciseType.SPEAKING_TEIL3,
+        generate_speaking_audio=generate_speaking_audio,
     )
 
 
@@ -1223,6 +1256,7 @@ def import_kind(
     file_arg: str = "",
     no_move: bool = False,
     retry_failed: bool = False,
+    generate_speaking_audio: bool = True,
 ) -> int:
     if kind not in TYPE_CONFIG:
         raise SystemExit(f"Unsupported importer kind: {kind}")
@@ -1254,7 +1288,10 @@ def import_kind(
         log(f"=== Import start: kind={kind} file={path.name} ===")
         try:
             with transaction.atomic():
-                imported_count = importer(path)
+                if kind.startswith("speaking_"):
+                    imported_count = importer(path, generate_speaking_audio=generate_speaking_audio)
+                else:
+                    imported_count = importer(path)
             ok += 1
             log(f"OK: {path.name} imported exercises={imported_count}")
             if not no_move and path.parent in {raw_dir, failed_dir}:
@@ -1301,6 +1338,11 @@ def build_parser(kind: str | None = None) -> argparse.ArgumentParser:
         action="store_true",
         help="Scan the kind failed/ directory instead of raw/ and retry those files.",
     )
+    parser.add_argument(
+        "--skip-speaking-audio",
+        action="store_true",
+        help="For Speaking imports, store turns without generating Azure MP3 files.",
+    )
     return parser
 
 
@@ -1315,6 +1357,7 @@ def main(kind: str | None = None) -> int:
         file_arg=args.file,
         no_move=args.no_move,
         retry_failed=args.retry_failed,
+        generate_speaking_audio=not args.skip_speaking_audio,
     )
 
 

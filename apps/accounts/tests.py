@@ -43,6 +43,7 @@ from apps.accounts.services.email_service import send_password_reset_email
 from apps.accounts.services.password_reset_codes import verify_password_reset_code
 
 
+@override_settings(COMING_SOON=False)
 class UserGuideStateApiTests(APITestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -60,7 +61,7 @@ class UserGuideStateApiTests(APITestCase):
         self.assertFalse(response.data["has_seen_schreiben_guide"])
         self.assertTrue(response.data["exam_preparation_release_access"])
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    @override_settings(COMING_SOON=True)
     def test_me_only_exposes_exam_preparation_preview_to_allowlisted_telephones(self) -> None:
         response = self.client.get("/api/accounts/users/me/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -780,7 +781,7 @@ class ActivationCodeApiTests(APITestCase):
         )
         self.assertIsNotNone(cache.get("activation_code:REDISROLLBACK"))
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    @override_settings(COMING_SOON=True)
     def test_mock_exam_coming_soon_does_not_block_exam_entitlement_redemption(self) -> None:
         Module.objects.get_or_create(
             key="exam_preparation",

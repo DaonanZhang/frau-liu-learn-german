@@ -69,8 +69,8 @@ REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
 # Temporary release gate for mock exams. Existing exam-preparation features
 # remain available; only the dedicated preview accounts can use mock exams.
-EXAM_PREPARATION_COMING_SOON_ENABLED = env.bool(
-    "EXAM_PREPARATION_COMING_SOON_ENABLED",
+COMING_SOON = env.bool(
+    "COMING_SOON",
     default=False,
 )
 EXAM_PREPARATION_PREVIEW_TELEPHONES = ("110",)

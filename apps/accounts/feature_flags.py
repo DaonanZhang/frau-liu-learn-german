@@ -4,7 +4,7 @@ from django.conf import settings
 
 
 def exam_preparation_coming_soon_enabled() -> bool:
-    return bool(getattr(settings, "EXAM_PREPARATION_COMING_SOON_ENABLED", False))
+    return bool(getattr(settings, "COMING_SOON", False))
 
 
 def user_allowed_exam_preparation_preview(user) -> bool:

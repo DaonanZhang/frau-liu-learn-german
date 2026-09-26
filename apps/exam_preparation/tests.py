@@ -294,7 +294,7 @@ class ExamPreparationPermissionTests(APITestCase):
         )
         self.assertEqual(write_response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    @override_settings(COMING_SOON=True)
     def test_mock_exam_coming_soon_does_not_block_existing_exam_content(self):
         existing_user = get_user_model().objects.create_user(
             telephone="11223344551",
@@ -313,7 +313,7 @@ class ExamPreparationPermissionTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    @override_settings(COMING_SOON=True)
     def test_preview_user_can_also_read_existing_exam_content(self):
         preview_user = get_user_model().objects.create_user(
             telephone="110",
@@ -521,6 +521,7 @@ class ListeningTranscriptVisibilityTests(APITestCase):
         )
 
 
+@override_settings(COMING_SOON=False)
 class MockExamApiTests(APITestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
@@ -595,7 +596,7 @@ class MockExamApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    @override_settings(COMING_SOON=True)
     def test_coming_soon_blocks_mock_exam_for_regular_paid_user(self):
         Entitlement.objects.create(
             user=self.user,
@@ -614,7 +615,7 @@ class MockExamApiTests(APITestCase):
         self.assertEqual(history_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(history_response.data["code"], "mock_exam_coming_soon")
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    @override_settings(COMING_SOON=True)
     def test_coming_soon_only_allows_110_to_preview_mock_exams(self):
         self.create_question_bank()
         preview_user = get_user_model().objects.create_user(

@@ -98,7 +98,7 @@ class AlipayPaymentApiTests(APITestCase):
             ],
         )
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    @override_settings(COMING_SOON=True)
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_mock_exam_coming_soon_does_not_block_exam_purchase(
         self,
@@ -135,7 +135,7 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(response.data["offer_code"], exam_offer.code)
         self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
 
-    @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
+    @override_settings(COMING_SOON=True)
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_payment_test_account_can_create_exam_purchase_while_coming_soon(
         self,

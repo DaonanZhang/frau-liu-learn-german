@@ -8,12 +8,14 @@ from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import action
@@ -483,6 +485,12 @@ def _create_mock_exam_paper(*, user, exam_type, level, selection, creation_metho
     )
 
 
+class SavedMockExamPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 50
+
+
 class MockExamViewSet(ViewSet):
     """Build one paid-access written mock exam from the current question bank."""
 
@@ -615,7 +623,9 @@ class SavedMockExamViewSet(ViewSet):
             pass
         elif scope != "all":
             return Response({"message": "记录类型无效。"}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({"count": queryset.count(), "results": [self._summary(item) for item in queryset]})
+        paginator = SavedMockExamPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response([self._summary(item) for item in page])
 
     def retrieve(self, request, pk=None):
         instance = get_object_or_404(SavedMockExam.objects.select_related("paper"), pk=pk, user=request.user)
@@ -715,8 +725,18 @@ class SavedMockExamViewSet(ViewSet):
         instance.save(update_fields=[*defaults, *result_fields, "updated_at"])
         return Response(self._summary(instance), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
+    @transaction.atomic
     def partial_update(self, request, pk=None):
-        instance = get_object_or_404(SavedMockExam, pk=pk, user=request.user)
+        instance = get_object_or_404(
+            SavedMockExam.objects.select_for_update(),
+            pk=pk,
+            user=request.user,
+        )
+        completion_fields = {"answers", "writing_text", "writing_grade", "writing_assessment", "is_completed", "progress"}
+        if instance.is_completed and completion_fields.intersection(request.data):
+            return Response({"message": "已完成的考试不能再次修改。"}, status=status.HTTP_409_CONFLICT)
+        if "is_completed" in request.data:
+            return Response({"message": "请使用交卷接口完成考试。"}, status=status.HTTP_400_BAD_REQUEST)
         update_fields = []
         next_writing_assessment = instance.writing_assessment or _legacy_writing_assessment(instance.writing_grade)
         if "writing_assessment" in request.data:
@@ -725,9 +745,6 @@ class SavedMockExamViewSet(ViewSet):
                 return Response({"message": "写作自评格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
         elif "writing_grade" in request.data:
             next_writing_assessment = _legacy_writing_assessment(str(request.data["writing_grade"]))
-        next_is_completed = bool(request.data.get("is_completed", instance.is_completed))
-        if next_is_completed and not _writing_assessment_is_complete(next_writing_assessment):
-            return Response({"message": "请完成写作自评。"}, status=status.HTTP_400_BAD_REQUEST)
         if "answers" in request.data:
             if not isinstance(request.data["answers"], dict):
                 return Response({"message": "答案格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
@@ -745,9 +762,6 @@ class SavedMockExamViewSet(ViewSet):
         if "writing_assessment" in request.data:
             instance.writing_assessment = next_writing_assessment
             update_fields.append("writing_assessment")
-        if "is_completed" in request.data:
-            instance.is_completed = bool(request.data["is_completed"])
-            update_fields.append("is_completed")
         if "is_favorite" in request.data:
             next_favorite = bool(request.data["is_favorite"])
             if next_favorite and not instance.is_completed:
@@ -759,16 +773,52 @@ class SavedMockExamViewSet(ViewSet):
                 return Response({"message": "考试进度格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
             instance.progress = request.data["progress"]
             update_fields.append("progress")
-        if next_is_completed:
-            update_fields.extend(_apply_mock_exam_result(instance))
-        elif "is_completed" in request.data:
-            instance.score_breakdown = {}
-            instance.total_score = None
-            instance.score_percentage = None
-            instance.is_passed = None
-            update_fields.extend(("score_breakdown", "total_score", "score_percentage", "is_passed"))
         if update_fields:
             instance.save(update_fields=[*dict.fromkeys(update_fields), "updated_at"])
+        return Response(self._summary(instance))
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        with transaction.atomic():
+            instance = get_object_or_404(
+                SavedMockExam.objects.select_for_update().select_related("paper"),
+                pk=pk,
+                user=request.user,
+            )
+            if instance.is_completed:
+                return Response({"message": "该考试已经交卷。"}, status=status.HTTP_409_CONFLICT)
+
+            answers = request.data.get("answers", instance.answers)
+            if not isinstance(answers, dict):
+                return Response({"message": "答案格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+            assessment_value = request.data.get("writing_assessment", instance.writing_assessment)
+            writing_assessment = _normalize_writing_assessment(assessment_value)
+            if writing_assessment is None:
+                return Response({"message": "写作自评格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+            if not _writing_assessment_is_complete(writing_assessment):
+                return Response({"message": "请完成写作自评。"}, status=status.HTTP_400_BAD_REQUEST)
+            progress = request.data.get("progress", instance.progress)
+            if not isinstance(progress, dict):
+                return Response({"message": "考试进度格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+
+            instance.answers = answers
+            instance.writing_text = str(request.data.get("writing_text", instance.writing_text))
+            instance.writing_assessment = writing_assessment
+            instance.progress = progress
+            instance.is_completed = True
+            if "is_favorite" in request.data:
+                instance.is_favorite = bool(request.data["is_favorite"])
+            result_fields = list(_apply_mock_exam_result(instance))
+            instance.save(update_fields=[
+                "answers",
+                "writing_text",
+                "writing_assessment",
+                "progress",
+                "is_completed",
+                "is_favorite",
+                *result_fields,
+                "updated_at",
+            ])
         return Response(self._summary(instance))
 
     def destroy(self, request, pk=None):

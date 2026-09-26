@@ -27,8 +27,9 @@ export function createMockExam(requestId) {
   return apiFetch(BASE, { method: "POST", body: { request_id: requestId } });
 }
 
-export function fetchSavedMockExams(scope = "favorites") {
-  return apiFetch(`/exam_preparation/saved-mock-exams/?scope=${encodeURIComponent(scope)}`);
+export function fetchSavedMockExams(scope = "favorites", page = 1, pageSize = 10) {
+  const query = new URLSearchParams({ scope, page: String(page), page_size: String(pageSize) });
+  return apiFetch(`/exam_preparation/saved-mock-exams/?${query.toString()}`);
 }
 
 export function fetchSavedMockExam(examId) {
@@ -41,6 +42,10 @@ export function saveMockExam(payload) {
 
 export function updateSavedMockExam(examId, payload) {
   return apiFetch(`/exam_preparation/saved-mock-exams/${examId}/`, { method: "PATCH", body: payload });
+}
+
+export function submitSavedMockExam(examId, payload) {
+  return apiFetch(`/exam_preparation/saved-mock-exams/${examId}/submit/`, { method: "POST", body: payload });
 }
 
 export function deleteSavedMockExam(examId) {

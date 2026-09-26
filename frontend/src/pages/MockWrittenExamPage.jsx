@@ -6,6 +6,7 @@ import {
   mockExamSessionKey,
   activeMockExamKey,
   saveMockExam,
+  submitSavedMockExam,
   updateSavedMockExam,
 } from "../api/exam_preparation/mockExams.js";
 import { useAuth } from "../api/auth/useAuth.js";
@@ -453,6 +454,7 @@ export default function MockWrittenExamPage() {
   const attemptParam = searchParams.get("attempt") || "";
   const audioRef = useRef(null);
   const createRequestIdRef = useRef(createRequestId());
+  const submissionStartedRef = useRef(false);
   const [exam, setExam] = useState(null);
   const [phase, setPhase] = useState("loading");
   const [deadline, setDeadline] = useState(0);
@@ -610,19 +612,20 @@ export default function MockWrittenExamPage() {
   }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, wasEarlySubmitted, isSavedReview, persist]);
 
   useEffect(() => {
-    if (!attemptId || isSavedReview) return undefined;
+    if (!attemptId || isSavedReview || submissionStartedRef.current) return undefined;
     const timer = window.setTimeout(async () => {
       try {
         await updateSavedMockExam(attemptId, {
           answers,
           writing_text: writingText,
           writing_assessment: writingAssessment,
-          is_completed: phase === "results",
           is_favorite: isFavorite,
           progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, early_submitted: wasEarlySubmitted },
         });
       } catch {
-        setFavoriteMessage("考试进度保存失败，请检查网络后继续");
+        if (!submissionStartedRef.current) {
+          setFavoriteMessage("考试进度保存失败，请检查网络后继续");
+        }
       }
     }, 500);
     return () => window.clearTimeout(timer);
@@ -729,6 +732,7 @@ export default function MockWrittenExamPage() {
   function finishListeningEarly() { if (window.confirm("确定结束听力部分并进入写作吗？进入后不能返回修改听力答案。")) enterWriting(); }
   function submitWriting() { if (window.confirm("确定提交写作吗？提交后将展示范文并进行自评。")) { setPhase("writing_review"); setDeadline(0); } }
   async function completeExam(finalWritingAssessment, earlySubmitted = false) {
+    submissionStartedRef.current = true;
     audioRef.current?.pause();
     setNeedsAudioGesture(false);
     setAnswerSheetOpen(false);
@@ -745,14 +749,15 @@ export default function MockWrittenExamPage() {
     });
     if (attemptId && !isSavedReview) {
       try {
-        await updateSavedMockExam(attemptId, {
-          answers, writing_text: writingText, writing_assessment: finalWritingAssessment, is_completed: true,
+        await submitSavedMockExam(attemptId, {
+          answers, writing_text: writingText, writing_assessment: finalWritingAssessment,
           is_favorite: isFavorite,
           progress: { phase: "results", deadline: 0, active_part: READING_PART_KEYS[0], audio_step: audioStep, audio_step_started_at: audioStepStartedAt, early_submitted: earlySubmitted },
         });
         const completed = await fetchSavedMockExam(attemptId);
         if (completed?.is_completed && completed?.exam) {
           setExam(completed.exam);
+          localStorage.removeItem(activeAttemptKey);
         }
       } catch {
         setFavoriteMessage("考试结果保存失败，请检查网络");

@@ -40,6 +40,12 @@ export default function MockExamRecordsPage() {
   const sessionKey = mockExamSessionKey(user?.id);
   const [records, setRecords] = useState([]);
   const [favorites, setFavorites] = useState([]);
+  const [recordCount, setRecordCount] = useState(0);
+  const [favoriteCount, setFavoriteCount] = useState(0);
+  const [recordPage, setRecordPage] = useState(1);
+  const [favoritePage, setFavoritePage] = useState(1);
+  const [hasPreviousPage, setHasPreviousPage] = useState(false);
+  const [hasNextPage, setHasNextPage] = useState(false);
   const [loading, setLoading] = useState(hasFullAccess);
   const [pendingId, setPendingId] = useState(null);
   const [errorText, setErrorText] = useState("");
@@ -49,17 +55,27 @@ export default function MockExamRecordsPage() {
     if (!hasFullAccess) return undefined;
     let cancelled = false;
     setLoading(true);
-    Promise.all([fetchSavedMockExams("history"), fetchSavedMockExams("favorites")])
-      .then(([historyData, favoriteData]) => {
+    const scope = activeTab === "favorites" ? "favorites" : "history";
+    const page = activeTab === "favorites" ? favoritePage : recordPage;
+    fetchSavedMockExams(scope, page, 10)
+      .then((data) => {
         if (cancelled) return;
-        setRecords(Array.isArray(historyData?.results) ? historyData.results : []);
-        setFavorites(Array.isArray(favoriteData?.results) ? favoriteData.results : []);
+        const results = Array.isArray(data?.results) ? data.results : [];
+        if (activeTab === "favorites") {
+          setFavorites(results);
+          setFavoriteCount(Number(data?.count) || 0);
+        } else {
+          setRecords(results);
+          setRecordCount(Number(data?.count) || 0);
+        }
+        setHasPreviousPage(Boolean(data?.previous));
+        setHasNextPage(Boolean(data?.next));
         setErrorText("");
       })
       .catch((error) => { if (!cancelled) setErrorText(error?.data?.message || "考试记录加载失败，请稍后重试。"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [hasFullAccess]);
+  }, [hasFullAccess, activeTab, recordPage, favoritePage]);
 
   function clearLocalAttempt(recordId) {
     if (localStorage.getItem(activeAttemptKey) !== String(recordId)) return;
@@ -80,6 +96,8 @@ export default function MockExamRecordsPage() {
       clearLocalAttempt(record.id);
       setRecords((items) => items.filter((item) => item.id !== record.id));
       setFavorites((items) => items.filter((item) => item.id !== record.id));
+      setRecordCount((count) => Math.max(0, count - 1));
+      if (record.is_favorite) setFavoriteCount((count) => Math.max(0, count - 1));
     } catch (error) {
       await Swal.fire({ icon: "error", title: "删除失败", text: error?.data?.message || "请稍后重试。" });
     } finally { setPendingId(null); }
@@ -94,6 +112,7 @@ export default function MockExamRecordsPage() {
       setFavorites((items) => updated.is_favorite
         ? [updated, ...items.filter((item) => item.id !== updated.id)]
         : items.filter((item) => item.id !== updated.id));
+      setFavoriteCount((count) => Math.max(0, count + (updated.is_favorite ? 1 : -1)));
     } catch (error) {
       await Swal.fire({ icon: "error", title: "操作失败", text: error?.data?.message || "请稍后重试。" });
     } finally { setPendingId(null); }
@@ -130,6 +149,13 @@ export default function MockExamRecordsPage() {
   }
 
   const visibleRecords = activeTab === "favorites" ? favorites : records;
+  const visibleCount = activeTab === "favorites" ? favoriteCount : recordCount;
+  const visiblePage = activeTab === "favorites" ? favoritePage : recordPage;
+
+  function changePage(nextPage) {
+    if (activeTab === "favorites") setFavoritePage(nextPage);
+    else setRecordPage(nextPage);
+  }
 
   return (
     <div className="mock-records-page">
@@ -143,7 +169,7 @@ export default function MockExamRecordsPage() {
       </div>
       {errorText ? <p className="mock-records-error">{errorText}</p> : null}
       {loading ? <p className="mock-records-loading">正在加载考试记录…</p> : null}
-      {!loading ? <section className="mock-records-section"><div className="mock-records-heading"><h2>{activeTab === "favorites" ? "收藏试卷" : "考试记录"}</h2><strong>{visibleRecords.length} {activeTab === "favorites" ? "份" : "场"}</strong></div>{visibleRecords.length ? <div className="mock-records-list">{visibleRecords.map((record) => <article key={record.id} className="mock-records-card"><div><span>{record.exam_type} {record.level}</span><strong>{record.is_completed ? formatCompletedResult(record) : `未完成 · ${PHASE_LABELS[record.progress?.phase] || "阅读与语言模块"}`}</strong><small>{formatUpdatedAt(record.updated_at)}</small></div>{actionButtons(record)}</article>)}</div> : <p className="mock-records-empty-note">{activeTab === "favorites" ? "还没有收藏试卷" : "还没有考试记录"}</p>}</section> : null}
+      {!loading ? <section className="mock-records-section"><div className="mock-records-heading"><h2>{activeTab === "favorites" ? "收藏试卷" : "考试记录"}</h2><strong>{visibleCount} {activeTab === "favorites" ? "份" : "场"}</strong></div>{visibleRecords.length ? <div className="mock-records-list">{visibleRecords.map((record) => <article key={record.id} className="mock-records-card"><div><span>{record.exam_type} {record.level}</span><strong>{record.is_completed ? formatCompletedResult(record) : `未完成 · ${PHASE_LABELS[record.progress?.phase] || "阅读与语言模块"}`}</strong><small>{formatUpdatedAt(record.updated_at)}</small></div>{actionButtons(record)}</article>)}</div> : <p className="mock-records-empty-note">{activeTab === "favorites" ? "还没有收藏试卷" : "还没有考试记录"}</p>}<nav className="mock-records-pagination" aria-label="考试记录分页"><button type="button" disabled={!hasPreviousPage} onClick={() => changePage(visiblePage - 1)}>上一页</button><span>第 {visiblePage} 页</span><button type="button" disabled={!hasNextPage} onClick={() => changePage(visiblePage + 1)}>下一页</button></nav></section> : null}
     </div>
   );
 }

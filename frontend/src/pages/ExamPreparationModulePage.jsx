@@ -69,6 +69,7 @@ export default function ExamPreparationModulePage() {
   const activeAttemptKey = activeMockExamKey(user?.id);
   const sessionKey = mockExamSessionKey(user?.id);
   const [activeMockExams, setActiveMockExams] = useState([]);
+  const [activeMockExamCount, setActiveMockExamCount] = useState(0);
   const [recordPending, setRecordPending] = useState(null);
   const currentExpiry = (Array.isArray(user?.entitlements) ? user.entitlements : [])
     .filter((item) => item?.module?.key === "exam_preparation" && item?.status === "active" && item?.expires_at)
@@ -79,9 +80,18 @@ export default function ExamPreparationModulePage() {
   useEffect(() => {
     if (!hasFullAccess) return undefined;
     let cancelled = false;
-    fetchSavedMockExams("active")
-      .then((data) => { if (!cancelled) setActiveMockExams(Array.isArray(data?.results) ? data.results : []); })
-      .catch(() => { if (!cancelled) setActiveMockExams([]); });
+    fetchSavedMockExams("active", 1, 3)
+      .then((data) => {
+        if (cancelled) return;
+        setActiveMockExams(Array.isArray(data?.results) ? data.results : []);
+        setActiveMockExamCount(Number(data?.count) || 0);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setActiveMockExams([]);
+          setActiveMockExamCount(0);
+        }
+      });
     return () => { cancelled = true; };
   }, [hasFullAccess]);
 
@@ -100,6 +110,7 @@ export default function ExamPreparationModulePage() {
         sessionStorage.removeItem(sessionKey);
       }
       setActiveMockExams((items) => items.filter((item) => item.id !== record.id));
+      setActiveMockExamCount((count) => Math.max(0, count - 1));
     } catch (error) {
       await Swal.fire({ icon: "error", title: "删除失败", text: error?.data?.message || "请稍后重试。" });
     } finally { setRecordPending(null); }
@@ -128,6 +139,15 @@ export default function ExamPreparationModulePage() {
     if (result.isConfirmed) {
       navigate("/modules/exam-preparation/purchase");
     }
+  }
+
+  function continueLatestMockExam() {
+    const latestAttempt = activeMockExams[0];
+    if (!latestAttempt) return;
+    sessionStorage.removeItem(sessionKey);
+    localStorage.removeItem(sessionKey);
+    localStorage.setItem(activeAttemptKey, String(latestAttempt.id));
+    navigate(`/modules/exam-preparation/mock-exam?attempt=${latestAttempt.id}`);
   }
 
   return (
@@ -182,15 +202,20 @@ export default function ExamPreparationModulePage() {
         <div className="exam-module-mock__content">
           <h2>笔试模拟</h2>
           <p>按正式考试流程完成一套笔试，检验时间分配和答题情况。</p>
-          <button type="button" onClick={openMockExam} className="exam-module-mock__button">
-            {hasFullAccess ? "开始模拟考试" : "🔒 购买以解锁"}
-          </button>
+          <div className="exam-module-mock__actions">
+            {hasFullAccess && activeMockExams.length ? (
+              <button type="button" onClick={continueLatestMockExam} className="exam-module-mock__button is-secondary">继续考试</button>
+            ) : null}
+            <button type="button" onClick={openMockExam} className="exam-module-mock__button">
+              {hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
+            </button>
+          </div>
         </div>
       </section>
 
       {hasFullAccess && activeMockExams.length ? (
         <section className="exam-module-interrupted" aria-label="未完成的模拟考试">
-          <div className="exam-module-interrupted__heading"><h2>未完成的模拟考试</h2><Link to="/modules/exam-preparation/mock-exams">查看全部记录 →</Link></div>
+          <div className="exam-module-interrupted__heading"><h2>未完成的模拟考试</h2>{activeMockExamCount > 3 ? <Link to="/modules/exam-preparation/mock-exams">查看更多未完成考试</Link> : null}</div>
           <div className="exam-module-interrupted__list">
             {activeMockExams.map((record) => (
               <article key={record.id} className="exam-module-interrupted__card">

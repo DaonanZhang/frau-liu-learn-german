@@ -149,6 +149,8 @@
 .exam-module-mock h2 { margin: 0.16rem 0 0; font-size: 1.45rem; }
 .exam-module-mock p { max-width: 44rem; margin: 0.35rem 0 0; color: rgba(255, 255, 255, 0.78); font-size: 0.84rem; line-height: 1.55; }
 .exam-module-mock__button { display: inline-flex; min-height: 2.7rem; margin-top: 0.78rem; padding: 0.62rem 1rem; border: 0; border-radius: 0.8rem; background: #f2bd61; color: #28312e; cursor: pointer; font: inherit; font-weight: 850; white-space: nowrap; }
+.exam-module-mock__actions { display: flex; gap: 0.55rem; flex-wrap: wrap; }
+.exam-module-mock__button.is-secondary { border: 1px solid rgba(255, 255, 255, 0.46); background: transparent; color: #fff; }
 .exam-module-mock.is-locked .exam-module-mock__button { background: #d9dcda; color: #59615e; }
 
 .exam-module-mock-modal__confirm { background: #2f6f5e !important; }
@@ -174,6 +176,7 @@
   .exam-module-mock { grid-template-columns: 1fr; }
   .exam-module-mock__icon { width: 3.4rem; height: 3.4rem; }
   .exam-module-mock__button { width: 100%; }
+  .exam-module-mock__actions { display: grid; grid-template-columns: 1fr; }
   .exam-module-interrupted__heading { align-items: flex-start; flex-direction: column; }
   .exam-module-interrupted__card { align-items: stretch; flex-direction: column; }
   .exam-module-interrupted__card > div:last-child { display: grid; grid-template-columns: 1fr 1fr; }

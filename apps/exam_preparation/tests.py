@@ -763,11 +763,10 @@ class MockExamApiTests(APITestCase):
         )
         self.assertEqual(favorite_before_completion.status_code, status.HTTP_400_BAD_REQUEST)
 
-        self.client.patch(
-            reverse("exam-prep-saved-mock-exams-detail", args=[attempt_id]),
+        self.client.post(
+            reverse("exam-prep-saved-mock-exams-submit", args=[attempt_id]),
             {
                 "writing_assessment": self.writing_assessment(),
-                "is_completed": True,
                 "progress": {"phase": "results", "deadline": 0},
             },
             format="json",
@@ -821,12 +820,11 @@ class MockExamApiTests(APITestCase):
         self.assertEqual(set(detail.data["exam"]["parts"]), set(generated.data["parts"]))
         self.assertEqual(detail.data["answers"], {"reading_understanding:1": "a"})
 
-        updated = self.client.patch(
-            reverse("exam-prep-saved-mock-exams-detail", args=[stored.pk]),
+        updated = self.client.post(
+            reverse("exam-prep-saved-mock-exams-submit", args=[stored.pk]),
             {
                 "answers": {"reading_understanding:1": "b"},
                 "writing_assessment": self.writing_assessment(),
-                "is_completed": True,
                 "is_favorite": True,
                 "progress": {"phase": "results", "deadline": 0, "audio_step": 7},
             },
@@ -872,22 +870,20 @@ class MockExamApiTests(APITestCase):
         )
         self.create_question_bank()
         generated = self.client.post(self.url, {}, format="json")
-        detail_url = reverse("exam-prep-saved-mock-exams-detail", args=[generated.data["attempt_id"]])
-
-        incomplete = self.client.patch(
-            detail_url,
+        submit_url = reverse("exam-prep-saved-mock-exams-submit", args=[generated.data["attempt_id"]])
+        incomplete = self.client.post(
+            submit_url,
             {
                 "writing_assessment": self.writing_assessment(formal_accuracy=""),
-                "is_completed": True,
             },
             format="json",
         )
         self.assertEqual(incomplete.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(incomplete.data["message"], "请完成写作自评。")
 
-        off_topic = self.client.patch(
-            detail_url,
-            {"writing_assessment": {"topic_relevant": False}, "is_completed": True},
+        off_topic = self.client.post(
+            submit_url,
+            {"writing_assessment": {"topic_relevant": False}},
             format="json",
         )
         self.assertEqual(off_topic.status_code, status.HTTP_200_OK)
@@ -959,12 +955,11 @@ class MockExamApiTests(APITestCase):
         self.assertEqual(rejected.status_code, status.HTTP_400_BAD_REQUEST)
 
         answers = {"reading_understanding:1": "a"}
-        self.client.patch(
-            reverse("exam-prep-saved-mock-exams-detail", args=[attempt_id]),
+        self.client.post(
+            reverse("exam-prep-saved-mock-exams-submit", args=[attempt_id]),
             {
                 "answers": answers,
                 "writing_assessment": self.writing_assessment(),
-                "is_completed": True,
             },
             format="json",
         )
@@ -980,3 +975,86 @@ class MockExamApiTests(APITestCase):
         self.assertEqual(shared.status_code, status.HTTP_201_CREATED)
         self.assertEqual(detail.data["shared_attempt"]["answers"], answers)
         self.assertEqual(detail.data["shared_attempt"]["total_score"], 27.0)
+
+    def test_submit_completes_attempt_and_rejects_later_exam_mutations(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.create_question_bank()
+        generated = self.client.post(self.url, {}, format="json")
+        detail_url = reverse("exam-prep-saved-mock-exams-detail", args=[generated.data["attempt_id"]])
+        submit_url = reverse("exam-prep-saved-mock-exams-submit", args=[generated.data["attempt_id"]])
+
+        direct_completion = self.client.patch(
+            detail_url,
+            {"writing_assessment": self.writing_assessment(), "is_completed": True},
+            format="json",
+        )
+        self.assertEqual(direct_completion.status_code, status.HTTP_400_BAD_REQUEST)
+
+        submitted = self.client.post(
+            submit_url,
+            {
+                "answers": {"reading_understanding:1": "a"},
+                "writing_text": "Meine Antwort",
+                "writing_assessment": self.writing_assessment(),
+                "progress": {"phase": "results", "deadline": 0},
+            },
+            format="json",
+        )
+
+        self.assertEqual(submitted.status_code, status.HTTP_200_OK)
+        self.assertTrue(submitted.data["is_completed"])
+        self.assertEqual(submitted.data["answers"], {"reading_understanding:1": "a"})
+        self.assertEqual(self.client.post(submit_url, {}, format="json").status_code, status.HTTP_409_CONFLICT)
+        stale_autosave = self.client.patch(
+            detail_url,
+            {"answers": {}, "is_completed": False, "progress": {"phase": "writing"}},
+            format="json",
+        )
+        self.assertEqual(stale_autosave.status_code, status.HTTP_409_CONFLICT)
+        stored = SavedMockExam.objects.get(pk=generated.data["attempt_id"])
+        self.assertTrue(stored.is_completed)
+        self.assertEqual(stored.answers, {"reading_understanding:1": "a"})
+
+    def test_saved_exam_history_is_paginated(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        paper = MockExamPaper.objects.create(
+            created_by=self.user,
+            exercise_selection={},
+        )
+        SavedMockExam.objects.bulk_create([
+            SavedMockExam(
+                user=self.user,
+                paper=paper,
+                fingerprint=f"history-{index}",
+                exercise_selection={},
+            )
+            for index in range(12)
+        ])
+        list_url = reverse("exam-prep-saved-mock-exams-list")
+
+        first_page = self.client.get(list_url, {"scope": "history", "page": 1})
+        second_page = self.client.get(list_url, {"scope": "history", "page": 2})
+        active_preview = self.client.get(list_url, {"scope": "active", "page_size": 3})
+
+        self.assertEqual(first_page.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_page.data["count"], 12)
+        self.assertEqual(len(first_page.data["results"]), 10)
+        self.assertIsNone(first_page.data["previous"])
+        self.assertIsNotNone(first_page.data["next"])
+        self.assertEqual(len(second_page.data["results"]), 2)
+        self.assertIsNotNone(second_page.data["previous"])
+        self.assertIsNone(second_page.data["next"])
+        self.assertEqual(active_preview.data["count"], 12)
+        self.assertEqual(len(active_preview.data["results"]), 3)

@@ -489,6 +489,12 @@ class SavedMockExamPagination(PageNumberPagination):
     max_page_size = 50
 
 
+MOCK_EXAM_RELEASE_ACCESS_DENIAL = {
+    "message": "模拟考试即将上线，敬请期待。",
+    "code": "mock_exam_coming_soon",
+}
+
+
 class MockExamViewSet(ViewSet):
     """Build one paid-access written mock exam from the current question bank."""
 
@@ -498,6 +504,7 @@ class MockExamViewSet(ViewSet):
         HasValidEntitlement,
     ]
     required_module_key = "exam_preparation"
+    release_access_denial = MOCK_EXAM_RELEASE_ACCESS_DENIAL
 
     def create(self, request):
         request_id = str(request.data.get("request_id", "")).strip()
@@ -572,6 +579,7 @@ class MockExamViewSet(ViewSet):
 
 class SavedMockExamViewSet(ViewSet):
     permission_classes = [IsAuthenticated, HasReleaseAccess, HasValidEntitlement]
+    release_access_denial = MOCK_EXAM_RELEASE_ACCESS_DENIAL
     required_module_key = "exam_preparation"
 
     @staticmethod
@@ -879,6 +887,7 @@ class MockExamShareViewSet(ViewSet):
     """Expose explicitly shared mock papers without exposing owner identity."""
 
     permission_classes = [IsAuthenticated, HasReleaseAccess, HasValidEntitlement]
+    release_access_denial = MOCK_EXAM_RELEASE_ACCESS_DENIAL
     required_module_key = "exam_preparation"
     lookup_field = "share_code"
     lookup_value_regex = r"MS-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{12}"

@@ -69,6 +69,7 @@ REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
 # Temporary one-off release gate. After launch, remove these settings together
 # with the release_access API field and its backend/frontend consumers.
+# Removal order: local-docs/release-access-removal.md.
 COMING_SOON = env.bool(
     "COMING_SOON",
     default=False,

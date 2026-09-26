@@ -84,7 +84,7 @@ class UserGuideStateApiTests(APITestCase):
         self.client.force_authenticate(user=payment_test_user)
         payment_test_response = self.client.get("/api/accounts/users/me/")
         self.assertEqual(payment_test_response.status_code, status.HTTP_200_OK)
-        self.assertTrue(payment_test_response.data["exam_preparation_release_access"])
+        self.assertFalse(payment_test_response.data["exam_preparation_release_access"])
 
     def test_me_can_mark_schreiben_guide_as_seen(self) -> None:
         response = self.client.patch(

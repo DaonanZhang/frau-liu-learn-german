@@ -17,7 +17,7 @@ def user_allowed_exam_preparation_preview(user) -> bool:
         for telephone in getattr(
             settings,
             "EXAM_PREPARATION_PREVIEW_TELEPHONES",
-            ("110", "11223344551"),
+            ("110",),
         )
         if str(telephone).strip()
     }

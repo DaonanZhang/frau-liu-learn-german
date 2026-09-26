@@ -296,14 +296,18 @@ class ExamPreparationPermissionTests(APITestCase):
 
     @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
     def test_mock_exam_coming_soon_does_not_block_existing_exam_content(self):
+        existing_user = get_user_model().objects.create_user(
+            telephone="11223344551",
+            password="test-password",
+        )
         Entitlement.objects.create(
-            user=self.user,
+            user=existing_user,
             module=self.module,
             season=None,
             plan=Entitlement.Plan.MONTH_1,
             status=Entitlement.Status.ACTIVE,
         )
-        self.client.force_authenticate(self.user)
+        self.client.force_authenticate(existing_user)
 
         response = self.client.get(self.url)
 
@@ -611,29 +615,38 @@ class MockExamApiTests(APITestCase):
         self.assertEqual(history_response.data["code"], "mock_exam_coming_soon")
 
     @override_settings(EXAM_PREPARATION_COMING_SOON_ENABLED=True)
-    def test_coming_soon_allows_both_mock_exam_preview_accounts(self):
+    def test_coming_soon_only_allows_110_to_preview_mock_exams(self):
         self.create_question_bank()
+        preview_user = get_user_model().objects.create_user(
+            telephone="110",
+            password="test-password",
+        )
+        blocked_user = get_user_model().objects.create_user(
+            telephone="11223344551",
+            password="test-password",
+        )
+        for user in (preview_user, blocked_user):
+            Entitlement.objects.create(
+                user=user,
+                module=self.module,
+                season=None,
+                plan=Entitlement.Plan.MONTH_1,
+                status=Entitlement.Status.ACTIVE,
+            )
 
-        for telephone in ("110", "11223344551"):
-            with self.subTest(telephone=telephone):
-                preview_user = get_user_model().objects.create_user(
-                    telephone=telephone,
-                    password="test-password",
-                )
-                Entitlement.objects.create(
-                    user=preview_user,
-                    module=self.module,
-                    season=None,
-                    plan=Entitlement.Plan.MONTH_1,
-                    status=Entitlement.Status.ACTIVE,
-                )
-                self.client.force_authenticate(preview_user)
+        self.client.force_authenticate(preview_user)
+        preview_response = self.client.post(self.url, {}, format="json")
+        preview_history = self.client.get(reverse("exam-prep-saved-mock-exams-list"))
 
-                response = self.client.post(self.url, {}, format="json")
+        self.client.force_authenticate(blocked_user)
+        blocked_response = self.client.post(self.url, {}, format="json")
+        blocked_history = self.client.get(reverse("exam-prep-saved-mock-exams-list"))
 
-                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-                history_response = self.client.get(reverse("exam-prep-saved-mock-exams-list"))
-                self.assertEqual(history_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(preview_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(preview_history.status_code, status.HTTP_200_OK)
+        self.assertEqual(blocked_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(blocked_response.data["code"], "mock_exam_coming_soon")
+        self.assertEqual(blocked_history.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_paid_user_gets_clear_error_when_question_bank_is_incomplete(self):
         Entitlement.objects.create(

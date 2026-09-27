@@ -1024,11 +1024,15 @@ export default function MockWrittenExamPage() {
               </fieldset>
             ))}
           </div> : null}
-          <div className="mock-exam-writing-review__actions">
+          <div className="mock-exam-writing-review__actions mock-exam-writing-review__actions--fixed">
+            <p id="writing-assessment-submit-hint" aria-live="polite">
+              {isWritingAssessmentComplete(writingAssessment) ? "自评已完成，可以提交结算。" : "请完成上方所有自评项后提交"}
+            </p>
             <button
               className="mock-exam-primary"
               disabled={!isWritingAssessmentComplete(writingAssessment)}
               onClick={finishSelfAssessment}
+              aria-describedby="writing-assessment-submit-hint"
             >
               提交自评并结算
             </button>

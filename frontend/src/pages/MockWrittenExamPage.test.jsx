@@ -33,9 +33,9 @@ describe("writing self-assessment", () => {
       writingText: "Meine Antwort",
       writingAssessment: {
         topic_relevant: true,
-        task_completion: "",
-        communicative_design: "",
-        formal_accuracy: "",
+        task_completion: "A",
+        communicative_design: "A",
+        formal_accuracy: "A",
       },
       audioStep: 0,
       audioStepStartedAt: 0,
@@ -45,12 +45,17 @@ describe("writing self-assessment", () => {
     }));
   });
 
-  it("keeps the self-assessment submit action visible after reopening the review", async () => {
+  it("keeps completed self-assessment actions outside the scrollable review content", async () => {
     render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
 
     const submit = await screen.findByRole("button", { name: "提交自评并结算" });
-    expect(submit).toBeDisabled();
-    expect(submit.parentElement).toHaveClass("mock-exam-writing-review__actions--fixed");
-    expect(screen.getByText("请完成上方所有自评项后提交")).toBeInTheDocument();
+    const review = submit.closest(".mock-exam-writing-review");
+    const scrollableContent = review.querySelector(".mock-exam-writing-review__body");
+
+    expect(submit).toBeEnabled();
+    expect(submit.parentElement).toHaveClass("mock-exam-writing-review__actions--sticky");
+    expect(scrollableContent).toBeInTheDocument();
+    expect(scrollableContent).not.toContainElement(submit);
+    expect(screen.getByText("自评已完成，可以提交结算。")).toBeInTheDocument();
   });
 });

@@ -990,41 +990,43 @@ export default function MockWrittenExamPage() {
     return (
       <div className="mock-exam-review-backdrop" role="dialog" aria-modal="true" aria-labelledby="writing-review-title">
         <section className="mock-exam-writing-review">
-          <div className="mock-exam-writing-review__head"><div><span>Schreiben · 自评</span><h1 id="writing-review-title">对照范文评估你的写作</h1></div></div>
-          <div className="mock-exam-writing-review__compare">
-            <article><h2>Meine Antwort</h2><div>{textBlocks(writingText || "（未作答）")}</div></article>
-            <article><h2>{example?.label || "Musterlösung"}</h2><div>{textBlocks(example?.example_text || "暂无范文")}</div></article>
+          <div className="mock-exam-writing-review__body">
+            <div className="mock-exam-writing-review__head"><div><span>Schreiben · 自评</span><h1 id="writing-review-title">对照范文评估你的写作</h1></div></div>
+            <div className="mock-exam-writing-review__compare">
+              <article><h2>Meine Antwort</h2><div>{textBlocks(writingText || "（未作答）")}</div></article>
+              <article><h2>{example?.label || "Musterlösung"}</h2><div>{textBlocks(example?.example_text || "暂无范文")}</div></article>
+            </div>
+            <div className="mock-exam-rubric"><h2>评分方法</h2><p>三个维度分别按 5、3、1、0 分计分，维度总分乘以 3，写作满分为 45 分。主题偏离时写作计 0 分。</p></div>
+            <fieldset className="mock-exam-topic-check">
+              <legend>文章是否围绕题目要求和给定情境展开？</legend>
+              <label className={writingAssessment.topic_relevant === true ? "is-selected" : ""}>
+                <input type="radio" name="writing-topic" checked={writingAssessment.topic_relevant === true}
+                  onChange={() => setWritingAssessment((previous) => ({ ...previous, topic_relevant: true }))} />
+                <strong>是</strong><span>继续评估三个评分维度</span>
+              </label>
+              <label className={writingAssessment.topic_relevant === false ? "is-selected" : ""}>
+                <input type="radio" name="writing-topic" checked={writingAssessment.topic_relevant === false}
+                  onChange={() => setWritingAssessment({ ...EMPTY_WRITING_ASSESSMENT, topic_relevant: false })} />
+                <strong>否</strong><span>主题偏离，写作计 0 分</span>
+              </label>
+            </fieldset>
+            {writingAssessment.topic_relevant === true ? <div className="mock-exam-assessment-list">
+              {WRITING_CRITERIA.map((criterion) => (
+                <fieldset className="mock-exam-grade-picker" key={criterion.key}>
+                  <legend>{criterion.title}</legend>
+                  {Object.entries(criterion.options).map(([grade, description]) => (
+                    <label key={grade} className={writingAssessment[criterion.key] === grade ? "is-selected" : ""}>
+                      <input type="radio" name={`writing-${criterion.key}`} value={grade}
+                        checked={writingAssessment[criterion.key] === grade}
+                        onChange={() => setWritingAssessment((previous) => ({ ...previous, [criterion.key]: grade }))} />
+                      <strong>{grade}</strong><span>{WRITING_GRADE_POINTS[grade]} 分</span><p>{description}</p>
+                    </label>
+                  ))}
+                </fieldset>
+              ))}
+            </div> : null}
           </div>
-          <div className="mock-exam-rubric"><h2>评分方法</h2><p>三个维度分别按 5、3、1、0 分计分，维度总分乘以 3，写作满分为 45 分。主题偏离时写作计 0 分。</p></div>
-          <fieldset className="mock-exam-topic-check">
-            <legend>文章是否围绕题目要求和给定情境展开？</legend>
-            <label className={writingAssessment.topic_relevant === true ? "is-selected" : ""}>
-              <input type="radio" name="writing-topic" checked={writingAssessment.topic_relevant === true}
-                onChange={() => setWritingAssessment((previous) => ({ ...previous, topic_relevant: true }))} />
-              <strong>是</strong><span>继续评估三个评分维度</span>
-            </label>
-            <label className={writingAssessment.topic_relevant === false ? "is-selected" : ""}>
-              <input type="radio" name="writing-topic" checked={writingAssessment.topic_relevant === false}
-                onChange={() => setWritingAssessment({ ...EMPTY_WRITING_ASSESSMENT, topic_relevant: false })} />
-              <strong>否</strong><span>主题偏离，写作计 0 分</span>
-            </label>
-          </fieldset>
-          {writingAssessment.topic_relevant === true ? <div className="mock-exam-assessment-list">
-            {WRITING_CRITERIA.map((criterion) => (
-              <fieldset className="mock-exam-grade-picker" key={criterion.key}>
-                <legend>{criterion.title}</legend>
-                {Object.entries(criterion.options).map(([grade, description]) => (
-                  <label key={grade} className={writingAssessment[criterion.key] === grade ? "is-selected" : ""}>
-                    <input type="radio" name={`writing-${criterion.key}`} value={grade}
-                      checked={writingAssessment[criterion.key] === grade}
-                      onChange={() => setWritingAssessment((previous) => ({ ...previous, [criterion.key]: grade }))} />
-                    <strong>{grade}</strong><span>{WRITING_GRADE_POINTS[grade]} 分</span><p>{description}</p>
-                  </label>
-                ))}
-              </fieldset>
-            ))}
-          </div> : null}
-          <div className="mock-exam-writing-review__actions mock-exam-writing-review__actions--fixed">
+          <div className="mock-exam-writing-review__actions mock-exam-writing-review__actions--sticky">
             <p id="writing-assessment-submit-hint" aria-live="polite">
               {isWritingAssessmentComplete(writingAssessment) ? "自评已完成，可以提交结算。" : "请完成上方所有自评项后提交"}
             </p>

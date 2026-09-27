@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { confirmMockExamAction } from "../utils/confirmMockExamAction.js";
+import { moveClozeMatchingOption } from "../utils/moveClozeMatchingOption.js";
 import {
   createMockExam,
   fetchSavedMockExam,
@@ -223,7 +224,7 @@ function ChoiceField({ value, options, onChange, disabled, review, correctKey, l
   );
 }
 
-function MatchingSelect({ value, options, correctKey, onChange, disabled, review, variant = "cloze", title = "", favorite }) {
+function MatchingSelect({ value, options, correctKey, onChange, disabled, review, variant = "cloze", title = "", placeholder = "请选择", favorite }) {
   const [open, setOpen] = useState(false);
   const stateClass = review ? (value === correctKey ? " is-correct" : " is-wrong") : "";
   const displayedValue = review ? correctKey : value;
@@ -235,7 +236,7 @@ function MatchingSelect({ value, options, correctKey, onChange, disabled, review
     <span className={`mock-exam-inline-answer${stateClass}`}>
       <button type="button" className={buttonClass} disabled={disabled} onClick={() => setOpen(true)}
         aria-haspopup="dialog" aria-expanded={open}>
-        {selected?.option_text || (variant === "title" ? "Überschrift auswählen" : "请选择")}
+        {selected?.option_text || (variant === "title" ? "Überschrift auswählen" : placeholder)}
       </button>
       <ExerciseOptionSheet open={open} title={title || "请选择答案"} selectedValue={displayedValue || ""}
         options={options.map((option) => ({ value: option.option_key, label: option.option_text, meta: option.option_key }))}
@@ -246,7 +247,7 @@ function MatchingSelect({ value, options, correctKey, onChange, disabled, review
   );
 }
 
-function PlaceholderText({ content, blanks, optionsForBlank, partKey, answers, setAnswer, disabled, review, favoriteFor }) {
+function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, setAnswer, disabled, review, favoriteFor }) {
   const blankMap = Object.fromEntries(blanks.map((blank) => [blank.blank_key, blank]));
   return String(content || "")
     .split(/(\{\{blank_\d+\}\})/g)
@@ -268,13 +269,101 @@ function PlaceholderText({ content, blanks, optionsForBlank, partKey, answers, s
           disabled={disabled}
           review={review}
           title={`空格 ${blank.blank_number || blank.blank_key || ""}`}
+          placeholder={String(blank.blank_number || "")}
           favorite={review ? favoriteFor(blank.id) : null}
         />
       );
     });
 }
 
-function ExercisePart({ partKey, exercise, answers, setAnswer, disabled = false, review = false, writingText, setWritingText, favoriteFor }) {
+function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, review, favoriteFor }) {
+  const [selectedOptionKey, setSelectedOptionKey] = useState("");
+  const blanks = exercise.blank_answers || [];
+  const options = exercise.options || [];
+  const blankMap = Object.fromEntries(blanks.map((blank) => [blank.blank_key, blank]));
+  const optionMap = Object.fromEntries(options.map((option) => [option.option_key, option]));
+  const blankKeys = blanks.map((blank) => answerKey(partKey, blank.id));
+  const usedOptionKeys = new Set(blankKeys.map((key) => answers[key]).filter(Boolean));
+  const poolOptions = options.filter((option) => !usedOptionKeys.has(option.option_key));
+
+  function assignOption(blank, optionKey) {
+    if (disabled) return;
+    setAnswers((previous) => moveClozeMatchingOption(
+      previous,
+      blankKeys,
+      answerKey(partKey, blank.id),
+      optionKey,
+    ));
+    setSelectedOptionKey("");
+  }
+
+  return (
+    <>
+      {!review ? (
+        <section className="mock-cloze-matching-pool" aria-label="选项区">
+          <div className="mock-cloze-matching-pool__heading"><strong>选项区</strong><span>拖动或选择一个选项后点击对应空格</span></div>
+          <div className="mock-cloze-matching-pool__options">
+            {poolOptions.map((option) => (
+              <button
+                key={option.option_key}
+                type="button"
+                draggable
+                className={`mock-cloze-matching-pool__option${selectedOptionKey === option.option_key ? " is-selected" : ""}`}
+                onClick={() => setSelectedOptionKey((previous) => previous === option.option_key ? "" : option.option_key)}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData("text/plain", option.option_key);
+                  setSelectedOptionKey(option.option_key);
+                }}
+              >
+                {option.option_text}
+              </button>
+            ))}
+            {!poolOptions.length ? <span className="mock-cloze-matching-pool__empty">所有选项均已填入空格。</span> : null}
+          </div>
+        </section>
+      ) : null}
+      <div className="mock-exam-source-text mock-cloze-matching-text">
+        {String(exercise.content_with_placeholders || "")
+          .split(/(\{\{blank_\d+\}\})/g)
+          .filter(Boolean)
+          .map((part, index) => {
+            if (!/^\{\{blank_\d+\}\}$/.test(part)) {
+              return <span key={`${index}-${part}`}>{textBlocks(part)}</span>;
+            }
+            const blank = blankMap[part.replace(/[{}]/g, "")];
+            if (!blank) return <span key={part}>{part}</span>;
+            const key = answerKey(partKey, blank.id);
+            const selectedKey = answers[key] || "";
+            const correctKey = blank.correct_option?.option_key || "";
+            const isCorrect = review && selectedKey === correctKey;
+            const isWrong = review && selectedKey !== correctKey;
+            return (
+              <span key={key} className="mock-cloze-matching-blank">
+                <span
+                  className={`mock-cloze-matching-slot${selectedOptionKey ? " is-ready" : ""}${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}
+                  onClick={() => {
+                    if (selectedOptionKey) assignOption(blank, selectedOptionKey);
+                    else if (selectedKey) assignOption(blank, "");
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    assignOption(blank, event.dataTransfer.getData("text/plain") || selectedOptionKey);
+                  }}
+                >
+                  {selectedKey ? <span className="mock-cloze-matching-slot__chip">{optionMap[selectedKey]?.option_text || selectedKey}</span> : <span>{blank.blank_number || ""}</span>}
+                </span>
+                {review && isWrong ? <small>正确答案：{optionMap[correctKey]?.option_text || correctKey || "—"}</small> : null}
+                {review ? <ExerciseFavoriteButton {...favoriteFor(blank.id)} /> : null}
+              </span>
+            );
+          })}
+      </div>
+    </>
+  );
+}
+
+function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor }) {
   if (!exercise) return <p>该部分题目加载失败。</p>;
   const heading = exercise.exercise_base?.title || PARTS[partKey].title;
 
@@ -326,15 +415,13 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, disabled = false,
       </>
     );
   } else if (partKey === "cloze_choice") {
-    body = <div className="mock-exam-source-text"><PlaceholderText content={exercise.content_with_placeholders}
+    body = <div className="mock-exam-source-text"><ClozeChoiceText content={exercise.content_with_placeholders}
       blanks={exercise.blanks || []} optionsForBlank={(blank) => blank.options || []} partKey={partKey}
       answers={answers} setAnswer={setAnswer} disabled={disabled} review={review}
       favoriteFor={(id) => favoriteFor(partKey, id)} /></div>;
   } else if (partKey === "cloze_matching") {
-    body = <div className="mock-exam-source-text"><PlaceholderText content={exercise.content_with_placeholders}
-      blanks={exercise.blank_answers || []} optionsForBlank={() => exercise.options || []} partKey={partKey}
-      answers={answers} setAnswer={setAnswer} disabled={disabled} review={review}
-      favoriteFor={(id) => favoriteFor(partKey, id)} /></div>;
+    body = <MockClozeMatching exercise={exercise} answers={answers} setAnswers={setAnswers} partKey={partKey}
+      disabled={disabled} review={review} favoriteFor={(id) => favoriteFor(partKey, id)} />;
   } else if (partKey.startsWith("listening_")) {
     body = (exercise.questions || []).map((question) => {
       const key = answerKey(partKey, question.id);
@@ -1008,7 +1095,7 @@ export default function MockWrittenExamPage() {
         </button>)}
       </nav>
 
-      <ExercisePart partKey={activePart} exercise={exam.parts[activePart]} answers={answers} setAnswer={setAnswer}
+      <ExercisePart partKey={activePart} exercise={exam.parts[activePart]} answers={answers} setAnswer={setAnswer} setAnswers={setAnswers}
         disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
         favoriteFor={favoriteFor} />
 

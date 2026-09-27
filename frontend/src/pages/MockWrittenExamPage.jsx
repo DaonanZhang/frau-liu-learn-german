@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { confirmMockExamAction } from "../utils/confirmMockExamAction.js";
 import {
   createMockExam,
   fetchSavedMockExam,
@@ -728,9 +729,18 @@ export default function MockWrittenExamPage() {
   }, [phase, currentAudioAction, audioStepStartedAt, playCurrentAudio, advanceAudioStep]);
 
   function setAnswer(key, value) { setAnswers((previous) => ({ ...previous, [key]: value })); }
-  function finishReadingEarly() { if (window.confirm("确定结束阅读部分并进入听力吗？进入后不能返回修改阅读答案。")) enterListening(); }
-  function finishListeningEarly() { if (window.confirm("确定结束听力部分并进入写作吗？进入后不能返回修改听力答案。")) enterWriting(); }
-  function submitWriting() { if (window.confirm("确定提交写作吗？提交后将展示范文并进行自评。")) { setPhase("writing_review"); setDeadline(0); } }
+  async function finishReadingEarly() {
+    if (await confirmMockExamAction("结束阅读并进入听力", "进入后不能返回修改阅读答案。")) enterListening();
+  }
+  async function finishListeningEarly() {
+    if (await confirmMockExamAction("结束听力并进入写作", "进入后不能返回修改听力答案。")) enterWriting();
+  }
+  async function submitWriting() {
+    if (await confirmMockExamAction("提交写作", "提交后将展示范文并进行自评。")) {
+      setPhase("writing_review");
+      setDeadline(0);
+    }
+  }
   async function completeExam(finalWritingAssessment, earlySubmitted = false) {
     submissionStartedRef.current = true;
     audioRef.current?.pause();
@@ -764,8 +774,8 @@ export default function MockWrittenExamPage() {
       }
     }
   }
-  function submitExamEarly() {
-    if (!window.confirm("确定提前交卷吗？确认后将立即结算，所有未作答的题目都会按错误计算，且不能继续修改。")) return;
+  async function submitExamEarly() {
+    if (!await confirmMockExamAction("提前交卷", "确认后将立即结算，所有未作答的题目都会按错误计算，且不能继续修改。")) return;
     completeExam({ ...EARLY_SUBMISSION_WRITING_ASSESSMENT }, true);
   }
   async function finishSelfAssessment() {

@@ -987,6 +987,7 @@ export default function MockWrittenExamPage() {
 
   if (phase === "writing_review") {
     const example = exam.parts.writing?.example_texts?.[0];
+    const assessmentComplete = isWritingAssessmentComplete(writingAssessment);
     return (
       <div className="mock-exam-review-backdrop" role="dialog" aria-modal="true" aria-labelledby="writing-review-title">
         <section className="mock-exam-writing-review">
@@ -1027,14 +1028,14 @@ export default function MockWrittenExamPage() {
             </div> : null}
           </div>
           <div className="mock-exam-writing-review__actions mock-exam-writing-review__actions--sticky">
-            <p id="writing-assessment-submit-hint" aria-live="polite">
-              {isWritingAssessmentComplete(writingAssessment) ? "自评已完成，可以提交结算。" : "请完成上方所有自评项后提交"}
-            </p>
             <button
-              className="mock-exam-primary"
-              disabled={!isWritingAssessmentComplete(writingAssessment)}
+              className="mock-exam-writing-review__submit"
+              disabled={!assessmentComplete}
               onClick={finishSelfAssessment}
-              aria-describedby="writing-assessment-submit-hint"
+              style={{
+                backgroundColor: assessmentComplete ? "#f2bd61" : "#d8ddda",
+                color: assessmentComplete ? "#2c2a22" : "#68756f",
+              }}
             >
               提交自评并结算
             </button>

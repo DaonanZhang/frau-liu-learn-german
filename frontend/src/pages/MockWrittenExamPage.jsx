@@ -1025,8 +1025,13 @@ export default function MockWrittenExamPage() {
             ))}
           </div> : null}
           <div className="mock-exam-writing-review__actions">
-            <button className="mock-exam-submit-early" onClick={submitExamEarly}>跳过自评并立即结算</button>
-            <button className="mock-exam-primary" disabled={!isWritingAssessmentComplete(writingAssessment)} onClick={finishSelfAssessment}>查看总成绩</button>
+            <button
+              className="mock-exam-primary"
+              disabled={!isWritingAssessmentComplete(writingAssessment)}
+              onClick={finishSelfAssessment}
+            >
+              提交自评并结算
+            </button>
           </div>
         </section>
       </div>

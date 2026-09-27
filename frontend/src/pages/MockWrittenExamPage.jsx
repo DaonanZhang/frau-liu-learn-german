@@ -15,7 +15,10 @@ import { useAuth } from "../api/auth/useAuth.js";
 import MockExamAnswerSheet from "../components/examPreparation/MockExamAnswerSheet.jsx";
 import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionSheet.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
 import ListeningTranscript from "../components/examPreparation/ListeningTranscript.jsx";
+import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
+import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import {
   fetchClozeChoiceBlankStates,
   fetchClozeMatchingBlankStates,
@@ -184,28 +187,49 @@ function textBlocks(text) {
   ));
 }
 
-function ChoiceField({ value, options, onChange, disabled, review, correctKey, label, variant = "reading", favorite }) {
+function ChoiceField({
+  value,
+  options,
+  onChange,
+  disabled,
+  review,
+  correctKey,
+  label,
+  variant = "reading",
+  feedbackVariant = variant,
+  explanation = "",
+  explanationScope = "question",
+  favorite,
+}) {
   const isCorrect = review && value && value === correctKey;
   const isWrong = review && value !== correctKey;
   const prefix = variant === "listening" ? "listening-exercise" : "reading-understanding";
+  const feedbackPrefix = feedbackVariant === "listening"
+    ? "listening-exercise"
+    : feedbackVariant === "ad"
+      ? "reading-ad"
+      : "reading-understanding";
+  const correctOption = options.find((option) => (option.option_key ?? option.ad_key) === correctKey);
+  const correctText = correctOption?.option_text ?? correctOption?.ad_text_markdown ?? "";
   return (
     <article className={`${prefix}-question-card mock-exam-choice-field${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}>
-      {label ? <div className={`${prefix}-question-card__header`}><h3>{label}</h3>{favorite ? <ExerciseFavoriteButton {...favorite} /> : null}</div> : null}
+      {label ? <div className={`${prefix}-question-card__header`}><h3>{label}</h3>{favorite && !review ? <ExerciseFavoriteButton {...favorite} /> : null}</div> : null}
       <div className={`${prefix}-option-grid`}>
         {options.map((option) => {
           const optionKey = option.option_key ?? option.ad_key;
           const optionText = option.option_text ?? option.ad_text_markdown;
           const showCorrect = review && optionKey === correctKey;
+          const showWrong = review && value === optionKey && optionKey !== correctKey;
           return (
             <label
               key={optionKey}
-              className={`${prefix}-option${value === optionKey && !review ? ` ${prefix}-option--selected` : ""}${showCorrect ? ` ${prefix}-option--correct` : ""}`}
+              className={`${prefix}-option${value === optionKey && !review ? ` ${prefix}-option--selected` : ""}${showCorrect ? ` ${prefix}-option--correct` : ""}${showWrong ? ` ${prefix}-option--wrong` : ""}`}
             >
               <input
                 type="radio"
                 name={label || correctKey}
                 value={optionKey}
-                checked={review ? showCorrect : value === optionKey}
+                checked={value === optionKey}
                 onChange={() => onChange(optionKey)}
                 disabled={disabled}
               />
@@ -216,22 +240,53 @@ function ChoiceField({ value, options, onChange, disabled, review, correctKey, l
         })}
       </div>
       {review ? (
-        <p className={`mock-exam-feedback ${isCorrect ? "is-correct" : "is-wrong"}`}>
-          {isCorrect ? "回答正确" : `${value ? "回答错误" : "未作答"}，正确答案：${correctKey || "—"}`}
-        </p>
+        <div className={`${feedbackPrefix}-feedback ${feedbackPrefix}-feedback--${isCorrect ? "correct" : "wrong"}`}>
+          <div className={`${feedbackPrefix}-feedback__header`}>
+            <strong className={`${feedbackPrefix}-feedback__title`}>
+              {isCorrect ? "Richtig" : value ? "Falsch" : "未作答"}
+            </strong>
+            {favorite ? <ExerciseFavoriteButton {...favorite} /> : null}
+          </div>
+          <p className={`${feedbackPrefix}-feedback__line`}>
+            Richtige Antwort: {correctKey || "-"}{correctText ? ` - ${correctText}` : ""}
+          </p>
+          {hasScopedExplanation(explanation, options) ? (
+            <p className={`${feedbackPrefix}-feedback__line`}>
+              Erklärung: <ScopedExplanation
+                explanation={explanation}
+                explanationScope={explanationScope}
+                options={options}
+              />
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </article>
   );
 }
 
-function MatchingSelect({ value, options, correctKey, onChange, disabled, review, variant = "cloze", title = "", placeholder = "请选择", favorite }) {
+function MatchingSelect({
+  value,
+  options,
+  correctKey,
+  onChange,
+  disabled,
+  review,
+  variant = "cloze",
+  title = "",
+  placeholder = "请选择",
+  explanation = "",
+  explanationScope = "question",
+  favorite,
+}) {
   const [open, setOpen] = useState(false);
-  const stateClass = review ? (value === correctKey ? " is-correct" : " is-wrong") : "";
-  const displayedValue = review ? correctKey : value;
+  const isCorrect = Boolean(value) && value === correctKey;
+  const stateClass = review ? (isCorrect ? " is-correct" : " is-wrong") : "";
+  const displayedValue = value;
   const selected = options.find((option) => option.option_key === displayedValue);
   const buttonClass = variant === "title"
-    ? `reading-title-select reading-title-select-trigger${value && !review ? " reading-title-select--selected" : ""}${review ? " reading-title-select--correct" : ""}`
-    : `cloze-choice-slot-trigger${displayedValue ? " cloze-drop-slot__chip" : " cloze-choice-slot-trigger--empty"}${review ? " cloze-drop-slot__chip--correct" : ""}`;
+    ? `reading-title-select reading-title-select-trigger${value && !review ? " reading-title-select--selected" : ""}${review && isCorrect ? " reading-title-select--correct" : ""}${review && !isCorrect ? " reading-title-select--wrong" : ""}`
+    : `cloze-choice-slot-trigger${displayedValue ? " cloze-drop-slot__chip" : " cloze-choice-slot-trigger--empty"}${review && isCorrect ? " cloze-drop-slot__chip--correct" : ""}${review && !isCorrect ? " cloze-drop-slot__chip--wrong" : ""}`;
   return (
     <span className={`mock-exam-inline-answer${stateClass}`}>
       <button type="button" className={buttonClass} disabled={disabled} onClick={() => setOpen(true)}
@@ -241,8 +296,25 @@ function MatchingSelect({ value, options, correctKey, onChange, disabled, review
       <ExerciseOptionSheet open={open} title={title || "请选择答案"} selectedValue={displayedValue || ""}
         options={options.map((option) => ({ value: option.option_key, label: option.option_text, meta: option.option_key }))}
         onClose={() => setOpen(false)} onSelect={onChange} />
-      {favorite ? <ExerciseFavoriteButton {...favorite} /> : null}
-      {review && value !== correctKey ? <small>{value ? "回答错误" : "未作答"}，正确答案：{correctKey || "—"}</small> : null}
+      {review && variant !== "title" ? (
+        <span className="cloze-choice-inline-details">
+          <span className="cloze-choice-inline-result">
+            <span className={`cloze-inline-feedback ${isCorrect ? "cloze-inline-feedback--correct" : "cloze-inline-feedback--answer"}`}>
+              {isCorrect ? "Richtig" : value ? `Richtig: ${options.find((option) => option.option_key === correctKey)?.option_text || correctKey || "-"}` : `未作答，Richtig: ${options.find((option) => option.option_key === correctKey)?.option_text || correctKey || "-"}`}
+            </span>
+            {favorite ? <ExerciseFavoriteButton {...favorite} /> : null}
+          </span>
+          {hasScopedExplanation(explanation, options) ? (
+            <span className="cloze-choice-inline-explanation">
+              Erklärung: <ScopedExplanation
+                explanation={explanation}
+                explanationScope={explanationScope}
+                options={options}
+              />
+            </span>
+          ) : null}
+        </span>
+      ) : favorite && !review ? <ExerciseFavoriteButton {...favorite} /> : null}
     </span>
   );
 }
@@ -270,6 +342,8 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
           review={review}
           title={`空格 ${blank.blank_number || blank.blank_key || ""}`}
           placeholder={String(blank.blank_number || "")}
+          explanation={blank.explanation}
+          explanationScope={blank.explanation_scope}
           favorite={review ? favoriteFor(blank.id) : null}
         />
       );
@@ -354,11 +428,37 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
                   {selectedKey ? <span className="mock-cloze-matching-slot__chip">{optionMap[selectedKey]?.option_text || selectedKey}</span> : <span>{blank.blank_number || ""}</span>}
                 </span>
                 {review && isWrong ? <small>正确答案：{optionMap[correctKey]?.option_text || correctKey || "—"}</small> : null}
-                {review ? <ExerciseFavoriteButton {...favoriteFor(blank.id)} /> : null}
+                {!review ? <ExerciseFavoriteButton {...favoriteFor(blank.id)} /> : null}
               </span>
             );
           })}
       </div>
+      {review ? (
+        <section className="cloze-feedback-list">
+          {blanks.map((blank) => {
+            const selectedKey = answers[answerKey(partKey, blank.id)] || "";
+            const selectedOption = optionMap[selectedKey];
+            const correctOption = blank.correct_option;
+            const isCorrect = Boolean(selectedKey) && selectedKey === correctOption?.option_key;
+            return (
+              <article
+                key={blank.id}
+                className={`cloze-feedback-card ${isCorrect ? "cloze-feedback-card--correct" : "cloze-feedback-card--wrong"}`}
+              >
+                <div className="cloze-feedback-card__header">
+                  <strong>{blank.blank_number}</strong>
+                  <ExerciseFavoriteButton {...favoriteFor(blank.id)} />
+                </div>
+                <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
+                <p>Richtige Antwort: {correctOption?.option_text || correctOption?.option_key || "-"}</p>
+                {String(blank.explanation || "").trim() ? (
+                  <p>Erklärung: <FormattedExplanation text={blank.explanation} /></p>
+                ) : null}
+              </article>
+            );
+          })}
+        </section>
+      ) : null}
     </>
   );
 }
@@ -377,12 +477,30 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
           return <article key={key} className="reading-title-text-card">
             <div className="reading-title-text-card__topline">
               <div className="reading-title-text-card__badge">Text {item.item_number}</div>
-              <MatchingSelect value={answers[key] || ""} options={exercise.options || []}
+                <MatchingSelect value={answers[key] || ""} options={exercise.options || []}
                 correctKey={item.correct_option?.option_key} onChange={(value) => setAnswer(key, value)}
                 disabled={disabled} review={review} variant="title" title={`Text ${item.item_number}`}
-                favorite={review ? favoriteFor(partKey, item.id) : null} />
+                favorite={review ? null : favoriteFor(partKey, item.id)} />
             </div>
             <div>{textBlocks(item.text)}</div>
+            {review ? (
+              <div className={`reading-title-feedback ${answers[key] === item.correct_option?.option_key ? "reading-title-feedback--correct" : "reading-title-feedback--wrong"}`}>
+                <div className="reading-title-feedback__header">
+                  <strong className="reading-title-feedback__title">
+                    {answers[key] === item.correct_option?.option_key ? "Richtig" : answers[key] ? "Falsch" : "未作答"}
+                  </strong>
+                  <ExerciseFavoriteButton {...favoriteFor(partKey, item.id)} />
+                </div>
+                <p className="reading-title-feedback__line">
+                  Richtige Antwort: {item.correct_option?.option_key || "-"} - {item.correct_option?.option_text || "-"}
+                </p>
+                {String(item.explanation || "").trim() ? (
+                  <p className="reading-title-feedback__line">
+                    Erklärung: <FormattedExplanation text={item.explanation} />
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </article>;
         })}</div>
       </>
@@ -397,6 +515,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
           return <ChoiceField key={key} label={`${question.question_number}. ${question.question_text}`}
             value={answers[key] || ""} options={question.answer_options || []} correctKey={correct}
             onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review} variant="reading"
+            explanation={question.explanation} explanationScope={question.explanation_scope}
             favorite={review ? favoriteFor(partKey, question.id) : null} />;
         })}
       </>
@@ -410,6 +529,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
           return <ChoiceField key={key} label={`${item.item_number}. ${item.item_text}`} value={answers[key] || ""}
             options={exercise.ads || []} correctKey={item.correct_ad?.ad_key}
             onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review}
+            feedbackVariant="ad" explanation={item.explanation}
             favorite={review ? favoriteFor(partKey, item.id) : null} />;
         })}
       </>
@@ -429,6 +549,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
       return <ChoiceField key={key} label={`${question.question_number}. ${question.question_text}`}
         value={answers[key] || ""} options={question.answer_options || []} correctKey={correct}
         onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review} variant="listening"
+        explanation={question.explanation} explanationScope={question.explanation_scope}
         favorite={review ? favoriteFor(partKey, question.id) : null} />;
     });
   } else if (partKey === "writing") {
@@ -817,10 +938,10 @@ export default function MockWrittenExamPage() {
 
   function setAnswer(key, value) { setAnswers((previous) => ({ ...previous, [key]: value })); }
   async function finishReadingEarly() {
-    if (await confirmMockExamAction("结束阅读并进入听力", "进入后不能返回修改阅读答案。")) enterListening();
+    if (await confirmMockExamAction("结束阅读并进入听力部分", "进入后不能返回修改阅读答案。")) enterListening();
   }
   async function finishListeningEarly() {
-    if (await confirmMockExamAction("结束听力并进入写作", "进入后不能返回修改听力答案。")) enterWriting();
+    if (await confirmMockExamAction("结束听力并进入写作部分", "进入后不能返回修改听力答案。")) enterWriting();
   }
   async function submitWriting() {
     if (await confirmMockExamAction("提交写作", "提交后将展示范文并进行自评。")) {
@@ -862,7 +983,7 @@ export default function MockWrittenExamPage() {
     }
   }
   async function submitExamEarly() {
-    if (!await confirmMockExamAction("提前交卷", "确认后将立即结算，所有未作答的题目都会按错误计算，且不能继续修改。")) return;
+    if (!await confirmMockExamAction("提前交卷")) return;
     completeExam({ ...EARLY_SUBMISSION_WRITING_ASSESSMENT }, true);
   }
   async function finishSelfAssessment() {
@@ -1037,7 +1158,7 @@ export default function MockWrittenExamPage() {
                 color: assessmentComplete ? "#2c2a22" : "#68756f",
               }}
             >
-              提交自评并结算
+              查看得分
             </button>
           </div>
         </section>
@@ -1092,7 +1213,7 @@ export default function MockWrittenExamPage() {
 
       {phase === "listening" ? (
         <section className="mock-exam-audio-status" aria-live="polite">
-          {currentAudioAction?.kind === "audio" ? <><span>正在播放 · {PARTS[currentAudioAction.partKey].title}</span><strong>第 {currentAudioAction.play} / {currentAudioAction.total} 遍</strong><small>播放期间不能切换 Teil</small></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></>}
+          {currentAudioAction?.kind === "audio" ? <><span>正在播放 · {PARTS[currentAudioAction.partKey].title}</span><strong>第 {currentAudioAction.play} / {currentAudioAction.total} 遍</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></>}
           {needsAudioGesture ? <button onClick={playCurrentAudio}>点击继续播放录音</button> : null}
           <audio ref={audioRef} src={currentAudioExercise?.audio_file_url || ""} onCanPlay={playCurrentAudio}
             onEnded={advanceAudioStep} preload="auto" />
@@ -1111,7 +1232,7 @@ export default function MockWrittenExamPage() {
         disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
         favoriteFor={favoriteFor} />
 
-      {!isResults ? <footer className="mock-exam-footer"><div><strong>进入下一部分后不能返回</strong><span>如需立刻结算，请使用计时器旁的“提前交卷”。</span></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
+      {!isResults ? <footer className="mock-exam-footer"><div><strong>上交答题卡</strong></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
       <MockExamAnswerSheet rows={answerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults}
         open={answerSheetOpen} onClose={() => setAnswerSheetOpen(false)} />
     </div>

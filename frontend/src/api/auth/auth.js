@@ -1,4 +1,5 @@
 import Swal from "sweetalert2";
+import { clearMockExamLocalStorage } from "../exam_preparation/mockExams.js";
 import { ApiError, apiFetch } from "../client";
 
 const DEVICE_ACTIVITY_STORAGE_KEY = "accountDeviceActivityId";
@@ -149,6 +150,7 @@ export async function logout() {
   localStorage.removeItem("accessToken");
   localStorage.removeItem("refreshToken");
   clearDeviceActivityId();
+  clearMockExamLocalStorage();
 
   if (!refreshToken) {
     return;

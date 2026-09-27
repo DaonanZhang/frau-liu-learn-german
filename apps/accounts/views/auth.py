@@ -156,7 +156,8 @@ class DeviceHeartbeatAPIView(APIView):
                     active_until__gt=now,
                 ).exclude(pk=session.pk)
                 if (
-                    active_other_sessions.count()
+                    settings.DEVICE_LIMIT_ENABLED
+                    and active_other_sessions.count()
                     >= settings.MAX_CONCURRENT_LOGIN_SESSIONS
                 ):
                     session.active_until = now

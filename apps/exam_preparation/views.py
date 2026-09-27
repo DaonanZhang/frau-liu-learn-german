@@ -1,19 +1,28 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
+import uuid
+from datetime import timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
+from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.viewsets import ModelViewSet, ViewSet
 
 from apps.accounts.permissions import (
-    HasExamPreparationReleaseAccess,
+    HasReleaseAccess,
     HasValidEntitlement,
     IsAdminOrReadOnly,
 )
@@ -31,6 +40,8 @@ from apps.exam_preparation.models import (
     ListeningAnswerOption,
     ListeningExercise,
     ListeningQuestion,
+    MockExamPaper,
+    MockExamShare,
     ReadingAdMatchingAd,
     ReadingAdMatchingExercise,
     ReadingAdMatchingItem,
@@ -40,6 +51,7 @@ from apps.exam_preparation.models import (
     ReadingUnderstandingAnswerOption,
     ReadingUnderstandingExercise,
     ReadingUnderstandingQuestion,
+    SavedMockExam,
     SpeakingTeilExercise,
     UserClozeChoiceBlankState,
     UserClozeMatchingBlankState,
@@ -100,7 +112,6 @@ from apps.exam_preparation.serializers import (
 class BaseExamPreparationViewSet(ModelViewSet):
     permission_classes = [
         IsAuthenticated,
-        HasExamPreparationReleaseAccess,
         HasValidEntitlement,
         IsAdminOrReadOnly,
     ]
@@ -113,7 +124,6 @@ class BaseExamPreparationViewSet(ModelViewSet):
         if self.trial_access_enabled and self.action in {"list", "retrieve"}:
             return [
                 IsAuthenticated(),
-                HasExamPreparationReleaseAccess(),
                 IsAdminOrReadOnly(),
             ]
         return super().get_permissions()
@@ -132,7 +142,7 @@ class BaseExamPreparationViewSet(ModelViewSet):
 
 
 class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
-    permission_classes = [IsAuthenticated, HasExamPreparationReleaseAccess]
+    permission_classes = [IsAuthenticated]
     state_lookup_field = ""
     state_lookup_fields = ()
     ordering = ["-updated_at", "id"]
@@ -190,6 +200,784 @@ class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
         )
         self._ensure_target_access(target_object)
         serializer.save(**validated_data)
+
+
+def _mock_exam_definitions(*, exam_type="telc", level=ExerciseBase.Level.B1):
+    definitions = (
+        (
+            "reading_title_matching",
+            ReadingTitleMatchingExercise.objects.select_related("exercise_base").prefetch_related(
+                "options", "items__correct_option"
+            ),
+            ReadingTitleMatchingExerciseDetailSerializer,
+        ),
+        (
+            "reading_understanding",
+            ReadingUnderstandingExercise.objects.select_related("exercise_base").prefetch_related(
+                "questions__answer_options"
+            ),
+            ReadingUnderstandingExerciseDetailSerializer,
+        ),
+        (
+            "reading_ad_matching",
+            ReadingAdMatchingExercise.objects.select_related("exercise_base").prefetch_related(
+                "ads", "items__correct_ad"
+            ),
+            ReadingAdMatchingExerciseDetailSerializer,
+        ),
+        (
+            "cloze_choice",
+            ClozeChoiceExercise.objects.select_related("exercise_base").prefetch_related("blanks__options"),
+            ClozeChoiceExerciseDetailSerializer,
+        ),
+        (
+            "cloze_matching",
+            ClozeMatchingExercise.objects.select_related("exercise_base").prefetch_related(
+                "options", "blank_answers__correct_option"
+            ),
+            ClozeMatchingExerciseDetailSerializer,
+        ),
+        (
+            "listening_teil1",
+            ListeningExercise.objects.filter(
+                listening_type=ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP
+            ).select_related("exercise_base").prefetch_related("questions__answer_options"),
+            ListeningExerciseDetailSerializer,
+        ),
+        (
+            "listening_teil2",
+            ListeningExercise.objects.filter(
+                listening_type=ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE
+            ).select_related("exercise_base").prefetch_related("questions__answer_options"),
+            ListeningExerciseDetailSerializer,
+        ),
+        (
+            "listening_teil3",
+            ListeningExercise.objects.filter(
+                listening_type=ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE
+            ).select_related("exercise_base").prefetch_related("questions__answer_options"),
+            ListeningExerciseDetailSerializer,
+        ),
+        (
+            "writing",
+            WritingExercise.objects.select_related("exercise_base").prefetch_related("example_texts"),
+            WritingExerciseDetailSerializer,
+        ),
+    )
+
+    # `exam_type` is the exam family and `level` is the CEFR level. The second
+    # condition keeps older rows labelled as e.g. "telc B1" usable while new
+    # imports continue to store the canonical family-only value "telc".
+    exam_filter = Q(exercise_base__exam_type__iexact=exam_type) | Q(
+        exercise_base__exam_type__iexact=f"{exam_type} {level}"
+    )
+    return tuple(
+        (key, queryset.filter(exercise_base__level=level).filter(exam_filter), serializer_class)
+        for key, queryset, serializer_class in definitions
+    )
+
+
+def _mock_exam_payload(
+    request,
+    selection=None,
+    *,
+    exam_type="telc",
+    level=ExerciseBase.Level.B1,
+    show_listening_scripts=False,
+):
+    parts = {}
+    selected_ids = {}
+    missing_parts = []
+    for key, queryset, serializer_class in _mock_exam_definitions(exam_type=exam_type, level=level):
+        exercise = queryset.filter(pk=selection[key]).first() if selection else queryset.order_by("?").first()
+        if exercise is None:
+            missing_parts.append(key)
+            continue
+        selected_ids[key] = exercise.pk
+        parts[key] = serializer_class(
+            exercise,
+            context={
+                "request": request,
+                "show_listening_script": show_listening_scripts,
+            },
+        ).data
+
+    if missing_parts:
+        return None, None, missing_parts
+    return {
+        "exam_type": exam_type,
+        "level": level,
+        "exam_label": f"{exam_type} {level}",
+        "durations": {
+            "reading_and_cloze": 90 * 60,
+            "collection_pause": 60,
+            "listening": 30 * 60,
+            "writing": 30 * 60,
+        },
+        "parts": parts,
+    }, selected_ids, []
+
+
+def _mock_exam_scope(data):
+    level = str(data.get("level", ExerciseBase.Level.B1)).strip().upper()
+    exam_type = str(data.get("exam_type", "telc")).strip()
+    legacy_suffix = f" {level}"
+    if exam_type.upper().endswith(legacy_suffix):
+        exam_type = exam_type[:-len(legacy_suffix)].strip()
+    if not exam_type or level not in ExerciseBase.Level.values:
+        return None
+    return exam_type, level
+
+
+def _new_mock_exam_progress():
+    started_at = timezone.now()
+    return {
+        "phase": "reading",
+        "deadline": int((started_at + timedelta(minutes=90)).timestamp() * 1000),
+        "active_part": "reading_title_matching",
+        "audio_step": 0,
+        "audio_step_started_at": 0,
+    }
+
+
+WRITING_ASSESSMENT_DIMENSIONS = (
+    "task_completion",
+    "communicative_design",
+    "formal_accuracy",
+)
+WRITING_GRADE_POINTS = {"A": 5, "B": 3, "C": 1, "D": 0}
+
+
+def _normalize_writing_assessment(value):
+    if not isinstance(value, dict):
+        return None
+    allowed_keys = {"topic_relevant", *WRITING_ASSESSMENT_DIMENSIONS}
+    if set(value) - allowed_keys:
+        return None
+    topic_relevant = value.get("topic_relevant")
+    if topic_relevant is not None and not isinstance(topic_relevant, bool):
+        return None
+    normalized = {"topic_relevant": topic_relevant}
+    for key in WRITING_ASSESSMENT_DIMENSIONS:
+        grade = value.get(key, "")
+        if grade not in {"", *WRITING_GRADE_POINTS}:
+            return None
+        normalized[key] = grade
+    return normalized
+
+
+def _legacy_writing_assessment(grade):
+    if grade not in WRITING_GRADE_POINTS:
+        return {}
+    return {
+        "topic_relevant": True,
+        **{key: grade for key in WRITING_ASSESSMENT_DIMENSIONS},
+    }
+
+
+def _writing_assessment_is_complete(assessment):
+    if assessment.get("topic_relevant") is False:
+        return True
+    return assessment.get("topic_relevant") is True and all(
+        assessment.get(key) in WRITING_GRADE_POINTS for key in WRITING_ASSESSMENT_DIMENSIONS
+    )
+
+
+def _writing_assessment_score(assessment):
+    if assessment.get("topic_relevant") is not True:
+        return 0
+    return sum(WRITING_GRADE_POINTS.get(assessment.get(key), 0) for key in WRITING_ASSESSMENT_DIMENSIONS) * 3
+
+
+def _mock_exam_correct_counts(instance):
+    selection = instance.paper.exercise_selection
+    answers = instance.answers
+
+    def selected(part_key, item_id):
+        return answers.get(f"{part_key}:{item_id}")
+
+    reading_correct = sum(
+        selected("reading_title_matching", item_id) == option_key
+        for item_id, option_key in ReadingTitleMatchingItem.objects.filter(
+            exercise_id=selection.get("reading_title_matching")
+        ).values_list("id", "correct_option__option_key")
+    )
+    reading_correct += sum(
+        selected("reading_understanding", question_id) == option_key
+        for question_id, option_key in ReadingUnderstandingAnswerOption.objects.filter(
+            question__exercise_id=selection.get("reading_understanding"),
+            is_correct=True,
+        ).values_list("question_id", "option_key")
+    )
+    reading_correct += sum(
+        selected("reading_ad_matching", item_id) == ad_key
+        for item_id, ad_key in ReadingAdMatchingItem.objects.filter(
+            exercise_id=selection.get("reading_ad_matching")
+        ).values_list("id", "correct_ad__ad_key")
+    )
+    cloze_correct = sum(
+        selected("cloze_choice", blank_id) == option_key
+        for blank_id, option_key in ClozeChoiceOption.objects.filter(
+            blank__exercise_id=selection.get("cloze_choice"),
+            is_correct=True,
+        ).values_list("blank_id", "option_key")
+    )
+    cloze_correct += sum(
+        selected("cloze_matching", blank_id) == option_key
+        for blank_id, option_key in ClozeMatchingBlankAnswer.objects.filter(
+            exercise_id=selection.get("cloze_matching")
+        ).values_list("id", "correct_option__option_key")
+    )
+    listening_correct = 0
+    for part_key in ("listening_teil1", "listening_teil2", "listening_teil3"):
+        listening_correct += sum(
+            selected(part_key, question_id) == option_key
+            for question_id, option_key in ListeningAnswerOption.objects.filter(
+                question__listening_exercise_id=selection.get(part_key),
+                is_correct=True,
+            ).values_list("question_id", "option_key")
+        )
+    return reading_correct, cloze_correct, listening_correct
+
+
+def _calculate_mock_exam_result(instance):
+    reading_correct, cloze_correct, listening_correct = _mock_exam_correct_counts(instance)
+    writing_score = Decimal(str(_writing_assessment_score(
+        instance.writing_assessment or _legacy_writing_assessment(instance.writing_grade)
+    )))
+    reading_score = Decimal(reading_correct) * Decimal("3.75")
+    cloze_score = Decimal(cloze_correct) * Decimal("1.5")
+    listening_score = Decimal(listening_correct) * Decimal("3.75")
+    total_score = reading_score + cloze_score + listening_score + writing_score
+    percentage = ((total_score / Decimal("225")) * 100).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return {
+        "score_breakdown": {
+            "reading_correct": reading_correct,
+            "reading_score": float(reading_score),
+            "cloze_correct": cloze_correct,
+            "cloze_score": float(cloze_score),
+            "listening_correct": listening_correct,
+            "listening_score": float(listening_score),
+            "writing_score": float(writing_score),
+        },
+        "total_score": total_score,
+        "score_percentage": percentage,
+        "is_passed": total_score >= Decimal("135"),
+    }
+
+
+def _apply_mock_exam_result(instance):
+    result = _calculate_mock_exam_result(instance)
+    for field, value in result.items():
+        setattr(instance, field, value)
+    return result
+
+
+def _create_mock_exam_paper(*, user, exam_type, level, selection, creation_method=MockExamPaper.CreationMethod.RANDOM):
+    return MockExamPaper.objects.create(
+        created_by=user,
+        exam_type=exam_type,
+        level=level,
+        exercise_selection=selection,
+        creation_method=creation_method,
+    )
+
+
+class SavedMockExamPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = "page_size"
+    max_page_size = 50
+
+
+MOCK_EXAM_RELEASE_ACCESS_DENIAL = {
+    "message": "模拟考试即将上线，敬请期待。",
+    "code": "mock_exam_coming_soon",
+}
+
+
+class MockExamViewSet(ViewSet):
+    """Build one paid-access written mock exam from the current question bank."""
+
+    permission_classes = [
+        IsAuthenticated,
+        HasReleaseAccess,
+        HasValidEntitlement,
+    ]
+    required_module_key = "exam_preparation"
+    release_access_denial = MOCK_EXAM_RELEASE_ACCESS_DENIAL
+
+    def create(self, request):
+        request_id = str(request.data.get("request_id", "")).strip()
+        if request_id and (len(request_id) > 128 or not re.fullmatch(r"[A-Za-z0-9._:-]+", request_id)):
+            return Response({"message": "组卷请求标识无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        scope = _mock_exam_scope(request.data)
+        if scope is None:
+            return Response({"message": "考试类型或等级无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        exam_type, level = scope
+        payload, selection, missing_parts = _mock_exam_payload(request, exam_type=exam_type, level=level)
+        if missing_parts:
+            return Response(
+                {
+                    "message": "题库尚不足以生成完整的模拟考试。",
+                    "missing_parts": missing_parts,
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        progress = _new_mock_exam_progress()
+        fingerprint = (
+            hashlib.sha256(f"mock-create:{request_id}".encode("utf-8")).hexdigest()
+            if request_id
+            else uuid.uuid4().hex
+        )
+        attempt = SavedMockExam.objects.select_related("paper").filter(
+            user=request.user,
+            fingerprint=fingerprint,
+        ).first()
+        reused_attempt = attempt is not None
+        if attempt is None:
+            paper = _create_mock_exam_paper(
+                user=request.user,
+                exam_type=exam_type,
+                level=level,
+                selection=selection,
+            )
+            attempt, created = SavedMockExam.objects.get_or_create(
+                user=request.user,
+                fingerprint=fingerprint,
+                defaults={
+                    "paper": paper,
+                    "exam_type": exam_type,
+                    "level": level,
+                    "exercise_selection": selection,
+                    "progress": progress,
+                },
+            )
+            if not created:
+                paper.delete()
+                attempt = SavedMockExam.objects.select_related("paper").get(pk=attempt.pk)
+                reused_attempt = True
+        if reused_attempt:
+            payload, selection, missing_parts = _mock_exam_payload(
+                request,
+                attempt.paper.exercise_selection,
+                exam_type=attempt.paper.exam_type,
+                level=attempt.paper.level,
+            )
+            if missing_parts:
+                return Response(
+                    {"message": "考试记录中的部分题目已不存在。", "missing_parts": missing_parts},
+                    status=status.HTTP_409_CONFLICT,
+                )
+            progress = attempt.progress
+        payload["selection"] = selection
+        payload["attempt_id"] = attempt.pk
+        payload["paper_code"] = attempt.paper.code
+        payload["progress"] = progress
+        return Response(payload, status=status.HTTP_201_CREATED)
+
+
+class SavedMockExamViewSet(ViewSet):
+    permission_classes = [IsAuthenticated, HasReleaseAccess, HasValidEntitlement]
+    release_access_denial = MOCK_EXAM_RELEASE_ACCESS_DENIAL
+    required_module_key = "exam_preparation"
+
+    @staticmethod
+    def _summary(instance):
+        writing_assessment = instance.writing_assessment or _legacy_writing_assessment(instance.writing_grade)
+        result = None
+        if instance.is_completed:
+            if instance.total_score is None:
+                result = _calculate_mock_exam_result(instance)
+            else:
+                result = {
+                    "score_breakdown": instance.score_breakdown,
+                    "total_score": instance.total_score,
+                    "score_percentage": instance.score_percentage,
+                    "is_passed": instance.is_passed,
+                }
+        return {
+            "id": instance.pk,
+            "paper_code": instance.paper.code,
+            "exam_type": instance.paper.exam_type,
+            "level": instance.paper.level,
+            "exercise_selection": instance.paper.exercise_selection,
+            "answers": instance.answers,
+            "writing_text": instance.writing_text,
+            "writing_grade": instance.writing_grade,
+            "writing_assessment": writing_assessment,
+            "writing_score": _writing_assessment_score(writing_assessment),
+            "score_breakdown": result["score_breakdown"] if result else None,
+            "total_score": float(result["total_score"]) if result else None,
+            "score_percentage": float(result["score_percentage"]) if result else None,
+            "is_passed": result["is_passed"] if result else None,
+            "is_completed": instance.is_completed,
+            "is_favorite": instance.is_favorite,
+            "progress": instance.progress,
+            "created_at": instance.created_at,
+            "updated_at": instance.updated_at,
+        }
+
+    def list(self, request):
+        queryset = SavedMockExam.objects.select_related("paper").filter(user=request.user)
+        scope = request.query_params.get("scope", "favorites")
+        if scope == "favorites":
+            queryset = queryset.filter(is_favorite=True)
+        elif scope == "active":
+            queryset = queryset.filter(is_completed=False)
+        elif scope == "history":
+            pass
+        elif scope != "all":
+            return Response({"message": "记录类型无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        paginator = SavedMockExamPagination()
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response([self._summary(item) for item in page])
+
+    def retrieve(self, request, pk=None):
+        instance = get_object_or_404(SavedMockExam.objects.select_related("paper"), pk=pk, user=request.user)
+        payload, _, missing_parts = _mock_exam_payload(
+            request,
+            instance.paper.exercise_selection,
+            exam_type=instance.paper.exam_type,
+            level=instance.paper.level,
+            show_listening_scripts=instance.is_completed,
+        )
+        if missing_parts:
+            return Response(
+                {"message": "收藏卷中的部分题目已不存在。", "missing_parts": missing_parts},
+                status=status.HTTP_409_CONFLICT,
+            )
+        payload["selection"] = instance.paper.exercise_selection
+        payload["paper_code"] = instance.paper.code
+        return Response({**self._summary(instance), "exam": payload})
+
+    def create(self, request):
+        selection = request.data.get("exercise_selection")
+        scope = _mock_exam_scope(request.data)
+        if scope is None:
+            return Response({"message": "考试类型或等级无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        exam_type, level = scope
+        expected_keys = {item[0] for item in _mock_exam_definitions(exam_type=exam_type, level=level)}
+        if not isinstance(selection, dict) or set(selection) != expected_keys:
+            return Response({"message": "试卷题目 ID 不完整。"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            selection = {key: int(selection[key]) for key in sorted(expected_keys)}
+        except (TypeError, ValueError):
+            return Response({"message": "试卷题目 ID 无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        _, _, missing_parts = _mock_exam_payload(
+            request,
+            selection,
+            exam_type=exam_type,
+            level=level,
+        )
+        if missing_parts:
+            return Response(
+                {"message": "试卷题目 ID 无效。", "missing_parts": missing_parts},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        answers = request.data.get("answers", {})
+        if not isinstance(answers, dict):
+            return Response({"message": "答案格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        writing_grade = str(request.data.get("writing_grade", ""))
+        if writing_grade and writing_grade not in {"A", "B", "C", "D"}:
+            return Response({"message": "写作等级无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        assessment_value = request.data.get("writing_assessment")
+        if assessment_value is None:
+            writing_assessment = _legacy_writing_assessment(writing_grade)
+        else:
+            writing_assessment = _normalize_writing_assessment(assessment_value)
+            if writing_assessment is None:
+                return Response({"message": "写作自评格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        fingerprint_source = {"exam_type": exam_type.lower(), "level": level, "selection": selection}
+        fingerprint = hashlib.sha256(
+            json.dumps(fingerprint_source, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        is_completed = bool(request.data.get("is_completed", False))
+        if is_completed and not _writing_assessment_is_complete(writing_assessment):
+            return Response({"message": "请完成写作自评。"}, status=status.HTTP_400_BAD_REQUEST)
+        defaults = {
+            "exercise_selection": selection,
+            "exam_type": exam_type,
+            "level": level,
+            "answers": answers,
+            "writing_text": str(request.data.get("writing_text", "")),
+            "writing_grade": writing_grade,
+            "writing_assessment": writing_assessment,
+            "is_completed": is_completed,
+            "is_favorite": is_completed and bool(request.data.get("is_favorite", True)),
+            "progress": request.data.get("progress", {}),
+        }
+        instance = SavedMockExam.objects.filter(user=request.user, fingerprint=fingerprint).first()
+        created = instance is None
+        if created:
+            paper = _create_mock_exam_paper(
+                user=request.user,
+                exam_type=exam_type,
+                level=level,
+                selection=selection,
+            )
+            instance = SavedMockExam.objects.create(
+                user=request.user,
+                paper=paper,
+                fingerprint=fingerprint,
+                **defaults,
+            )
+        else:
+            for field, value in defaults.items():
+                setattr(instance, field, value)
+        result_fields = []
+        if instance.is_completed:
+            result_fields = list(_apply_mock_exam_result(instance))
+        instance.save(update_fields=[*defaults, *result_fields, "updated_at"])
+        return Response(self._summary(instance), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+    @transaction.atomic
+    def partial_update(self, request, pk=None):
+        instance = get_object_or_404(
+            SavedMockExam.objects.select_for_update(),
+            pk=pk,
+            user=request.user,
+        )
+        completion_fields = {"answers", "writing_text", "writing_grade", "writing_assessment", "is_completed", "progress"}
+        if instance.is_completed and completion_fields.intersection(request.data):
+            return Response({"message": "已完成的考试不能再次修改。"}, status=status.HTTP_409_CONFLICT)
+        if "is_completed" in request.data:
+            return Response({"message": "请使用交卷接口完成考试。"}, status=status.HTTP_400_BAD_REQUEST)
+        update_fields = []
+        next_writing_assessment = instance.writing_assessment or _legacy_writing_assessment(instance.writing_grade)
+        if "writing_assessment" in request.data:
+            next_writing_assessment = _normalize_writing_assessment(request.data["writing_assessment"])
+            if next_writing_assessment is None:
+                return Response({"message": "写作自评格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        elif "writing_grade" in request.data:
+            next_writing_assessment = _legacy_writing_assessment(str(request.data["writing_grade"]))
+        if "answers" in request.data:
+            if not isinstance(request.data["answers"], dict):
+                return Response({"message": "答案格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+            instance.answers = request.data["answers"]
+            update_fields.append("answers")
+        if "writing_text" in request.data:
+            instance.writing_text = str(request.data["writing_text"])
+            update_fields.append("writing_text")
+        if "writing_grade" in request.data:
+            grade = str(request.data["writing_grade"])
+            if grade and grade not in {"A", "B", "C", "D"}:
+                return Response({"message": "写作等级无效。"}, status=status.HTTP_400_BAD_REQUEST)
+            instance.writing_grade = grade
+            update_fields.append("writing_grade")
+        if "writing_assessment" in request.data:
+            instance.writing_assessment = next_writing_assessment
+            update_fields.append("writing_assessment")
+        if "is_favorite" in request.data:
+            next_favorite = bool(request.data["is_favorite"])
+            if next_favorite and not instance.is_completed:
+                return Response({"message": "完成考试后才能收藏试卷。"}, status=status.HTTP_400_BAD_REQUEST)
+            instance.is_favorite = next_favorite
+            update_fields.append("is_favorite")
+        if "progress" in request.data:
+            if not isinstance(request.data["progress"], dict):
+                return Response({"message": "考试进度格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+            instance.progress = request.data["progress"]
+            update_fields.append("progress")
+        if update_fields:
+            instance.save(update_fields=[*dict.fromkeys(update_fields), "updated_at"])
+        return Response(self._summary(instance))
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        with transaction.atomic():
+            instance = get_object_or_404(
+                SavedMockExam.objects.select_for_update().select_related("paper"),
+                pk=pk,
+                user=request.user,
+            )
+            if instance.is_completed:
+                return Response({"message": "该考试已经交卷。"}, status=status.HTTP_409_CONFLICT)
+
+            answers = request.data.get("answers", instance.answers)
+            if not isinstance(answers, dict):
+                return Response({"message": "答案格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+            assessment_value = request.data.get("writing_assessment", instance.writing_assessment)
+            writing_assessment = _normalize_writing_assessment(assessment_value)
+            if writing_assessment is None:
+                return Response({"message": "写作自评格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+            if not _writing_assessment_is_complete(writing_assessment):
+                return Response({"message": "请完成写作自评。"}, status=status.HTTP_400_BAD_REQUEST)
+            progress = request.data.get("progress", instance.progress)
+            if not isinstance(progress, dict):
+                return Response({"message": "考试进度格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+
+            instance.answers = answers
+            instance.writing_text = str(request.data.get("writing_text", instance.writing_text))
+            instance.writing_assessment = writing_assessment
+            instance.progress = progress
+            instance.is_completed = True
+            if "is_favorite" in request.data:
+                instance.is_favorite = bool(request.data["is_favorite"])
+            result_fields = list(_apply_mock_exam_result(instance))
+            instance.save(update_fields=[
+                "answers",
+                "writing_text",
+                "writing_assessment",
+                "progress",
+                "is_completed",
+                "is_favorite",
+                *result_fields,
+                "updated_at",
+            ])
+        return Response(self._summary(instance))
+
+    def destroy(self, request, pk=None):
+        instance = get_object_or_404(SavedMockExam, pk=pk, user=request.user)
+        instance.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"])
+    def share(self, request, pk=None):
+        instance = get_object_or_404(
+            SavedMockExam.objects.select_related("paper"),
+            pk=pk,
+            user=request.user,
+        )
+        share_mode = request.data.get("share_mode", MockExamShare.ShareMode.PAPER)
+        if share_mode not in MockExamShare.ShareMode.values:
+            return Response({"message": "分享类型无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        if share_mode == MockExamShare.ShareMode.PAPER_WITH_ANSWERS and not instance.is_completed:
+            return Response({"message": "完成考试后才能分享答案。"}, status=status.HTTP_400_BAD_REQUEST)
+        shared, _ = MockExamShare.objects.get_or_create(
+            attempt=instance,
+            share_mode=share_mode,
+            defaults={
+                "owner": request.user,
+                "paper": instance.paper,
+            },
+        )
+        if not shared.is_active:
+            shared.is_active = True
+            shared.save(update_fields=["is_active", "updated_at"])
+        return Response(MockExamShareViewSet.summary(shared), status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"])
+    def retake(self, request, pk=None):
+        source = get_object_or_404(SavedMockExam.objects.select_related("paper"), pk=pk, user=request.user)
+        _, _, missing_parts = _mock_exam_payload(
+            request,
+            source.paper.exercise_selection,
+            exam_type=source.paper.exam_type,
+            level=source.paper.level,
+        )
+        if missing_parts:
+            return Response(
+                {"message": "原试卷中的部分题目已不存在。", "missing_parts": missing_parts},
+                status=status.HTTP_409_CONFLICT,
+            )
+        attempt = SavedMockExam.objects.create(
+            user=request.user,
+            paper=source.paper,
+            fingerprint=uuid.uuid4().hex,
+            exam_type=source.paper.exam_type,
+            level=source.paper.level,
+            exercise_selection=source.paper.exercise_selection,
+            progress=_new_mock_exam_progress(),
+        )
+        return Response(self._summary(attempt), status=status.HTTP_201_CREATED)
+
+
+class MockExamShareViewSet(ViewSet):
+    """Expose explicitly shared mock papers without exposing owner identity."""
+
+    permission_classes = [IsAuthenticated, HasReleaseAccess, HasValidEntitlement]
+    release_access_denial = MOCK_EXAM_RELEASE_ACCESS_DENIAL
+    required_module_key = "exam_preparation"
+    lookup_field = "share_code"
+    lookup_value_regex = r"MS-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{12}"
+
+    @staticmethod
+    def summary(instance):
+        return {
+            "share_code": instance.share_code,
+            "share_mode": instance.share_mode,
+            "paper_code": instance.paper.code,
+            "exam_type": instance.paper.exam_type,
+            "level": instance.paper.level,
+            "is_active": instance.is_active,
+            "created_at": instance.created_at,
+            "updated_at": instance.updated_at,
+        }
+
+    def list(self, request):
+        queryset = MockExamShare.objects.select_related("paper").filter(owner=request.user)
+        return Response({"count": queryset.count(), "results": [self.summary(item) for item in queryset]})
+
+    def retrieve(self, request, share_code=None):
+        shared = get_object_or_404(
+            MockExamShare.objects.select_related("paper", "attempt"),
+            share_code=share_code,
+            is_active=True,
+            paper__is_active=True,
+        )
+        payload, _, missing_parts = _mock_exam_payload(
+            request,
+            shared.paper.exercise_selection,
+            exam_type=shared.paper.exam_type,
+            level=shared.paper.level,
+            show_listening_scripts=(
+                shared.share_mode == MockExamShare.ShareMode.PAPER_WITH_ANSWERS
+                and shared.attempt.is_completed
+            ),
+        )
+        if missing_parts:
+            return Response(
+                {"message": "分享试卷中的部分题目已不存在。", "missing_parts": missing_parts},
+                status=status.HTTP_409_CONFLICT,
+            )
+        payload["selection"] = shared.paper.exercise_selection
+        payload["paper_code"] = shared.paper.code
+        response_data = {**self.summary(shared), "exam": payload}
+        if shared.share_mode == MockExamShare.ShareMode.PAPER_WITH_ANSWERS:
+            response_data["shared_attempt"] = SavedMockExamViewSet._summary(shared.attempt)
+        return Response(response_data)
+
+    def destroy(self, request, share_code=None):
+        shared = get_object_or_404(MockExamShare, share_code=share_code, owner=request.user)
+        shared.is_active = False
+        shared.save(update_fields=["is_active", "updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["post"])
+    def start(self, request, share_code=None):
+        shared = get_object_or_404(
+            MockExamShare.objects.select_related("paper"),
+            share_code=share_code,
+            is_active=True,
+            paper__is_active=True,
+        )
+        payload, selection, missing_parts = _mock_exam_payload(
+            request,
+            shared.paper.exercise_selection,
+            exam_type=shared.paper.exam_type,
+            level=shared.paper.level,
+        )
+        if missing_parts:
+            return Response(
+                {"message": "分享试卷中的部分题目已不存在。", "missing_parts": missing_parts},
+                status=status.HTTP_409_CONFLICT,
+            )
+        progress = _new_mock_exam_progress()
+        attempt = SavedMockExam.objects.create(
+            user=request.user,
+            paper=shared.paper,
+            fingerprint=uuid.uuid4().hex,
+            exam_type=shared.paper.exam_type,
+            level=shared.paper.level,
+            exercise_selection=selection,
+            progress=progress,
+        )
+        payload["selection"] = selection
+        payload["attempt_id"] = attempt.pk
+        payload["paper_code"] = shared.paper.code
+        payload["progress"] = progress
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class ExerciseBaseViewSet(BaseExamPreparationViewSet):
@@ -447,7 +1235,7 @@ class SpeakingTeilExerciseViewSet(BaseExamPreparationViewSet):
 
     def get_permissions(self):
         if self.action == "turn_audio":
-            return [IsAuthenticated(), HasExamPreparationReleaseAccess(), IsAdminOrReadOnly()]
+            return [IsAuthenticated(), IsAdminOrReadOnly()]
         return super().get_permissions()
 
     @action(detail=True, methods=["get"], url_path=r"turn-audio/(?P<sequence>[0-9]+)")
@@ -476,7 +1264,6 @@ class UserExerciseFavoriteViewSet(BaseExamPreparationViewSet):
     serializer_class = UserExerciseFavoriteSerializer
     permission_classes = [
         IsAuthenticated,
-        HasExamPreparationReleaseAccess,
         HasValidEntitlement,
     ]
     filterset_fields = ["exercise"]
@@ -496,7 +1283,6 @@ class FavoriteQuestionViewSet(ViewSet):
 
     permission_classes = [
         IsAuthenticated,
-        HasExamPreparationReleaseAccess,
         HasValidEntitlement,
     ]
     required_module_key = "exam_preparation"

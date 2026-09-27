@@ -12,6 +12,7 @@ from .listening import (
     ListeningExercise,
     ListeningQuestion,
 )
+from .mock_exam import MockExamPaper, MockExamShare, SavedMockExam
 from .reading import (
     ReadingAdMatchingAd,
     ReadingAdMatchingExercise,
@@ -44,6 +45,9 @@ __all__ = [
     "ListeningExercise",
     "ListeningQuestion",
     "ListeningAnswerOption",
+    "SavedMockExam",
+    "MockExamPaper",
+    "MockExamShare",
     "ReadingTitleMatchingExercise",
     "ReadingTitleMatchingItem",
     "ReadingTitleMatchingOption",

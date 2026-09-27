@@ -1,9 +1,9 @@
 from .entitlement import HasValidEntitlement
 from .common import IsAdminOrReadOnly
-from .exam_preparation import HasExamPreparationReleaseAccess
+from .release_access import HasReleaseAccess
 
 __all__ = [
-    "HasExamPreparationReleaseAccess",
+    "HasReleaseAccess",
     "HasValidEntitlement",
     "IsAdminOrReadOnly",
 ]

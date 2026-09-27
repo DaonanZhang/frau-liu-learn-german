@@ -15,6 +15,9 @@ from apps.exam_preparation.views import (
     ListeningAnswerOptionViewSet,
     ListeningExerciseViewSet,
     ListeningQuestionViewSet,
+    MockExamViewSet,
+    MockExamShareViewSet,
+    SavedMockExamViewSet,
     ReadingAdMatchingAdViewSet,
     ReadingAdMatchingExerciseViewSet,
     ReadingAdMatchingItemViewSet,
@@ -40,6 +43,9 @@ from apps.exam_preparation.views import (
 )
 
 router = DefaultRouter()
+router.register(r"mock-exams", MockExamViewSet, basename="exam-prep-mock-exams")
+router.register(r"mock-exam-shares", MockExamShareViewSet, basename="exam-prep-mock-exam-shares")
+router.register(r"saved-mock-exams", SavedMockExamViewSet, basename="exam-prep-saved-mock-exams")
 router.register(r"exercise-bases", ExerciseBaseViewSet, basename="exam-prep-exercise-bases")
 router.register(r"listening-exercises", ListeningExerciseViewSet, basename="exam-prep-listening-exercises")
 router.register(r"listening-questions", ListeningQuestionViewSet, basename="exam-prep-listening-questions")

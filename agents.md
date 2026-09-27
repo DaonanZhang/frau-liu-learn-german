@@ -220,6 +220,16 @@ After run:
 - Do not ship a layout that looks correct on desktop but breaks, overflows, overlaps, becomes cramped, or becomes hard to operate on iPad or mobile screens.
 - When adjusting spacing, cards, grids, toolbars, buttons, or fixed/sticky areas, verify that the result remains readable and usable across common desktop, iPad/tablet, and mobile widths.
 
+## User-Facing Copywriting Rule
+- Treat promotional and editorial copy as product writing, not as a place to dump a feature list or implementation summary.
+- Default to a restrained, matter-of-fact tone. Do not invent sentimental, inspirational, or overly warm slogans merely to fill space.
+- Before writing copy, decide whether the interface needs any text there at all. Do not add decorative eyebrows, badges, taglines, subtitles, or helper sentences merely to make a layout feel complete.
+- Hero text, entry-card descriptions, campaign copy, onboarding text, and other genuinely persuasive surfaces should communicate the user's goal, concrete benefit, or reason to act in natural language. Do not substitute phrases such as "the system randomly selects...", "this page provides...", or a compressed enumeration of functions merely because those functions already exist.
+- Keep operational copy operational: navigation labels, buttons, status messages, validation errors, confirmations, and help text should remain short, concrete, and unambiguous rather than becoming advertising slogans.
+- Utility pages such as history, favorites, account, and management views generally do not need taglines. Empty states should normally use a short neutral message such as "还没有考试记录"; add guidance only when the user needs it to take the next action.
+- Prefer familiar literal labels such as "考试记录", "继续考试", and "删除". Avoid ornamental wording, unnecessary foreign-language labels, inflated claims, and emotional framing unless the user explicitly asks for a campaign-style treatment.
+- When adding or changing a frontend feature, review every new user-visible string in context and explicitly decide whether its role is persuasive copy or functional guidance. Match the writing to that role and keep terminology consistent across desktop, tablet, and mobile views.
+
 ## Exam Preparation XLSX Rules
 - For routing staged exam-preparation workbooks from the repository-level `tmp/`
   directory into the appropriate `apps/exam_preparation/data/imports/*/raw/`

@@ -67,13 +67,14 @@ REST_FRAMEWORK = {
 
 REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/1")
 
-# Temporary release gate for the exam-preparation module. When enabled, only
-# the dedicated preview accounts can enter, activate, or purchase this module.
-EXAM_PREPARATION_COMING_SOON_ENABLED = env.bool(
-    "EXAM_PREPARATION_COMING_SOON_ENABLED",
+# Temporary one-off release gate. After launch, remove these settings together
+# with the release_access API field and its backend/frontend consumers.
+# Removal order: local-docs/release-access-removal.md.
+COMING_SOON = env.bool(
+    "COMING_SOON",
     default=False,
 )
-EXAM_PREPARATION_PREVIEW_TELEPHONES = ("110", "11223344551")
+RELEASE_ACCESS_TELEPHONES = ("110",)
 
 CACHES = {
     "default": {
@@ -301,6 +302,7 @@ SIMPLE_JWT = {
     ),
 }
 
+DEVICE_LIMIT_ENABLED = env.bool("DEVICE_LIMIT_ENABLED", default=True)
 MAX_CONCURRENT_LOGIN_SESSIONS = env.int(
     "MAX_CONCURRENT_LOGIN_SESSIONS",
     default=3,

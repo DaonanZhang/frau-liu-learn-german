@@ -1,8 +1,15 @@
+import process from "node:process";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+    globals: true,
+    include: ["src/**/*.test.{js,jsx}"],
+    setupFiles: "./src/test/setup.js",
+  },
   publicDir:
     process.env.DEPLOY_SKIP_RUNTIME_RESOURCES === "1" ? false : "public",
   server: {

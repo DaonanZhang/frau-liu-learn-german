@@ -11,6 +11,8 @@ from apps.exam_preparation.models import (
     ListeningAnswerOption,
     ListeningExercise,
     ListeningQuestion,
+    MockExamPaper,
+    MockExamShare,
     ReadingAdMatchingAd,
     ReadingAdMatchingExercise,
     ReadingAdMatchingItem,
@@ -20,6 +22,7 @@ from apps.exam_preparation.models import (
     ReadingUnderstandingAnswerOption,
     ReadingUnderstandingExercise,
     ReadingUnderstandingQuestion,
+    SavedMockExam,
     UserClozeChoiceBlankState,
     UserClozeMatchingBlankState,
     UserExerciseFavorite,
@@ -32,6 +35,41 @@ from apps.exam_preparation.models import (
     WritingExampleText,
     WritingExercise,
 )
+
+
+@admin.register(MockExamPaper)
+class MockExamPaperAdmin(admin.ModelAdmin):
+    list_display = ("code", "exam_type", "level", "creation_method", "created_by", "is_active", "created_at")
+    list_filter = ("exam_type", "level", "creation_method", "is_active")
+    search_fields = ("code", "created_by__telephone")
+    readonly_fields = ("code", "created_at", "updated_at")
+
+
+@admin.register(SavedMockExam)
+class SavedMockExamAdmin(admin.ModelAdmin):
+    list_display = ("id", "paper", "user", "exam_type", "level", "is_favorite", "is_completed", "updated_at")
+    list_filter = ("exam_type", "level", "is_favorite", "is_completed")
+    search_fields = ("paper__code", "user__telephone", "fingerprint")
+    readonly_fields = (
+        "fingerprint",
+        "exercise_selection",
+        "answers",
+        "writing_assessment",
+        "score_breakdown",
+        "total_score",
+        "score_percentage",
+        "is_passed",
+        "created_at",
+        "updated_at",
+    )
+
+
+@admin.register(MockExamShare)
+class MockExamShareAdmin(admin.ModelAdmin):
+    list_display = ("share_code", "share_mode", "owner", "paper", "attempt", "is_active", "created_at")
+    list_filter = ("share_mode", "is_active")
+    search_fields = ("share_code", "paper__code", "owner__telephone")
+    readonly_fields = ("share_code", "created_at", "updated_at")
 
 
 @admin.register(ExerciseBase)

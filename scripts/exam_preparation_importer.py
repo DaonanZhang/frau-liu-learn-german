@@ -132,6 +132,26 @@ def normalize_link_id(value) -> str:
     return text
 
 
+def normalize_listening_script(listening_type: str, script: str) -> str:
+    """Normalize imported listening instructions to the configured play count.
+
+    Args:
+        listening_type: Listening exercise type stored in the workbook.
+        script: Imported instruction and transcript text.
+
+    Returns:
+        The script with the Teil 3 playback instruction normalized.
+    """
+    if listening_type == ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE:
+        return re.sub(
+            r"Sie hören (?:jeden Text|diese Texte) zweimal\.",
+            "Sie hören jeden Text nur einmal.",
+            script,
+            flags=re.IGNORECASE,
+        )
+    return script
+
+
 def external_id_from_filename(xlsx_path: Path, workbook_external_id) -> str:
     workbook_id = normalize_link_id(workbook_external_id)
     if not workbook_id:
@@ -391,7 +411,10 @@ def import_listening(xlsx_path: Path) -> int:
                 "listening_type": listening_type,
                 "audio_file_identifier": audio_path.stem,
                 "audio_file_url": audio_url,
-                "script": clean_text(meta.get("script")),
+                "script": normalize_listening_script(
+                    listening_type,
+                    clean_text(meta.get("script")),
+                ),
             },
         )
         exercise.questions.all().delete()

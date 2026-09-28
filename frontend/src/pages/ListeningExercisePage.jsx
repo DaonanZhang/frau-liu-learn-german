@@ -44,6 +44,7 @@ export default function ListeningExercisePage({
 }) {
   const { exerciseId } = useParams();
   const audioRef = useRef(null);
+  const teil2CompletedPlaysRef = useRef(0);
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -56,6 +57,7 @@ export default function ListeningExercisePage({
   const [repeatEnabled, setRepeatEnabled] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const isTeil2 = listeningType === "short_text_true_false_once";
 
   useEffect(() => {
     let aborted = false;
@@ -119,9 +121,9 @@ export default function ListeningExercisePage({
     }
 
     audioElement.playbackRate = playbackRate;
-    audioElement.loop = repeatEnabled;
+    audioElement.loop = !isTeil2 && repeatEnabled;
     return undefined;
-  }, [exercise?.audio_file_url, playbackRate, repeatEnabled]);
+  }, [exercise?.audio_file_url, isTeil2, playbackRate, repeatEnabled]);
 
   function syncAudioProgress(audioElement) {
     setCurrentTime(Number.isFinite(audioElement.currentTime) ? audioElement.currentTime : 0);
@@ -129,6 +131,7 @@ export default function ListeningExercisePage({
   }
 
   function resetAudioProgress() {
+    teil2CompletedPlaysRef.current = 0;
     setIsPlaying(false);
     setCurrentTime(0);
     setDuration(0);
@@ -172,11 +175,31 @@ export default function ListeningExercisePage({
     if (!audioElement) {
       return;
     }
+    teil2CompletedPlaysRef.current = 0;
     audioElement.currentTime = 0;
     setCurrentTime(0);
     audioElement.play().catch((error) => {
       setErrorText(error?.message || "Audio playback failed.");
     });
+  }
+
+  async function handleAudioEnded(event) {
+    const audioElement = event.currentTarget;
+    if (isTeil2 && teil2CompletedPlaysRef.current === 0) {
+      teil2CompletedPlaysRef.current = 1;
+      audioElement.currentTime = 0;
+      setCurrentTime(0);
+      try {
+        await audioElement.play();
+      } catch (error) {
+        setErrorText(error?.message || "Audio playback failed.");
+      }
+      return;
+    }
+
+    teil2CompletedPlaysRef.current = 0;
+    setIsPlaying(false);
+    syncAudioProgress(audioElement);
   }
 
   function seekAudio(event) {
@@ -319,7 +342,7 @@ export default function ListeningExercisePage({
             <audio
               key={exercise?.audio_file_url || "no-audio"}
               ref={audioRef}
-              src={exercise?.audio_file_url || ""}
+              src={exercise?.audio_file_url || undefined}
               preload="metadata"
               onLoadStart={resetAudioProgress}
               onLoadedMetadata={(event) => {
@@ -340,10 +363,7 @@ export default function ListeningExercisePage({
               onPause={() => {
                 setIsPlaying(false);
               }}
-              onEnded={(event) => {
-                setIsPlaying(false);
-                syncAudioProgress(event.currentTarget);
-              }}
+              onEnded={handleAudioEnded}
               onEmptied={resetAudioProgress}
               onContextMenu={(event) => {
                 event.preventDefault();
@@ -366,12 +386,13 @@ export default function ListeningExercisePage({
                 {isPlaying ? "Ⅱ" : "▶"}
               </span>
             </button>
-            <label className="listening-exercise-timeline">
+            <label className="listening-exercise-timeline" htmlFor="listening-audio-position">
               <span className="listening-exercise-timeline__meta">
                 <span>Wiedergabeposition</span>
                 <span>{formatAudioTime(currentTime)} / {formatAudioTime(duration)}</span>
               </span>
               <input
+                id="listening-audio-position"
                 type="range"
                 min="0"
                 max={duration || 0}
@@ -395,9 +416,10 @@ export default function ListeningExercisePage({
             >
               Wieder abspielen
             </button>
-            <label className="listening-exercise-select">
+            <label className="listening-exercise-select" htmlFor="listening-playback-rate">
               <span className="listening-exercise-control-label">Geschwindigkeit</span>
               <select
+                id="listening-playback-rate"
                 value={playbackRate}
                 onChange={(event) => {
                   setPlaybackRate(Number(event.target.value));
@@ -410,16 +432,19 @@ export default function ListeningExercisePage({
                 ))}
               </select>
             </label>
-            <label className="listening-exercise-repeat">
-              <input
-                type="checkbox"
-                checked={repeatEnabled}
-                onChange={(event) => {
-                  setRepeatEnabled(event.target.checked);
-                }}
-              />
-              <span>Repeat aktivieren</span>
-            </label>
+            {!isTeil2 ? (
+              <label className="listening-exercise-repeat" htmlFor="listening-repeat">
+                <input
+                  id="listening-repeat"
+                  type="checkbox"
+                  checked={repeatEnabled}
+                  onChange={(event) => {
+                    setRepeatEnabled(event.target.checked);
+                  }}
+                />
+                <span>Repeat aktivieren</span>
+              </label>
+            ) : null}
           </div>
         </section>
 

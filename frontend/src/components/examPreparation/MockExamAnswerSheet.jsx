@@ -1,61 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-
-export default function MockExamAnswerSheet({ rows, answers, onAnswer, review, open, onClose }) {
-  const cardRef = useRef(null);
-  const dragRef = useRef(null);
-  const [position, setPosition] = useState({ x: 24, y: 96 });
-
-  useEffect(() => {
-    function move(event) {
-      if (!dragRef.current) return;
-      const card = cardRef.current;
-      const width = card?.offsetWidth || 620;
-      const height = card?.offsetHeight || 520;
-      setPosition({
-        x: Math.max(8, Math.min(window.innerWidth - width - 8, event.clientX - dragRef.current.offsetX)),
-        y: Math.max(8, Math.min(window.innerHeight - height - 8, event.clientY - dragRef.current.offsetY)),
-      });
-    }
-    function stop() { dragRef.current = null; }
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop);
-    window.addEventListener("pointercancel", stop);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-      window.removeEventListener("pointercancel", stop);
-    };
-  }, []);
-
-  if (!open) return null;
-
+export default function MockExamAnswerSheet({ rows, answers, onAnswer, review }) {
   const sections = [
     { key: "reading", label: "Lesen & Sprachbausteine", rows: rows.filter((row) => row.group === "reading") },
     { key: "listening", label: "Hören", rows: rows.filter((row) => row.group === "listening") },
   ];
 
   return (
-    <aside
-      ref={cardRef}
-      className="mock-answer-sheet"
-      style={{ transform: `translate(${position.x}px, ${position.y}px)` }}
-      role="dialog"
-      aria-modal="false"
-      aria-labelledby="mock-answer-sheet-title"
-    >
-      <header
-        className="mock-answer-sheet__handle"
-        onPointerDown={(event) => {
-          const bounds = cardRef.current?.getBoundingClientRect();
-          dragRef.current = {
-            offsetX: event.clientX - (bounds?.left || 0),
-            offsetY: event.clientY - (bounds?.top || 0),
-          };
-          event.currentTarget.setPointerCapture?.(event.pointerId);
-        }}
-      >
-        <div><span>拖动此处移动</span><h2 id="mock-answer-sheet-title">答题卡</h2></div>
-        <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={onClose} aria-label="关闭答题卡">×</button>
+    <aside className="mock-answer-sheet" role="region" aria-label="答题卡">
+      <header className="mock-answer-sheet__header">
+        <h2>答题卡</h2>
       </header>
 
       <div className="mock-answer-sheet__body">
@@ -80,11 +32,12 @@ export default function MockExamAnswerSheet({ rows, answers, onAnswer, review, o
                           <div className="mock-answer-sheet__bubbles">
                             {row.optionKeys.map((optionKey) => {
                               const correctAnswer = review && optionKey === row.correctKey;
+                              const wrongSelection = review && selected === optionKey && optionKey !== row.correctKey;
                               return (
                                 <button
                                   type="button"
                                   key={optionKey}
-                                  className={`${!review && selected === optionKey ? "is-selected" : ""}${correctAnswer ? " is-correct" : ""}`}
+                                  className={`${!review && selected === optionKey ? "is-selected" : ""}${correctAnswer ? " is-correct" : ""}${wrongSelection ? " is-wrong" : ""}`}
                                   onClick={() => row.editable && onAnswer(row.answerKey, optionKey)}
                                   disabled={!row.editable}
                                   aria-label={`第 ${row.number} 题，答案 ${optionKey}`}

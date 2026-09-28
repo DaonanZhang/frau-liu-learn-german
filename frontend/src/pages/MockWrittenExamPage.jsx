@@ -17,6 +17,7 @@ import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionShe
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
 import ListeningTranscript from "../components/examPreparation/ListeningTranscript.jsx";
+import ReadingAdMatchingWorkspace from "../components/examPreparation/ReadingAdMatchingWorkspace.jsx";
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import {
@@ -36,6 +37,7 @@ import {
   saveWritingExerciseState,
 } from "../api/exam_preparation/userExerciseStates.js";
 import "./MockWrittenExamPage.css";
+import "./ReadingAdMatchingPage.css";
 
 const READING_SECONDS = 90 * 60;
 const LISTENING_SECONDS = 30 * 60;
@@ -58,13 +60,11 @@ const READING_PART_KEYS = Object.keys(PARTS).filter((key) => PARTS[key].section 
 const LISTENING_PART_KEYS = Object.keys(PARTS).filter((key) => PARTS[key].section === "listening");
 const ALL_REVIEW_PART_KEYS = [...READING_PART_KEYS, ...LISTENING_PART_KEYS, "writing"];
 const AUDIO_SEQUENCE = [
-  { kind: "audio", partKey: "listening_teil1", play: 1, total: 1 },
+  { kind: "audio", partKey: "listening_teil1", playbackLabel: "einmal" },
   { kind: "break", next: "Hören · Teil 2" },
-  { kind: "audio", partKey: "listening_teil2", play: 1, total: 2 },
-  { kind: "break", next: "Hören · Teil 2（第二遍）" },
-  { kind: "audio", partKey: "listening_teil2", play: 2, total: 2 },
+  { kind: "audio", partKey: "listening_teil2", playbackLabel: "zweimal" },
   { kind: "break", next: "Hören · Teil 3" },
-  { kind: "audio", partKey: "listening_teil3", play: 1, total: 1 },
+  { kind: "audio", partKey: "listening_teil3", playbackLabel: "einmal" },
 ];
 
 const WRITING_GRADE_POINTS = { A: 5, B: 3, C: 1, D: 0 };
@@ -374,7 +374,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
   return (
     <>
       {!review ? (
-        <section className="mock-cloze-matching-pool" aria-label="选项区">
+        <section className="mock-cloze-matching-pool mock-cloze-matching-pool--sticky" aria-label="选项区">
           <div className="mock-cloze-matching-pool__heading"><strong>选项区</strong><span>拖动或选择一个选项后点击对应空格</span></div>
           <div className="mock-cloze-matching-pool__options">
             {poolOptions.map((option) => (
@@ -396,7 +396,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
           </div>
         </section>
       ) : null}
-      <div className="mock-exam-source-text mock-cloze-matching-text">
+      <div className="mock-exam-source-text mock-cloze-matching-text mock-cloze-matching-text--compact">
         {String(exercise.content_with_placeholders || "")
           .split(/(\{\{blank_\d+\}\})/g)
           .filter(Boolean)
@@ -521,19 +521,21 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
       </>
     );
   } else if (partKey === "reading_ad_matching") {
-    body = (
-      <>
-        {exercise.instruction ? <p className="mock-exam-prompt">{textBlocks(exercise.instruction)}</p> : null}
-        {(exercise.items || []).map((item) => {
-          const key = answerKey(partKey, item.id);
-          return <ChoiceField key={key} label={`${item.item_number}. ${item.item_text}`} value={answers[key] || ""}
-            options={exercise.ads || []} correctKey={item.correct_ad?.ad_key}
-            onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review}
-            feedbackVariant="ad" explanation={item.explanation}
-            favorite={review ? favoriteFor(partKey, item.id) : null} />;
-        })}
-      </>
-    );
+    const adAnswers = Object.fromEntries((exercise.items || []).map((item) => [
+      item.id,
+      answers[answerKey(partKey, item.id)] || "",
+    ]));
+    body = <>
+      {exercise.instruction ? <p className="mock-exam-prompt">{textBlocks(exercise.instruction)}</p> : null}
+      <ReadingAdMatchingWorkspace
+        key={exercise.id}
+        exercise={exercise}
+        answers={adAnswers}
+        review={review}
+        onAnswer={(itemId, value) => setAnswer(answerKey(partKey, itemId), value)}
+        favoriteFor={review ? (item) => favoriteFor(partKey, item.id) : null}
+      />
+    </>;
   } else if (partKey === "cloze_choice") {
     body = <div className="mock-exam-source-text"><ClozeChoiceText content={exercise.content_with_placeholders}
       blanks={exercise.blanks || []} optionsForBlank={(blank) => blank.options || []} partKey={partKey}
@@ -662,6 +664,7 @@ export default function MockWrittenExamPage() {
   const savedExamParam = searchParams.get("saved") || "";
   const attemptParam = searchParams.get("attempt") || "";
   const audioRef = useRef(null);
+  const teil2CompletedPlaysRef = useRef(0);
   const createRequestIdRef = useRef(createRequestId());
   const submissionStartedRef = useRef(false);
   const [exam, setExam] = useState(null);
@@ -682,7 +685,6 @@ export default function MockWrittenExamPage() {
   const [isSavedReview, setIsSavedReview] = useState(false);
   const [favoritePending, setFavoritePending] = useState(false);
   const [favoriteMessage, setFavoriteMessage] = useState("");
-  const [answerSheetOpen, setAnswerSheetOpen] = useState(false);
   const [questionFavorites, setQuestionFavorites] = useState({});
   const [questionFavoritePending, setQuestionFavoritePending] = useState({});
   const [resultModalOpen, setResultModalOpen] = useState(false);
@@ -867,6 +869,7 @@ export default function MockWrittenExamPage() {
   const enterListening = useCallback(() => {
     const nextDeadline = Date.now() + LISTENING_SECONDS * 1000;
     const startedAt = Date.now();
+    teil2CompletedPlaysRef.current = 0;
     setPhase("listening"); setDeadline(nextDeadline); setActivePart(LISTENING_PART_KEYS[0]);
     setAudioStep(0); setAudioStepStartedAt(startedAt); setNeedsAudioGesture(false);
     persist({ phase: "listening", deadline: nextDeadline, activePart: LISTENING_PART_KEYS[0], audioStep: 0, audioStepStartedAt: startedAt });
@@ -922,6 +925,23 @@ export default function MockWrittenExamPage() {
     }
   }, [audioStep, persist, attemptId, isSavedReview, answers, writingText, writingAssessment, isFavorite, phase, deadline, activePart]);
 
+  const handleAudioEnded = useCallback(async (event) => {
+    if (currentAudioAction?.partKey === "listening_teil2" && teil2CompletedPlaysRef.current === 0) {
+      teil2CompletedPlaysRef.current = 1;
+      event.currentTarget.currentTime = 0;
+      try {
+        await event.currentTarget.play();
+        setNeedsAudioGesture(false);
+      } catch {
+        setNeedsAudioGesture(true);
+      }
+      return;
+    }
+
+    teil2CompletedPlaysRef.current = 0;
+    advanceAudioStep();
+  }, [currentAudioAction, advanceAudioStep]);
+
   useEffect(() => {
     if (phase !== "listening" || !currentAudioAction) return undefined;
     if (currentAudioAction.kind === "audio") {
@@ -953,7 +973,6 @@ export default function MockWrittenExamPage() {
     submissionStartedRef.current = true;
     audioRef.current?.pause();
     setNeedsAudioGesture(false);
-    setAnswerSheetOpen(false);
     setWritingAssessment(finalWritingAssessment);
     setWasEarlySubmitted(earlySubmitted);
     setResultModalOpen(true);
@@ -1103,7 +1122,7 @@ export default function MockWrittenExamPage() {
   if (!exam) return null;
 
   if (phase === "collection") {
-    return <><div className="mock-exam-state mock-exam-state--collection"><span className="mock-exam-kicker">第一部分已收卷</span><h1>答案已锁定</h1><p>听力考试将在倒计时结束后自动开始，请准备好耳机并保持页面开启。</p><div className="mock-exam-collection-timer"><strong className="mock-exam-big-time">{formatTime(remainingSeconds)}</strong><button className="mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div><button className="mock-exam-primary" onClick={enterListening}>立即进入听力</button><button className="mock-answer-sheet-launch" onClick={() => setAnswerSheetOpen(true)}>打开答题卡</button></div><MockExamAnswerSheet rows={answerSheetRows} answers={answers} onAnswer={setAnswer} review={false} open={answerSheetOpen} onClose={() => setAnswerSheetOpen(false)} /></>;
+    return <div className="mock-exam-state mock-exam-state--collection"><span className="mock-exam-kicker">第一部分已收卷</span><h1>答案已锁定</h1><p>听力考试将在倒计时结束后自动开始，请准备好耳机并保持页面开启。</p><div className="mock-exam-collection-timer"><strong className="mock-exam-big-time">{formatTime(remainingSeconds)}</strong><button className="mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div><button className="mock-exam-primary" onClick={enterListening}>立即进入听力</button></div>;
   }
 
   if (phase === "writing_review") {
@@ -1116,7 +1135,7 @@ export default function MockWrittenExamPage() {
             <div className="mock-exam-writing-review__head"><div><span>Schreiben · 自评</span><h1 id="writing-review-title">对照范文评估你的写作</h1></div></div>
             <div className="mock-exam-writing-review__compare">
               <article><h2>Meine Antwort</h2><div>{textBlocks(writingText || "（未作答）")}</div></article>
-              <article><h2>{example?.label || "Musterlösung"}</h2><div>{textBlocks(example?.example_text || "暂无范文")}</div></article>
+              <article><h2>Beispieltext</h2><div>{textBlocks(example?.example_text || "暂无范文")}</div></article>
             </div>
             <div className="mock-exam-rubric"><h2>评分方法</h2><p>三个维度分别按 5、3、1、0 分计分，维度总分乘以 3，写作满分为 45 分。主题偏离时写作计 0 分。</p></div>
             <fieldset className="mock-exam-topic-check">
@@ -1175,7 +1194,6 @@ export default function MockWrittenExamPage() {
       <header className="mock-exam-header">
         <div><button className="mock-exam-back" onClick={() => navigate("/modules/exam-preparation")}>← 退出模拟</button><span className="mock-exam-kicker">telc B1 · 笔试模拟</span><h1>{isResults ? "考试结果与答案回顾" : phase === "reading" ? "Lesen & Sprachbausteine" : phase === "listening" ? "Hören" : "Schreiben"}</h1></div>
         <div className="mock-exam-header__actions">
-          <button className="mock-exam-utility" onClick={() => setAnswerSheetOpen(true)}>▦ 答题卡</button>
           {isResults ? <button className={`mock-exam-utility${isFavorite ? " is-favorite" : ""}`} disabled={favoritePending} onClick={toggleFavorite}>{isFavorite ? "★ 已收藏" : "☆ 收藏本卷"}</button> : null}
           {!isResults ? <div className="mock-exam-timer-actions"><div className={`mock-exam-timer${remainingSeconds <= 300 ? " is-urgent" : ""}`}><span>剩余时间</span><strong>{formatTime(remainingSeconds)}</strong><small>{phase === "reading" ? "90 分钟" : "30 分钟"}</small></div><button className="mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div> : <button className="mock-exam-primary" onClick={newExam}>再考一套</button>}
         </div>
@@ -1213,10 +1231,10 @@ export default function MockWrittenExamPage() {
 
       {phase === "listening" ? (
         <section className="mock-exam-audio-status" aria-live="polite">
-          {currentAudioAction?.kind === "audio" ? <><span>正在播放 · {PARTS[currentAudioAction.partKey].title}</span><strong>第 {currentAudioAction.play} / {currentAudioAction.total} 遍</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></>}
+          {currentAudioAction?.kind === "audio" ? <><span>正在播放 · {PARTS[currentAudioAction.partKey].title}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></>}
           {needsAudioGesture ? <button onClick={playCurrentAudio}>点击继续播放录音</button> : null}
-          <audio ref={audioRef} src={currentAudioExercise?.audio_file_url || ""} onCanPlay={playCurrentAudio}
-            onEnded={advanceAudioStep} preload="auto" />
+          <audio ref={audioRef} src={currentAudioExercise?.audio_file_url || undefined} onCanPlay={playCurrentAudio}
+            onEnded={handleAudioEnded} preload="auto" />
         </section>
       ) : null}
 
@@ -1232,9 +1250,9 @@ export default function MockWrittenExamPage() {
         disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
         favoriteFor={favoriteFor} />
 
+      <MockExamAnswerSheet rows={answerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults} />
+
       {!isResults ? <footer className="mock-exam-footer"><div><strong>上交答题卡</strong></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
-      <MockExamAnswerSheet rows={answerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults}
-        open={answerSheetOpen} onClose={() => setAnswerSheetOpen(false)} />
     </div>
   );
 }

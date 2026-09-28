@@ -1272,6 +1272,7 @@ export default function VideoStudyPage() {
         {shouldShowExercisePanel ? (
           <section className={isMobile ? "vs-right vs-right--modal vs-right--modal--clear" : "vs-right"}>
             <ExercisePanel
+              key={`${videoId}-${video?.season_number ?? ""}`}
               isOpen={isExerciseOpen}
               onClose={() => {
                 setIsExerciseOpen(false);

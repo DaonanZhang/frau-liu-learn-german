@@ -75,20 +75,20 @@ function renderGrammarPrompt(promptText, selectedOptionText, onBlankClick, isOpe
  * @returns {JSX.Element|null} Panel component.
  */
 export default function ExercisePanel({ isOpen, onClose, videoId, seasonNumber = null }) {
+  const normalizedSeasonNumber = Number(seasonNumber);
+  const isVlogSeason = normalizedSeasonNumber === 4;
   const [questions, setQuestions] = useState([]);
   const [loadingState, setLoadingState] = useState("idle"); // idle | loading | ready | error
   const [errorMessage, setErrorMessage] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [isOutlineOpen, setIsOutlineOpen] = useState(false);
-  const [activeMode, setActiveMode] = useState("");
-  const [isModePickerOpen, setIsModePickerOpen] = useState(true);
+  const [activeMode, setActiveMode] = useState(() => isVlogSeason ? "grammar" : "");
+  const [isModePickerOpen, setIsModePickerOpen] = useState(() => !isVlogSeason);
   const [openGrammarPickerQuestionId, setOpenGrammarPickerQuestionId] = useState("");
 
   // Track selected option per question id: { [questionId]: optionId }
   const [selectedOptionByQuestionId, setSelectedOptionByQuestionId] = useState({});
   const [confirmedQuestionIds, setConfirmedQuestionIds] = useState({});
-  const normalizedSeasonNumber = Number(seasonNumber);
-  const isVlogSeason = normalizedSeasonNumber === 4;
   const availableModes = useMemo(() => {
     if (isVlogSeason) {
       return EXERCISE_MODES.filter((mode) => mode.id === "grammar");
@@ -104,28 +104,6 @@ export default function ExercisePanel({ isOpen, onClose, videoId, seasonNumber =
   }, [questions, activeIndex]);
 
   const activeModeMeta = useMemo(() => getModeMeta(activeMode), [activeMode]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    if (availableModes.length === 1) {
-      const onlyModeId = availableModes[0]?.id || "";
-      if (activeMode !== onlyModeId) {
-        setActiveMode(onlyModeId);
-      }
-      if (isModePickerOpen) {
-        setIsModePickerOpen(false);
-      }
-      return;
-    }
-
-    if (!availableModes.some((mode) => mode.id === activeMode)) {
-      setActiveMode("");
-      setIsModePickerOpen(true);
-    }
-  }, [activeMode, availableModes, isModePickerOpen, isOpen]);
 
   useEffect(() => {
     if (!isOpen || !activeMode) {

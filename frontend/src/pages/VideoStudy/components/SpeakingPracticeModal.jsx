@@ -1,4 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+
+const EMPTY_SUBSCRIBE = () => () => {};
+
+function getViewportHeightSnapshot() {
+  const height = window.visualViewport?.height ?? window.innerHeight;
+  return Number.isFinite(height) ? Math.round(height) : null;
+}
+
+function subscribeToViewportHeight(onStoreChange) {
+  const viewport = window.visualViewport;
+  const target = viewport || window;
+  target.addEventListener("resize", onStoreChange);
+  viewport?.addEventListener("scroll", onStoreChange);
+  return () => {
+    target.removeEventListener("resize", onStoreChange);
+    viewport?.removeEventListener("scroll", onStoreChange);
+  };
+}
 
 function formatUpdatedAt(value) {
   if (!value) {
@@ -49,8 +67,13 @@ export default function SpeakingPracticeModal({
   const activeItemRef = useRef(null);
   const subtitleListRef = useRef(null);
   const textareaRef = useRef(null);
-  const [viewportHeight, setViewportHeight] = useState(null);
   const [isNoteFocused, setIsNoteFocused] = useState(false);
+  const measuredViewportHeight = useSyncExternalStore(
+    isOpen && isMobile ? subscribeToViewportHeight : EMPTY_SUBSCRIBE,
+    getViewportHeightSnapshot,
+    () => null,
+  );
+  const viewportHeight = isOpen && isMobile ? measuredViewportHeight : null;
 
   const items = useMemo(() => {
     if (!Array.isArray(subtitleItems)) {
@@ -103,32 +126,6 @@ export default function SpeakingPracticeModal({
     const nextTop = Math.max(activeElement.offsetTop - container.clientHeight * 0.28, 0);
     container.scrollTo({ top: nextTop, behavior: "smooth" });
   }, [isOpen, activeSubtitleIndex]);
-
-  useEffect(() => {
-    if (!isOpen || !isMobile) {
-      setViewportHeight(null);
-      return;
-    }
-
-    const viewport = window.visualViewport;
-    if (!viewport) {
-      setViewportHeight(window.innerHeight || null);
-      return;
-    }
-
-    const syncViewportHeight = () => {
-      setViewportHeight(Math.round(viewport.height));
-    };
-
-    syncViewportHeight();
-    viewport.addEventListener("resize", syncViewportHeight);
-    viewport.addEventListener("scroll", syncViewportHeight);
-
-    return () => {
-      viewport.removeEventListener("resize", syncViewportHeight);
-      viewport.removeEventListener("scroll", syncViewportHeight);
-    };
-  }, [isMobile, isOpen]);
 
   useEffect(() => {
     if (!isOpen || !isMobile || !isNoteFocused) {

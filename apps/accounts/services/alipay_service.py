@@ -452,8 +452,15 @@ class AlipayService:
         signature = data.get("sign", "")
         if not signature:
             return False
+        if data.get("sign_type", "") != self.config.sign_type:
+            return False
 
-        signing_string = _build_signing_string(data)
+        signing_data = {
+            key: value
+            for key, value in data.items()
+            if key not in {"sign", "sign_type"}
+        }
+        signing_string = _build_signing_string(signing_data)
         try:
             self._alipay_public_key.verify(
                 base64.b64decode(signature),

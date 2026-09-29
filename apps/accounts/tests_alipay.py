@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from django.contrib.auth import get_user_model
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -20,6 +23,77 @@ from apps.accounts.models import (
 )
 from apps.accounts.views.payment import _apply_payment_status, _query_and_sync_payment_status
 from apps.accounts.services.payment_grant_service import process_payment_grant_task_by_id
+from apps.accounts.services.alipay_service import AlipayClientConfig, AlipayService
+
+
+class AlipayNotifySignatureTests(SimpleTestCase):
+    @staticmethod
+    def _build_signed_notify() -> tuple[AlipayService, dict[str, str]]:
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_key = private_key.public_key()
+        private_key_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        ).decode("utf-8")
+        public_key_pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode("utf-8")
+        service = AlipayService(
+            config=AlipayClientConfig(
+                app_id="test-app-id",
+                gateway_url="https://openapi.alipay.test/gateway.do",
+                app_private_key=private_key_pem,
+                app_public_key=public_key_pem,
+                alipay_public_key=public_key_pem,
+                notify_url="https://example.test/alipay/notify/",
+                return_url="https://example.test/alipay/return/",
+                seller_id="2088000000000000",
+                sign_type="RSA2",
+                timeout_express="15m",
+                api_timeout_seconds=3.0,
+            )
+        )
+        payload = {
+            "app_id": "test-app-id",
+            "out_trade_no": "pay-notify-signature-001",
+            "total_amount": "29.90",
+            "trade_no": "202609280001",
+            "trade_status": "TRADE_SUCCESS",
+            "sign_type": "RSA2",
+        }
+        signed_content = (
+            "app_id=test-app-id"
+            "&out_trade_no=pay-notify-signature-001"
+            "&total_amount=29.90"
+            "&trade_no=202609280001"
+            "&trade_status=TRADE_SUCCESS"
+        )
+        signature = private_key.sign(
+            signed_content.encode("utf-8"),
+            padding.PKCS1v15(),
+            hashes.SHA256(),
+        )
+        payload["sign"] = base64.b64encode(signature).decode("utf-8")
+        return service, payload
+
+    def test_valid_notify_signature_excludes_sign_type_from_signed_content(self) -> None:
+        service, payload = self._build_signed_notify()
+
+        self.assertTrue(service.verify_notify_signature(payload))
+
+    def test_notify_signature_rejects_unexpected_sign_type(self) -> None:
+        service, payload = self._build_signed_notify()
+        payload["sign_type"] = "RSA"
+
+        self.assertFalse(service.verify_notify_signature(payload))
+
+    def test_notify_signature_rejects_tampered_payload(self) -> None:
+        service, payload = self._build_signed_notify()
+        payload["total_amount"] = "39.90"
+
+        self.assertFalse(service.verify_notify_signature(payload))
 
 
 @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=False)
@@ -73,6 +147,30 @@ class AlipayPaymentApiTests(APITestCase):
             is_active=True,
         )
         self.client.force_authenticate(user=self.user)
+
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_notify_logs_rejected_signature_without_payload(
+        self,
+        mock_get_alipay_service: Mock,
+    ) -> None:
+        service = Mock()
+        service.verify_notify_signature.return_value = False
+        mock_get_alipay_service.return_value = service
+
+        with self.assertLogs("apps.accounts.views.payment", level="WARNING") as logs:
+            response = self.client.post(
+                "/api/accounts/payments/alipay/notify/",
+                {
+                    "out_trade_no": "secret-order-number",
+                    "sign_type": "RSA2",
+                    "sign": "secret-signature",
+                },
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Rejected invalid Alipay notify signature", logs.output[0])
+        self.assertNotIn("secret-order-number", logs.output[0])
+        self.assertNotIn("secret-signature", logs.output[0])
 
     def test_exam_preparation_offers_use_launch_pricing(self) -> None:
         response = self.client.get(

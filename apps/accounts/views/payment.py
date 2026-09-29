@@ -904,6 +904,7 @@ class AlipayNotifyAPIView(APIView):
             return HttpResponse("failure", status=500, content_type="text/plain")
 
         if not alipay_service.verify_notify_signature(payload):
+            logger.warning("Rejected invalid Alipay notify signature")
             return HttpResponse("failure", status=400, content_type="text/plain")
 
         merchant_order_no = payload.get("out_trade_no", "").strip()

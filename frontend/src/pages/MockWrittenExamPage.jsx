@@ -56,6 +56,17 @@ const PARTS = {
   writing: { section: "writing", short: "Schr.", title: "Schreiben" },
 };
 
+const INTRODUCTION_BY_PART = {
+  reading_title_matching: "Lesen Sie die Überschriften und die Texte. Finden Sie für jeden Text die passende Überschrift. Sie können jede Überschrift nur einmal benutzen.",
+  reading_understanding: "Lesen Sie den Text und die Aufgaben. Welche Lösung (a, b oder c) ist jeweils richtig?",
+  reading_ad_matching: "Lesen sie die Situationen 1-10 und die Anzeigen a-l. Finden sie für jede die passende Anzeige. Sie können jede Anzeige nur einmal benutzen. Markieren sie Ihre Lösungen für die Aufgaben 1–10 auf dem Antwortbogen. Wenn Sie zu einer Situation keine Anzeige finden, markieren Sie x.",
+  cloze_choice: "Lesen Sie den Text und schließen Sie die Lücken. Welche Lösung ist jeweils richtig?",
+  cloze_matching: "Lesen Sie den folgenden Text. Welcher Ausdruck passt am besten in die Lücken?",
+  listening_teil1: "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Sie hören diese Texte nur einmal. Entscheiden Sie beim Hören, ob die Aussagen 1 - 5 richtig oder falsch sind. Lesen Sie jetzt die Aufgaben 1 - 5. Sie haben dazu 30 Sekunden Zeit.",
+  listening_teil2: "Sie hören nun ein Gespräch. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch zweimal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
+  listening_teil3: "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Sie hören diese Texte nur einmal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
+};
+
 const READING_PART_KEYS = Object.keys(PARTS).filter((key) => PARTS[key].section === "reading");
 const LISTENING_PART_KEYS = Object.keys(PARTS).filter((key) => PARTS[key].section === "listening");
 const ALL_REVIEW_PART_KEYS = [...READING_PART_KEYS, ...LISTENING_PART_KEYS, "writing"];
@@ -167,6 +178,24 @@ function writingAssessmentScore(assessment) {
 
 function answerKey(partKey, id) {
   return `${partKey}:${id}`;
+}
+
+function displayQuestionNumber(questionNumbers, partKey, id, fallback) {
+  return questionNumbers[answerKey(partKey, id)] ?? fallback;
+}
+
+function listeningIntroduction(partKey, exercise, questionNumbers, fallback) {
+  if (!partKey.startsWith("listening_")) return fallback;
+  const numbers = (exercise.questions || [])
+    .map((question) => questionNumbers[answerKey(partKey, question.id)])
+    .filter((number) => Number.isFinite(number));
+  if (!numbers.length) return fallback;
+
+  const range = `${Math.min(...numbers)}–${Math.max(...numbers)}`;
+  if (/\b\d+\s*[-–]\s*\d+\b/.test(fallback)) {
+    return fallback.replace(/\b\d+\s*[-–]\s*\d+\b/g, range);
+  }
+  return `${fallback} Bearbeiten Sie die Aufgaben ${range}.`.trim();
 }
 
 function itemCorrectKey(partKey, item) {
@@ -291,10 +320,16 @@ function MatchingSelect({
     <span className={`mock-exam-inline-answer${stateClass}`}>
       <button type="button" className={buttonClass} disabled={disabled} onClick={() => setOpen(true)}
         aria-haspopup="dialog" aria-expanded={open}>
-        {selected?.option_text || (variant === "title" ? "Überschrift auswählen" : placeholder)}
+        {selected && variant === "title" ? (
+          <>
+            <span className="reading-title-select__key">{selected.option_key}</span>
+            <span className="reading-title-select__label">{selected.option_text}</span>
+          </>
+        ) : selected?.option_text || (variant === "title" ? "Überschrift auswählen" : placeholder)}
       </button>
       <ExerciseOptionSheet open={open} title={title || "请选择答案"} selectedValue={displayedValue || ""}
         options={options.map((option) => ({ value: option.option_key, label: option.option_text, meta: option.option_key }))}
+        metaPlacement={variant === "title" ? "before" : "after"}
         onClose={() => setOpen(false)} onSelect={onChange} />
       {review && variant !== "title" ? (
         <span className="cloze-choice-inline-details">
@@ -319,7 +354,7 @@ function MatchingSelect({
   );
 }
 
-function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, setAnswer, disabled, review, favoriteFor }) {
+function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, setAnswer, disabled, review, favoriteFor, questionNumbers }) {
   const blankMap = Object.fromEntries(blanks.map((blank) => [blank.blank_key, blank]));
   return String(content || "")
     .split(/(\{\{blank_\d+\}\})/g)
@@ -331,6 +366,7 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
       const blank = blankMap[part.replace(/[{}]/g, "")];
       if (!blank) return <span key={part}>{part}</span>;
       const key = answerKey(partKey, blank.id);
+      const displayNumber = displayQuestionNumber(questionNumbers, partKey, blank.id, blank.blank_number || blank.blank_key || "");
       return (
         <MatchingSelect
           key={key}
@@ -340,8 +376,8 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
           onChange={(value) => setAnswer(key, value)}
           disabled={disabled}
           review={review}
-          title={`空格 ${blank.blank_number || blank.blank_key || ""}`}
-          placeholder={String(blank.blank_number || "")}
+          title={`空格 ${displayNumber}`}
+          placeholder={String(displayNumber)}
           explanation={blank.explanation}
           explanationScope={blank.explanation_scope}
           favorite={review ? favoriteFor(blank.id) : null}
@@ -350,7 +386,7 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
     });
 }
 
-function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, review, favoriteFor }) {
+function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, review, favoriteFor, questionNumbers }) {
   const [selectedOptionKey, setSelectedOptionKey] = useState("");
   const blanks = exercise.blank_answers || [];
   const options = exercise.options || [];
@@ -409,6 +445,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
             const key = answerKey(partKey, blank.id);
             const selectedKey = answers[key] || "";
             const correctKey = blank.correct_option?.option_key || "";
+            const displayNumber = displayQuestionNumber(questionNumbers, partKey, blank.id, blank.blank_number || "");
             const isCorrect = review && selectedKey === correctKey;
             const isWrong = review && selectedKey !== correctKey;
             return (
@@ -425,10 +462,9 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
                     assignOption(blank, event.dataTransfer.getData("text/plain") || selectedOptionKey);
                   }}
                 >
-                  {selectedKey ? <span className="mock-cloze-matching-slot__chip">{optionMap[selectedKey]?.option_text || selectedKey}</span> : <span>{blank.blank_number || ""}</span>}
+                  {selectedKey ? <span className="mock-cloze-matching-slot__chip">{optionMap[selectedKey]?.option_text || selectedKey}</span> : <span>{displayNumber}</span>}
                 </span>
                 {review && isWrong ? <small>正确答案：{optionMap[correctKey]?.option_text || correctKey || "—"}</small> : null}
-                {!review ? <ExerciseFavoriteButton {...favoriteFor(blank.id)} /> : null}
               </span>
             );
           })}
@@ -439,6 +475,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
             const selectedKey = answers[answerKey(partKey, blank.id)] || "";
             const selectedOption = optionMap[selectedKey];
             const correctOption = blank.correct_option;
+            const displayNumber = displayQuestionNumber(questionNumbers, partKey, blank.id, blank.blank_number || "");
             const isCorrect = Boolean(selectedKey) && selectedKey === correctOption?.option_key;
             return (
               <article
@@ -446,7 +483,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
                 className={`cloze-feedback-card ${isCorrect ? "cloze-feedback-card--correct" : "cloze-feedback-card--wrong"}`}
               >
                 <div className="cloze-feedback-card__header">
-                  <strong>{blank.blank_number}</strong>
+                  <strong>{displayNumber}</strong>
                   <ExerciseFavoriteButton {...favoriteFor(blank.id)} />
                 </div>
                 <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
@@ -463,24 +500,25 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
   );
 }
 
-function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor }) {
+function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor, questionNumbers }) {
   if (!exercise) return <p>该部分题目加载失败。</p>;
   const heading = exercise.exercise_base?.title || PARTS[partKey].title;
+  const baseIntroduction = String(exercise.instruction || INTRODUCTION_BY_PART[partKey] || "").trim();
+  const introduction = listeningIntroduction(partKey, exercise, questionNumbers, baseIntroduction);
 
   let body = null;
   if (partKey === "reading_title_matching") {
     body = (
       <>
-        {exercise.instruction ? <p className="mock-exam-prompt">{textBlocks(exercise.instruction)}</p> : null}
         <div className="reading-title-text-grid">{(exercise.items || []).map((item) => {
           const key = answerKey(partKey, item.id);
+          const displayNumber = displayQuestionNumber(questionNumbers, partKey, item.id, item.item_number);
           return <article key={key} className="reading-title-text-card">
             <div className="reading-title-text-card__topline">
-              <div className="reading-title-text-card__badge">Text {item.item_number}</div>
+              <div className="reading-title-text-card__badge">Text {displayNumber}</div>
                 <MatchingSelect value={answers[key] || ""} options={exercise.options || []}
                 correctKey={item.correct_option?.option_key} onChange={(value) => setAnswer(key, value)}
-                disabled={disabled} review={review} variant="title" title={`Text ${item.item_number}`}
-                favorite={review ? null : favoriteFor(partKey, item.id)} />
+                disabled={disabled} review={review} variant="title" title={`Text ${displayNumber}`} />
             </div>
             <div>{textBlocks(item.text)}</div>
             {review ? (
@@ -511,8 +549,9 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
         <div className="mock-exam-source-text">{textBlocks(exercise.text_markdown)}</div>
         {(exercise.questions || []).map((question) => {
           const key = answerKey(partKey, question.id);
+          const displayNumber = displayQuestionNumber(questionNumbers, partKey, question.id, question.question_number);
           const correct = (question.answer_options || []).find((option) => option.is_correct)?.option_key;
-          return <ChoiceField key={key} label={`${question.question_number}. ${question.question_text}`}
+          return <ChoiceField key={key} label={`${displayNumber}. ${question.question_text}`}
             value={answers[key] || ""} options={question.answer_options || []} correctKey={correct}
             onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review} variant="reading"
             explanation={question.explanation} explanationScope={question.explanation_scope}
@@ -525,11 +564,17 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
       item.id,
       answers[answerKey(partKey, item.id)] || "",
     ]));
+    const numberedExercise = {
+      ...exercise,
+      items: (exercise.items || []).map((item) => ({
+        ...item,
+        item_number: displayQuestionNumber(questionNumbers, partKey, item.id, item.item_number),
+      })),
+    };
     body = <>
-      {exercise.instruction ? <p className="mock-exam-prompt">{textBlocks(exercise.instruction)}</p> : null}
       <ReadingAdMatchingWorkspace
         key={exercise.id}
-        exercise={exercise}
+        exercise={numberedExercise}
         answers={adAnswers}
         review={review}
         onAnswer={(itemId, value) => setAnswer(answerKey(partKey, itemId), value)}
@@ -540,15 +585,16 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
     body = <div className="mock-exam-source-text"><ClozeChoiceText content={exercise.content_with_placeholders}
       blanks={exercise.blanks || []} optionsForBlank={(blank) => blank.options || []} partKey={partKey}
       answers={answers} setAnswer={setAnswer} disabled={disabled} review={review}
-      favoriteFor={(id) => favoriteFor(partKey, id)} /></div>;
+      favoriteFor={(id) => favoriteFor(partKey, id)} questionNumbers={questionNumbers} /></div>;
   } else if (partKey === "cloze_matching") {
     body = <MockClozeMatching exercise={exercise} answers={answers} setAnswers={setAnswers} partKey={partKey}
-      disabled={disabled} review={review} favoriteFor={(id) => favoriteFor(partKey, id)} />;
+      disabled={disabled} review={review} favoriteFor={(id) => favoriteFor(partKey, id)} questionNumbers={questionNumbers} />;
   } else if (partKey.startsWith("listening_")) {
     body = (exercise.questions || []).map((question) => {
       const key = answerKey(partKey, question.id);
+      const displayNumber = displayQuestionNumber(questionNumbers, partKey, question.id, question.question_number);
       const correct = (question.answer_options || []).find((option) => option.is_correct)?.option_key;
-      return <ChoiceField key={key} label={`${question.question_number}. ${question.question_text}`}
+      return <ChoiceField key={key} label={`${displayNumber}. ${question.question_text}`}
         value={answers[key] || ""} options={question.answer_options || []} correctKey={correct}
         onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review} variant="listening"
         explanation={question.explanation} explanationScope={question.explanation_scope}
@@ -579,6 +625,12 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
         <div><span>{PARTS[partKey].title}</span><h2>{heading}</h2></div>
         <span className="mock-exam-paper__badge">{exercise.exercise_base?.exam_type || "telc B1"}</span>
       </div>
+      {introduction ? (
+        <section className="mock-exam-introduction">
+          <span className="mock-exam-introduction__label">Einleitung</span>
+          <p>{textBlocks(introduction)}</p>
+        </section>
+      ) : null}
       {partKey.startsWith("listening_") && review ? (
         <ListeningTranscript script={exercise.script} />
       ) : null}
@@ -625,6 +677,10 @@ function buildAnswerSheetRows(parts) {
         partLabel,
         group,
         number,
+        options: (itemOptions || []).map((option) => ({
+          optionKey: option.option_key ?? option.ad_key,
+          optionText: option.option_text ?? option.ad_text_markdown ?? "",
+        })),
         optionKeys: (itemOptions || []).map((option) => option.option_key ?? option.ad_key),
         correctKey: correctKey(item),
       });
@@ -1116,6 +1172,9 @@ export default function MockWrittenExamPage() {
     ...row,
     editable: row.group === "reading" ? phase === "reading" : phase === "listening",
   })), [exam, phase]);
+  const questionNumbers = useMemo(() => Object.fromEntries(
+    answerSheetRows.map((row) => [row.answerKey, row.number]),
+  ), [answerSheetRows]);
 
   if (phase === "loading") return <div className="mock-exam-state"><span className="mock-exam-spinner" /><h1>正在准备模拟考试…</h1></div>;
   if (phase === "error") return <div className="mock-exam-state"><h1>暂时无法开始</h1><p>{errorText}</p><Link to="/modules/exam-preparation/purchase" className="mock-exam-primary">购买以解锁</Link><Link to="/modules/exam-preparation">返回备考季</Link></div>;
@@ -1186,6 +1245,9 @@ export default function MockWrittenExamPage() {
   }
 
   const isResults = phase === "results";
+  const visibleAnswerSheetRows = isResults
+    ? answerSheetRows
+    : answerSheetRows.filter((row) => row.group === phase);
   const visiblePartKeys = isResults ? ALL_REVIEW_PART_KEYS : phase === "reading" ? READING_PART_KEYS : phase === "listening" ? LISTENING_PART_KEYS : ["writing"];
   const audioLocked = phase === "listening" && currentAudioAction?.kind === "audio";
 
@@ -1231,7 +1293,7 @@ export default function MockWrittenExamPage() {
 
       {phase === "listening" ? (
         <section className="mock-exam-audio-status" aria-live="polite">
-          {currentAudioAction?.kind === "audio" ? <><span>正在播放 · {PARTS[currentAudioAction.partKey].title}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></>}
+          {currentAudioAction?.kind === "audio" ? <><span className="mock-exam-audio-status__title">正在播放 · {PARTS[currentAudioAction.partKey].title}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></>}
           {needsAudioGesture ? <button onClick={playCurrentAudio}>点击继续播放录音</button> : null}
           <audio ref={audioRef} src={currentAudioExercise?.audio_file_url || undefined} onCanPlay={playCurrentAudio}
             onEnded={handleAudioEnded} preload="auto" />
@@ -1248,9 +1310,11 @@ export default function MockWrittenExamPage() {
 
       <ExercisePart partKey={activePart} exercise={exam.parts[activePart]} answers={answers} setAnswer={setAnswer} setAnswers={setAnswers}
         disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
-        favoriteFor={favoriteFor} />
+        favoriteFor={favoriteFor} questionNumbers={questionNumbers} />
 
-      <MockExamAnswerSheet rows={answerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults} />
+      {visibleAnswerSheetRows.length ? (
+        <MockExamAnswerSheet rows={visibleAnswerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults} />
+      ) : null}
 
       {!isResults ? <footer className="mock-exam-footer"><div><strong>上交答题卡</strong></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
     </div>

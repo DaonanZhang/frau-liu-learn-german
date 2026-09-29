@@ -202,6 +202,7 @@ export default function ReadingTitleMatchingPage() {
           <div className="reading-title-text-grid">
             {items.map((item) => {
               const selectedKey = answers[item.id] || "";
+              const selectedOption = options.find((option) => option.option_key === selectedKey);
               const isCorrect = selectedKey === item.correct_option?.option_key;
               return (
                 <article key={item.id} className="reading-title-text-card">
@@ -224,9 +225,12 @@ export default function ReadingTitleMatchingPage() {
                         aria-haspopup="dialog"
                         aria-expanded={String(activeItemId) === String(item.id)}
                       >
-                        {selectedKey
-                          ? options.find((option) => option.option_key === selectedKey)?.option_text || selectedKey
-                          : "Überschrift auswählen"}
+                        {selectedKey ? (
+                          <>
+                            <span className="reading-title-select__key">{selectedKey}</span>
+                            <span className="reading-title-select__label">{selectedOption?.option_text || selectedKey}</span>
+                          </>
+                        ) : "Überschrift auswählen"}
                       </button>
                       <ExerciseOptionSheet
                         open={String(activeItemId) === String(item.id)}
@@ -238,6 +242,7 @@ export default function ReadingTitleMatchingPage() {
                           label: option.option_text,
                           meta: option.option_key,
                         }))}
+                        metaPlacement="before"
                         onClose={() => {
                           setActiveItemId("");
                         }}

@@ -8,6 +8,7 @@ export default function ExerciseOptionSheet({
   subtitle = "",
   options = [],
   selectedValue = "",
+  metaPlacement = "after",
   onClose,
   onSelect,
 }) {
@@ -112,14 +113,21 @@ export default function ExerciseOptionSheet({
               className={[
                 "exercise-option-sheet__option",
                 option.value === selectedValue ? "exercise-option-sheet__option--selected" : "",
+                metaPlacement === "before" ? "exercise-option-sheet__option--meta-before" : "",
               ].filter(Boolean).join(" ")}
+              aria-label={metaPlacement === "before" && option.meta
+                ? `${option.meta} ${option.label}`
+                : undefined}
               onClick={() => {
                 onSelect?.(option.value);
                 onClose?.();
               }}
             >
+              {metaPlacement === "before" && option.meta ? (
+                <span className="exercise-option-sheet__option-meta">{option.meta}</span>
+              ) : null}
               <span className="exercise-option-sheet__option-label">{option.label}</span>
-              {option.meta ? (
+              {metaPlacement !== "before" && option.meta ? (
                 <span className="exercise-option-sheet__option-meta">{option.meta}</span>
               ) : null}
             </button>

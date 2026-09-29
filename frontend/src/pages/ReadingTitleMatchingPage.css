@@ -238,8 +238,28 @@
 }
 
 .reading-title-select-trigger {
+  gap: 0.65rem;
   cursor: pointer;
   text-align: left;
+}
+
+.reading-title-select__key {
+  display: grid;
+  flex: 0 0 2rem;
+  place-items: center;
+  width: 2rem;
+  min-height: 2rem;
+  border-radius: 0.6rem;
+  background: #eef4f1;
+  color: #2f6f5e;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.reading-title-select__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.45;
 }
 
 .reading-title-select--selected {

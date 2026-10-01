@@ -1,3 +1,7 @@
+.app-layout:has(.cloze-page) {
+  overflow-x: clip;
+}
+
 .cloze-page {
   display: flex;
   justify-content: center;
@@ -100,6 +104,12 @@
 .cloze-actions,
 .cloze-feedback-card {
   padding: 1.15rem 1.1rem;
+}
+
+.cloze-pool-panel {
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .cloze-instruction p,
@@ -476,15 +486,8 @@
 
 @media (max-width: 700px) {
   html:has(.cloze-page),
-  body:has(.cloze-page),
-  .app-layout:has(.cloze-page) {
+  body:has(.cloze-page) {
     overflow-x: clip;
-  }
-
-  .cloze-pool-panel {
-    position: sticky;
-    top: 0;
-    z-index: 20;
   }
 
   .cloze-pool-chip,

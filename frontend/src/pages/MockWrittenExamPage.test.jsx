@@ -8,6 +8,7 @@ import MockWrittenExamPage from "./MockWrittenExamPage.jsx";
 import MockExamAnswerSheet from "../components/examPreparation/MockExamAnswerSheet.jsx";
 
 const mockExamStyleSource = readFileSync(resolve("src/pages/MockWrittenExamPage.css"), "utf8");
+const appLayoutStyleSource = readFileSync(resolve("src/layouts/AppLayout.css"), "utf8");
 const readingAdStyleSource = readFileSync(resolve("src/pages/ReadingAdMatchingPage.css"), "utf8");
 
 vi.mock("../api/auth/useAuth.js", () => ({
@@ -986,6 +987,29 @@ describe("mock exam exercise layout", () => {
     expect(mockExamStyleSource).toMatch(
       /\.mock-cloze-matching-pool\s*\{[^}]*max-height:\s*calc\(100dvh - [^)]+\)[^}]*overflow-y:\s*auto/
     );
+  });
+
+  it("scrolls the exam header away and sticks the option pool to the viewport top", () => {
+    const { container } = render(
+      <>
+        <style>{`${appLayoutStyleSource}\n${mockExamStyleSource}`}</style>
+        <div className="app-layout">
+          <main className="mock-exam-page">
+            <header className="mock-exam-header" />
+            <section className="mock-cloze-matching-pool" />
+          </main>
+        </div>
+      </>
+    );
+
+    const layout = container.querySelector(".app-layout");
+    const header = container.querySelector(".mock-exam-header");
+    const pool = container.querySelector(".mock-cloze-matching-pool");
+
+    expect(getComputedStyle(layout).overflowX).toBe("clip");
+    expect(getComputedStyle(header).position).toBe("static");
+    expect(getComputedStyle(pool).position).toBe("sticky");
+    expect(getComputedStyle(pool).top).toBe("0px");
   });
 
   it("gates hover polish to pointer devices and provides press feedback", () => {

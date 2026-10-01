@@ -11,9 +11,10 @@ const authMocks = vi.hoisted(() => ({ useAuth: vi.fn() }));
 vi.mock("../api/auth/useAuth.js", () => ({ useAuth: authMocks.useAuth }));
 vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
 
-function entitledUser(releaseAccess = true) {
+function entitledUser(releaseAccess = true, telephone = "13800138000") {
   return {
     id: 7,
+    telephone,
     release_access: releaseAccess,
     entitlements: [{
       status: "active",
@@ -98,5 +99,24 @@ describe("exam preparation mock exam entry", () => {
     })));
     expect(fetchSavedMockExams).not.toHaveBeenCalled();
     expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation");
+  });
+
+  it("shows the question-bank search only to telephone 110", () => {
+    authMocks.useAuth.mockReturnValue({ user: entitledUser(true, "110") });
+    const { unmount } = renderPage();
+
+    expect(screen.getByRole("heading", { name: "题库搜索" })).toBeInTheDocument();
+    unmount();
+
+    authMocks.useAuth.mockReturnValue({
+      user: {
+        ...entitledUser(true, "119"),
+        is_staff: true,
+        is_superuser: true,
+      },
+    });
+    renderPage();
+
+    expect(screen.queryByRole("heading", { name: "题库搜索" })).not.toBeInTheDocument();
   });
 });

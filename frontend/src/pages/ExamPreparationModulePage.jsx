@@ -10,6 +10,7 @@ import {
   deleteSavedMockExam,
   fetchSavedMockExams,
 } from "../api/exam_preparation/mockExams.js";
+import ExamPreparationContentSearch from "../components/examPreparation/ExamPreparationContentSearch.jsx";
 import "./ExamPreparationModulePage.css";
 
 const SKILL_CARDS = [
@@ -198,6 +199,10 @@ export default function ExamPreparationModulePage() {
           </div>
         </div>
       </section>
+
+      {String(user?.telephone || "").trim() === "110" ? (
+        <ExamPreparationContentSearch />
+      ) : null}
 
       <section className={`exam-module-mock${hasFullAccess ? "" : " is-locked"}`} aria-label="笔试模拟考试">
         <div className="exam-module-mock__icon" aria-hidden="true">

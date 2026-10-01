@@ -27,6 +27,15 @@ SUCCESSFUL_PAYMENT_STATUSES = (
     AlipayWebsitePayment.Status.PAID,
     AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
 )
+EXCLUDED_CAMPAIGNS = {
+    "alipay-notify-e2e",
+    "全模块5元无门槛测试",
+    "线上功能测试",
+}
+EXCLUDED_ORGANIZATIONS = {
+    "internal-payment-test",
+    "内部测试",
+}
 
 
 def parse_report_datetime(value: str, option_name: str) -> datetime:
@@ -93,6 +102,8 @@ class Command(BaseCommand):
                 applied_at__gte=start_at,
                 applied_at__lt=end_at,
             )
+            .exclude(campaign_name_snapshot__in=EXCLUDED_CAMPAIGNS)
+            .exclude(campaign_organization_snapshot__in=EXCLUDED_ORGANIZATIONS)
             .select_related("offer__module", "offer__season", "promotion_code")
             .order_by("campaign_name_snapshot", "applied_at", "id")
         )

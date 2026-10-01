@@ -592,7 +592,8 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
         payment_id = purchase.data["payment_id"]
         coupon = UserCoupon.objects.get(pk=coupon_id)
-        self.assertEqual(coupon.status, UserCoupon.Status.AVAILABLE)
+        self.assertEqual(coupon.status, UserCoupon.Status.RESERVED)
+        self.assertEqual(coupon.reserved_payment_id, payment_id)
 
         _mark_open_payment_closed(payment_id=payment_id)
 
@@ -604,12 +605,25 @@ class PromotionCodeTests(APITestCase):
 
     @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=False)
     @patch("apps.accounts.views.payment.get_alipay_service")
-    def test_pending_payment_does_not_reserve_coupon(
+    def test_pending_payment_reserves_coupon_and_blocks_reuse_for_another_module(
         self,
         mock_get_alipay_service: Mock,
     ) -> None:
         mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"
-        coupon_id = self.redeem().data["coupon"]["id"]
+        global_record = store_promotion_code(
+            code="GLOBALONCE",
+            campaign_name=self.campaign_name,
+            organization_name=self.organization_name,
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=timezone.now() + timedelta(days=90),
+        )
+        coupon_id = self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": global_record.code},
+            format="json",
+        ).data["coupon"]["id"]
         purchase = self.client.post(
             "/api/accounts/payments/alipay/create/",
             {
@@ -627,12 +641,46 @@ class PromotionCodeTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["available_count"], 1)
+        self.assertEqual(response.data["available_count"], 0)
         coupon = UserCoupon.objects.get(pk=coupon_id)
         application = PaymentDiscountApplication.objects.get(payment=payment)
-        self.assertEqual(coupon.status, UserCoupon.Status.AVAILABLE)
-        self.assertIsNone(coupon.reserved_payment_id)
+        self.assertEqual(coupon.status, UserCoupon.Status.RESERVED)
+        self.assertEqual(coupon.reserved_payment_id, payment.id)
         self.assertEqual(application.status, PaymentDiscountApplication.Status.RESERVED)
+
+        coupon.status = UserCoupon.Status.AVAILABLE
+        coupon.reserved_payment = None
+        coupon.reserved_at = None
+        coupon.save(
+            update_fields=["status", "reserved_payment", "reserved_at", "updated_at"]
+        )
+
+        other_module = Module.objects.create(
+            key="promotion-other-module",
+            name="Promotion Other Module",
+            is_active=True,
+        )
+        other_offer = PurchaseOffer.objects.create(
+            code="promotion-other-offer",
+            title="Promotion Other Offer",
+            module=other_module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            price_amount=Decimal("59.90"),
+            currency="CNY",
+        )
+        second_purchase = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {
+                "offer_code": other_offer.code,
+                "coupon_id": coupon_id,
+                "idempotency_key": "00000000-0000-4000-8000-000000000110",
+            },
+            format="json",
+        )
+
+        self.assertEqual(second_purchase.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(PaymentDiscountApplication.objects.count(), 1)
 
     @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True, DEBUG=True)
     def test_same_coupon_purchase_intent_is_idempotent(self) -> None:

@@ -162,11 +162,17 @@ def eligible_coupon_queryset(*, user, offer, for_update: bool = False):
         Q(applicable_module__isnull=True) | Q(applicable_module=offer.module),
         Q(applicable_season__isnull=True) | Q(applicable_season=offer.season),
         Q(applicable_offer__isnull=True) | Q(applicable_offer=offer),
+    ).exclude(
+        payment_applications__status=PaymentDiscountApplication.Status.RESERVED,
+        payment_applications__payment__status__in={
+            AlipayWebsitePayment.Status.CREATED,
+            AlipayWebsitePayment.Status.PENDING,
+        },
     ).select_related("promotion_code").order_by(
         "-discount_amount",
         F("expires_at").asc(nulls_last=True),
         "id",
-    )
+    ).distinct()
     if for_update:
         queryset = queryset.select_for_update()
     return queryset

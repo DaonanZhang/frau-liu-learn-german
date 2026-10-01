@@ -180,6 +180,30 @@ class PromotionOrganizationExcelReportTests(TestCase):
             status=PaymentDiscountApplication.Status.APPLIED,
             applied_at=start + timedelta(minutes=30),
         )
+        for index, campaign in enumerate(
+            ("alipay-notify-e2e", "全模块5元无门槛测试", "线上功能测试"),
+            start=1,
+        ):
+            self._create_applied_purchase(
+                code=f"TESTCAMPAIGN{index}",
+                campaign=campaign,
+                organization="普通机构",
+                offer=self.science_offer,
+                applied_at=start + timedelta(hours=2, minutes=index),
+                final_amount="49.90",
+            )
+        for index, organization in enumerate(
+            ("internal-payment-test", "内部测试"),
+            start=1,
+        ):
+            self._create_applied_purchase(
+                code=f"TESTORG000{index}",
+                campaign=f"普通活动 {index}",
+                organization=organization,
+                offer=self.science_offer,
+                applied_at=start + timedelta(hours=3, minutes=index),
+                final_amount="49.90",
+            )
         before = list(
             PaymentDiscountApplication.objects.order_by("id").values_list(
                 "id", "status", "applied_at", "final_amount"

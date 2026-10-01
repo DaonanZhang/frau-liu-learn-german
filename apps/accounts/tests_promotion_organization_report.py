@@ -72,6 +72,7 @@ class PromotionOrganizationExcelReportTests(TestCase):
         self,
         *,
         code: str,
+        campaign: str,
         organization: str,
         offer: PurchaseOffer,
         applied_at: datetime,
@@ -79,7 +80,7 @@ class PromotionOrganizationExcelReportTests(TestCase):
     ) -> PaymentDiscountApplication:
         promotion = PromotionCodeRecord.objects.create(
             code=code,
-            campaign_name="渠道活动",
+            campaign_name=campaign,
             organization_name=organization,
             remark="报表测试",
             discount_amount=Decimal("10.00"),
@@ -115,18 +116,19 @@ class PromotionOrganizationExcelReportTests(TestCase):
             automatic_discount_amount=Decimal("0.00"),
             promotion_discount_amount=Decimal("10.00"),
             final_amount=Decimal(final_amount),
-            campaign_name_snapshot="渠道活动",
+            campaign_name_snapshot=campaign,
             campaign_organization_snapshot=organization,
             promotion_code_remark_snapshot="报表测试",
             status=PaymentDiscountApplication.Status.APPLIED,
             applied_at=applied_at,
         )
 
-    def test_exports_microsecond_bounded_read_only_workbook_with_one_sheet_per_org(self) -> None:
+    def test_exports_paid_orders_in_microsecond_range_with_one_sheet_per_campaign(self) -> None:
         start = datetime(2026, 10, 1, 8, 0, 0, 123456, tzinfo=datetime_timezone.utc)
         end = datetime(2026, 10, 1, 18, 0, 0, 654321, tzinfo=datetime_timezone.utc)
-        self._create_applied_purchase(
+        science_application = self._create_applied_purchase(
             code="SCIENCE001",
+            campaign="渠道 A",
             organization="机构 A",
             offer=self.science_offer,
             applied_at=start,
@@ -134,6 +136,7 @@ class PromotionOrganizationExcelReportTests(TestCase):
         )
         self._create_applied_purchase(
             code="VLOG000001",
+            campaign="渠道 A",
             organization="机构 A",
             offer=self.vlog_offer,
             applied_at=end - timedelta(microseconds=1),
@@ -141,6 +144,7 @@ class PromotionOrganizationExcelReportTests(TestCase):
         )
         self._create_applied_purchase(
             code="EXAM000001",
+            campaign="渠道 B",
             organization="机构 B",
             offer=self.exam_offer,
             applied_at=start + timedelta(hours=1),
@@ -148,10 +152,33 @@ class PromotionOrganizationExcelReportTests(TestCase):
         )
         self._create_applied_purchase(
             code="ATEND00001",
+            campaign="渠道 A",
             organization="机构 A",
             offer=self.exam_offer,
             applied_at=end,
             final_amount="500.00",
+        )
+        unpaid_payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="ORDER-SCIENCE001-UNPAID",
+            subject=self.science_offer.title,
+            total_amount=Decimal("199.00"),
+            status=AlipayWebsitePayment.Status.PENDING,
+        )
+        PaymentDiscountApplication.objects.create(
+            payment=unpaid_payment,
+            coupon=science_application.coupon,
+            promotion_code=science_application.promotion_code,
+            user=self.user,
+            offer=self.science_offer,
+            original_amount=Decimal("209.00"),
+            automatic_discount_amount=Decimal("0.00"),
+            promotion_discount_amount=Decimal("10.00"),
+            final_amount=Decimal("199.00"),
+            campaign_name_snapshot="渠道 A",
+            campaign_organization_snapshot="机构 A",
+            promotion_code_remark_snapshot="异常待付款订单",
+            status=PaymentDiscountApplication.Status.APPLIED,
+            applied_at=start + timedelta(minutes=30),
         )
         before = list(
             PaymentDiscountApplication.objects.order_by("id").values_list(
@@ -169,9 +196,9 @@ class PromotionOrganizationExcelReportTests(TestCase):
             )
 
             workbook = load_workbook(output_path, data_only=True)
-            self.assertEqual(workbook.sheetnames, ["机构 A", "机构 B"])
+            self.assertEqual(workbook.sheetnames, ["渠道 A", "渠道 B"])
             self.assertEqual(
-                list(workbook["机构 A"].values),
+                list(workbook["渠道 A"].values),
                 [
                     ("Promotion Code", "购买商品", "购买时长", "订单金额"),
                     ("SCIENCE001", "科普季", "30天", 49.9),
@@ -180,7 +207,7 @@ class PromotionOrganizationExcelReportTests(TestCase):
                 ],
             )
             self.assertEqual(
-                list(workbook["机构 B"].values),
+                list(workbook["渠道 B"].values),
                 [
                     ("Promotion Code", "购买商品", "购买时长", "订单金额"),
                     ("EXAM000001", "备考季", "90天", 59.9),

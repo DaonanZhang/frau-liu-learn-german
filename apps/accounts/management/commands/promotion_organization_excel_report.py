@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.accounts.models import Entitlement, PaymentDiscountApplication
+from apps.accounts.models import AlipayWebsitePayment, Entitlement, PaymentDiscountApplication
 
 
 COLUMNS = ["Promotion Code", "购买商品", "购买时长", "订单金额"]
@@ -23,6 +23,10 @@ PLAN_LABELS = {
     Entitlement.Plan.MONTH_12: "12个月",
     Entitlement.Plan.LIFETIME: "永久",
 }
+SUCCESSFUL_PAYMENT_STATUSES = (
+    AlipayWebsitePayment.Status.PAID,
+    AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
+)
 
 
 def parse_report_datetime(value: str, option_name: str) -> datetime:
@@ -49,8 +53,8 @@ def purchase_category(application: PaymentDiscountApplication) -> str:
     return offer.module.name
 
 
-def unique_sheet_name(organization: str, used_names: set[str]) -> str:
-    base = INVALID_SHEET_NAME_CHARACTERS.sub("_", organization).strip(" '") or "未填写机构"
+def unique_sheet_name(campaign: str, used_names: set[str]) -> str:
+    base = INVALID_SHEET_NAME_CHARACTERS.sub("_", campaign).strip(" '") or "未填写 Campaign"
     base = base[:31]
     candidate = base
     counter = 2
@@ -63,7 +67,7 @@ def unique_sheet_name(organization: str, used_names: set[str]) -> str:
 
 
 class Command(BaseCommand):
-    help = "Export a read-only promotion purchase report with one Excel sheet per organization."
+    help = "Export a read-only paid promotion purchase report with one Excel sheet per campaign."
 
     def add_arguments(self, parser) -> None:
         parser.add_argument("--start-at", required=True)
@@ -85,16 +89,17 @@ class Command(BaseCommand):
         applications = (
             PaymentDiscountApplication.objects.filter(
                 status=PaymentDiscountApplication.Status.APPLIED,
+                payment__status__in=SUCCESSFUL_PAYMENT_STATUSES,
                 applied_at__gte=start_at,
                 applied_at__lt=end_at,
             )
             .select_related("offer__module", "offer__season", "promotion_code")
-            .order_by("campaign_organization_snapshot", "applied_at", "id")
+            .order_by("campaign_name_snapshot", "applied_at", "id")
         )
         grouped: OrderedDict[str, list[PaymentDiscountApplication]] = OrderedDict()
         for application in applications:
-            organization = application.campaign_organization_snapshot.strip() or "未填写机构"
-            grouped.setdefault(organization, []).append(application)
+            campaign = application.campaign_name_snapshot.strip() or "未填写 Campaign"
+            grouped.setdefault(campaign, []).append(application)
 
         if not grouped:
             raise CommandError("No paid promotion-code purchases were found in the requested interval")
@@ -102,9 +107,9 @@ class Command(BaseCommand):
         output_path.parent.mkdir(parents=True, exist_ok=True)
         used_sheet_names: set[str] = set()
         with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-            for organization, organization_applications in grouped.items():
+            for campaign, campaign_applications in grouped.items():
                 total = sum(
-                    (application.final_amount for application in organization_applications),
+                    (application.final_amount for application in campaign_applications),
                     start=Decimal("0.00"),
                 )
                 rows = [
@@ -114,7 +119,7 @@ class Command(BaseCommand):
                         "购买时长": PLAN_LABELS[application.offer.plan],
                         "订单金额": float(application.final_amount),
                     }
-                    for application in organization_applications
+                    for application in campaign_applications
                 ]
                 rows.append(
                     {
@@ -124,7 +129,7 @@ class Command(BaseCommand):
                         "订单金额": float(total),
                     }
                 )
-                sheet_name = unique_sheet_name(organization, used_sheet_names)
+                sheet_name = unique_sheet_name(campaign, used_sheet_names)
                 pd.DataFrame(rows, columns=COLUMNS).to_excel(
                     writer,
                     sheet_name=sheet_name,
@@ -146,7 +151,6 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Exported {sum(len(items) for items in grouped.values())} purchases "
-                f"across {len(grouped)} organizations to {output_path}"
+                f"across {len(grouped)} campaigns to {output_path}"
             )
         )
-

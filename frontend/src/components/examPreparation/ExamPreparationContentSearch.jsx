@@ -124,13 +124,15 @@ export default function ExamPreparationContentSearch() {
           />
         </label>
 
-        <label className="exam-content-search__field">
+        <label className="exam-content-search__field exam-content-search__field--module">
           <span>模块</span>
-          <select value={draftSkill} onChange={changeSkill}>
-            {SKILL_OPTIONS.map(([value, label]) => (
-              <option key={value || "all"} value={value}>{label}</option>
-            ))}
-          </select>
+          <span className="exam-content-search__select-shell">
+            <select value={draftSkill} onChange={changeSkill}>
+              {SKILL_OPTIONS.map(([value, label]) => (
+                <option key={value || "all"} value={value}>{label}</option>
+              ))}
+            </select>
+          </span>
         </label>
 
         {teilOptions.length ? (

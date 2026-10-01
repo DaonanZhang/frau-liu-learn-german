@@ -35,6 +35,23 @@
   flex: 1 1 360px;
 }
 
+.exam-content-search__select-shell {
+  position: relative;
+}
+
+.exam-content-search__select-shell::after {
+  position: absolute;
+  top: 50%;
+  right: 1.15rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid #76533a;
+  border-bottom: 2px solid #76533a;
+  content: "";
+  pointer-events: none;
+  transform: translateY(-70%) rotate(45deg);
+}
+
 .exam-content-search__field input,
 .exam-content-search__field select {
   box-sizing: border-box;
@@ -47,6 +64,11 @@
   font: inherit;
   font-weight: 500;
   padding: 0.65rem 0.75rem;
+}
+
+.exam-content-search__field--module select {
+  appearance: none;
+  padding-right: 2.75rem;
 }
 
 .exam-content-search__field input:focus,

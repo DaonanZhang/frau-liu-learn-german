@@ -78,6 +78,17 @@ describe("ExamPreparationContentSearch", () => {
     expect(screen.queryByLabelText("Teil")).not.toBeInTheDocument();
   });
 
+  it("targets only the module selector for the inset dropdown arrow", () => {
+    renderSearch();
+
+    const moduleSelect = screen.getByLabelText("模块");
+    expect(moduleSelect.closest("label")).toHaveClass("exam-content-search__field--module");
+
+    fireEvent.change(moduleSelect, { target: { value: "reading" } });
+    expect(screen.getByLabelText("Teil").closest("label"))
+      .not.toHaveClass("exam-content-search__field--module");
+  });
+
   it("shows loading, safely highlighted results, existing links, and expandable matches", async () => {
     let resolveRequest;
     fetchExamPreparationContentSearch.mockReturnValue(new Promise((resolve) => {

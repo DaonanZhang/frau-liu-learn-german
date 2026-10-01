@@ -3,6 +3,9 @@ from __future__ import annotations
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
 
 from apps.exam_preparation.content_search import (
     parse_search_query,
@@ -329,3 +332,179 @@ class ContentSearchServiceTests(TestCase):
         for params in invalid_values:
             with self.subTest(params=params), self.assertRaises(ValidationError):
                 parse_search_query(**params)
+
+
+class ContentSearchApiTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.search_user = get_user_model().objects.create_user(telephone="110", password="test")
+        cls.regular_user = get_user_model().objects.create_user(telephone="13800138000", password="test")
+        cls.other_superuser = get_user_model().objects.create_superuser(telephone="119", password="test")
+        cls.expected_routes = {}
+        exercise_types = (
+            ExerciseBase.ExerciseType.LISTENING_TEIL1,
+            ExerciseBase.ExerciseType.LISTENING_TEIL2,
+            ExerciseBase.ExerciseType.LISTENING_TEIL3,
+            ExerciseBase.ExerciseType.READING_TITLE_MATCHING,
+            ExerciseBase.ExerciseType.READING_UNDERSTANDING,
+            ExerciseBase.ExerciseType.READING_AD_MATCHING,
+            ExerciseBase.ExerciseType.CLOZE_CHOICE,
+            ExerciseBase.ExerciseType.CLOZE_MATCHING,
+            ExerciseBase.ExerciseType.WRITING_PROMPT,
+            ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+            ExerciseBase.ExerciseType.SPEAKING_TEIL3,
+        )
+        for index, exercise_type in enumerate(exercise_types, start=1):
+            cls._create_exercise(exercise_type, index, "RouteNeedle")
+
+        for index in range(1, 22):
+            cls._create_exercise(
+                ExerciseBase.ExerciseType.WRITING_PROMPT,
+                100 + index,
+                "Paged Needle",
+            )
+
+    @classmethod
+    def _create_exercise(cls, exercise_type, index, title):
+        skill_by_type = {
+            ExerciseBase.ExerciseType.LISTENING_TEIL1: ExerciseBase.Skill.LISTENING,
+            ExerciseBase.ExerciseType.LISTENING_TEIL2: ExerciseBase.Skill.LISTENING,
+            ExerciseBase.ExerciseType.LISTENING_TEIL3: ExerciseBase.Skill.LISTENING,
+            ExerciseBase.ExerciseType.READING_TITLE_MATCHING: ExerciseBase.Skill.READING,
+            ExerciseBase.ExerciseType.READING_UNDERSTANDING: ExerciseBase.Skill.READING,
+            ExerciseBase.ExerciseType.READING_AD_MATCHING: ExerciseBase.Skill.READING,
+            ExerciseBase.ExerciseType.CLOZE_CHOICE: ExerciseBase.Skill.SPRACHBAUSTEIN,
+            ExerciseBase.ExerciseType.CLOZE_MATCHING: ExerciseBase.Skill.SPRACHBAUSTEIN,
+            ExerciseBase.ExerciseType.WRITING_PROMPT: ExerciseBase.Skill.WRITING,
+            ExerciseBase.ExerciseType.SPEAKING_TEIL1: ExerciseBase.Skill.SPEAKING,
+            ExerciseBase.ExerciseType.SPEAKING_TEIL2: ExerciseBase.Skill.SPEAKING,
+            ExerciseBase.ExerciseType.SPEAKING_TEIL3: ExerciseBase.Skill.SPEAKING,
+        }
+        base = ExerciseBase.objects.create(
+            exam_type="telc B1",
+            level=ExerciseBase.Level.B1,
+            skill=skill_by_type[exercise_type],
+            exercise_type=exercise_type,
+            external_id=f"API-{index}",
+            title=f"{title} {index}",
+        )
+
+        if exercise_type in {
+            ExerciseBase.ExerciseType.LISTENING_TEIL1,
+            ExerciseBase.ExerciseType.LISTENING_TEIL2,
+            ExerciseBase.ExerciseType.LISTENING_TEIL3,
+        }:
+            listening_type = {
+                ExerciseBase.ExerciseType.LISTENING_TEIL1: ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP,
+                ExerciseBase.ExerciseType.LISTENING_TEIL2: ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE,
+                ExerciseBase.ExerciseType.LISTENING_TEIL3: ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE,
+            }[exercise_type]
+            exercise = ListeningExercise.objects.create(exercise_base=base, listening_type=listening_type)
+        elif exercise_type == ExerciseBase.ExerciseType.READING_TITLE_MATCHING:
+            exercise = ReadingTitleMatchingExercise.objects.create(exercise_base=base)
+        elif exercise_type == ExerciseBase.ExerciseType.READING_UNDERSTANDING:
+            exercise = ReadingUnderstandingExercise.objects.create(exercise_base=base, text_markdown="Text")
+        elif exercise_type == ExerciseBase.ExerciseType.READING_AD_MATCHING:
+            exercise = ReadingAdMatchingExercise.objects.create(exercise_base=base)
+        elif exercise_type == ExerciseBase.ExerciseType.CLOZE_CHOICE:
+            exercise = ClozeChoiceExercise.objects.create(exercise_base=base, content_with_placeholders="Text")
+        elif exercise_type == ExerciseBase.ExerciseType.CLOZE_MATCHING:
+            exercise = ClozeMatchingExercise.objects.create(exercise_base=base, content_with_placeholders="Text")
+        elif exercise_type == ExerciseBase.ExerciseType.WRITING_PROMPT:
+            exercise = WritingExercise.objects.create(exercise_base=base)
+        else:
+            exercise = SpeakingTeilExercise.objects.create(exercise_base=base)
+
+        route_templates = {
+            ExerciseBase.ExerciseType.LISTENING_TEIL1: "/modules/exam-preparation/hoeren/short-text-prep/{id}",
+            ExerciseBase.ExerciseType.LISTENING_TEIL2: "/modules/exam-preparation/hoeren/short-text-once/{id}",
+            ExerciseBase.ExerciseType.LISTENING_TEIL3: "/modules/exam-preparation/hoeren/dialog-twice/{id}",
+            ExerciseBase.ExerciseType.READING_TITLE_MATCHING: "/modules/exam-preparation/lesen/title-matching/{id}",
+            ExerciseBase.ExerciseType.READING_UNDERSTANDING: "/modules/exam-preparation/lesen/understanding/{id}",
+            ExerciseBase.ExerciseType.READING_AD_MATCHING: "/modules/exam-preparation/lesen/ad-matching/{id}",
+            ExerciseBase.ExerciseType.CLOZE_CHOICE: "/modules/exam-preparation/sprachbausteine/cloze-choice/{id}",
+            ExerciseBase.ExerciseType.CLOZE_MATCHING: "/modules/exam-preparation/sprachbausteine/cloze-matching/{id}",
+            ExerciseBase.ExerciseType.WRITING_PROMPT: "/modules/exam-preparation/schreiben/{id}",
+            ExerciseBase.ExerciseType.SPEAKING_TEIL1: "/modules/exam-preparation/sprechen/teil-1/{id}",
+            ExerciseBase.ExerciseType.SPEAKING_TEIL2: "/modules/exam-preparation/sprechen/teil-2/{id}",
+            ExerciseBase.ExerciseType.SPEAKING_TEIL3: "/modules/exam-preparation/sprechen/teil-3/{id}",
+        }
+        if title == "RouteNeedle":
+            cls.expected_routes[exercise_type] = route_templates[exercise_type].format(id=exercise.pk)
+
+    def setUp(self):
+        self.url = reverse("exam-prep-content-search")
+
+    def test_only_exact_telephone_110_can_search(self):
+        anonymous = self.client.get(self.url, {"q": "RouteNeedle"})
+        self.assertEqual(anonymous.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.force_authenticate(self.regular_user)
+        regular = self.client.get(self.url, {"q": "RouteNeedle"})
+        self.assertEqual(regular.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.other_superuser)
+        other_superuser = self.client.get(self.url, {"q": "RouteNeedle"})
+        self.assertEqual(other_superuser.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.search_user)
+        allowed = self.client.get(self.url, {"q": "RouteNeedle"})
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+
+    def test_invalid_queries_and_filter_combinations_return_400(self):
+        self.client.force_authenticate(self.search_user)
+        invalid_queries = (
+            {},
+            {"q": " "},
+            {"q": "x" * 201},
+            {"q": "Text", "skill": "unknown"},
+            {"q": "Text", "teil": "1"},
+            {"q": "Text", "skill": "writing", "teil": "1"},
+            {"q": "Text", "skill": "reading", "teil": "4"},
+            {"q": "Text", "page": "zero"},
+            {"q": "Text", "page": "0"},
+        )
+        for params in invalid_queries:
+            with self.subTest(params=params):
+                response = self.client.get(self.url, params)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_module_and_teil_filters_are_applied(self):
+        self.client.force_authenticate(self.search_user)
+        response = self.client.get(
+            self.url,
+            {"q": "RouteNeedle", "skill": "reading", "teil": "2"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["exercise_type"],
+            ExerciseBase.ExerciseType.READING_UNDERSTANDING,
+        )
+
+    def test_response_is_paginated_twenty_exercises_per_page(self):
+        self.client.force_authenticate(self.search_user)
+        first = self.client.get(self.url, {"q": "Paged Needle"})
+        second = self.client.get(self.url, {"q": "Paged Needle", "page": "2"})
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(first.data["count"], 21)
+        self.assertEqual(first.data["page_size"], 20)
+        self.assertEqual(first.data["page"], 1)
+        self.assertEqual(first.data["total_pages"], 2)
+        self.assertEqual(len(first.data["results"]), 20)
+        self.assertEqual(second.data["page"], 2)
+        self.assertEqual(len(second.data["results"]), 1)
+
+    def test_every_exercise_type_returns_its_existing_detail_route(self):
+        self.client.force_authenticate(self.search_user)
+        response = self.client.get(self.url, {"q": "RouteNeedle"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        actual_routes = {
+            result["exercise_type"]: result["href"]
+            for result in response.data["results"]
+        }
+        self.assertEqual(actual_routes, self.expected_routes)

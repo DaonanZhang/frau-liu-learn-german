@@ -41,6 +41,7 @@ from apps.exam_preparation.views import (
     WritingExampleTextViewSet,
     WritingExerciseViewSet,
 )
+from apps.exam_preparation.views_content_search import ExamPreparationContentSearchAPIView
 
 router = DefaultRouter()
 router.register(r"mock-exams", MockExamViewSet, basename="exam-prep-mock-exams")
@@ -161,5 +162,10 @@ router.register(
 )
 
 urlpatterns = [
+    path(
+        "content-search/",
+        ExamPreparationContentSearchAPIView.as_view(),
+        name="exam-prep-content-search",
+    ),
     path("", include(router.urls)),
 ]

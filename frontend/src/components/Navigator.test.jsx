@@ -27,10 +27,10 @@ describe("mock exam navigation release gate", () => {
     });
   });
 
-  it("hides mock exam history while keeping the existing exam purchase action", () => {
+  it("shows mock exam history to an entitled user regardless of release access", () => {
     render(<MemoryRouter initialEntries={["/modules/exam-preparation"]}><Navigator /></MemoryRouter>);
 
-    expect(screen.queryByRole("button", { name: "模拟考试记录" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "模拟考试记录" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "延长备考季" })).toBeInTheDocument();
   });
 });

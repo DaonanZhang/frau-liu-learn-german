@@ -30,7 +30,7 @@ function renderProtectedRoute(path) {
 describe("mock exam release gate", () => {
   beforeEach(() => {
     authMocks.useAuth.mockReturnValue({
-      user: { release_access: false },
+      user: { entitlements: [] },
       loading: false,
       isAuthenticated: true,
     });
@@ -47,5 +47,25 @@ describe("mock exam release gate", () => {
 
     expect(screen.getByText("备考季首页")).toBeInTheDocument();
     expect(screen.queryByText("受保护内容")).not.toBeInTheDocument();
+  });
+
+  it("allows direct mock exam routes for users with a valid entitlement", () => {
+    authMocks.useAuth.mockReturnValue({
+      user: {
+        release_access: false,
+        entitlements: [{
+          status: "active",
+          module: { key: "exam_preparation" },
+          starts_at: "2026-01-01T00:00:00Z",
+          expires_at: "2027-01-01T00:00:00Z",
+        }],
+      },
+      loading: false,
+      isAuthenticated: true,
+    });
+
+    renderProtectedRoute("/modules/exam-preparation/mock-exams");
+
+    expect(screen.getByText("受保护内容")).toBeInTheDocument();
   });
 });

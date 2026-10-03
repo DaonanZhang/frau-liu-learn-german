@@ -67,7 +67,6 @@ export default function ExamPreparationModulePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const hasFullAccess = hasModuleAccess(user, EXAM_PREPARATION_MODULE);
-  const hasReleaseAccess = user?.release_access !== false;
   const activeAttemptKey = activeMockExamKey(user?.id);
   const sessionKey = mockExamSessionKey(user?.id);
   const [activeMockExams, setActiveMockExams] = useState([]);
@@ -80,7 +79,7 @@ export default function ExamPreparationModulePage() {
     .sort((left, right) => right.getTime() - left.getTime())[0];
 
   useEffect(() => {
-    if (!hasFullAccess || !hasReleaseAccess) return undefined;
+    if (!hasFullAccess) return undefined;
     let cancelled = false;
     fetchSavedMockExams("active", 1, 3)
       .then((data) => {
@@ -95,7 +94,7 @@ export default function ExamPreparationModulePage() {
         }
       });
     return () => { cancelled = true; };
-  }, [hasFullAccess, hasReleaseAccess]);
+  }, [hasFullAccess]);
 
   async function removeInterruptedExam(record) {
     const result = await Swal.fire({
@@ -119,15 +118,6 @@ export default function ExamPreparationModulePage() {
   }
 
   async function openMockExam() {
-    if (!hasReleaseAccess) {
-      await Swal.fire({
-        icon: "info",
-        title: "Coming Soon",
-        text: "模拟考试正在准备中，敬请期待。",
-        confirmButtonText: "知道了",
-      });
-      return;
-    }
     if (hasFullAccess) {
       sessionStorage.removeItem(sessionKey);
       localStorage.removeItem(sessionKey);
@@ -218,17 +208,17 @@ export default function ExamPreparationModulePage() {
           <h2>笔试模拟</h2>
           <p>按正式考试流程完成一套笔试，检验时间分配和答题情况。</p>
           <div className="exam-module-mock__actions">
-            {hasFullAccess && hasReleaseAccess && activeMockExams.length ? (
+            {hasFullAccess && activeMockExams.length ? (
               <button type="button" onClick={continueLatestMockExam} className="exam-module-mock__button is-secondary">继续考试</button>
             ) : null}
             <button type="button" onClick={openMockExam} className="exam-module-mock__button">
-              {!hasReleaseAccess ? "Coming Soon" : hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
+              {hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
             </button>
           </div>
         </div>
       </section>
 
-      {hasFullAccess && hasReleaseAccess && activeMockExams.length ? (
+      {hasFullAccess && activeMockExams.length ? (
         <section className="exam-module-interrupted" aria-label="未完成的模拟考试">
           <div className="exam-module-interrupted__heading"><h2>未完成的模拟考试</h2>{activeMockExamCount > 3 ? <Link to="/modules/exam-preparation/mock-exams">查看更多未完成考试</Link> : null}</div>
           <div className="exam-module-interrupted__list">

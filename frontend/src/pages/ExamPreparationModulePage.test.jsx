@@ -87,18 +87,17 @@ describe("exam preparation mock exam entry", () => {
     });
   });
 
-  it("shows Coming Soon instead of loading or opening mock exams for other users", async () => {
+  it("allows an entitled user to open mock exams regardless of release access", async () => {
     authMocks.useAuth.mockReturnValue({ user: entitledUser(false) });
     renderPage();
 
     const entry = screen.getByLabelText("笔试模拟考试");
-    fireEvent.click(within(entry).getByRole("button", { name: "Coming Soon" }));
+    fireEvent.click(within(entry).getByRole("button", { name: "开始新考试" }));
 
-    await waitFor(() => expect(Swal.fire).toHaveBeenCalledWith(expect.objectContaining({
-      title: "Coming Soon",
-    })));
-    expect(fetchSavedMockExams).not.toHaveBeenCalled();
-    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation");
+    await waitFor(() => {
+      expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/mock-exam");
+    });
+    expect(fetchSavedMockExams).toHaveBeenCalledWith("active", 1, 3);
   });
 
   it("shows the question-bank search only to telephone 110", () => {

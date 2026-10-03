@@ -8,6 +8,7 @@ import MockWrittenExamPage from "./MockWrittenExamPage.jsx";
 import MockExamAnswerSheet from "../components/examPreparation/MockExamAnswerSheet.jsx";
 
 const mockExamStyleSource = readFileSync(resolve("src/pages/MockWrittenExamPage.css"), "utf8");
+const clozeExerciseStyleSource = readFileSync(resolve("src/pages/ClozeExercisePage.css"), "utf8");
 const appLayoutStyleSource = readFileSync(resolve("src/layouts/AppLayout.css"), "utf8");
 const readingAdStyleSource = readFileSync(resolve("src/pages/ReadingAdMatchingPage.css"), "utf8");
 
@@ -446,10 +447,14 @@ describe("writing self-assessment", () => {
 
 describe("mock exam exercise layout", () => {
   let styleElement;
+  let clozeStyleElement;
   let playSpy;
   let pauseSpy;
 
   beforeAll(() => {
+    clozeStyleElement = document.createElement("style");
+    clozeStyleElement.textContent = clozeExerciseStyleSource;
+    document.head.append(clozeStyleElement);
     styleElement = document.createElement("style");
     styleElement.textContent = mockExamStyleSource;
     document.head.append(styleElement);
@@ -458,6 +463,7 @@ describe("mock exam exercise layout", () => {
   });
 
   afterAll(() => {
+    clozeStyleElement.remove();
     styleElement.remove();
     playSpy.mockRestore();
     pauseSpy.mockRestore();
@@ -466,6 +472,286 @@ describe("mock exam exercise layout", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+  });
+
+  it("centers selected answers in regular Sprachbausteine slots", () => {
+    const selectedAnswerRule = [...clozeStyleElement.sheet.cssRules]
+      .find((rule) => rule.selectorText === ".cloze-drop-slot__chip");
+
+    expect(selectedAnswerRule.style.textAlign).toBe("center");
+  });
+
+  it.each([
+    [
+      "Teil 1",
+      "cloze_choice",
+      {
+        exercise_base: { title: "Sprachbausteine 1", exam_type: "telc" },
+        content_with_placeholders: "Ich {{blank_1}} heute.",
+        blanks: [{
+          id: 41,
+          blank_key: "blank_1",
+          blank_number: 1,
+          options: [{ id: 41, option_key: "A", option_text: "lerne", is_correct: true }],
+        }],
+      },
+      { "cloze_choice:41": "A" },
+      ".cloze-choice-slot-trigger",
+    ],
+    [
+      "Teil 2",
+      "cloze_matching",
+      {
+        exercise_base: { title: "Sprachbausteine 2", exam_type: "telc" },
+        content_with_placeholders: "Wir {{blank_1}} heute.",
+        options: [{ id: 51, option_key: "option_1", option_text: "lernen" }],
+        blank_answers: [{
+          id: 51,
+          blank_key: "blank_1",
+          blank_number: 1,
+          correct_option: { option_key: "option_1", option_text: "lernen" },
+        }],
+      },
+      { "cloze_matching:51": "option_1" },
+      ".mock-cloze-matching-slot__chip",
+    ],
+  ])("centers the selected answer in mock-exam Sprachbausteine %s", async (_label, partKey, exercise, answers, selector) => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      ...mockExamState(partKey, exercise),
+      answers,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    await screen.findByRole("heading", { name: exercise.exercise_base.title });
+    expect(getComputedStyle(container.querySelector(selector)).textAlign).toBe("center");
+  });
+
+  it("moves between reading and Sprachbausteine parts without entering Hören", async () => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam: continuousNumberingExam(),
+      phase: "reading",
+      deadline: Date.now() + 60_000,
+      activePart: "reading_title_matching",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: 0,
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    const previous = await screen.findByRole("button", { name: "上一部分" });
+    const next = screen.getByRole("button", { name: "下一部分" });
+    expect(previous).toBeDisabled();
+    expect(next).toBeEnabled();
+
+    fireEvent.click(next);
+    expect(screen.getByRole("heading", { name: "3. Verstehen" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sprachbausteine · Teil 2" }));
+    expect(screen.getByRole("button", { name: "下一部分" })).toBeDisabled();
+  });
+
+  it("places large part arrows between the exercise and answer sheet", async () => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam: continuousNumberingExam(),
+      phase: "reading",
+      deadline: Date.now() + 60_000,
+      activePart: "reading_understanding",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: 0,
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    const exercise = container.querySelector(".mock-exam-paper");
+    const navigation = await screen.findByRole("navigation", { name: "前后部分导航" });
+    const answerSheet = screen.getByRole("region", { name: "答题卡" });
+    const next = screen.getByRole("button", { name: "下一部分" });
+    const arrowStyle = getComputedStyle(next);
+
+    expect(exercise.compareDocumentPosition(navigation) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(navigation.compareDocumentPosition(answerSheet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(arrowStyle.width).toBe("4rem");
+    expect(arrowStyle.minHeight).toBe("4rem");
+    expect(arrowStyle.fontSize).toBe("1.8rem");
+  });
+
+  it("disables both part arrows while listening audio is playing", async () => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam: listeningRangeExam(),
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil2",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 2,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    const previous = await screen.findByRole("button", { name: "上一部分" });
+    const next = screen.getByRole("button", { name: "下一部分" });
+    const audio = container.querySelector("audio");
+
+    expect(previous).toBeEnabled();
+    expect(next).toBeEnabled();
+
+    fireEvent.play(audio);
+    expect(previous).toBeDisabled();
+    expect(next).toBeDisabled();
+
+    fireEvent.pause(audio);
+    expect(previous).toBeEnabled();
+    expect(next).toBeEnabled();
+  });
+
+  it("keeps part arrows available when listening autoplay is rejected", async () => {
+    playSpy.mockRejectedValueOnce(new Error("autoplay blocked"));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil2.audio_file_url = "/teil2.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil2",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 2,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    expect(await screen.findByRole("button", { name: "点击继续播放录音" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "上一部分" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "下一部分" })).toBeEnabled();
+  });
+
+  it("enables available part arrows after listening audio has finished", async () => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam: listeningRangeExam(),
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil2",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 5,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    expect(await screen.findByRole("button", { name: "上一部分" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "下一部分" })).toBeEnabled();
+  });
+
+  it("crosses from Sprachbausteine to Hören with arrows in the completed review", async () => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam: continuousNumberingExam(),
+      phase: "results",
+      deadline: 0,
+      activePart: "cloze_matching",
+      answers: {},
+      writingText: "",
+      writingAssessment: { topic_relevant: false },
+      audioStep: 0,
+      audioStepStartedAt: 0,
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "下一部分" }));
+    expect(screen.getByRole("heading", { name: "7. Hörfrage" })).toBeInTheDocument();
+  });
+
+  it("does not show part arrows in Schreiben", async () => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam: {
+        parts: {
+          writing: {
+            exercise_base: { title: "Schreiben", exam_type: "telc" },
+            request_text: "Schreiben Sie einen Brief.",
+            task_text: "Antworten Sie auf die Aufgabe.",
+          },
+        },
+      },
+      phase: "writing",
+      deadline: Date.now() + 60_000,
+      activePart: "writing",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: 0,
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    expect(await screen.findByRole("button", { name: "提交写作并自评" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "上一部分" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "下一部分" })).not.toBeInTheDocument();
+  });
+
+  it("does not show part arrows for Schreiben in the completed review", async () => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam: {
+        parts: {
+          writing: {
+            exercise_base: { title: "Schreiben", exam_type: "telc" },
+            request_text: "Schreiben Sie einen Brief.",
+            task_text: "Antworten Sie auf die Aufgabe.",
+          },
+        },
+      },
+      phase: "results",
+      deadline: 0,
+      activePart: "writing",
+      answers: {},
+      writingText: "",
+      writingAssessment: { topic_relevant: false },
+      audioStep: 0,
+      audioStepStartedAt: 0,
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    expect(await screen.findByRole("heading", { name: "考试结果与答案回顾" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "上一部分" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "下一部分" })).not.toBeInTheDocument();
   });
 
   it("shows only reading rows in the answer sheet during the reading phase", async () => {

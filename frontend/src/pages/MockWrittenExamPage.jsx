@@ -70,6 +70,7 @@ const INTRODUCTION_BY_PART = {
 const READING_PART_KEYS = Object.keys(PARTS).filter((key) => PARTS[key].section === "reading");
 const LISTENING_PART_KEYS = Object.keys(PARTS).filter((key) => PARTS[key].section === "listening");
 const ALL_REVIEW_PART_KEYS = [...READING_PART_KEYS, ...LISTENING_PART_KEYS, "writing"];
+const REVIEW_NAVIGATION_PART_KEYS = [...READING_PART_KEYS, ...LISTENING_PART_KEYS];
 const AUDIO_SEQUENCE = [
   { kind: "audio", partKey: "listening_teil1", playbackLabel: "einmal" },
   { kind: "break", next: "Hören · Teil 2" },
@@ -500,7 +501,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
   );
 }
 
-function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor, questionNumbers }) {
+function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor, questionNumbers, sectionRef }) {
   if (!exercise) return <p>该部分题目加载失败。</p>;
   const heading = exercise.exercise_base?.title || PARTS[partKey].title;
   const baseIntroduction = String(exercise.instruction || INTRODUCTION_BY_PART[partKey] || "").trim();
@@ -620,7 +621,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
   }
 
   return (
-    <section className="mock-exam-paper">
+    <section ref={sectionRef} className="mock-exam-paper">
       <div className="mock-exam-paper__heading">
         <div><span>{PARTS[partKey].title}</span><h2>{heading}</h2></div>
         <span className="mock-exam-paper__badge">{exercise.exercise_base?.exam_type || "telc B1"}</span>
@@ -720,6 +721,7 @@ export default function MockWrittenExamPage() {
   const savedExamParam = searchParams.get("saved") || "";
   const attemptParam = searchParams.get("attempt") || "";
   const audioRef = useRef(null);
+  const exercisePartRef = useRef(null);
   const teil2CompletedPlaysRef = useRef(0);
   const createRequestIdRef = useRef(createRequestId());
   const submissionStartedRef = useRef(false);
@@ -733,6 +735,7 @@ export default function MockWrittenExamPage() {
   const [writingAssessment, setWritingAssessment] = useState(() => ({ ...EMPTY_WRITING_ASSESSMENT }));
   const [audioStep, setAudioStep] = useState(0);
   const [audioStepStartedAt, setAudioStepStartedAt] = useState(0);
+  const [audioPlaying, setAudioPlaying] = useState(false);
   const [needsAudioGesture, setNeedsAudioGesture] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [loadKey, setLoadKey] = useState(0);
@@ -961,7 +964,7 @@ export default function MockWrittenExamPage() {
     const element = audioRef.current;
     if (!element || !currentAudioExercise?.audio_file_url) return;
     try { await element.play(); setNeedsAudioGesture(false); }
-    catch { setNeedsAudioGesture(true); }
+    catch { setAudioPlaying(false); setNeedsAudioGesture(true); }
   }, [currentAudioExercise]);
 
   const advanceAudioStep = useCallback(() => {
@@ -982,6 +985,7 @@ export default function MockWrittenExamPage() {
   }, [audioStep, persist, attemptId, isSavedReview, answers, writingText, writingAssessment, isFavorite, phase, deadline, activePart]);
 
   const handleAudioEnded = useCallback(async (event) => {
+    setAudioPlaying(false);
     if (currentAudioAction?.partKey === "listening_teil2" && teil2CompletedPlaysRef.current === 0) {
       teil2CompletedPlaysRef.current = 1;
       event.currentTarget.currentTime = 0;
@@ -1249,7 +1253,26 @@ export default function MockWrittenExamPage() {
     ? answerSheetRows
     : answerSheetRows.filter((row) => row.group === phase);
   const visiblePartKeys = isResults ? ALL_REVIEW_PART_KEYS : phase === "reading" ? READING_PART_KEYS : phase === "listening" ? LISTENING_PART_KEYS : ["writing"];
-  const audioLocked = phase === "listening" && currentAudioAction?.kind === "audio";
+  const audioLocked = phase === "listening" && audioPlaying;
+  const partNavigationKeys = activePart === "writing"
+    ? []
+    : isResults
+      ? REVIEW_NAVIGATION_PART_KEYS
+      : phase === "reading"
+        ? READING_PART_KEYS
+        : phase === "listening"
+          ? LISTENING_PART_KEYS
+          : [];
+  const activePartIndex = partNavigationKeys.indexOf(activePart);
+
+  function moveToAdjacentPart(offset) {
+    const nextPart = partNavigationKeys[activePartIndex + offset];
+    if (!nextPart || audioLocked) return;
+    setActivePart(nextPart);
+    window.requestAnimationFrame(() => {
+      exercisePartRef.current?.scrollIntoView?.({ block: "start" });
+    });
+  }
 
   return (
     <div className={`mock-exam-page${isResults ? " is-results" : ""}`}>
@@ -1296,6 +1319,7 @@ export default function MockWrittenExamPage() {
           {currentAudioAction?.kind === "audio" ? <><span className="mock-exam-audio-status__title">正在播放 · {PARTS[currentAudioAction.partKey].title}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></>}
           {needsAudioGesture ? <button onClick={playCurrentAudio}>点击继续播放录音</button> : null}
           <audio ref={audioRef} src={currentAudioExercise?.audio_file_url || undefined} onCanPlay={playCurrentAudio}
+            onPlay={() => setAudioPlaying(true)} onPause={() => setAudioPlaying(false)}
             onEnded={handleAudioEnded} preload="auto" />
         </section>
       ) : null}
@@ -1310,7 +1334,16 @@ export default function MockWrittenExamPage() {
 
       <ExercisePart partKey={activePart} exercise={exam.parts[activePart]} answers={answers} setAnswer={setAnswer} setAnswers={setAnswers}
         disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
-        favoriteFor={favoriteFor} questionNumbers={questionNumbers} />
+        favoriteFor={favoriteFor} questionNumbers={questionNumbers} sectionRef={exercisePartRef} />
+
+      {activePartIndex >= 0 ? (
+        <nav className="mock-exam-bottom-nav" aria-label="前后部分导航">
+          <button type="button" aria-label="上一部分" title="上一部分"
+            disabled={audioLocked || activePartIndex === 0} onClick={() => moveToAdjacentPart(-1)}>←</button>
+          <button type="button" aria-label="下一部分" title="下一部分"
+            disabled={audioLocked || activePartIndex === partNavigationKeys.length - 1} onClick={() => moveToAdjacentPart(1)}>→</button>
+        </nav>
+      ) : null}
 
       {visibleAnswerSheetRows.length ? (
         <MockExamAnswerSheet rows={visibleAnswerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults} />

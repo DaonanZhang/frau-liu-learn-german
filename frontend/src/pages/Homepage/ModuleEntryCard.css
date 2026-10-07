@@ -313,10 +313,12 @@
   margin: 20px 0 0 !important;
   padding: 0 !important;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .module-purchase-modal-confirm,
-.module-purchase-modal-cancel {
+.module-purchase-modal-cancel,
+.module-purchase-modal-redeem {
   margin: 0 !important;
   min-width: 0 !important;
   height: 46px;
@@ -324,19 +326,80 @@
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
+  transition:
+    transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .module-purchase-modal-confirm {
   padding: 0 1.2rem;
   background: linear-gradient(90deg, rgba(173, 235, 230, 1), rgba(247, 213, 234, 1));
   color: #111827;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.56),
+    0 8px 18px rgba(105, 174, 168, 0.14);
+}
+
+.module-purchase-modal-confirm.swal2-deny {
+  border-color: #b8ddd6;
+  background: #edf8f6;
+  color: #155e58;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
 .module-purchase-modal-cancel {
   padding: 0 1.2rem;
-  background: #f3f4f6;
-  color: #374151;
+  border-color: #e2e6eb;
+  background: #f6f7f9;
+  color: #4b5563;
+}
+
+.module-purchase-modal-redeem {
+  padding: 0 1.2rem;
+  border-color: #e8c8da;
+  background: #fffafd;
+  color: #7f3f63;
+}
+
+.module-purchase-modal-confirm:focus-visible,
+.module-purchase-modal-cancel:focus-visible,
+.module-purchase-modal-redeem:focus-visible {
+  outline: 3px solid rgba(74, 151, 143, 0.28);
+  outline-offset: 2px;
+}
+
+.module-purchase-modal-confirm:active,
+.module-purchase-modal-cancel:active,
+.module-purchase-modal-redeem:active {
+  transform: scale(0.98);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .module-purchase-modal-confirm:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.62),
+      0 10px 22px rgba(105, 174, 168, 0.2);
+  }
+
+  .module-purchase-modal-confirm.swal2-deny:hover {
+    border-color: #9ccfc6;
+    background: #e4f4f1;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.76);
+  }
+
+  .module-purchase-modal-redeem:hover {
+    border-color: #ddb2ca;
+    background: #fff3f9;
+    box-shadow: 0 6px 14px rgba(127, 63, 99, 0.08);
+  }
+
+  .module-purchase-modal-cancel:hover {
+    border-color: #d5dae1;
+    background: #eef1f4;
+  }
 }
 
 .module-checkout-modal {
@@ -431,5 +494,9 @@
   .module-purchase-modal__description,
   .module-purchase-modal__list {
     font-size: 0.9rem;
+  }
+
+  .module-purchase-modal-actions > button {
+    flex: 1 1 calc(50% - 0.75rem);
   }
 }

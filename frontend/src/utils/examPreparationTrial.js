@@ -1,6 +1,7 @@
 import Swal from "sweetalert2";
 import { EXAM_PREPARATION_MODULE } from "../pages/Homepage/homeShared.js";
 import { formatExpiredDuration, getLatestExpiredModuleExpiry } from "./moduleAccess.js";
+import { addRedeemActionToPurchaseModal } from "./modulePurchaseRedeem.js";
 
 function escapeHtml(value) {
   return String(value || "")
@@ -70,6 +71,9 @@ export async function showExamPreparationPurchasePrompt(navigate, user) {
     },
     buttonsStyling: false,
     width: 720,
+    didOpen: (popup) => {
+      addRedeemActionToPurchaseModal(popup, navigate, () => Swal.close());
+    },
   });
 
   if (result.isConfirmed) {

@@ -19,6 +19,7 @@ import {
   getLatestExpiredModuleExpiry,
   hasModuleAccess,
 } from "../utils/moduleAccess.js";
+import { addRedeemActionToPurchaseModal } from "../utils/modulePurchaseRedeem.js";
 
 import "./Home.css";
 import "./Homepage/ModuleEntryCard.css";
@@ -247,6 +248,9 @@ export default function Home() {
                         },
                         buttonsStyling: false,
                         width: 720,
+                        didOpen: (popup) => {
+                          addRedeemActionToPurchaseModal(popup, navigate, () => Swal.close());
+                        },
                       });
 
                       if (result.isConfirmed) {

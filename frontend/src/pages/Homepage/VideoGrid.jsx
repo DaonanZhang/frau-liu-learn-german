@@ -2,6 +2,7 @@ import "./VideoGrid.css";
 import "./LockedVideoAlert.css";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
+import { addRedeemActionToPurchaseModal } from "../../utils/modulePurchaseRedeem.js";
 import useMaxWidth from "../../hooks/useMaxWidth.js";
 import VideoCard from "./VideoCard.jsx";
 
@@ -118,6 +119,9 @@ export default function VideoGrid({
                     },
                     buttonsStyling: false,
                     width: 720,
+                    didOpen: (popup) => {
+                      addRedeemActionToPurchaseModal(popup, navigate, () => Swal.close());
+                    },
                   });
 
                   if (result.isConfirmed) {

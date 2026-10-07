@@ -5,6 +5,7 @@ import { useAuth } from "../../api/auth/useAuth.js";
 import useMaxWidth from "../../hooks/useMaxWidth.js";
 import { createAlipayPurchase, fetchPurchaseOffers, savePendingPaymentContext } from "../../api/payments/alipay.js";
 import { hasModuleAccess } from "../../utils/moduleAccess.js";
+import { addRedeemActionToPurchaseModal } from "../../utils/modulePurchaseRedeem.js";
 import "./ModuleEntryCard.css";
 
 function buildCoverCandidates(src) {
@@ -228,6 +229,9 @@ export default function ModuleEntryCard({ module }) {
       },
       buttonsStyling: false,
       width: 720,
+      didOpen: (popup) => {
+        addRedeemActionToPurchaseModal(popup, navigate, () => Swal.close());
+      },
     });
 
     if (result.isConfirmed) {

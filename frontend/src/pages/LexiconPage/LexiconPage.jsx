@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
+import { addRedeemActionToPurchaseModal } from "../../utils/modulePurchaseRedeem.js";
 
 import { fetchVideoList } from "../../api/learning_by_video/videos";
 import {
@@ -837,6 +838,9 @@ export default function LexiconPage() {
             },
             buttonsStyling: false,
             width: 720,
+            didOpen: (popup) => {
+              addRedeemActionToPurchaseModal(popup, navigate, () => Swal.close());
+            },
           });
 
           if (result.isConfirmed) {

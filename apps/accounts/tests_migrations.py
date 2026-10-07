@@ -183,8 +183,22 @@ class ActivationCodeLedgerMigrationTests(TransactionTestCase):
 
 
 class PaymentOrderMigrationTests(TransactionTestCase):
+    data_seed_parent = ("accounts", "0026_restore_plaintext_codes")
     migrate_from = ("accounts", "0034_reset_device_activity_after_lifecycle_fix")
     migrate_to = ("accounts", "0035_provider_neutral_payment_order")
+
+    def setUp(self) -> None:
+        super().setUp()
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.data_seed_parent])
+        seed_apps = executor.loader.project_state([self.data_seed_parent]).apps
+        Module = seed_apps.get_model("accounts", "Module")
+        Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
 
     def tearDown(self) -> None:
         MigrationExecutor(connection).migrate([self.migrate_to])

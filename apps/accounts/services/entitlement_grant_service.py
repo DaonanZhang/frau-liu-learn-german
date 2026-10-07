@@ -105,7 +105,7 @@ def revoke_and_compact_payment_entitlement(*, payment, at=None) -> bool:
     """Cancel a refunded entitlement and remove gaps from later extensions.
 
     Args:
-        payment: Fully refunded Alipay payment record.
+        payment: Fully refunded payment order.
         at: Optional deterministic revocation timestamp.
 
     Returns:

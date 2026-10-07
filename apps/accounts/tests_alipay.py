@@ -21,7 +21,11 @@ from apps.accounts.models import (
     PaymentGrantTask,
     PurchaseOffer,
 )
-from apps.accounts.views.payment import _apply_payment_status, _query_and_sync_payment_status
+from apps.accounts.views.payment import (
+    _apply_payment_status,
+    _close_unpaid_payment,
+    _query_and_sync_payment_status,
+)
 from apps.accounts.services.payment_grant_service import process_payment_grant_task_by_id
 from apps.accounts.services.alipay_service import (
     AlipayClientConfig,
@@ -1086,6 +1090,22 @@ class AlipayPaymentApiTests(APITestCase):
 
         with self.assertRaises(AlipayGatewayError):
             service.build_page_pay_params(payment=payment)
+
+    @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True)
+    def test_local_alipay_close_does_not_close_wechat_order(self) -> None:
+        payment = PaymentOrder.objects.create(
+            merchant_order_no="wechat-local-close-isolated",
+            subject="WeChat payment",
+            total_amount=Decimal("29.90"),
+            provider=PaymentOrder.Provider.WECHAT_PAY,
+            status=PaymentOrder.Status.PENDING,
+        )
+
+        with self.assertRaises(AlipayGatewayError):
+            _close_unpaid_payment(payment=payment, alipay_service=None)
+
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, PaymentOrder.Status.PENDING)
 
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_alipay_notify_does_not_match_wechat_order(

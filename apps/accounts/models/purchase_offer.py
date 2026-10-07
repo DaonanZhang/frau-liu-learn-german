@@ -63,7 +63,7 @@ class PurchaseOffer(models.Model):
         if self.price_amount <= 0:
             raise ValidationError({"price_amount": "Price must be greater than zero."})
         if self.currency != "CNY":
-            raise ValidationError({"currency": "Alipay purchase offers must use CNY."})
+            raise ValidationError({"currency": "Payment purchase offers must use CNY."})
 
     def __str__(self) -> str:
         scope = self.module.key

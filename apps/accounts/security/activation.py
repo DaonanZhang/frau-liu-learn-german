@@ -39,6 +39,13 @@ def _close_open_payments(*, user, module, season) -> None:
     if season is not None:
         open_payments = open_payments.filter(season=season)
 
+    if open_payments.exclude(
+        payment__provider=PaymentOrder.Provider.ALIPAY
+    ).exists():
+        raise ValueError(
+            "The unpaid order could not be canceled safely. Please retry shortly."
+        )
+
     alipay_service = None
     if open_payments.exists() and not getattr(
         settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False

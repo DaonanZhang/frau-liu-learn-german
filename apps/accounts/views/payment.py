@@ -373,6 +373,9 @@ def _find_open_purchase_for_scope(
 def _close_unpaid_payment(*, payment: PaymentOrder, alipay_service) -> str:
     """Close an earlier unpaid order before a new purchase intent is created."""
 
+    if payment.provider != PaymentOrder.Provider.ALIPAY:
+        raise AlipayGatewayError("Alipay cannot close an order owned by another provider.")
+
     if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
         _mark_open_payment_closed(payment_id=payment.id)
         return "closed"

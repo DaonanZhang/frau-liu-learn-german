@@ -180,3 +180,117 @@ class ActivationCodeLedgerMigrationTests(TransactionTestCase):
             ActivationCodeRecord.objects.get(code="LEGACY03").status,
             "consumed",
         )
+
+
+class PaymentOrderMigrationTests(TransactionTestCase):
+    migrate_from = ("accounts", "0034_reset_device_activity_after_lifecycle_fix")
+    migrate_to = ("accounts", "0035_provider_neutral_payment_order")
+
+    def tearDown(self) -> None:
+        MigrationExecutor(connection).migrate([self.migrate_to])
+        super().tearDown()
+
+    def test_payment_rows_relations_and_entitlement_refs_migrate_reversibly(self) -> None:
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        old_apps = executor.loader.project_state([self.migrate_from]).apps
+
+        User = old_apps.get_model("accounts", "User")
+        Module = old_apps.get_model("accounts", "Module")
+        PurchaseOffer = old_apps.get_model("accounts", "PurchaseOffer")
+        Payment = old_apps.get_model("accounts", "AlipayWebsitePayment")
+        PaymentGrantTask = old_apps.get_model("accounts", "PaymentGrantTask")
+        PromotionCodeRecord = old_apps.get_model("accounts", "PromotionCodeRecord")
+        UserCoupon = old_apps.get_model("accounts", "UserCoupon")
+        PaymentDiscountApplication = old_apps.get_model(
+            "accounts", "PaymentDiscountApplication"
+        )
+        Entitlement = old_apps.get_model("accounts", "Entitlement")
+
+        user = User.objects.create(telephone="13900000035", username="payment-migration")
+        module = Module.objects.create(key="payment-migration", name="Payment migration")
+        offer = PurchaseOffer.objects.create(
+            code="payment-migration-offer",
+            title="Payment migration offer",
+            module=module,
+            plan="m1",
+            price_amount="29.90",
+        )
+        payment = Payment.objects.create(
+            merchant_order_no="MIGRATION-PAYMENT-0035",
+            subject="Migration payment",
+            total_amount="24.90",
+            status="paid",
+            alipay_trade_no="ALIPAY-TRADE-0035",
+            paid_at=timezone.now(),
+        )
+        grant_task = PaymentGrantTask.objects.create(
+            payment=payment,
+            offer=offer,
+            user=user,
+            module=module,
+            plan="m1",
+        )
+        promotion_code = PromotionCodeRecord.objects.create(
+            code="MIGRATE35",
+            campaign_name="Migration",
+            discount_amount="5.00",
+        )
+        coupon = UserCoupon.objects.create(
+            user=user,
+            promotion_code=promotion_code,
+            discount_amount="5.00",
+            status="reserved",
+            reserved_payment=payment,
+        )
+        discount = PaymentDiscountApplication.objects.create(
+            payment=payment,
+            coupon=coupon,
+            promotion_code=promotion_code,
+            user=user,
+            offer=offer,
+            original_amount="29.90",
+            promotion_discount_amount="5.00",
+            final_amount="24.90",
+        )
+        entitlement = Entitlement.objects.create(
+            user=user,
+            module=module,
+            plan="m1",
+            external_ref="alipay_payment:MIGRATION-PAYMENT-0035",
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_to])
+        migrated_apps = executor.loader.project_state([self.migrate_to]).apps
+        PaymentOrder = migrated_apps.get_model("accounts", "PaymentOrder")
+        MigratedGrantTask = migrated_apps.get_model("accounts", "PaymentGrantTask")
+        MigratedCoupon = migrated_apps.get_model("accounts", "UserCoupon")
+        MigratedDiscount = migrated_apps.get_model(
+            "accounts", "PaymentDiscountApplication"
+        )
+        MigratedEntitlement = migrated_apps.get_model("accounts", "Entitlement")
+
+        migrated_payment = PaymentOrder.objects.get(pk=payment.pk)
+        self.assertEqual(migrated_payment.provider, "alipay")
+        self.assertEqual(migrated_payment.provider_trade_no, "ALIPAY-TRADE-0035")
+        self.assertEqual(MigratedGrantTask.objects.get(pk=grant_task.pk).payment_id, payment.pk)
+        self.assertEqual(MigratedCoupon.objects.get(pk=coupon.pk).reserved_payment_id, payment.pk)
+        self.assertEqual(MigratedDiscount.objects.get(pk=discount.pk).payment_id, payment.pk)
+        self.assertEqual(
+            MigratedEntitlement.objects.get(pk=entitlement.pk).external_ref,
+            "payment:alipay:MIGRATION-PAYMENT-0035",
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        reversed_apps = executor.loader.project_state([self.migrate_from]).apps
+        ReversedPayment = reversed_apps.get_model("accounts", "AlipayWebsitePayment")
+        ReversedEntitlement = reversed_apps.get_model("accounts", "Entitlement")
+
+        reversed_payment = ReversedPayment.objects.get(pk=payment.pk)
+        self.assertEqual(reversed_payment.alipay_trade_no, "ALIPAY-TRADE-0035")
+        self.assertEqual(
+            ReversedEntitlement.objects.get(pk=entitlement.pk).external_ref,
+            "alipay_payment:MIGRATION-PAYMENT-0035",
+        )

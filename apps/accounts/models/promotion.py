@@ -125,14 +125,14 @@ class UserCoupon(models.Model):
     )
     expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     reserved_payment = models.OneToOneField(
-        "accounts.AlipayWebsitePayment",
+        "accounts.PaymentOrder",
         null=True,
         blank=True,
         on_delete=models.PROTECT,
         related_name="reserved_coupon",
     )
     used_payment = models.OneToOneField(
-        "accounts.AlipayWebsitePayment",
+        "accounts.PaymentOrder",
         null=True,
         blank=True,
         on_delete=models.PROTECT,
@@ -168,7 +168,7 @@ class PaymentDiscountApplication(models.Model):
         MANUAL = "manual", "Selected by user"
 
     payment = models.OneToOneField(
-        "accounts.AlipayWebsitePayment",
+        "accounts.PaymentOrder",
         on_delete=models.PROTECT,
         related_name="discount_application",
     )

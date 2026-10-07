@@ -5,7 +5,7 @@ from .entitlement import Entitlement
 from .module_season import ModuleSeason
 from .activation_code_record import ActivationCodeRecord
 from .purchase_offer import PurchaseOffer
-from .alipay_payment import AlipayWebsitePayment
+from .payment_order import PaymentOrder
 from .payment_grant_task import PaymentGrantTask
 from .promotion import PromotionCodeRecord, UserCoupon, PaymentDiscountApplication
 from .bug_report import BugReport
@@ -19,7 +19,7 @@ __all__ = [
     "ModuleSeason",
     "ActivationCodeRecord",
     "PurchaseOffer",
-    "AlipayWebsitePayment",
+    "PaymentOrder",
     "PaymentGrantTask",
     "PromotionCodeRecord",
     "UserCoupon",

@@ -4,10 +4,12 @@ from django.db import models
 from django.db.models import F, Q
 
 
-class AlipayWebsitePayment(models.Model):
-    """
-    Minimal persistent record for an Alipay website payment attempt.
-    """
+class PaymentOrder(models.Model):
+    """Provider-neutral record for one payment attempt."""
+
+    class Provider(models.TextChoices):
+        ALIPAY = "alipay", "Alipay"
+        WECHAT_PAY = "wechat_pay", "WeChat Pay"
 
     class Status(models.TextChoices):
         CREATED = "created", "Created"
@@ -18,6 +20,13 @@ class AlipayWebsitePayment(models.Model):
         PARTIALLY_REFUNDED = "partially_refunded", "Partially refunded"
         REFUNDED = "refunded", "Refunded"
 
+    provider = models.CharField(
+        max_length=16,
+        choices=Provider.choices,
+        default=Provider.ALIPAY,
+        db_index=True,
+        help_text="Payment provider responsible for this order.",
+    )
     merchant_order_no = models.CharField(
         max_length=64,
         unique=True,
@@ -25,7 +34,7 @@ class AlipayWebsitePayment(models.Model):
     )
     subject = models.CharField(
         max_length=256,
-        help_text="Payment subject shown to the customer and Alipay.",
+        help_text="Payment subject shown to the customer and payment provider.",
     )
     total_amount = models.DecimalField(
         max_digits=10,
@@ -39,17 +48,17 @@ class AlipayWebsitePayment(models.Model):
         db_index=True,
         help_text="Current payment lifecycle status.",
     )
-    alipay_trade_no = models.CharField(
+    provider_trade_no = models.CharField(
         max_length=64,
         blank=True,
         default="",
         db_index=True,
-        help_text="Alipay trade number returned by Alipay after payment creation or completion.",
+        help_text="Trade number returned by the selected payment provider.",
     )
     raw_notify_payload = models.JSONField(
         null=True,
         blank=True,
-        help_text="Raw notify payload received from Alipay, if available.",
+        help_text="Raw notification payload received from the payment provider, if available.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -67,13 +76,13 @@ class AlipayWebsitePayment(models.Model):
     last_reconciled_at = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="Last time this payment was successfully reconciled with Alipay.",
+        help_text="Last time this payment was successfully reconciled with its provider.",
     )
     refunded_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=0,
-        help_text="Cumulative amount confirmed as refunded by Alipay.",
+        help_text="Cumulative amount confirmed as refunded by the payment provider.",
     )
     refunded_at = models.DateTimeField(
         null=True,
@@ -83,19 +92,26 @@ class AlipayWebsitePayment(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["status", "created_at"], name="idx_alipay_status_created"),
+            models.Index(fields=["status", "created_at"], name="idx_payment_status_created"),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["alipay_trade_no"],
-                condition=~Q(alipay_trade_no=""),
-                name="uniq_nonblank_alipay_trade_no",
+                fields=["provider", "provider_trade_no"],
+                condition=~Q(provider_trade_no=""),
+                name="uniq_provider_nonblank_trade_no",
             ),
             models.CheckConstraint(
                 condition=Q(refunded_amount__gte=0) & Q(refunded_amount__lte=F("total_amount")),
-                name="alipay_refund_amount_valid",
+                name="payment_refund_amount_valid",
             ),
         ]
 
+    @property
+    def entitlement_external_ref(self) -> str:
+        return f"payment:{self.provider}:{self.merchant_order_no}"
+
     def __str__(self) -> str:
-        return f"AlipayWebsitePayment<order={self.merchant_order_no} status={self.status}>"
+        return (
+            "PaymentOrder<"
+            f"provider={self.provider} order={self.merchant_order_no} status={self.status}>"
+        )

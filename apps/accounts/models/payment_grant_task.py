@@ -16,7 +16,7 @@ class PaymentGrantTask(models.Model):
         FAILED = "failed", "Failed"
 
     payment = models.ForeignKey(
-        "accounts.AlipayWebsitePayment",
+        "accounts.PaymentOrder",
         on_delete=models.CASCADE,
         related_name="grant_tasks",
         db_index=True,

@@ -21,18 +21,18 @@ django.setup()
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, Subquery, Sum  # noqa: E402
 from django.utils import timezone  # noqa: E402
 
-from apps.accounts.models import AlipayWebsitePayment, PaymentGrantTask  # noqa: E402
+from apps.accounts.models import PaymentOrder, PaymentGrantTask  # noqa: E402
 
 
 MODULE_KEY = "exam_preparation"
 SUCCESSFUL_STATUSES = (
-    AlipayWebsitePayment.Status.PAID,
-    AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
-    AlipayWebsitePayment.Status.REFUNDED,
+    PaymentOrder.Status.PAID,
+    PaymentOrder.Status.PARTIALLY_REFUNDED,
+    PaymentOrder.Status.REFUNDED,
 )
 RETAINED_STATUSES = (
-    AlipayWebsitePayment.Status.PAID,
-    AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
+    PaymentOrder.Status.PAID,
+    PaymentOrder.Status.PARTIALLY_REFUNDED,
 )
 
 
@@ -43,9 +43,11 @@ def money(value: Decimal | None) -> str:
 def main() -> None:
     module_payment_ids = PaymentGrantTask.objects.filter(
         module__key=MODULE_KEY,
+        payment__provider=PaymentOrder.Provider.ALIPAY,
     ).values("payment_id")
-    successful_payments = AlipayWebsitePayment.objects.filter(
+    successful_payments = PaymentOrder.objects.filter(
         id__in=Subquery(module_payment_ids),
+        provider=PaymentOrder.Provider.ALIPAY,
         status__in=SUCCESSFUL_STATUSES,
     )
     retained_payments = successful_payments.filter(status__in=RETAINED_STATUSES)
@@ -62,6 +64,7 @@ def main() -> None:
     paying_users = (
         PaymentGrantTask.objects.filter(
             module__key=MODULE_KEY,
+            payment__provider=PaymentOrder.Provider.ALIPAY,
             payment__status__in=RETAINED_STATUSES,
         )
         .values("user_id")
@@ -71,6 +74,7 @@ def main() -> None:
     breakdown = (
         PaymentGrantTask.objects.filter(
             module__key=MODULE_KEY,
+            payment__provider=PaymentOrder.Provider.ALIPAY,
             payment__status__in=RETAINED_STATUSES,
         )
         .values("offer__code", "offer__title", "plan")
@@ -94,11 +98,11 @@ def main() -> None:
     print(f"历史成交订单：{successful_payments.count()} 单")
     print(
         "其中全额退款："
-        f"{successful_payments.filter(status=AlipayWebsitePayment.Status.REFUNDED).count()} 单"
+        f"{successful_payments.filter(status=PaymentOrder.Status.REFUNDED).count()} 单"
     )
     print(
         "其中部分退款："
-        f"{successful_payments.filter(status=AlipayWebsitePayment.Status.PARTIALLY_REFUNDED).count()} 单"
+        f"{successful_payments.filter(status=PaymentOrder.Status.PARTIALLY_REFUNDED).count()} 单"
     )
     print(f"历史实付：{money(amounts['gross'])}")
     print(f"已退款：{money(amounts['refunded'])}")

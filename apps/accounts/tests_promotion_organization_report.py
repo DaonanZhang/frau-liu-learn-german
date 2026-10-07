@@ -10,8 +10,9 @@ from django.core.management import call_command
 from django.test import TestCase
 from openpyxl import load_workbook
 
+from apps.accounts.admin import PaymentOrderAdmin
 from apps.accounts.models import (
-    AlipayWebsitePayment,
+    PaymentOrder,
     Entitlement,
     Module,
     ModuleSeason,
@@ -77,6 +78,7 @@ class PromotionOrganizationExcelReportTests(TestCase):
         offer: PurchaseOffer,
         applied_at: datetime,
         final_amount: str,
+        provider: str = PaymentOrder.Provider.ALIPAY,
     ) -> PaymentDiscountApplication:
         promotion = PromotionCodeRecord.objects.create(
             code=code,
@@ -96,11 +98,12 @@ class PromotionOrganizationExcelReportTests(TestCase):
             minimum_order_amount=Decimal("0.00"),
             status=UserCoupon.Status.USED,
         )
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
+            provider=provider,
             merchant_order_no=f"ORDER-{code}",
             subject=offer.title,
             total_amount=Decimal(final_amount),
-            status=AlipayWebsitePayment.Status.PAID,
+            status=PaymentOrder.Status.PAID,
             paid_at=applied_at,
         )
         coupon.used_payment = payment
@@ -151,6 +154,15 @@ class PromotionOrganizationExcelReportTests(TestCase):
             final_amount="59.90",
         )
         self._create_applied_purchase(
+            code="WECHAT0001",
+            campaign="渠道 A",
+            organization="机构 A",
+            offer=self.science_offer,
+            applied_at=start + timedelta(hours=1, minutes=30),
+            final_amount="888.00",
+            provider=PaymentOrder.Provider.WECHAT_PAY,
+        )
+        self._create_applied_purchase(
             code="ATEND00001",
             campaign="渠道 A",
             organization="机构 A",
@@ -158,11 +170,11 @@ class PromotionOrganizationExcelReportTests(TestCase):
             applied_at=end,
             final_amount="500.00",
         )
-        unpaid_payment = AlipayWebsitePayment.objects.create(
+        unpaid_payment = PaymentOrder.objects.create(
             merchant_order_no="ORDER-SCIENCE001-UNPAID",
             subject=self.science_offer.title,
             total_amount=Decimal("199.00"),
-            status=AlipayWebsitePayment.Status.PENDING,
+            status=PaymentOrder.Status.PENDING,
         )
         PaymentDiscountApplication.objects.create(
             payment=unpaid_payment,
@@ -247,3 +259,8 @@ class PromotionOrganizationExcelReportTests(TestCase):
             ),
             before,
         )
+
+    def test_payment_admin_exposes_provider_and_neutral_trade_number(self) -> None:
+        self.assertIn("provider", PaymentOrderAdmin.list_display)
+        self.assertIn("provider", PaymentOrderAdmin.list_filter)
+        self.assertIn("provider_trade_no", PaymentOrderAdmin.search_fields)

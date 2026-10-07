@@ -10,7 +10,7 @@ from apps.accounts.models.module_season import ModuleSeason
 from apps.accounts.models.purchase_offer import PurchaseOffer
 from apps.accounts.models import (
     ActivationCodeRecord,
-    AlipayWebsitePayment,
+    PaymentOrder,
     BugReport,
     PaymentDiscountApplication,
     PaymentGrantTask,
@@ -158,10 +158,11 @@ class ActivationCodeRecordAdmin(admin.ModelAdmin):
         return False
 
 
-@admin.register(AlipayWebsitePayment)
-class AlipayWebsitePaymentAdmin(admin.ModelAdmin):
+@admin.register(PaymentOrder)
+class PaymentOrderAdmin(admin.ModelAdmin):
     list_display = (
         "id",
+        "provider",
         "merchant_order_no",
         "status",
         "total_amount",
@@ -170,14 +171,15 @@ class AlipayWebsitePaymentAdmin(admin.ModelAdmin):
         "expires_at",
         "last_reconciled_at",
     )
-    list_filter = ("status",)
-    search_fields = ("merchant_order_no", "alipay_trade_no")
+    list_filter = ("provider", "status")
+    search_fields = ("merchant_order_no", "provider_trade_no")
     readonly_fields = (
+        "provider",
         "merchant_order_no",
         "subject",
         "total_amount",
         "status",
-        "alipay_trade_no",
+        "provider_trade_no",
         "raw_notify_payload",
         "created_at",
         "updated_at",

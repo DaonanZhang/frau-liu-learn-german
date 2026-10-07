@@ -180,6 +180,10 @@ This is important because:
   is the recovery path for pending/paid/refunded orders and failed grants
 - Celery beat is one supported scheduler, but Celery itself is optional
 
+Keep `frau-liu-alipay-reconcile.timer` enabled after the provider-neutral payment
+migration. The task is explicitly scoped to `provider=alipay`; it does not query,
+retry, revoke, or purge future WeChat orders.
+
 Run a one-off reconciliation after deployment:
 
 ```bash
@@ -324,8 +328,8 @@ location /api/ {
 ```bash
 cd /srv/projects/frau-liu-learn-german
 .venv/bin/python manage.py shell -c "
-from apps.accounts.models import AlipayWebsitePayment, PaymentGrantTask
-print('payments=', list(AlipayWebsitePayment.objects.values_list('id','merchant_order_no','status','total_amount','paid_at').order_by('-id')[:10]))
+from apps.accounts.models import PaymentOrder, PaymentGrantTask
+print('payments=', list(PaymentOrder.objects.values_list('id','provider','merchant_order_no','provider_trade_no','status','total_amount','paid_at').order_by('-id')[:10]))
 print('grant_tasks=', list(PaymentGrantTask.objects.values_list('id','payment__merchant_order_no','status','user__telephone','season__season_number','last_error').order_by('-id')[:10]))
 "
 ```

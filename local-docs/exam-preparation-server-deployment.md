@@ -154,6 +154,8 @@ Before first server use of `exam_preparation`:
    systemd timer that runs the same management command every 15 minutes.
    Automatic payment/grant recovery requires a scheduler, but does not require
    Celery specifically.
+   Keep `frau-liu-alipay-reconcile.timer` enabled after the provider-neutral
+   payment migration; the task is explicitly scoped to `provider=alipay`.
 10. Keep the existing production Redis configured and reachable. Activation
     codes use PostgreSQL as the final one-time-use authority, but Redis fallback
     remains enabled so historical Redis-only codes can still be redeemed and
@@ -521,9 +523,9 @@ Useful payment inspection:
 
 ```bash
 uv run python manage.py shell -c "
-from apps.accounts.models import AlipayWebsitePayment, PaymentGrantTask
-print(list(AlipayWebsitePayment.objects.values_list(
-    'merchant_order_no', 'status', 'total_amount', 'paid_at', 'refunded_at'
+from apps.accounts.models import PaymentOrder, PaymentGrantTask
+print(list(PaymentOrder.objects.values_list(
+    'provider', 'merchant_order_no', 'provider_trade_no', 'status', 'total_amount', 'paid_at', 'refunded_at'
 ).order_by('-id')[:10]))
 print(list(PaymentGrantTask.objects.values_list(
     'payment__merchant_order_no', 'status', 'user__telephone', 'last_error'

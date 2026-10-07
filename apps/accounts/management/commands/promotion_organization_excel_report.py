@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.accounts.models import AlipayWebsitePayment, Entitlement, PaymentDiscountApplication
+from apps.accounts.models import PaymentOrder, Entitlement, PaymentDiscountApplication
 
 
 COLUMNS = ["Promotion Code", "购买商品", "购买时长", "订单金额"]
@@ -24,8 +24,8 @@ PLAN_LABELS = {
     Entitlement.Plan.LIFETIME: "永久",
 }
 SUCCESSFUL_PAYMENT_STATUSES = (
-    AlipayWebsitePayment.Status.PAID,
-    AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
+    PaymentOrder.Status.PAID,
+    PaymentOrder.Status.PARTIALLY_REFUNDED,
 )
 EXCLUDED_CAMPAIGNS = {
     "alipay-notify-e2e",
@@ -98,6 +98,7 @@ class Command(BaseCommand):
         applications = (
             PaymentDiscountApplication.objects.filter(
                 status=PaymentDiscountApplication.Status.APPLIED,
+                payment__provider=PaymentOrder.Provider.ALIPAY,
                 payment__status__in=SUCCESSFUL_PAYMENT_STATUSES,
                 applied_at__gte=start_at,
                 applied_at__lt=end_at,

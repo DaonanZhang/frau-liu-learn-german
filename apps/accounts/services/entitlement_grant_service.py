@@ -113,7 +113,7 @@ def revoke_and_compact_payment_entitlement(*, payment, at=None) -> bool:
     """
 
     at = at or timezone.now()
-    external_ref = f"alipay_payment:{payment.merchant_order_no}"
+    external_ref = payment.entitlement_external_ref
     target = Entitlement.objects.filter(
         external_ref=external_ref,
         status=Entitlement.Status.ACTIVE,

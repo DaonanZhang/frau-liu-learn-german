@@ -9,7 +9,7 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 from apps.accounts.models import (
-    AlipayWebsitePayment,
+    PaymentOrder,
     PaymentDiscountApplication,
     PromotionCodeRecord,
     UserCoupon,
@@ -165,8 +165,8 @@ def eligible_coupon_queryset(*, user, offer, for_update: bool = False):
     ).exclude(
         payment_applications__status=PaymentDiscountApplication.Status.RESERVED,
         payment_applications__payment__status__in={
-            AlipayWebsitePayment.Status.CREATED,
-            AlipayWebsitePayment.Status.PENDING,
+            PaymentOrder.Status.CREATED,
+            PaymentOrder.Status.PENDING,
         },
     ).select_related("promotion_code").order_by(
         "-discount_amount",
@@ -228,8 +228,8 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
     now = timezone.now()
 
     if payment.status in {
-        AlipayWebsitePayment.Status.PAID,
-        AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
+        PaymentOrder.Status.PAID,
+        PaymentOrder.Status.PARTIALLY_REFUNDED,
     }:
         if application.status == PaymentDiscountApplication.Status.RESERVED:
             application.status = PaymentDiscountApplication.Status.APPLIED
@@ -256,7 +256,7 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
             )
         return
 
-    if payment.status == AlipayWebsitePayment.Status.REFUNDED:
+    if payment.status == PaymentOrder.Status.REFUNDED:
         if application.status in {
             PaymentDiscountApplication.Status.RESERVED,
             PaymentDiscountApplication.Status.APPLIED,
@@ -272,8 +272,8 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
         return
 
     if payment.status in {
-        AlipayWebsitePayment.Status.CLOSED,
-        AlipayWebsitePayment.Status.FAILED,
+        PaymentOrder.Status.CLOSED,
+        PaymentOrder.Status.FAILED,
     }:
         if application.status == PaymentDiscountApplication.Status.RESERVED:
             application.status = PaymentDiscountApplication.Status.RELEASED

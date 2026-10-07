@@ -14,7 +14,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import (
-    AlipayWebsitePayment,
+    PaymentOrder,
     Entitlement,
     Module,
     ModuleSeason,
@@ -231,7 +231,7 @@ class AlipayPaymentApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["offer_code"], exam_offer.code)
-        self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
+        self.assertEqual(PaymentOrder.objects.count(), 1)
 
     @override_settings(COMING_SOON=True)
     @patch("apps.accounts.views.payment.get_alipay_service")
@@ -274,7 +274,7 @@ class AlipayPaymentApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["offer_code"], exam_offer.code)
-        self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
+        self.assertEqual(PaymentOrder.objects.count(), 1)
 
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_same_purchase_intent_reuses_existing_pending_payment(self, mock_get_alipay_service: Mock) -> None:
@@ -293,7 +293,7 @@ class AlipayPaymentApiTests(APITestCase):
 
         self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
+        self.assertEqual(PaymentOrder.objects.count(), 1)
         self.assertEqual(PaymentGrantTask.objects.count(), 1)
         self.assertEqual(
             first_response.data["merchant_order_no"],
@@ -306,11 +306,11 @@ class AlipayPaymentApiTests(APITestCase):
         self,
         mock_get_alipay_service: Mock,
     ) -> None:
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-closed-intent-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.CLOSED,
+            status=PaymentOrder.Status.CLOSED,
         )
         PaymentGrantTask.objects.create(
             payment=payment,
@@ -330,7 +330,7 @@ class AlipayPaymentApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(response.data["code"], "purchase_intent_closed")
-        self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
+        self.assertEqual(PaymentOrder.objects.count(), 1)
 
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_new_purchase_closes_open_order_before_creating_a_different_plan(
@@ -374,11 +374,11 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second_response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second_response.data["offer_code"], second_offer.code)
-        self.assertEqual(AlipayWebsitePayment.objects.count(), 2)
-        first_payment = AlipayWebsitePayment.objects.get(
+        self.assertEqual(PaymentOrder.objects.count(), 2)
+        first_payment = PaymentOrder.objects.get(
             merchant_order_no=first_response.data["merchant_order_no"]
         )
-        self.assertEqual(first_payment.status, AlipayWebsitePayment.Status.CLOSED)
+        self.assertEqual(first_payment.status, PaymentOrder.Status.CLOSED)
         service.close_trade.assert_called_once_with(
             merchant_order_no=first_payment.merchant_order_no
         )
@@ -388,11 +388,11 @@ class AlipayPaymentApiTests(APITestCase):
         self,
         mock_get_alipay_service: Mock,
     ) -> None:
-        expired_payment = AlipayWebsitePayment.objects.create(
+        expired_payment = PaymentOrder.objects.create(
             merchant_order_no="pay-expired-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PENDING,
+            status=PaymentOrder.Status.PENDING,
             expires_at=timezone.now() - timedelta(minutes=1),
         )
         PaymentGrantTask.objects.create(
@@ -419,9 +419,9 @@ class AlipayPaymentApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         expired_payment.refresh_from_db()
-        self.assertEqual(expired_payment.status, AlipayWebsitePayment.Status.CLOSED)
+        self.assertEqual(expired_payment.status, PaymentOrder.Status.CLOSED)
         self.assertNotEqual(response.data["merchant_order_no"], expired_payment.merchant_order_no)
-        self.assertEqual(AlipayWebsitePayment.objects.count(), 2)
+        self.assertEqual(PaymentOrder.objects.count(), 2)
         service.close_trade.assert_not_called()
 
     @patch("apps.accounts.views.payment.get_alipay_service")
@@ -429,11 +429,11 @@ class AlipayPaymentApiTests(APITestCase):
         self,
         mock_get_alipay_service: Mock,
     ) -> None:
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-became-paid-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PENDING,
+            status=PaymentOrder.Status.PENDING,
             expires_at=timezone.now() + timedelta(minutes=10),
         )
         PaymentGrantTask.objects.create(
@@ -465,24 +465,24 @@ class AlipayPaymentApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["already_paid"])
-        self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
+        self.assertEqual(PaymentOrder.objects.count(), 1)
         payment.refresh_from_db()
-        self.assertEqual(payment.status, AlipayWebsitePayment.Status.PAID)
+        self.assertEqual(payment.status, PaymentOrder.Status.PAID)
         self.assertTrue(
             Entitlement.objects.filter(
-                external_ref=f"alipay_payment:{payment.merchant_order_no}"
+                external_ref=payment.entitlement_external_ref
             ).exists()
         )
         service.close_trade.assert_not_called()
 
     def test_paid_payment_status_is_not_downgraded_by_late_notify(self) -> None:
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-locked-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PAID,
+            status=PaymentOrder.Status.PAID,
             paid_at=timezone.now(),
-            alipay_trade_no="202605120001",
+            provider_trade_no="202605120001",
         )
 
         _apply_payment_status(
@@ -492,7 +492,7 @@ class AlipayPaymentApiTests(APITestCase):
             raw_payload={"trade_status": "TRADE_CLOSED"},
         )
 
-        self.assertEqual(payment.status, AlipayWebsitePayment.Status.PAID)
+        self.assertEqual(payment.status, PaymentOrder.Status.PAID)
         self.assertIsNotNone(payment.paid_at)
 
     @patch("apps.accounts.views.payment.get_alipay_service")
@@ -500,17 +500,17 @@ class AlipayPaymentApiTests(APITestCase):
         self,
         mock_get_alipay_service: Mock,
     ) -> None:
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-concurrency-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PENDING,
+            status=PaymentOrder.Status.PENDING,
         )
-        stale_payment = AlipayWebsitePayment.objects.get(pk=payment.pk)
-        AlipayWebsitePayment.objects.filter(pk=payment.pk).update(
-            status=AlipayWebsitePayment.Status.PAID,
+        stale_payment = PaymentOrder.objects.get(pk=payment.pk)
+        PaymentOrder.objects.filter(pk=payment.pk).update(
+            status=PaymentOrder.Status.PAID,
             paid_at=timezone.now(),
-            alipay_trade_no="202605120099",
+            provider_trade_no="202605120099",
         )
         service = Mock()
         service.config.seller_id = "2088000000000000"
@@ -526,7 +526,7 @@ class AlipayPaymentApiTests(APITestCase):
         _query_and_sync_payment_status(payment=stale_payment)
 
         payment.refresh_from_db()
-        self.assertEqual(payment.status, AlipayWebsitePayment.Status.PAID)
+        self.assertEqual(payment.status, PaymentOrder.Status.PAID)
 
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_notify_processes_entitlement_without_async_worker(self, mock_get_alipay_service: Mock) -> None:
@@ -536,11 +536,11 @@ class AlipayPaymentApiTests(APITestCase):
         service.config.seller_id = "2088000000000000"
         mock_get_alipay_service.return_value = service
 
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-notify-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PENDING,
+            status=PaymentOrder.Status.PENDING,
         )
         grant_task = PaymentGrantTask.objects.create(
             payment=payment,
@@ -570,7 +570,7 @@ class AlipayPaymentApiTests(APITestCase):
         payment.refresh_from_db()
         grant_task.refresh_from_db()
 
-        self.assertEqual(payment.status, AlipayWebsitePayment.Status.PAID)
+        self.assertEqual(payment.status, PaymentOrder.Status.PAID)
         self.assertEqual(grant_task.status, PaymentGrantTask.Status.SUCCEEDED)
         self.assertTrue(
             Entitlement.objects.filter(
@@ -578,7 +578,7 @@ class AlipayPaymentApiTests(APITestCase):
                 module=self.module,
                 season=self.season,
                 plan=Entitlement.Plan.MONTH_1,
-                external_ref=f"alipay_payment:{payment.merchant_order_no}",
+                external_ref=payment.entitlement_external_ref,
             ).exists()
         )
 
@@ -593,11 +593,11 @@ class AlipayPaymentApiTests(APITestCase):
         service.config.seller_id = ""
         mock_get_alipay_service.return_value = service
 
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-notify-optional-seller-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PENDING,
+            status=PaymentOrder.Status.PENDING,
         )
         PaymentGrantTask.objects.create(
             payment=payment,
@@ -625,7 +625,7 @@ class AlipayPaymentApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         payment.refresh_from_db()
-        self.assertEqual(payment.status, AlipayWebsitePayment.Status.PAID)
+        self.assertEqual(payment.status, PaymentOrder.Status.PAID)
         self.assertNotIn("sign", payment.raw_notify_payload)
 
     def test_paid_purchase_extends_existing_access_once(self) -> None:
@@ -638,13 +638,13 @@ class AlipayPaymentApiTests(APITestCase):
             status=Entitlement.Status.ACTIVE,
             expires_at=current_expiry,
         )
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-extension-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PAID,
+            status=PaymentOrder.Status.PAID,
             paid_at=timezone.now(),
-            alipay_trade_no="202605120003",
+            provider_trade_no="202605120003",
         )
         grant_task = PaymentGrantTask.objects.create(
             payment=payment,
@@ -659,13 +659,13 @@ class AlipayPaymentApiTests(APITestCase):
         process_payment_grant_task_by_id(payment_grant_task_id=grant_task.id)
 
         extension = Entitlement.objects.get(
-            external_ref="alipay_payment:pay-extension-001"
+            external_ref="payment:alipay:pay-extension-001"
         )
         self.assertEqual(extension.starts_at, current_expiry)
         self.assertEqual(extension.expires_at, current_expiry + timedelta(days=30))
         self.assertEqual(
             Entitlement.objects.filter(
-                external_ref="alipay_payment:pay-extension-001"
+                external_ref="payment:alipay:pay-extension-001"
             ).count(),
             1,
         )
@@ -711,11 +711,11 @@ class AlipayPaymentApiTests(APITestCase):
         service.config.seller_id = "2088000000000000"
         mock_get_alipay_service.return_value = service
         mock_process_grants.side_effect = ValueError("grant failed")
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-notify-failure-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PENDING,
+            status=PaymentOrder.Status.PENDING,
         )
         PaymentGrantTask.objects.create(
             payment=payment,
@@ -904,7 +904,7 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(response.data["offer_code"], self.vlog_offer.code)
         self.assertEqual(response.data["amount"], "94.00")
 
-        payment = AlipayWebsitePayment.objects.get(id=response.data["payment_id"])
+        payment = PaymentOrder.objects.get(id=response.data["payment_id"])
         self.assertEqual(payment.total_amount, Decimal("94.00"))
 
     @patch("apps.accounts.views.payment.get_alipay_service")
@@ -928,17 +928,17 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(response.data["offer_code"], self.vlog_offer.code)
         self.assertEqual(response.data["amount"], "94.00")
 
-        payment = AlipayWebsitePayment.objects.get(id=response.data["payment_id"])
+        payment = PaymentOrder.objects.get(id=response.data["payment_id"])
         self.assertEqual(payment.total_amount, Decimal("94.00"))
 
     def test_paid_grant_failure_is_reported_as_attention_not_payment_failure(self) -> None:
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-attention-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PAID,
+            status=PaymentOrder.Status.PAID,
             paid_at=timezone.now(),
-            alipay_trade_no="202605120200",
+            provider_trade_no="202605120200",
         )
         PaymentGrantTask.objects.create(
             payment=payment,
@@ -975,13 +975,13 @@ class AlipayPaymentApiTests(APITestCase):
             plan=Entitlement.Plan.LIFETIME,
             status=Entitlement.Status.ACTIVE,
         )
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-lifetime-race-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PAID,
+            status=PaymentOrder.Status.PAID,
             paid_at=timezone.now(),
-            alipay_trade_no="202605120201",
+            provider_trade_no="202605120201",
         )
         grant_task = PaymentGrantTask.objects.create(
             payment=payment,
@@ -999,7 +999,7 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(grant_task.status, PaymentGrantTask.Status.FAILED)
         self.assertFalse(
             Entitlement.objects.filter(
-                external_ref=f"alipay_payment:{payment.merchant_order_no}"
+                external_ref=payment.entitlement_external_ref
             ).exists()
         )
 
@@ -1009,13 +1009,13 @@ class AlipayPaymentApiTests(APITestCase):
         mock_get_alipay_service: Mock,
     ) -> None:
         now = timezone.now()
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="pay-refund-001",
             subject="Science Season 1 Monthly",
             total_amount=Decimal("29.90"),
-            status=AlipayWebsitePayment.Status.PAID,
+            status=PaymentOrder.Status.PAID,
             paid_at=now,
-            alipay_trade_no="202605120202",
+            provider_trade_no="202605120202",
         )
         PaymentGrantTask.objects.create(
             payment=payment,
@@ -1033,7 +1033,7 @@ class AlipayPaymentApiTests(APITestCase):
             plan=Entitlement.Plan.MONTH_1,
             starts_at=now,
             expires_at=now + timedelta(days=30),
-            external_ref=f"alipay_payment:{payment.merchant_order_no}",
+            external_ref=payment.entitlement_external_ref,
         )
         later = Entitlement.objects.create(
             user=self.user,
@@ -1042,7 +1042,7 @@ class AlipayPaymentApiTests(APITestCase):
             plan=Entitlement.Plan.MONTH_2,
             starts_at=now + timedelta(days=30),
             expires_at=now + timedelta(days=90),
-            external_ref="alipay_payment:later-order",
+            external_ref="payment:alipay:later-order",
         )
         service = Mock()
         service.config.seller_id = "2088000000000000"
@@ -1061,7 +1061,7 @@ class AlipayPaymentApiTests(APITestCase):
         payment.refresh_from_db()
         refunded_entitlement.refresh_from_db()
         later.refresh_from_db()
-        self.assertEqual(payment.status, AlipayWebsitePayment.Status.REFUNDED)
+        self.assertEqual(payment.status, PaymentOrder.Status.REFUNDED)
         self.assertEqual(refunded_entitlement.status, Entitlement.Status.CANCELED)
         self.assertLess(later.starts_at, now + timedelta(minutes=1))
         self.assertEqual(later.expires_at - later.starts_at, timedelta(days=60))

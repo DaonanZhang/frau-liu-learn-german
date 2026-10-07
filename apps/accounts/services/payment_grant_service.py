@@ -101,7 +101,7 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
                 module=payment_grant_task.module,
                 season=payment_grant_task.season,
                 plan=payment_grant_task.plan,
-                external_ref=f"alipay_payment:{payment_grant_task.payment.merchant_order_no}",
+                external_ref=payment_grant_task.payment.entitlement_external_ref,
                 reject_if_lifetime=True,
             )
 

@@ -13,7 +13,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import (
-    AlipayWebsitePayment,
+    PaymentOrder,
     Entitlement,
     Module,
     ModuleSeason,
@@ -549,10 +549,10 @@ class PromotionCodeTests(APITestCase):
 
         self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
         self.assertEqual(purchase.data["amount"], "29.90")
-        payment = AlipayWebsitePayment.objects.get(pk=purchase.data["payment_id"])
+        payment = PaymentOrder.objects.get(pk=purchase.data["payment_id"])
         coupon = UserCoupon.objects.get(pk=coupon_id)
         application = PaymentDiscountApplication.objects.get(payment=payment)
-        self.assertEqual(payment.status, AlipayWebsitePayment.Status.PAID)
+        self.assertEqual(payment.status, PaymentOrder.Status.PAID)
         self.assertEqual(coupon.status, UserCoupon.Status.USED)
         self.assertEqual(coupon.used_payment, payment)
         self.assertEqual(application.status, PaymentDiscountApplication.Status.APPLIED)
@@ -633,7 +633,7 @@ class PromotionCodeTests(APITestCase):
             },
             format="json",
         )
-        payment = AlipayWebsitePayment.objects.get(pk=purchase.data["payment_id"])
+        payment = PaymentOrder.objects.get(pk=purchase.data["payment_id"])
 
         response = self.client.get(
             "/api/accounts/coupons/choices/",
@@ -710,8 +710,8 @@ class PromotionCodeTests(APITestCase):
             },
             format="json",
         )
-        payment = AlipayWebsitePayment.objects.get(pk=purchase.data["payment_id"])
-        payment.status = AlipayWebsitePayment.Status.REFUNDED
+        payment = PaymentOrder.objects.get(pk=purchase.data["payment_id"])
+        payment.status = PaymentOrder.Status.REFUNDED
         payment.refunded_amount = payment.total_amount
         payment.refunded_at = timezone.now()
         payment.save(update_fields=["status", "refunded_amount", "refunded_at", "updated_at"])

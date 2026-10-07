@@ -12,7 +12,7 @@ from apps.accounts.services.activation_codes import (
 )
 from apps.accounts.models import (
     ActivationCodeRecord,
-    AlipayWebsitePayment,
+    PaymentOrder,
     Module,
     ModuleSeason,
     PaymentGrantTask,
@@ -32,8 +32,8 @@ def _close_open_payments(*, user, module, season) -> None:
         user=user,
         module=module,
         payment__status__in=[
-            AlipayWebsitePayment.Status.CREATED,
-            AlipayWebsitePayment.Status.PENDING,
+            PaymentOrder.Status.CREATED,
+            PaymentOrder.Status.PENDING,
         ],
     )
     if season is not None:

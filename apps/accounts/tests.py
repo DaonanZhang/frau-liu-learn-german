@@ -23,7 +23,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.accounts.models import (
     AccountLoginSession,
     ActivationCodeRecord,
-    AlipayWebsitePayment,
+    PaymentOrder,
     Entitlement,
     Module,
     ModuleSeason,
@@ -837,11 +837,11 @@ class ActivationCodeApiTests(APITestCase):
     @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True)
     def test_activation_code_closes_matching_unpaid_order_and_redeems(self) -> None:
         self._store_code("CLOSEPAY", season_number=1)
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
             merchant_order_no="activation-unpaid-001",
             subject="Learning by Video Season 1",
             total_amount="29.90",
-            status=AlipayWebsitePayment.Status.PENDING,
+            status=PaymentOrder.Status.PENDING,
         )
         PaymentGrantTask.objects.create(
             payment=payment,
@@ -861,7 +861,7 @@ class ActivationCodeApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["type"], "activation")
         payment.refresh_from_db()
-        self.assertEqual(payment.status, AlipayWebsitePayment.Status.CLOSED)
+        self.assertEqual(payment.status, PaymentOrder.Status.CLOSED)
         self.assertTrue(
             Entitlement.objects.filter(
                 user=self.user,

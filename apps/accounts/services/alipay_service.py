@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from django.conf import settings
 from django.utils import timezone
 
-from apps.accounts.models import AlipayWebsitePayment
+from apps.accounts.models import PaymentOrder
 
 
 class AlipayConfigurationError(ValueError):
@@ -239,7 +239,7 @@ class AlipayService:
     def build_page_pay_params(
         self,
         *,
-        payment: AlipayWebsitePayment,
+        payment: PaymentOrder,
     ) -> dict[str, str]:
         """
         Build signed query parameters for `alipay.trade.page.pay`.
@@ -247,6 +247,9 @@ class AlipayService:
         Args:
             payment: Local payment record used to build the Alipay request.
         """
+
+        if payment.provider != PaymentOrder.Provider.ALIPAY:
+            raise AlipayGatewayError("Alipay cannot process an order owned by another provider.")
 
         biz_content = {
             "out_trade_no": payment.merchant_order_no,
@@ -413,7 +416,7 @@ class AlipayService:
     def build_page_pay_url(
         self,
         *,
-        payment: AlipayWebsitePayment,
+        payment: PaymentOrder,
     ) -> str:
         """
         Build the full Alipay redirect URL for a website payment.

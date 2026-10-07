@@ -23,7 +23,12 @@ from apps.accounts.models import (
 )
 from apps.accounts.views.payment import _apply_payment_status, _query_and_sync_payment_status
 from apps.accounts.services.payment_grant_service import process_payment_grant_task_by_id
-from apps.accounts.services.alipay_service import AlipayClientConfig, AlipayService
+from apps.accounts.services.alipay_service import (
+    AlipayClientConfig,
+    AlipayGatewayError,
+    AlipayService,
+)
+from apps.accounts.tasks import reconcile_alipay_payments_now
 
 
 class AlipayNotifySignatureTests(SimpleTestCase):
@@ -295,6 +300,10 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(second_response.status_code, status.HTTP_200_OK)
         self.assertEqual(PaymentOrder.objects.count(), 1)
         self.assertEqual(PaymentGrantTask.objects.count(), 1)
+        self.assertEqual(
+            PaymentOrder.objects.get().provider,
+            PaymentOrder.Provider.ALIPAY,
+        )
         self.assertEqual(
             first_response.data["merchant_order_no"],
             second_response.data["merchant_order_no"],
@@ -1065,3 +1074,131 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(refunded_entitlement.status, Entitlement.Status.CANCELED)
         self.assertLess(later.starts_at, now + timedelta(minutes=1))
         self.assertEqual(later.expires_at - later.starts_at, timedelta(days=60))
+
+    def test_alipay_service_rejects_wechat_order(self) -> None:
+        payment = PaymentOrder.objects.create(
+            merchant_order_no="wechat-not-for-alipay",
+            subject="WeChat payment",
+            total_amount=Decimal("29.90"),
+            provider=PaymentOrder.Provider.WECHAT_PAY,
+        )
+        service, _ = AlipayNotifySignatureTests._build_signed_notify()
+
+        with self.assertRaises(AlipayGatewayError):
+            service.build_page_pay_params(payment=payment)
+
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_alipay_notify_does_not_match_wechat_order(
+        self,
+        mock_get_alipay_service: Mock,
+    ) -> None:
+        payment = PaymentOrder.objects.create(
+            merchant_order_no="wechat-notify-isolated",
+            subject="WeChat payment",
+            total_amount=Decimal("29.90"),
+            provider=PaymentOrder.Provider.WECHAT_PAY,
+            status=PaymentOrder.Status.PENDING,
+        )
+        service = Mock()
+        service.verify_notify_signature.return_value = True
+        service.config.app_id = "test-app-id"
+        service.config.seller_id = "seller-id"
+        mock_get_alipay_service.return_value = service
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/notify/",
+            {
+                "out_trade_no": payment.merchant_order_no,
+                "trade_no": "alipay-trade-must-not-bind",
+                "trade_status": "TRADE_SUCCESS",
+                "total_amount": "29.90",
+                "app_id": "test-app-id",
+                "seller_id": "seller-id",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, PaymentOrder.Status.PENDING)
+        self.assertEqual(payment.provider_trade_no, "")
+
+    def test_alipay_status_does_not_expose_wechat_order(self) -> None:
+        payment = PaymentOrder.objects.create(
+            merchant_order_no="wechat-status-isolated",
+            subject="WeChat payment",
+            total_amount=Decimal("29.90"),
+            provider=PaymentOrder.Provider.WECHAT_PAY,
+            status=PaymentOrder.Status.PENDING,
+        )
+        PaymentGrantTask.objects.create(
+            payment=payment,
+            offer=self.offer,
+            user=self.user,
+            module=self.module,
+            season=self.season,
+            plan=Entitlement.Plan.MONTH_1,
+        )
+
+        response = self.client.get(
+            "/api/accounts/payments/alipay/status/",
+            {"merchant_order_no": payment.merchant_order_no},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("apps.accounts.services.revoke_and_compact_payment_entitlement")
+    @patch("apps.accounts.tasks.process_payment_grant_task_by_id")
+    @patch("apps.accounts.views.payment._query_and_sync_payment_status")
+    def test_alipay_reconciliation_ignores_wechat_orders(
+        self,
+        mock_query: Mock,
+        mock_process_grant: Mock,
+        mock_revoke: Mock,
+    ) -> None:
+        pending = PaymentOrder.objects.create(
+            merchant_order_no="wechat-reconcile-pending",
+            subject="WeChat payment",
+            total_amount=Decimal("29.90"),
+            provider=PaymentOrder.Provider.WECHAT_PAY,
+            status=PaymentOrder.Status.PENDING,
+        )
+        paid = PaymentOrder.objects.create(
+            merchant_order_no="wechat-reconcile-paid",
+            subject="WeChat payment",
+            total_amount=Decimal("29.90"),
+            provider=PaymentOrder.Provider.WECHAT_PAY,
+            status=PaymentOrder.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        PaymentGrantTask.objects.create(
+            payment=paid,
+            offer=self.offer,
+            user=self.user,
+            module=self.module,
+            season=self.season,
+            plan=Entitlement.Plan.MONTH_1,
+            status=PaymentGrantTask.Status.FAILED,
+        )
+        refunded = PaymentOrder.objects.create(
+            merchant_order_no="wechat-reconcile-refunded",
+            subject="WeChat payment",
+            total_amount=Decimal("29.90"),
+            provider=PaymentOrder.Provider.WECHAT_PAY,
+            status=PaymentOrder.Status.REFUNDED,
+            refunded_amount=Decimal("29.90"),
+            refunded_at=timezone.now(),
+            raw_notify_payload={"private": "wechat"},
+        )
+        PaymentOrder.objects.filter(pk=refunded.pk).update(
+            updated_at=timezone.now() - timedelta(days=100)
+        )
+
+        stats = reconcile_alipay_payments_now()
+
+        mock_query.assert_not_called()
+        mock_process_grant.assert_not_called()
+        mock_revoke.assert_not_called()
+        refunded.refresh_from_db()
+        self.assertEqual(refunded.raw_notify_payload, {"private": "wechat"})
+        self.assertEqual(stats["queried"], 0)
+        self.assertEqual(stats["grant_retried"], 0)

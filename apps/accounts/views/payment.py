@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from urllib.parse import urlencode
 
 from apps.accounts.models import (
-    AlipayWebsitePayment,
+    PaymentOrder,
     PaymentDiscountApplication,
     PaymentGrantTask,
     UserCoupon,
@@ -49,9 +49,9 @@ REMOTE_PAYMENT_QUERY_COOLDOWN_SECONDS = 5
 logger = logging.getLogger(__name__)
 
 PAID_PAYMENT_STATUSES = {
-    AlipayWebsitePayment.Status.PAID,
-    AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
-    AlipayWebsitePayment.Status.REFUNDED,
+    PaymentOrder.Status.PAID,
+    PaymentOrder.Status.PARTIALLY_REFUNDED,
+    PaymentOrder.Status.REFUNDED,
 }
 STORED_NOTIFY_FIELDS = {
     "notify_time",
@@ -98,7 +98,7 @@ def _build_payment_subject(
 
 def _build_purchase_response_data(
     *,
-    payment: AlipayWebsitePayment,
+    payment: PaymentOrder,
     grant_task: PaymentGrantTask,
     offer,
     module,
@@ -143,7 +143,7 @@ def _resolve_frontend_return_url(request: Request) -> str:
 
 def _apply_payment_status(
     *,
-    payment: AlipayWebsitePayment,
+    payment: PaymentOrder,
     trade_status: str,
     alipay_trade_no: str = "",
     raw_payload: dict[str, str] | None = None,
@@ -154,44 +154,44 @@ def _apply_payment_status(
         }
 
     if alipay_trade_no:
-        if payment.alipay_trade_no and payment.alipay_trade_no != alipay_trade_no:
+        if payment.provider_trade_no and payment.provider_trade_no != alipay_trade_no:
             raise AlipayGatewayError("Alipay trade number conflicts with the confirmed local trade.")
-        payment.alipay_trade_no = alipay_trade_no
+        payment.provider_trade_no = alipay_trade_no
 
     normalized_trade_status = str(trade_status or "").strip()
     if normalized_trade_status in {"TRADE_SUCCESS", "TRADE_FINISHED"}:
         if payment.status not in {
-            AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
-            AlipayWebsitePayment.Status.REFUNDED,
+            PaymentOrder.Status.PARTIALLY_REFUNDED,
+            PaymentOrder.Status.REFUNDED,
         }:
-            payment.status = AlipayWebsitePayment.Status.PAID
+            payment.status = PaymentOrder.Status.PAID
         if payment.paid_at is None:
             payment.paid_at = timezone.now()
     elif normalized_trade_status == "TRADE_CLOSED":
         if payment.status in {
-            AlipayWebsitePayment.Status.CREATED,
-            AlipayWebsitePayment.Status.PENDING,
-            AlipayWebsitePayment.Status.FAILED,
+            PaymentOrder.Status.CREATED,
+            PaymentOrder.Status.PENDING,
+            PaymentOrder.Status.FAILED,
         }:
-            payment.status = AlipayWebsitePayment.Status.CLOSED
+            payment.status = PaymentOrder.Status.CLOSED
     elif normalized_trade_status == "WAIT_BUYER_PAY" and payment.status in {
-        AlipayWebsitePayment.Status.CREATED,
-        AlipayWebsitePayment.Status.PENDING,
+        PaymentOrder.Status.CREATED,
+        PaymentOrder.Status.PENDING,
     }:
-        payment.status = AlipayWebsitePayment.Status.PENDING
+        payment.status = PaymentOrder.Status.PENDING
 
 
-def _apply_refund_amount(*, payment: AlipayWebsitePayment, refund_amount: Decimal) -> None:
+def _apply_refund_amount(*, payment: PaymentOrder, refund_amount: Decimal) -> None:
     if refund_amount < 0 or refund_amount > payment.total_amount:
         raise AlipayGatewayError("Refund amount is outside the valid payment range.")
     if refund_amount <= payment.refunded_amount:
         return
     payment.refunded_amount = refund_amount
     if refund_amount == payment.total_amount:
-        payment.status = AlipayWebsitePayment.Status.REFUNDED
+        payment.status = PaymentOrder.Status.REFUNDED
         payment.refunded_at = payment.refunded_at or timezone.now()
     elif refund_amount > 0:
-        payment.status = AlipayWebsitePayment.Status.PARTIALLY_REFUNDED
+        payment.status = PaymentOrder.Status.PARTIALLY_REFUNDED
 
 
 def _parse_refund_amount(payload: dict[str, object]) -> Decimal:
@@ -204,13 +204,16 @@ def _parse_refund_amount(payload: dict[str, object]) -> Decimal:
 
 def _query_and_sync_payment_status(
     *,
-    payment: AlipayWebsitePayment,
+    payment: PaymentOrder,
 ) -> str:
     """
     Query Alipay directly for the latest trade state and update the local payment record.
 
     Returns synced, not_found, or unavailable.
     """
+
+    if payment.provider != PaymentOrder.Provider.ALIPAY:
+        raise AlipayGatewayError("Alipay cannot reconcile an order owned by another provider.")
 
     alipay_service = get_alipay_service()
     query_response = alipay_service.query_trade(
@@ -244,7 +247,10 @@ def _query_and_sync_payment_status(
         raise AlipayGatewayError("Queried total_amount is invalid.") from exc
     refund_amount = _parse_refund_amount(query_response)
     with transaction.atomic():
-        locked_payment = AlipayWebsitePayment.objects.select_for_update().get(pk=payment.pk)
+        locked_payment = PaymentOrder.objects.select_for_update().get(
+            pk=payment.pk,
+            provider=PaymentOrder.Provider.ALIPAY,
+        )
         if queried_total_amount != locked_payment.total_amount:
             raise AlipayGatewayError("Queried total_amount does not match local payment.")
         previous_status = locked_payment.status
@@ -257,7 +263,7 @@ def _query_and_sync_payment_status(
         locked_payment.last_reconciled_at = timezone.now()
         locked_payment.save(
             update_fields=[
-                "alipay_trade_no",
+                "provider_trade_no",
                 "status",
                 "paid_at",
                 "refunded_amount",
@@ -270,11 +276,11 @@ def _query_and_sync_payment_status(
         current_status = locked_payment.status
 
     if (
-        current_status == AlipayWebsitePayment.Status.PAID
+        current_status == PaymentOrder.Status.PAID
         and previous_status not in PAID_PAYMENT_STATUSES
     ):
         _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
-    if current_status == AlipayWebsitePayment.Status.REFUNDED:
+    if current_status == PaymentOrder.Status.REFUNDED:
         revoke_and_compact_payment_entitlement(payment=locked_payment)
 
     return "synced"
@@ -282,20 +288,20 @@ def _query_and_sync_payment_status(
 
 def _mark_open_payment_closed(*, payment_id: int) -> None:
     with transaction.atomic():
-        payment = AlipayWebsitePayment.objects.select_for_update().get(pk=payment_id)
+        payment = PaymentOrder.objects.select_for_update().get(pk=payment_id)
         if payment.status in {
-            AlipayWebsitePayment.Status.CREATED,
-            AlipayWebsitePayment.Status.PENDING,
+            PaymentOrder.Status.CREATED,
+            PaymentOrder.Status.PENDING,
         }:
-            payment.status = AlipayWebsitePayment.Status.CLOSED
+            payment.status = PaymentOrder.Status.CLOSED
             payment.save(update_fields=["status", "updated_at"])
             sync_payment_discount_status(payment_id=payment.id)
 
 
-def _should_query_remote_payment_status(*, payment: AlipayWebsitePayment) -> bool:
+def _should_query_remote_payment_status(*, payment: PaymentOrder) -> bool:
     if payment.status not in {
-        AlipayWebsitePayment.Status.CREATED,
-        AlipayWebsitePayment.Status.PENDING,
+        PaymentOrder.Status.CREATED,
+        PaymentOrder.Status.PENDING,
     }:
         return False
 
@@ -332,7 +338,8 @@ def _find_incomplete_paid_purchase(
             module_id=module_id,
             season_id=season_id,
             plan=plan,
-            payment__status=AlipayWebsitePayment.Status.PAID,
+            payment__provider=PaymentOrder.Provider.ALIPAY,
+            payment__status=PaymentOrder.Status.PAID,
         )
         .exclude(status=PaymentGrantTask.Status.SUCCEEDED)
         .order_by("-id")
@@ -352,9 +359,10 @@ def _find_open_purchase_for_scope(
             user_id=user_id,
             module_id=module_id,
             season_id=season_id,
+            payment__provider=PaymentOrder.Provider.ALIPAY,
             payment__status__in=[
-                AlipayWebsitePayment.Status.CREATED,
-                AlipayWebsitePayment.Status.PENDING,
+                PaymentOrder.Status.CREATED,
+                PaymentOrder.Status.PENDING,
             ],
         )
         .order_by("-id")
@@ -362,7 +370,7 @@ def _find_open_purchase_for_scope(
     )
 
 
-def _close_unpaid_payment(*, payment: AlipayWebsitePayment, alipay_service) -> str:
+def _close_unpaid_payment(*, payment: PaymentOrder, alipay_service) -> str:
     """Close an earlier unpaid order before a new purchase intent is created."""
 
     if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
@@ -371,12 +379,12 @@ def _close_unpaid_payment(*, payment: AlipayWebsitePayment, alipay_service) -> s
 
     outcome = _query_and_sync_payment_status(payment=payment)
     payment.refresh_from_db()
-    if payment.status == AlipayWebsitePayment.Status.PAID:
+    if payment.status == PaymentOrder.Status.PAID:
         _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
         return "paid"
     if payment.status not in {
-        AlipayWebsitePayment.Status.CREATED,
-        AlipayWebsitePayment.Status.PENDING,
+        PaymentOrder.Status.CREATED,
+        PaymentOrder.Status.PENDING,
     }:
         return "closed"
     if outcome == "not_found":
@@ -395,7 +403,7 @@ def _close_unpaid_payment(*, payment: AlipayWebsitePayment, alipay_service) -> s
     # The buyer may have completed payment between the status query and close call.
     _query_and_sync_payment_status(payment=payment)
     payment.refresh_from_db()
-    if payment.status == AlipayWebsitePayment.Status.PAID:
+    if payment.status == PaymentOrder.Status.PAID:
         _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
         return "paid"
     raise AlipayGatewayError("The previous Alipay order could not be closed safely.")
@@ -404,7 +412,7 @@ def _close_unpaid_payment(*, payment: AlipayWebsitePayment, alipay_service) -> s
 def _simulate_local_paid_purchase(
     *,
     request: Request,
-    payment: AlipayWebsitePayment,
+    payment: PaymentOrder,
     payment_grant_task: PaymentGrantTask,
 ) -> str:
     simulated_trade_no = _build_simulated_alipay_trade_no(payment_id=payment.id)
@@ -425,7 +433,7 @@ def _simulate_local_paid_purchase(
     payment.save(
         update_fields=[
             "raw_notify_payload",
-            "alipay_trade_no",
+            "provider_trade_no",
             "status",
             "paid_at",
             "updated_at",
@@ -469,11 +477,12 @@ class CreateAlipayDebugPaymentAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        payment = AlipayWebsitePayment.objects.create(
+        payment = PaymentOrder.objects.create(
+            provider=PaymentOrder.Provider.ALIPAY,
             merchant_order_no=_build_debug_merchant_order_no(user_id=request.user.id),
             subject=subject,
             total_amount=amount,
-            status=AlipayWebsitePayment.Status.PENDING,
+            status=PaymentOrder.Status.PENDING,
         )
 
         pay_url = alipay_service.build_page_pay_url(payment=payment)
@@ -546,7 +555,10 @@ class CreateAlipayPurchaseAPIView(APIView):
 
         existing_intent = (
             PaymentGrantTask.objects.select_related("payment", "offer")
-            .filter(idempotency_key=idempotency_key)
+            .filter(
+                idempotency_key=idempotency_key,
+                payment__provider=PaymentOrder.Provider.ALIPAY,
+            )
             .first()
         )
         if existing_intent is not None:
@@ -556,7 +568,7 @@ class CreateAlipayPurchaseAPIView(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
             existing_payment = existing_intent.payment
-            if existing_payment.status == AlipayWebsitePayment.Status.PAID:
+            if existing_payment.status == PaymentOrder.Status.PAID:
                 _process_pending_payment_grant_tasks_safely(payment_id=existing_payment.id)
                 existing_intent.refresh_from_db()
                 return_url = alipay_service.config.return_url if alipay_service else _resolve_frontend_return_url(request)
@@ -576,8 +588,8 @@ class CreateAlipayPurchaseAPIView(APIView):
                     status=status.HTTP_200_OK,
                 )
             if existing_payment.status in {
-                AlipayWebsitePayment.Status.CREATED,
-                AlipayWebsitePayment.Status.PENDING,
+                PaymentOrder.Status.CREATED,
+                PaymentOrder.Status.PENDING,
             }:
                 if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
                     return Response(
@@ -585,8 +597,8 @@ class CreateAlipayPurchaseAPIView(APIView):
                         status=status.HTTP_409_CONFLICT,
                     )
                 pay_url = alipay_service.build_page_pay_url(payment=existing_payment)
-                if existing_payment.status == AlipayWebsitePayment.Status.CREATED:
-                    existing_payment.status = AlipayWebsitePayment.Status.PENDING
+                if existing_payment.status == PaymentOrder.Status.CREATED:
+                    existing_payment.status = PaymentOrder.Status.PENDING
                     existing_payment.save(update_fields=["status", "updated_at"])
                 return Response(
                     _build_purchase_response_data(
@@ -716,7 +728,10 @@ class CreateAlipayPurchaseAPIView(APIView):
             get_user_model().objects.select_for_update().only("id").get(pk=request.user.pk)
             raced_intent = (
                 PaymentGrantTask.objects.select_related("payment", "offer")
-                .filter(idempotency_key=idempotency_key)
+                .filter(
+                    idempotency_key=idempotency_key,
+                    payment__provider=PaymentOrder.Provider.ALIPAY,
+                )
                 .first()
             )
             if raced_intent is not None:
@@ -735,8 +750,8 @@ class CreateAlipayPurchaseAPIView(APIView):
                         status=status.HTTP_409_CONFLICT,
                     )
                 pay_url = alipay_service.build_page_pay_url(payment=raced_payment)
-                if raced_payment.status == AlipayWebsitePayment.Status.CREATED:
-                    raced_payment.status = AlipayWebsitePayment.Status.PENDING
+                if raced_payment.status == PaymentOrder.Status.CREATED:
+                    raced_payment.status = PaymentOrder.Status.PENDING
                     raced_payment.save(update_fields=["status", "updated_at"])
                 return Response(
                     _build_purchase_response_data(
@@ -756,9 +771,10 @@ class CreateAlipayPurchaseAPIView(APIView):
                 user=request.user,
                 module=module,
                 season=season,
+                payment__provider=PaymentOrder.Provider.ALIPAY,
                 payment__status__in=[
-                    AlipayWebsitePayment.Status.CREATED,
-                    AlipayWebsitePayment.Status.PENDING,
+                    PaymentOrder.Status.CREATED,
+                    PaymentOrder.Status.PENDING,
                 ],
                 payment__expires_at__gt=timezone.now(),
             ).exists()
@@ -814,11 +830,12 @@ class CreateAlipayPurchaseAPIView(APIView):
                     status=status.HTTP_409_CONFLICT,
                 )
             total_amount = pricing.final_amount
-            payment = AlipayWebsitePayment.objects.create(
+            payment = PaymentOrder.objects.create(
+                provider=PaymentOrder.Provider.ALIPAY,
                 merchant_order_no=_build_merchant_order_no(user_id=request.user.id),
                 subject=payment_subject,
                 total_amount=total_amount,
-                status=AlipayWebsitePayment.Status.CREATED,
+                status=PaymentOrder.Status.CREATED,
                 expires_at=timezone.now() + timedelta(seconds=timeout_seconds),
             )
             payment_grant_task = PaymentGrantTask.objects.create(
@@ -866,7 +883,7 @@ class CreateAlipayPurchaseAPIView(APIView):
                     payment_grant_task=payment_grant_task,
                 )
             except (DatabaseError, ValueError) as exc:
-                payment.status = AlipayWebsitePayment.Status.FAILED
+                payment.status = PaymentOrder.Status.FAILED
                 payment.save(update_fields=["status", "updated_at"])
                 payment_grant_task.status = PaymentGrantTask.Status.FAILED
                 payment_grant_task.last_error = str(exc)
@@ -878,7 +895,7 @@ class CreateAlipayPurchaseAPIView(APIView):
                 )
         else:
             pay_url = alipay_service.build_page_pay_url(payment=payment)
-            payment.status = AlipayWebsitePayment.Status.PENDING
+            payment.status = PaymentOrder.Status.PENDING
             payment.save(update_fields=["status", "updated_at"])
 
         return Response(
@@ -935,8 +952,11 @@ class AlipayNotifyAPIView(APIView):
 
         with transaction.atomic():
             payment = (
-                AlipayWebsitePayment.objects.select_for_update()
-                .filter(merchant_order_no=merchant_order_no)
+                PaymentOrder.objects.select_for_update()
+                .filter(
+                    merchant_order_no=merchant_order_no,
+                    provider=PaymentOrder.Provider.ALIPAY,
+                )
                 .first()
             )
             if payment is None:
@@ -977,7 +997,7 @@ class AlipayNotifyAPIView(APIView):
             payment.save(
                 update_fields=[
                     "raw_notify_payload",
-                    "alipay_trade_no",
+                    "provider_trade_no",
                     "status",
                     "paid_at",
                     "refunded_amount",
@@ -988,13 +1008,13 @@ class AlipayNotifyAPIView(APIView):
             )
             sync_payment_discount_status(payment_id=payment.id)
 
-        if payment.status == AlipayWebsitePayment.Status.PAID:
+        if payment.status == PaymentOrder.Status.PAID:
             try:
                 process_pending_payment_grant_tasks_for_payment(payment_id=payment.id)
             except (DatabaseError, ValueError):
                 logger.exception("Alipay notify confirmed payment but entitlement grant failed")
                 return HttpResponse("failure", status=500, content_type="text/plain")
-        elif payment.status == AlipayWebsitePayment.Status.REFUNDED:
+        elif payment.status == PaymentOrder.Status.REFUNDED:
             revoke_and_compact_payment_entitlement(payment=payment)
 
         return HttpResponse("success", content_type="text/plain")
@@ -1017,7 +1037,10 @@ class AlipayPaymentStatusAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        payment = AlipayWebsitePayment.objects.filter(merchant_order_no=merchant_order_no).first()
+        payment = PaymentOrder.objects.filter(
+            merchant_order_no=merchant_order_no,
+            provider=PaymentOrder.Provider.ALIPAY,
+        ).first()
         if payment is None:
             return Response(
                 {"detail": "Payment not found."},
@@ -1038,8 +1061,8 @@ class AlipayPaymentStatusAPIView(APIView):
             )
 
         if payment.status in {
-            AlipayWebsitePayment.Status.CREATED,
-            AlipayWebsitePayment.Status.PENDING,
+            PaymentOrder.Status.CREATED,
+            PaymentOrder.Status.PENDING,
         }:
             if _should_query_remote_payment_status(payment=payment):
                 try:
@@ -1052,7 +1075,7 @@ class AlipayPaymentStatusAPIView(APIView):
             payment.refresh_from_db()
 
         if (
-            payment.status == AlipayWebsitePayment.Status.PAID
+            payment.status == PaymentOrder.Status.PAID
             and grant_task.status != PaymentGrantTask.Status.SUCCEEDED
         ):
             try:
@@ -1068,16 +1091,16 @@ class AlipayPaymentStatusAPIView(APIView):
         payment_status = payment.status
         grant_status = grant_task.status
         is_paid = payment_status in PAID_PAYMENT_STATUSES
-        is_refunded = payment_status == AlipayWebsitePayment.Status.REFUNDED
-        is_partially_refunded = payment_status == AlipayWebsitePayment.Status.PARTIALLY_REFUNDED
+        is_refunded = payment_status == PaymentOrder.Status.REFUNDED
+        is_partially_refunded = payment_status == PaymentOrder.Status.PARTIALLY_REFUNDED
         is_granted = grant_status == PaymentGrantTask.Status.SUCCEEDED and not is_refunded
         is_pending_grant = is_paid and not is_granted and grant_status in {
             PaymentGrantTask.Status.PENDING,
             PaymentGrantTask.Status.PROCESSING,
         }
         is_failed = payment_status in {
-            AlipayWebsitePayment.Status.FAILED,
-            AlipayWebsitePayment.Status.CLOSED,
+            PaymentOrder.Status.FAILED,
+            PaymentOrder.Status.CLOSED,
         }
         needs_attention = (
             is_paid and grant_status == PaymentGrantTask.Status.FAILED

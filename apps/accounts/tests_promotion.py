@@ -154,6 +154,10 @@ class PromotionCodeTests(APITestCase):
 
         self.assertEqual(first.status_code, status.HTTP_200_OK)
         self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            first.data["coupon"]["display_name"],
+            "昆仑字幕组专属优惠券",
+        )
         reusable_record.refresh_from_db()
         self.assertEqual(reusable_record.status, PromotionCodeRecord.Status.ACTIVE)
         self.assertIsNone(reusable_record.consumed_by_user)
@@ -617,6 +621,10 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(
             selected["coupon"]["stacking_policy"],
             PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND,
+        )
+        self.assertEqual(
+            selected["coupon"]["display_name"],
+            "昆仑字幕组专属优惠券",
         )
         self.assertEqual(selected["pricing"]["automatic_discount_amount"], "0.00")
         self.assertEqual(

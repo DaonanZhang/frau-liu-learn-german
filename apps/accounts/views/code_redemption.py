@@ -45,6 +45,7 @@ class RedeemCodeAPIView(APIView):
                     "type": "promotion",
                     "coupon": {
                         "id": coupon.id,
+                        "display_name": coupon.display_name,
                         "discount_amount": f"{coupon.discount_amount:.2f}",
                         "minimum_order_amount": f"{coupon.minimum_order_amount:.2f}",
                         "expires_at": coupon.expires_at.isoformat() if coupon.expires_at else None,

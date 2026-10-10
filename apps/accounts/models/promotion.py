@@ -176,6 +176,17 @@ class UserCoupon(models.Model):
     def __str__(self) -> str:
         return f"UserCoupon<user={self.user_id} promotion_code={self.promotion_code_id} status={self.status}>"
 
+    @property
+    def display_name(self) -> str:
+        if (
+            self.promotion_code.stacking_policy
+            == PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND
+        ):
+            return "昆仑字幕组专属优惠券"
+        if self.minimum_order_amount > 0:
+            return "满减优惠券"
+        return "无门槛优惠券"
+
 
 class PaymentDiscountApplication(models.Model):
     class Status(models.TextChoices):

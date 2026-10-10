@@ -145,7 +145,7 @@ export default function CheckoutCouponSelector({
 
             <div className="module-checkout-page__couponChoices">
               {hasBrandFriendCoupon ? (
-                <div className="module-checkout-page__couponChoice module-checkout-page__couponChoice--brandFriend is-selected">
+                <div className={`module-checkout-page__couponChoice module-checkout-page__couponChoice--brandFriend${selectedReplacesBrandFriend ? "" : " is-selected"}`}>
                   <span className="module-checkout-page__couponChoiceValue">
                     <strong><small>¥</small>{formatAmount(brandFriendCouponDiscount)}</strong>
                     <small>无门槛</small>
@@ -155,7 +155,9 @@ export default function CheckoutCouponSelector({
                     <small>长期有效 · 每笔订单自动使用</small>
                     <em>{hasExclusiveChoice ? "部分优惠券不可叠加" : "可与其他优惠券叠加"}</em>
                   </span>
-                  <span className="module-checkout-page__couponRadio" aria-hidden="true">✓</span>
+                  <span className="module-checkout-page__couponRadio" aria-hidden="true">
+                    {selectedReplacesBrandFriend ? "" : "✓"}
+                  </span>
                 </div>
               ) : null}
 
@@ -175,7 +177,7 @@ export default function CheckoutCouponSelector({
                       <small>{Number(coupon.minimum_order_amount) > 0 ? `满 ¥${formatAmount(coupon.minimum_order_amount)} 可用` : "无门槛"}</small>
                     </span>
                     <span className="module-checkout-page__couponChoiceBody">
-                      <strong>{Number(coupon.minimum_order_amount) > 0 ? "满减优惠券" : "无门槛优惠券"}</strong>
+                      <strong>{coupon.display_name}</strong>
                       <small>适用于：{formatCouponScope(coupon)}</small>
                       <small>{formatCouponExpiry(coupon.expires_at)}</small>
                       <em>{choice.is_applicable ? `本单优惠 ¥${choice.pricing?.promotion_discount_amount}` : choice.unavailable_reason}</em>
@@ -219,7 +221,7 @@ export default function CheckoutCouponSelector({
               >
                 <h3>优惠方式确认</h3>
                 <p>
-                  该优惠券不能与品牌挚友优惠叠加使用。选择后，本单将改用昆仑字幕组 5 元优惠券，最终价格不变。
+                  该优惠券不能与品牌挚友优惠叠加使用。选择后，本单将改用{pendingExclusiveCoupon.display_name}，最终价格不变。
                 </p>
                 <div className="module-checkout-page__couponConfirmActions">
                   <button type="button" onClick={() => setPendingExclusiveCoupon(null)}>取消</button>

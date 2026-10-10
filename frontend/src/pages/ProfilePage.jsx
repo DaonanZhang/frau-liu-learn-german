@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../api/auth";
 import { fetchMyProfile, updateMyProfile } from "../api/auth/profile.js";
 import { fetchMyCoupons } from "../api/coupons.js";
+import { hasModuleAccess } from "../utils/moduleAccess.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
 import "./ProfilePage.css";
 
@@ -151,8 +152,11 @@ export default function ProfilePage() {
     [coupons]
   );
   const couponModules = useMemo(
-    () => PURCHASE_MODULES.filter((module) => couponCanUseForModule(couponToUse, module)),
-    [couponToUse]
+    () => PURCHASE_MODULES.filter(
+      (module) => couponCanUseForModule(couponToUse, module)
+        && !hasModuleAccess(user, module)
+    ),
+    [couponToUse, user]
   );
 
   useEffect(() => {
@@ -426,7 +430,7 @@ export default function ProfilePage() {
                 <div className="profile-coupon__details">
                   <div className="profile-coupon__topline">
                     <strong>
-                      {Number(coupon.minimum_order_amount) > 0 ? "满减优惠券" : "无门槛优惠券"}
+                      {coupon.display_name}
                     </strong>
                     <span className={`profile-coupon__status profile-coupon__status--${statusKey}`}>
                       {COUPON_STATUS_LABELS[statusKey] || statusKey}
@@ -508,7 +512,7 @@ export default function ProfilePage() {
               <span>
                 {Number(couponToUse.minimum_order_amount) > 0
                   ? `满 ¥${formatCouponAmount(couponToUse.minimum_order_amount)} 可用`
-                  : "无门槛优惠券"}
+                  : couponToUse.display_name}
               </span>
             </div>
             <div className="profile-couponPicker__modules">

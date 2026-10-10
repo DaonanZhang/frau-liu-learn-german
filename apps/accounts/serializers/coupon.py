@@ -7,6 +7,7 @@ from apps.accounts.models import PaymentDiscountApplication, UserCoupon
 
 
 class UserCouponReadSerializer(serializers.ModelSerializer):
+    display_name = serializers.CharField(read_only=True)
     effective_status = serializers.SerializerMethodField()
     scope = serializers.SerializerMethodField()
     stacking_policy = serializers.SerializerMethodField()
@@ -16,6 +17,7 @@ class UserCouponReadSerializer(serializers.ModelSerializer):
         model = UserCoupon
         fields = (
             "id",
+            "display_name",
             "discount_amount",
             "minimum_order_amount",
             "stacking_policy",

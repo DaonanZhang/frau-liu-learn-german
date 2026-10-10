@@ -157,7 +157,7 @@ export default function ExamPreparationModulePage() {
         <div className="exam-module-hero__content">
           <h1 className="exam-module-hero__title">备考季</h1>
           <p className="exam-module-hero__copy">
-            按考试板块练习听、说、读、写，并完成完整的笔试模拟。
+            {EXAM_PREPARATION_MODULE.description}
           </p>
           <div className="exam-module-hero__tags" aria-label="核心功能亮点">
             <span className="exam-module-hero__tag">真题与模拟题</span>

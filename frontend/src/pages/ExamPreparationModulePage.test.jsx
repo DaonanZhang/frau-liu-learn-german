@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ExamPreparationModulePage from "./ExamPreparationModulePage.jsx";
+import { EXAM_PREPARATION_MODULE } from "./Homepage/homeShared.js";
 import { fetchSavedMockExams } from "../api/exam_preparation/mockExams.js";
 import Swal from "sweetalert2";
 
@@ -72,6 +73,12 @@ describe("exam preparation mock exam entry", () => {
       "/modules/exam-preparation/mock-exams",
     );
     expect(fetchSavedMockExams).toHaveBeenCalledWith("active", 1, 3);
+  });
+
+  it("uses the same description as the homepage entry", () => {
+    renderPage();
+
+    expect(screen.getByText(EXAM_PREPARATION_MODULE.description)).toBeInTheDocument();
   });
 
   it("adds a continue button that opens the most recently updated attempt", async () => {

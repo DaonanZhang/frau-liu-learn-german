@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from django.db import models
 from django.utils import timezone
 
 from apps.accounts.models import Entitlement, PromotionCodeRecord, PurchaseOffer
 
-BRAND_FRIEND_COUPON_DISCOUNT_AMOUNT = Decimal("5.00")
-BRAND_FRIEND_COUPON_LABEL = "品牌挚友优惠券"
-VIDEO_EXAM_PREPARATION_DISCOUNT_LABEL = "备考季专享"
+OLD_USER_DISCOUNT_AMOUNT = Decimal("8.00")
+OLD_USER_DISCOUNT_LABEL = "老用户优惠"
 UPGRADE_DISCOUNT_RULES = {
     "science-season-lifetime": {2, 4},
     "vlog-season-lifetime": {1, 2},
@@ -101,29 +100,14 @@ def _user_has_video_exam_preparation_discount(*, user, offer: PurchaseOffer) -> 
 def _get_automatic_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
     original_amount = offer.price_amount
 
-    if _user_has_video_exam_preparation_discount(user=user, offer=offer):
-        final_amount = (original_amount * Decimal("0.50")).quantize(
-            Decimal("0.01"),
-            rounding=ROUND_HALF_UP,
+    has_old_user_discount = any(
+        (
+            _user_has_upgrade_discount(user=user, offer=offer),
+            _user_has_exam_preparation_other_module_discount(user=user, offer=offer),
+            _user_has_video_exam_preparation_discount(user=user, offer=offer),
         )
-        return PurchasePricing(
-            original_amount=original_amount,
-            final_amount=final_amount,
-            discount_amount=original_amount - final_amount,
-            discount_label=VIDEO_EXAM_PREPARATION_DISCOUNT_LABEL,
-            is_discounted=True,
-            automatic_discount_amount=original_amount - final_amount,
-        )
-
-    discount_amount = Decimal("0.00")
-    discount_labels = []
-
-    if _user_has_upgrade_discount(user=user, offer=offer):
-        discount_amount += BRAND_FRIEND_COUPON_DISCOUNT_AMOUNT
-        discount_labels.append(BRAND_FRIEND_COUPON_LABEL)
-    if _user_has_exam_preparation_other_module_discount(user=user, offer=offer):
-        discount_amount += BRAND_FRIEND_COUPON_DISCOUNT_AMOUNT
-        discount_labels.append(BRAND_FRIEND_COUPON_LABEL)
+    )
+    discount_amount = OLD_USER_DISCOUNT_AMOUNT if has_old_user_discount else Decimal("0.00")
 
     if discount_amount <= 0:
         return PurchasePricing(
@@ -141,7 +125,7 @@ def _get_automatic_pricing(*, user, offer: PurchaseOffer) -> PurchasePricing:
         original_amount=original_amount,
         final_amount=final_amount,
         discount_amount=discount_amount,
-        discount_label=" + ".join(discount_labels) if discount_amount > 0 else "",
+        discount_label=OLD_USER_DISCOUNT_LABEL if discount_amount > 0 else "",
         is_discounted=discount_amount > 0,
         automatic_discount_amount=discount_amount,
         brand_friend_coupon_discount_amount=discount_amount,
@@ -165,9 +149,14 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
 
     best = automatic
     for candidate in coupons:
-        replaces_brand_friend = (
+        is_exclusive_brand_friend = (
             candidate.promotion_code.stacking_policy
             == PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND
+        )
+        if is_exclusive_brand_friend and not explicit_coupon:
+            continue
+        replaces_brand_friend = (
+            is_exclusive_brand_friend
             and automatic.brand_friend_coupon_discount_amount > 0
         )
         retained_automatic_discount = automatic.automatic_discount_amount
@@ -179,7 +168,10 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
             automatic_label = "" if retained_automatic_discount <= 0 else automatic.discount_label
         base_amount = automatic.original_amount - retained_automatic_discount
         candidate_final = max(base_amount - candidate.discount_amount, Decimal("0.01"))
-        if candidate_final > best.final_amount or (
+        if (
+            candidate_final > best.final_amount
+            and not (explicit_coupon and is_exclusive_brand_friend)
+        ) or (
             candidate_final == best.final_amount and not explicit_coupon
         ):
             continue

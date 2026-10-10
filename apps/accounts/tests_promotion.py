@@ -543,13 +543,13 @@ class PromotionCodeTests(APITestCase):
         )
         self.assertTrue(selected["is_applicable"])
         self.assertEqual(selected["pricing"]["original_amount"], "59.90")
-        self.assertEqual(selected["pricing"]["automatic_discount_amount"], "5.00")
+        self.assertEqual(selected["pricing"]["automatic_discount_amount"], "8.00")
         self.assertEqual(
             selected["pricing"]["brand_friend_coupon_discount_amount"],
-            "5.00",
+            "8.00",
         )
         self.assertEqual(selected["pricing"]["promotion_discount_amount"], "10.00")
-        self.assertEqual(selected["pricing"]["final_amount"], "44.90")
+        self.assertEqual(selected["pricing"]["final_amount"], "41.90")
 
         purchase = self.client.post(
             "/api/accounts/payments/alipay/create/",
@@ -562,17 +562,17 @@ class PromotionCodeTests(APITestCase):
             format="json",
         )
         self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(purchase.data["amount"], "44.90")
+        self.assertEqual(purchase.data["amount"], "41.90")
         application = PaymentDiscountApplication.objects.get(
             payment_id=purchase.data["payment_id"]
         )
         self.assertEqual(application.original_amount, Decimal("59.90"))
-        self.assertEqual(application.automatic_discount_amount, Decimal("5.00"))
+        self.assertEqual(application.automatic_discount_amount, Decimal("8.00"))
         self.assertEqual(application.promotion_discount_amount, Decimal("10.00"))
-        self.assertEqual(application.final_amount, Decimal("44.90"))
+        self.assertEqual(application.final_amount, Decimal("41.90"))
 
     @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True, DEBUG=True)
-    def test_exclusive_coupon_replaces_brand_friend_discount_without_changing_price(self) -> None:
+    def test_exclusive_coupon_can_replace_better_old_user_discount_after_warning(self) -> None:
         video_module, _ = Module.objects.get_or_create(
             key="learning_by_video",
             defaults={"name": "Learning by Video", "is_active": True},
@@ -624,7 +624,7 @@ class PromotionCodeTests(APITestCase):
         self.assertIsNone(choices.data["default_coupon_id"])
         self.assertEqual(
             choices.data["no_coupon_pricing"]["brand_friend_coupon_discount_amount"],
-            "5.00",
+            "8.00",
         )
         selected = next(
             choice for choice in choices.data["choices"]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import traceback
 from datetime import timedelta
 from decimal import Decimal
 from decimal import InvalidOperation
@@ -502,6 +503,30 @@ class CreateAlipayPurchaseAPIView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = "alipay_purchase_create"
+
+    def handle_exception(self, exc):
+        try:
+            return super().handle_exception(exc)
+        except Exception as unhandled:
+            # TEMPORARY: expose this authenticated endpoint's unexpected error
+            # while diagnosing repeated reusable-coupon checkout failures.
+            logger.exception("Unhandled Alipay purchase creation error")
+            return Response(
+                {
+                    "detail": "创建支付宝订单时发生未处理异常。",
+                    "exception_type": type(unhandled).__name__,
+                    "exception_message": str(unhandled) or "（异常没有消息）",
+                    "traceback": "".join(
+                        traceback.format_exception(
+                            type(unhandled),
+                            unhandled,
+                            unhandled.__traceback__,
+                            limit=12,
+                        )
+                    ),
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     def post(self, request: Request) -> Response:
         serializer = CreateAlipayPurchaseSerializer(

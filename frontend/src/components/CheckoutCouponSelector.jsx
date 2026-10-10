@@ -9,6 +9,11 @@ function formatAmount(amount) {
   return numeric.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
 }
 
+function formatMoney(amount) {
+  const numeric = Number(amount);
+  return Number.isFinite(numeric) ? numeric.toFixed(2) : "";
+}
+
 function formatCouponExpiry(value) {
   if (!value) {
     return "长期有效";
@@ -50,17 +55,17 @@ export default function CheckoutCouponSelector({
 }) {
   const [pendingExclusiveCoupon, setPendingExclusiveCoupon] = useState(null);
   const choices = Array.isArray(couponBundle?.choices) ? couponBundle.choices : [];
-  const brandFriendCouponDiscount = Number(
+  const oldUserDiscount = Number(
     couponBundle?.no_coupon_pricing?.brand_friend_coupon_discount_amount
   ) || 0;
-  const hasBrandFriendCoupon = brandFriendCouponDiscount > 0;
+  const hasOldUserDiscount = oldUserDiscount > 0;
   const availableCount = (Number(couponBundle?.available_count) || 0)
-    + (hasBrandFriendCoupon ? 1 : 0);
+    + (hasOldUserDiscount ? 1 : 0);
   const selectedChoice = choices.find(
     (choice) => choice?.coupon?.id === selectedCouponId
   );
   const selectedReplacesBrandFriend = Boolean(
-    hasBrandFriendCoupon
+    hasOldUserDiscount
       && selectedChoice?.coupon?.stacking_policy === "exclusive_brand_friend"
   );
   const hasExclusiveChoice = choices.some(
@@ -73,10 +78,10 @@ export default function CheckoutCouponSelector({
 
   function handleCouponSelection(choice) {
     if (
-      hasBrandFriendCoupon
+      hasOldUserDiscount
       && choice?.coupon?.stacking_policy === "exclusive_brand_friend"
     ) {
-      setPendingExclusiveCoupon(choice.coupon);
+      setPendingExclusiveCoupon(choice);
       return;
     }
     onSelectCoupon(choice.coupon.id);
@@ -95,10 +100,10 @@ export default function CheckoutCouponSelector({
           <strong>优惠券</strong>
           <small>
             {selectedChoice
-              ? `${hasBrandFriendCoupon && !selectedReplacesBrandFriend ? "品牌挚友券 + " : ""}已选优惠券 · 最终优惠 ¥${formatAmount(selectedChoice.pricing?.total_discount_amount)}`
+              ? `${hasOldUserDiscount && !selectedReplacesBrandFriend ? "老用户优惠 + " : ""}已选优惠券 · 最终优惠 ¥${formatAmount(selectedChoice.pricing?.total_discount_amount)}`
               : selectedCouponId === null && couponBundle
-                ? hasBrandFriendCoupon
-                  ? `品牌挚友优惠券已自动使用 · 本单减 ¥${formatAmount(brandFriendCouponDiscount)}`
+                ? hasOldUserDiscount
+                  ? `老用户优惠已自动使用 · 本单减 ¥${formatAmount(oldUserDiscount)}`
                   : "不使用优惠券"
                 : couponBundle
                   ? "暂无适用优惠券"
@@ -133,10 +138,10 @@ export default function CheckoutCouponSelector({
                 <div className="module-checkout-page__couponSheetEyebrow">SMART SAVINGS</div>
                 <h2 id="coupon-sheet-title">选择优惠券</h2>
                 <p>
-                  {offerTitle || "当前商品"} · {hasBrandFriendCoupon
+                  {offerTitle || "当前商品"} · {hasOldUserDiscount
                     ? hasExclusiveChoice
-                      ? "部分优惠券不能与品牌挚友优惠叠加"
-                      : "品牌挚友优惠券已自动叠加，可再选择其他优惠券"
+                      ? "昆仑字幕组优惠券不能与老用户优惠叠加"
+                      : "老用户优惠已自动使用，可再选择其他优惠券"
                     : "可选择使用或不使用优惠券"}
                 </p>
               </div>
@@ -144,14 +149,14 @@ export default function CheckoutCouponSelector({
             </div>
 
             <div className="module-checkout-page__couponChoices">
-              {hasBrandFriendCoupon ? (
+              {hasOldUserDiscount ? (
                 <div className={`module-checkout-page__couponChoice module-checkout-page__couponChoice--brandFriend${selectedReplacesBrandFriend ? "" : " is-selected"}`}>
                   <span className="module-checkout-page__couponChoiceValue">
-                    <strong><small>¥</small>{formatAmount(brandFriendCouponDiscount)}</strong>
+                    <strong><small>¥</small>{formatAmount(oldUserDiscount)}</strong>
                     <small>无门槛</small>
                   </span>
                   <span className="module-checkout-page__couponChoiceBody">
-                    <strong>品牌挚友优惠券</strong>
+                    <strong>老用户优惠</strong>
                     <small>长期有效 · 每笔订单自动使用</small>
                     <em>{hasExclusiveChoice ? "部分优惠券不可叠加" : "可与其他优惠券叠加"}</em>
                   </span>
@@ -194,10 +199,10 @@ export default function CheckoutCouponSelector({
               >
                 <span className="module-checkout-page__couponChoiceNoneIcon" aria-hidden="true">—</span>
                 <span className="module-checkout-page__couponChoiceBody">
-                  <strong>{hasBrandFriendCoupon ? "不使用其他优惠券" : "不使用优惠券"}</strong>
+                  <strong>{hasOldUserDiscount ? "不使用其他优惠券" : "不使用优惠券"}</strong>
                   <small>
-                    {hasBrandFriendCoupon
-                      ? "品牌挚友优惠券仍会自动使用"
+                    {hasOldUserDiscount
+                      ? "老用户优惠仍会自动使用"
                       : "仅保留当前账号自动享有的优惠"}
                   </small>
                 </span>
@@ -221,7 +226,14 @@ export default function CheckoutCouponSelector({
               >
                 <h3>优惠方式确认</h3>
                 <p>
-                  该优惠券不能与品牌挚友优惠叠加使用。选择后，本单将改用{pendingExclusiveCoupon.display_name}，最终价格不变。
+                  该优惠券不能与 {formatAmount(oldUserDiscount)} 元老用户优惠叠加使用。
+                  使用后将取消老用户优惠，改为减 {formatAmount(pendingExclusiveCoupon.coupon.discount_amount)} 元。
+                  本单实付将从 ¥{formatMoney(couponBundle?.no_coupon_pricing?.final_amount)} 变为
+                  ¥{formatMoney(pendingExclusiveCoupon.pricing?.final_amount)}，比当前价格高
+                  ¥{formatAmount(
+                    Number(pendingExclusiveCoupon.pricing?.final_amount)
+                      - Number(couponBundle?.no_coupon_pricing?.final_amount)
+                  )}。
                 </p>
                 <div className="module-checkout-page__couponConfirmActions">
                   <button type="button" onClick={() => setPendingExclusiveCoupon(null)}>取消</button>
@@ -229,7 +241,7 @@ export default function CheckoutCouponSelector({
                     type="button"
                     className="is-primary"
                     onClick={() => {
-                      onSelectCoupon(pendingExclusiveCoupon.id);
+                      onSelectCoupon(pendingExclusiveCoupon.coupon.id);
                       setPendingExclusiveCoupon(null);
                     }}
                   >

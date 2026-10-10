@@ -197,6 +197,33 @@ class AlipayPaymentApiTests(APITestCase):
             ],
         )
 
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_create_purchase_temporarily_returns_unhandled_error_details(
+        self,
+        mock_get_alipay_service: Mock,
+    ) -> None:
+        mock_get_alipay_service.return_value.build_page_pay_url.side_effect = RuntimeError(
+            "temporary checkout debug failure"
+        )
+
+        with self.assertLogs("apps.accounts.views.payment", level="ERROR"):
+            response = self.client.post(
+                "/api/accounts/payments/alipay/create/",
+                {
+                    "offer_code": self.offer.code,
+                    "idempotency_key": "00000000-0000-4000-8000-000000000098",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(response.data["exception_type"], "RuntimeError")
+        self.assertEqual(
+            response.data["exception_message"],
+            "temporary checkout debug failure",
+        )
+        self.assertIn("RuntimeError: temporary checkout debug failure", response.data["traceback"])
+
     @override_settings(COMING_SOON=True)
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_mock_exam_coming_soon_does_not_block_exam_purchase(
@@ -760,8 +787,8 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["code"], self.vlog_offer.code)
-        self.assertEqual(response.data[0]["discount_amount"], "5.00")
-        self.assertEqual(response.data[0]["final_price_amount"], "94.00")
+        self.assertEqual(response.data[0]["discount_amount"], "8.00")
+        self.assertEqual(response.data[0]["final_price_amount"], "91.00")
         self.assertTrue(response.data[0]["is_discounted_for_user"])
 
     def test_purchase_offers_list_marks_vlog_discount_for_season2_owner(self) -> None:
@@ -781,8 +808,8 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["code"], self.vlog_offer.code)
-        self.assertEqual(response.data[0]["discount_amount"], "5.00")
-        self.assertEqual(response.data[0]["final_price_amount"], "94.00")
+        self.assertEqual(response.data[0]["discount_amount"], "8.00")
+        self.assertEqual(response.data[0]["final_price_amount"], "91.00")
         self.assertTrue(response.data[0]["is_discounted_for_user"])
 
     def test_purchase_offers_list_marks_science_discount_for_vlog_owner(self) -> None:
@@ -813,13 +840,13 @@ class AlipayPaymentApiTests(APITestCase):
         offer_data = next(
             item for item in response.data if item["code"] == science_offer.code
         )
-        self.assertEqual(offer_data["discount_amount"], "5.00")
-        self.assertEqual(offer_data["final_price_amount"], "94.00")
-        self.assertEqual(offer_data["discount_label"], "品牌挚友优惠券")
+        self.assertEqual(offer_data["discount_amount"], "8.00")
+        self.assertEqual(offer_data["final_price_amount"], "91.00")
+        self.assertEqual(offer_data["discount_label"], "老用户优惠")
         self.assertTrue(offer_data["is_discounted_for_user"])
 
     @patch("apps.accounts.views.payment.get_alipay_service")
-    def test_exam_preparation_offer_gets_five_yuan_discount_for_video_trial_user(self, mock_get_alipay_service: Mock) -> None:
+    def test_exam_preparation_offer_gets_eight_yuan_discount_for_video_trial_user(self, mock_get_alipay_service: Mock) -> None:
         mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"
         video_module = Module.objects.create(
             key="learning_by_video",
@@ -853,10 +880,10 @@ class AlipayPaymentApiTests(APITestCase):
         )
 
         offer_data = next(item for item in response.data if item["code"] == exam_offer.code)
-        self.assertEqual(offer_data["discount_amount"], "5.00")
-        self.assertEqual(offer_data["final_price_amount"], "24.90")
-        self.assertEqual(offer_data["discount_label"], "品牌挚友优惠券")
-        self.assertEqual(offer_data["brand_friend_coupon_discount_amount"], "5.00")
+        self.assertEqual(offer_data["discount_amount"], "8.00")
+        self.assertEqual(offer_data["final_price_amount"], "21.90")
+        self.assertEqual(offer_data["discount_label"], "老用户优惠")
+        self.assertEqual(offer_data["brand_friend_coupon_discount_amount"], "8.00")
 
         purchase = self.client.post(
             "/api/accounts/payments/alipay/create/",
@@ -864,10 +891,10 @@ class AlipayPaymentApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(purchase.data["amount"], "24.90")
+        self.assertEqual(purchase.data["amount"], "21.90")
 
     @patch("apps.accounts.views.payment.get_alipay_service")
-    def test_video_offer_is_half_price_for_active_exam_preparation_user(self, mock_get_alipay_service: Mock) -> None:
+    def test_video_offer_gets_eight_yuan_discount_for_active_exam_preparation_user(self, mock_get_alipay_service: Mock) -> None:
         mock_get_alipay_service.return_value.build_page_pay_url.return_value = "https://alipay.test/pay"
         video_module = Module.objects.create(
             key="learning_by_video",
@@ -905,9 +932,9 @@ class AlipayPaymentApiTests(APITestCase):
         )
 
         offer_data = next(item for item in response.data if item["code"] == video_offer.code)
-        self.assertEqual(offer_data["discount_amount"], "29.95")
-        self.assertEqual(offer_data["final_price_amount"], "29.95")
-        self.assertEqual(offer_data["discount_label"], "备考季专享")
+        self.assertEqual(offer_data["discount_amount"], "8.00")
+        self.assertEqual(offer_data["final_price_amount"], "51.90")
+        self.assertEqual(offer_data["discount_label"], "老用户优惠")
 
         purchase = self.client.post(
             "/api/accounts/payments/alipay/create/",
@@ -915,7 +942,7 @@ class AlipayPaymentApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(purchase.data["amount"], "29.95")
+        self.assertEqual(purchase.data["amount"], "51.90")
 
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_create_purchase_applies_vlog_discount_for_season1_owner(self, mock_get_alipay_service: Mock) -> None:
@@ -936,10 +963,10 @@ class AlipayPaymentApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["offer_code"], self.vlog_offer.code)
-        self.assertEqual(response.data["amount"], "94.00")
+        self.assertEqual(response.data["amount"], "91.00")
 
         payment = AlipayWebsitePayment.objects.get(id=response.data["payment_id"])
-        self.assertEqual(payment.total_amount, Decimal("94.00"))
+        self.assertEqual(payment.total_amount, Decimal("91.00"))
 
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_create_purchase_applies_vlog_discount_for_season2_owner(self, mock_get_alipay_service: Mock) -> None:
@@ -960,10 +987,10 @@ class AlipayPaymentApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["offer_code"], self.vlog_offer.code)
-        self.assertEqual(response.data["amount"], "94.00")
+        self.assertEqual(response.data["amount"], "91.00")
 
         payment = AlipayWebsitePayment.objects.get(id=response.data["payment_id"])
-        self.assertEqual(payment.total_amount, Decimal("94.00"))
+        self.assertEqual(payment.total_amount, Decimal("91.00"))
 
     def test_paid_grant_failure_is_reported_as_attention_not_payment_failure(self) -> None:
         payment = AlipayWebsitePayment.objects.create(

@@ -77,11 +77,13 @@ audit record when a coupon is used.
 
 Use `--module` and optional `--season` instead of `--offer` for a broader
 scope. Omit all three options for a coupon valid across every active offer.
-Ordinary promotion coupons apply after any automatic member discount. An
-active entitlement for another module gives a ¥5 “品牌挚友专享” discount when
-buying exam preparation. For example, a ¥59.90 exam-preparation offer with that
-discount and a ¥10 ordinary coupon costs ¥44.90. The configured Kunlun Subtitle
-Group coupon is the exception described below.
+Ordinary promotion coupons apply after the automatic old-user discount. An
+eligible existing entitlement gives one ¥8 old-user discount. This includes
+buying Vlog or Science after exam preparation; that combination no longer uses
+the former half-price rule. Multiple qualifying entitlements still produce only
+one ¥8 discount. For example, a ¥59.90 exam-preparation offer with that discount
+and a ¥10 ordinary coupon costs ¥41.90. The configured Kunlun Subtitle Group
+coupon is the exception described below.
 
 Promotion codes expire after 360 days by default. Pass `--no-expiry` when the
 unredeemed promotion code itself should remain redeemable indefinitely. This
@@ -125,10 +127,12 @@ that it is reusable and that its issued coupons replace the automatic
 brand-friend discount. Existing and randomly generated promotion codes remain
 single-use and keep their current stacking behavior.
 
-Each redemption creates a separate one-use CNY 5 coupon. When the current
-order has no brand-friend discount, the coupon stacks with other automatic
-pricing. When a brand-friend discount applies, selecting this coupon replaces
-that discount, so the two CNY 5 benefits are not added together.
+Each redemption creates a separate one-use CNY 5 coupon. It never stacks with
+the ¥8 old-user discount. Because selecting it makes an eligible old user pay
+CNY 3 more, checkout must show the old and new final prices and require an
+explicit confirmation before replacing the old-user discount. The coupon is
+not selected automatically. Other promotion coupons continue to stack with the
+¥8 old-user discount.
 
 ## User Coupon Wallet and Checkout
 

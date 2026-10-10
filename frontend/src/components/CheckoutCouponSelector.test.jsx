@@ -29,7 +29,7 @@ describe("CheckoutCouponSelector", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("asks for confirmation before replacing the brand-friend discount", () => {
+  it("warns before replacing the better old-user discount", () => {
     const onSelectCoupon = vi.fn();
     render(
       <CheckoutCouponSelector
@@ -37,8 +37,8 @@ describe("CheckoutCouponSelector", () => {
           available_count: 1,
           default_coupon_id: null,
           no_coupon_pricing: {
-            brand_friend_coupon_discount_amount: "5.00",
-            final_amount: "34.90",
+            brand_friend_coupon_discount_amount: "8.00",
+            final_amount: "51.90",
           },
           choices: [{
             coupon: {
@@ -55,7 +55,7 @@ describe("CheckoutCouponSelector", () => {
             pricing: {
               promotion_discount_amount: "5.00",
               total_discount_amount: "5.00",
-              final_amount: "34.90",
+              final_amount: "54.90",
             },
           }],
         }}
@@ -69,27 +69,30 @@ describe("CheckoutCouponSelector", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /昆仑字幕组专属优惠券/ }));
+    const kunlunCoupon = screen.getByRole("button", { name: /昆仑字幕组专属优惠券/ });
+    expect(kunlunCoupon).toHaveTextContent("¥5");
+    fireEvent.click(kunlunCoupon);
 
     expect(onSelectCoupon).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog", { name: "优惠方式确认" })).toBeInTheDocument();
-    expect(screen.getByText(/不能与品牌挚友优惠叠加使用/)).toBeInTheDocument();
-    expect(screen.getByText(/本单将改用昆仑字幕组专属优惠券/)).toBeInTheDocument();
-    expect(screen.getByText(/最终价格不变/)).toBeInTheDocument();
+    const confirmDialog = screen.getByRole("dialog", { name: "优惠方式确认" });
+    expect(confirmDialog).toHaveTextContent("不能与 8 元老用户优惠叠加使用");
+    expect(confirmDialog).toHaveTextContent("改为减 5 元");
+    expect(confirmDialog).toHaveTextContent("实付将从 ¥51.90 变为 ¥54.90");
+    expect(confirmDialog).toHaveTextContent("比当前价格高 ¥3");
     expect(screen.queryByText("可与其他优惠券叠加")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "确认使用" }));
     expect(onSelectCoupon).toHaveBeenCalledWith(17);
   });
 
-  it("does not mark the brand-friend coupon selected when an exclusive coupon is selected", () => {
+  it("does not mark the old-user discount selected when an exclusive coupon is selected", () => {
     render(
       <CheckoutCouponSelector
         couponBundle={{
           available_count: 1,
           default_coupon_id: null,
           no_coupon_pricing: {
-            brand_friend_coupon_discount_amount: "5.00",
+            brand_friend_coupon_discount_amount: "8.00",
           },
           choices: [{
             coupon: {
@@ -120,7 +123,7 @@ describe("CheckoutCouponSelector", () => {
     );
 
     const brandFriendChoice = screen
-      .getByText("品牌挚友优惠券")
+      .getByText("老用户优惠")
       .closest(".module-checkout-page__couponChoice");
     const exclusiveChoice = screen
       .getByText("昆仑字幕组专属优惠券")

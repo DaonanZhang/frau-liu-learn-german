@@ -347,9 +347,7 @@ export default function ModuleCheckoutPage() {
           <p className="module-checkout-page__notice">
             {isExamPreparation
               ? "集中练习听力、阅读、语言模块、写作与口语，为考试做好更充分的准备。"
-              : alreadyHasAccess
-                ? "你当前已有有效权限，新购买的天数会从现有最晚到期时间继续顺延。"
-                : "支付成功后将自动开通对应模块权限，有效期从支付确认时刻开始计算。"}
+              : "科普季与 Vlog 季需分别购买，购买后终生有效。"}
           </p>
         </div>
       </section>
@@ -428,20 +426,30 @@ export default function ModuleCheckoutPage() {
                       <div className="module-checkout-page__offer-body">
                         <div className="module-checkout-page__offer-top">
                         <div>
-                          <h3 className="module-checkout-page__offer-title">{offer.title || module.title}</h3>
+                          <h3 className="module-checkout-page__offer-title">
+                            {isExamPreparation ? offer.title || module.title : module.title}
+                          </h3>
                           <p className="module-checkout-page__offer-meta">
-                            {offer.access_duration_days ? `${offer.access_duration_days} 天有效` : offer.plan_label}
+                            {isExamPreparation
+                              ? offer.access_duration_days
+                                ? `${offer.access_duration_days} 天有效`
+                                : offer.plan_label
+                              : "终生有效"}
                           </p>
-                          <p className="module-checkout-page__offer-expiry">
-                            {formatExpiry(offer.estimated_expires_at)}
-                          </p>
+                          {isExamPreparation ? (
+                            <p className="module-checkout-page__offer-expiry">
+                              {formatExpiry(offer.estimated_expires_at)}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
 
                         <p className="module-checkout-page__offer-description">
                           {isExamPreparation
                             ? "激活备考季全部内容！"
-                            : offer.description || `解锁 ${module.title} 全部正式学习内容、工具与后续学习体验。`}
+                            : module.id === "vlog-season"
+                              ? "解锁 Vlog季全部正式学习内容。"
+                              : "解锁科普季全部正式学习内容。"}
                         </p>
 
                         <ul className="module-checkout-page__offer-notes">
@@ -452,10 +460,9 @@ export default function ModuleCheckoutPage() {
                               <li>保留学习进度与收藏记录。</li>
                             </>
                           ) : (
-                            <>
-                              <li>一次购买，解锁本方案包含的全部正式学习内容。</li>
-                              <li>支持支付宝安全支付，付款完成后即可开始学习。</li>
-                            </>
+                            module.purchaseFeatures.map((feature) => (
+                              <li key={feature}>{feature}</li>
+                            ))
                           )}
                         </ul>
                       </div>

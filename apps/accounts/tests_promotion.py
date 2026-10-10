@@ -235,6 +235,31 @@ class PromotionCodeTests(APITestCase):
         other_response = self.client.get("/api/accounts/coupons/")
         self.assertEqual(other_response.data, [])
 
+    def test_expired_coupon_stays_in_wallet_but_is_omitted_from_purchase_choices(self) -> None:
+        expired_coupon = UserCoupon.objects.create(
+            user=self.user,
+            promotion_code=self.record,
+            discount_amount=self.record.discount_amount,
+            minimum_order_amount=self.record.minimum_order_amount,
+            applicable_offer=self.offer,
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        wallet = self.client.get("/api/accounts/coupons/")
+        choices = self.client.get(
+            "/api/accounts/coupons/choices/",
+            {"offer_code": self.offer.code},
+        )
+
+        self.assertEqual(wallet.status_code, status.HTTP_200_OK)
+        wallet_coupon = next(item for item in wallet.data if item["id"] == expired_coupon.id)
+        self.assertEqual(wallet_coupon["effective_status"], UserCoupon.Status.EXPIRED)
+        self.assertEqual(choices.status_code, status.HTTP_200_OK)
+        self.assertNotIn(
+            expired_coupon.id,
+            [choice["coupon"]["id"] for choice in choices.data["choices"]],
+        )
+
     def test_coupon_without_valid_days_is_unlimited(self) -> None:
         store_promotion_code(
             code="FOREVER001",

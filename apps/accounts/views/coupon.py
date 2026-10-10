@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -89,7 +90,12 @@ class UserCouponViewSet(ReadOnlyModelViewSet):
         default_pricing = get_purchase_pricing(user=request.user, offer=offer)
         choices = []
         available_count = 0
-        for coupon in self.get_queryset():
+        purchase_coupons = self.get_queryset().exclude(
+            status=UserCoupon.Status.EXPIRED,
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
+        )
+        for coupon in purchase_coupons:
             unavailable_reason = get_coupon_unavailable_reason(coupon=coupon, offer=offer)
             pricing = None
             if not unavailable_reason:

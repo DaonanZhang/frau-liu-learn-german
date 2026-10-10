@@ -67,6 +67,10 @@ export default function CheckoutCouponSelector({
     (choice) => choice?.coupon?.stacking_policy === "exclusive_brand_friend"
   );
 
+  if (couponBundle && availableCount === 0) {
+    return null;
+  }
+
   function handleCouponSelection(choice) {
     if (
       hasBrandFriendCoupon

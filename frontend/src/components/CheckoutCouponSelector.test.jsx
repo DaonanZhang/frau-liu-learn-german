@@ -5,6 +5,30 @@ import CheckoutCouponSelector from "./CheckoutCouponSelector.jsx";
 
 
 describe("CheckoutCouponSelector", () => {
+  it("renders nothing when there are no usable coupons or brand-friend discount", () => {
+    const { container } = render(
+      <CheckoutCouponSelector
+        couponBundle={{
+          available_count: 0,
+          default_coupon_id: null,
+          no_coupon_pricing: {
+            brand_friend_coupon_discount_amount: "0.00",
+          },
+          choices: [],
+        }}
+        isOpen={false}
+        offerTitle="测试商品"
+        selectedCouponId={null}
+        onOpen={vi.fn()}
+        onClose={vi.fn()}
+        onSelectCoupon={vi.fn()}
+        onSelectNone={vi.fn()}
+      />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("asks for confirmation before replacing the brand-friend discount", () => {
     const onSelectCoupon = vi.fn();
     render(

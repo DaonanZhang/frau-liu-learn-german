@@ -12,7 +12,7 @@ BRAND_FRIEND_COUPON_DISCOUNT_AMOUNT = Decimal("5.00")
 BRAND_FRIEND_COUPON_LABEL = "品牌挚友优惠券"
 VIDEO_EXAM_PREPARATION_DISCOUNT_LABEL = "备考季专享"
 UPGRADE_DISCOUNT_RULES = {
-    "science-season-lifetime": {2},
+    "science-season-lifetime": {2, 4},
     "vlog-season-lifetime": {1, 2},
 }
 

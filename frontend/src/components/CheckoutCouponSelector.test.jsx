@@ -75,7 +75,7 @@ describe("CheckoutCouponSelector", () => {
 
     expect(onSelectCoupon).not.toHaveBeenCalled();
     const confirmDialog = screen.getByRole("dialog", { name: "优惠方式确认" });
-    expect(confirmDialog).toHaveTextContent("不能与 8 元老用户优惠叠加使用");
+    expect(confirmDialog).toHaveTextContent("不能与品牌挚友专享优惠叠加使用");
     expect(confirmDialog).toHaveTextContent("改为减 5 元");
     expect(confirmDialog).toHaveTextContent("实付将从 ¥51.90 变为 ¥54.90");
     expect(confirmDialog).toHaveTextContent("比当前价格高 ¥3");
@@ -123,7 +123,7 @@ describe("CheckoutCouponSelector", () => {
     );
 
     const brandFriendChoice = screen
-      .getByText("老用户优惠")
+      .getByText("品牌挚友专享优惠")
       .closest(".module-checkout-page__couponChoice");
     const exclusiveChoice = screen
       .getByText("昆仑字幕组专属优惠券")

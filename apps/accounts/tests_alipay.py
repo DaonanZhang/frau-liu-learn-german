@@ -842,7 +842,7 @@ class AlipayPaymentApiTests(APITestCase):
         )
         self.assertEqual(offer_data["discount_amount"], "8.00")
         self.assertEqual(offer_data["final_price_amount"], "91.00")
-        self.assertEqual(offer_data["discount_label"], "老用户优惠")
+        self.assertEqual(offer_data["discount_label"], "品牌挚友专享优惠")
         self.assertTrue(offer_data["is_discounted_for_user"])
 
     @patch("apps.accounts.views.payment.get_alipay_service")
@@ -882,7 +882,7 @@ class AlipayPaymentApiTests(APITestCase):
         offer_data = next(item for item in response.data if item["code"] == exam_offer.code)
         self.assertEqual(offer_data["discount_amount"], "8.00")
         self.assertEqual(offer_data["final_price_amount"], "21.90")
-        self.assertEqual(offer_data["discount_label"], "老用户优惠")
+        self.assertEqual(offer_data["discount_label"], "品牌挚友专享优惠")
         self.assertEqual(offer_data["brand_friend_coupon_discount_amount"], "8.00")
 
         purchase = self.client.post(
@@ -934,7 +934,7 @@ class AlipayPaymentApiTests(APITestCase):
         offer_data = next(item for item in response.data if item["code"] == video_offer.code)
         self.assertEqual(offer_data["discount_amount"], "8.00")
         self.assertEqual(offer_data["final_price_amount"], "51.90")
-        self.assertEqual(offer_data["discount_label"], "老用户优惠")
+        self.assertEqual(offer_data["discount_label"], "品牌挚友专享优惠")
 
         purchase = self.client.post(
             "/api/accounts/payments/alipay/create/",

@@ -100,10 +100,10 @@ export default function CheckoutCouponSelector({
           <strong>优惠券</strong>
           <small>
             {selectedChoice
-              ? `${hasOldUserDiscount && !selectedReplacesBrandFriend ? "老用户优惠 + " : ""}已选优惠券 · 最终优惠 ¥${formatAmount(selectedChoice.pricing?.total_discount_amount)}`
+              ? `${hasOldUserDiscount && !selectedReplacesBrandFriend ? "品牌挚友专享优惠 + " : ""}已选优惠券 · 最终优惠 ¥${formatAmount(selectedChoice.pricing?.total_discount_amount)}`
               : selectedCouponId === null && couponBundle
                 ? hasOldUserDiscount
-                  ? `老用户优惠已自动使用 · 本单减 ¥${formatAmount(oldUserDiscount)}`
+                  ? `品牌挚友专享优惠已自动使用 · 本单减 ¥${formatAmount(oldUserDiscount)}`
                   : "不使用优惠券"
                 : couponBundle
                   ? "暂无适用优惠券"
@@ -140,8 +140,8 @@ export default function CheckoutCouponSelector({
                 <p>
                   {offerTitle || "当前商品"} · {hasOldUserDiscount
                     ? hasExclusiveChoice
-                      ? "昆仑字幕组优惠券不能与老用户优惠叠加"
-                      : "老用户优惠已自动使用，可再选择其他优惠券"
+                      ? "昆仑字幕组优惠券不能与品牌挚友专享优惠叠加"
+                      : "品牌挚友专享优惠已自动使用，可再选择其他优惠券"
                     : "可选择使用或不使用优惠券"}
                 </p>
               </div>
@@ -156,7 +156,7 @@ export default function CheckoutCouponSelector({
                     <small>无门槛</small>
                   </span>
                   <span className="module-checkout-page__couponChoiceBody">
-                    <strong>老用户优惠</strong>
+                    <strong>品牌挚友专享优惠</strong>
                     <small>长期有效 · 每笔订单自动使用</small>
                     <em>{hasExclusiveChoice ? "部分优惠券不可叠加" : "可与其他优惠券叠加"}</em>
                   </span>
@@ -202,7 +202,7 @@ export default function CheckoutCouponSelector({
                   <strong>{hasOldUserDiscount ? "不使用其他优惠券" : "不使用优惠券"}</strong>
                   <small>
                     {hasOldUserDiscount
-                      ? "老用户优惠仍会自动使用"
+                      ? "品牌挚友专享优惠仍会自动使用"
                       : "仅保留当前账号自动享有的优惠"}
                   </small>
                 </span>
@@ -226,8 +226,8 @@ export default function CheckoutCouponSelector({
               >
                 <h3>优惠方式确认</h3>
                 <p>
-                  该优惠券不能与 {formatAmount(oldUserDiscount)} 元老用户优惠叠加使用。
-                  使用后将取消老用户优惠，改为减 {formatAmount(pendingExclusiveCoupon.coupon.discount_amount)} 元。
+                  该优惠券不能与品牌挚友专享优惠叠加使用。
+                  使用后将取消当前 {formatAmount(oldUserDiscount)} 元优惠，改为减 {formatAmount(pendingExclusiveCoupon.coupon.discount_amount)} 元。
                   本单实付将从 ¥{formatMoney(couponBundle?.no_coupon_pricing?.final_amount)} 变为
                   ¥{formatMoney(pendingExclusiveCoupon.pricing?.final_amount)}，比当前价格高
                   ¥{formatAmount(

@@ -9,7 +9,7 @@ from django.utils import timezone
 from apps.accounts.models import Entitlement, PromotionCodeRecord, PurchaseOffer
 
 OLD_USER_DISCOUNT_AMOUNT = Decimal("8.00")
-OLD_USER_DISCOUNT_LABEL = "老用户优惠"
+OLD_USER_DISCOUNT_LABEL = "品牌挚友专享优惠"
 UPGRADE_DISCOUNT_RULES = {
     "science-season-lifetime": {2, 4},
     "vlog-season-lifetime": {1, 2},

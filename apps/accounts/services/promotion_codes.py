@@ -5,7 +5,7 @@ import string
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
-from django.db.models import F, Q
+from django.db.models import Exists, F, OuterRef, Q
 from django.utils import timezone
 
 from apps.accounts.models import (
@@ -154,6 +154,14 @@ def eligible_coupon_queryset(*, user, offer, for_update: bool = False):
         expires_at__isnull=False,
         expires_at__lte=now,
     ).update(status=UserCoupon.Status.EXPIRED)
+    open_payment_reservations = PaymentDiscountApplication.objects.filter(
+        coupon_id=OuterRef("pk"),
+        status=PaymentDiscountApplication.Status.RESERVED,
+        payment__status__in={
+            AlipayWebsitePayment.Status.CREATED,
+            AlipayWebsitePayment.Status.PENDING,
+        },
+    )
     queryset = UserCoupon.objects.filter(
         user=user,
         status=UserCoupon.Status.AVAILABLE,
@@ -163,19 +171,17 @@ def eligible_coupon_queryset(*, user, offer, for_update: bool = False):
         Q(applicable_module__isnull=True) | Q(applicable_module=offer.module),
         Q(applicable_season__isnull=True) | Q(applicable_season=offer.season),
         Q(applicable_offer__isnull=True) | Q(applicable_offer=offer),
-    ).exclude(
-        payment_applications__status=PaymentDiscountApplication.Status.RESERVED,
-        payment_applications__payment__status__in={
-            AlipayWebsitePayment.Status.CREATED,
-            AlipayWebsitePayment.Status.PENDING,
-        },
+    ).alias(
+        has_open_payment_reservation=Exists(open_payment_reservations),
+    ).filter(
+        has_open_payment_reservation=False,
     ).select_related("promotion_code").order_by(
         "-discount_amount",
         F("expires_at").asc(nulls_last=True),
         "id",
-    ).distinct()
+    )
     if for_update:
-        queryset = queryset.select_for_update()
+        queryset = queryset.select_for_update(of=("self",))
     return queryset
 
 

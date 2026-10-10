@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,13 +11,12 @@ import {
 const mocks = vi.hoisted(() => ({
   fetchPurchaseOffers: vi.fn(),
   fetchCouponChoices: vi.fn(),
-  createAlipayPurchase: vi.fn(),
   useAuth: vi.fn(),
 }));
 
 vi.mock("../api/payments/alipay.js", () => ({
   fetchPurchaseOffers: mocks.fetchPurchaseOffers,
-  createAlipayPurchase: mocks.createAlipayPurchase,
+  createAlipayPurchase: vi.fn(),
   savePendingPaymentContext: vi.fn(),
 }));
 vi.mock("../api/coupons.js", () => ({ fetchCouponChoices: mocks.fetchCouponChoices }));
@@ -38,7 +37,6 @@ describe("ModuleCheckoutPage", () => {
   beforeEach(() => {
     mocks.fetchPurchaseOffers.mockReset();
     mocks.fetchCouponChoices.mockReset();
-    mocks.createAlipayPurchase.mockReset();
     mocks.useAuth.mockReturnValue({
       user: null,
       loading: false,
@@ -103,44 +101,4 @@ describe("ModuleCheckoutPage", () => {
     expect(within(offer).getByText("登录后显示预计到期时间")).toBeInTheDocument();
   });
 
-  it("shows the backend response body when Alipay order creation fails", async () => {
-    mocks.useAuth.mockReturnValue({
-      user: { entitlements: [] },
-      loading: false,
-      isAuthenticated: true,
-      reloadMe: vi.fn(),
-    });
-    mocks.fetchPurchaseOffers.mockResolvedValue([{
-      code: "science-season-lifetime",
-      title: "科普季终身版",
-      plan_label: "终身",
-      price_amount: "99.00",
-      original_price_amount: "99.00",
-      final_price_amount: "99.00",
-    }]);
-    mocks.fetchCouponChoices.mockResolvedValue({
-      choices: [],
-      default_coupon_id: null,
-      no_coupon_pricing: { final_amount: "99.00" },
-    });
-    mocks.createAlipayPurchase.mockRejectedValue({
-      status: 500,
-      message: "API request failed: 500",
-      data: {
-        detail: "Database constraint failed",
-        request_id: "debug-123",
-      },
-    });
-
-    renderCheckout(SCIENCE_SEASON_MODULE.id);
-
-    fireEvent.click(await screen.findByRole("button", { name: "去支付宝支付" }));
-
-    const debug = await screen.findByRole("alert");
-    expect(debug).toHaveTextContent("临时支付调试信息");
-    expect(debug).toHaveTextContent("HTTP 500");
-    expect(debug).toHaveTextContent("Database constraint failed");
-    expect(debug).toHaveTextContent("debug-123");
-    expect(screen.getByRole("button", { name: "去支付宝支付" })).toBeInTheDocument();
-  });
 });

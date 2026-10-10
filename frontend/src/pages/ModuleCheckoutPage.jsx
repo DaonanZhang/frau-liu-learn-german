@@ -93,29 +93,6 @@ function formatExpiry(value) {
   }).format(date)}`;
 }
 
-function formatPaymentDebugError(error) {
-  const status = error?.status ? `HTTP ${error.status}` : "HTTP 状态未知";
-  const responseData = error?.data;
-  let responseText = "（后端没有返回响应内容）";
-
-  if (typeof responseData === "string" && responseData.trim()) {
-    responseText = responseData.trim();
-  } else if (responseData !== null && responseData !== undefined) {
-    try {
-      responseText = JSON.stringify(responseData, null, 2);
-    } catch {
-      responseText = String(responseData);
-    }
-  }
-
-  return [
-    "临时支付调试信息",
-    status,
-    `后端响应：${responseText}`,
-    `前端错误：${error?.message || "未知错误"}`,
-  ].join("\n");
-}
-
 export default function ModuleCheckoutPage() {
   const { moduleId } = useParams();
   const navigate = useNavigate();
@@ -139,7 +116,6 @@ export default function ModuleCheckoutPage() {
   const [offers, setOffers] = useState([]);
   const [loadingOffers, setLoadingOffers] = useState(true);
   const [offersError, setOffersError] = useState("");
-  const [paymentDebugError, setPaymentDebugError] = useState("");
   const [creatingOrderCode, setCreatingOrderCode] = useState("");
   const [couponChoicesByOffer, setCouponChoicesByOffer] = useState({});
   const [selectedCouponByOffer, setSelectedCouponByOffer] = useState({});
@@ -296,7 +272,6 @@ export default function ModuleCheckoutPage() {
 
     try {
       setCreatingOrderCode(offerCode);
-      setPaymentDebugError("");
       const couponBundle = couponChoicesByOffer[offerCode];
       const hasExplicitSelection = Object.prototype.hasOwnProperty.call(
         selectedCouponByOffer,
@@ -321,7 +296,7 @@ export default function ModuleCheckoutPage() {
       }
       window.location.assign(payUrl);
     } catch (err) {
-      setPaymentDebugError(formatPaymentDebugError(err));
+      setOffersError(err?.data?.detail || err?.message || "创建支付订单失败");
       setCreatingOrderCode("");
     }
   }
@@ -411,11 +386,6 @@ export default function ModuleCheckoutPage() {
       ) : null}
 
       {loadingOffers ? <div className="module-checkout-page__state">加载购买方案中...</div> : null}
-        {paymentDebugError ? (
-          <pre className="module-checkout-page__payment-debug" role="alert">
-            {paymentDebugError}
-          </pre>
-        ) : null}
         {!loadingOffers && offersError ? (
           <div className="module-checkout-page__state module-checkout-page__state--error">
             {offersError}

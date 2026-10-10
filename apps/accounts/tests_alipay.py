@@ -197,33 +197,6 @@ class AlipayPaymentApiTests(APITestCase):
             ],
         )
 
-    @patch("apps.accounts.views.payment.get_alipay_service")
-    def test_create_purchase_temporarily_returns_unhandled_error_details(
-        self,
-        mock_get_alipay_service: Mock,
-    ) -> None:
-        mock_get_alipay_service.return_value.build_page_pay_url.side_effect = RuntimeError(
-            "temporary checkout debug failure"
-        )
-
-        with self.assertLogs("apps.accounts.views.payment", level="ERROR"):
-            response = self.client.post(
-                "/api/accounts/payments/alipay/create/",
-                {
-                    "offer_code": self.offer.code,
-                    "idempotency_key": "00000000-0000-4000-8000-000000000098",
-                },
-                format="json",
-            )
-
-        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
-        self.assertEqual(response.data["exception_type"], "RuntimeError")
-        self.assertEqual(
-            response.data["exception_message"],
-            "temporary checkout debug failure",
-        )
-        self.assertIn("RuntimeError: temporary checkout debug failure", response.data["traceback"])
-
     @override_settings(COMING_SOON=True)
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_mock_exam_coming_soon_does_not_block_exam_purchase(

@@ -22,8 +22,9 @@ from apps.accounts.models import (
     PurchaseOffer,
     UserCoupon,
 )
-from apps.accounts.services.promotion_codes import store_promotion_code
 from apps.accounts.services.promotion_codes import create_promotion_code_batch
+from apps.accounts.services.promotion_codes import eligible_coupon_queryset
+from apps.accounts.services.promotion_codes import store_promotion_code
 from apps.accounts.services.promotion_codes import sync_payment_discount_status
 from apps.accounts.views.payment import _mark_open_payment_closed
 
@@ -169,6 +170,18 @@ class PromotionCodeTests(APITestCase):
             ).count(),
             2,
         )
+
+    def test_coupon_locking_query_does_not_use_distinct(self) -> None:
+        self.redeem()
+
+        queryset = eligible_coupon_queryset(
+            user=self.user,
+            offer=self.offer,
+            for_update=True,
+        )
+
+        self.assertTrue(queryset.query.select_for_update)
+        self.assertFalse(queryset.query.distinct)
 
     def test_redeem_expired_promotion_code_returns_specific_message(self) -> None:
         expired_record = store_promotion_code(

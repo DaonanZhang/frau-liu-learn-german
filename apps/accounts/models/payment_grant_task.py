@@ -14,6 +14,7 @@ class PaymentGrantTask(models.Model):
         PROCESSING = "processing", "Processing"
         SUCCEEDED = "succeeded", "Succeeded"
         FAILED = "failed", "Failed"
+        CANCELED = "canceled", "Canceled"
 
     payment = models.ForeignKey(
         "accounts.AlipayWebsitePayment",

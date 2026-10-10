@@ -24,6 +24,7 @@ from apps.accounts.models import (
 from apps.accounts.views.payment import _apply_payment_status, _query_and_sync_payment_status
 from apps.accounts.services.payment_grant_service import process_payment_grant_task_by_id
 from apps.accounts.services.alipay_service import AlipayClientConfig, AlipayService
+from apps.accounts.tasks import reconcile_alipay_payments_now
 
 
 class AlipayNotifySignatureTests(SimpleTestCase):
@@ -1000,7 +1001,7 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertNotIn("last_error", response.data)
         self.assertNotIn("secret", str(response.data))
 
-    def test_lifetime_access_race_fails_grant_instead_of_consuming_paid_order(self) -> None:
+    def test_lifetime_access_race_cancels_redundant_grant_task(self) -> None:
         Entitlement.objects.create(
             user=self.user,
             module=self.module,
@@ -1025,16 +1026,22 @@ class AlipayPaymentApiTests(APITestCase):
             plan=Entitlement.Plan.MONTH_1,
         )
 
-        with self.assertRaisesRegex(ValueError, "lifetime access"):
-            process_payment_grant_task_by_id(payment_grant_task_id=grant_task.id)
+        process_payment_grant_task_by_id(payment_grant_task_id=grant_task.id)
 
         grant_task.refresh_from_db()
-        self.assertEqual(grant_task.status, PaymentGrantTask.Status.FAILED)
+        self.assertEqual(grant_task.status, PaymentGrantTask.Status.CANCELED)
+        self.assertEqual(grant_task.attempt_count, 1)
+        self.assertIsNotNone(grant_task.processed_at)
+        self.assertIn("lifetime access", grant_task.last_error)
         self.assertFalse(
             Entitlement.objects.filter(
                 external_ref=f"alipay_payment:{payment.merchant_order_no}"
             ).exists()
         )
+
+        process_payment_grant_task_by_id(payment_grant_task_id=grant_task.id)
+        grant_task.refresh_from_db()
+        self.assertEqual(grant_task.attempt_count, 1)
 
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_full_refund_revokes_entitlement_and_compacts_later_extension(
@@ -1098,3 +1105,126 @@ class AlipayPaymentApiTests(APITestCase):
         self.assertEqual(refunded_entitlement.status, Entitlement.Status.CANCELED)
         self.assertLess(later.starts_at, now + timedelta(minutes=1))
         self.assertEqual(later.expires_at - later.starts_at, timedelta(days=60))
+
+
+@override_settings(
+    ALIPAY_RECONCILE_INTERVAL_SECONDS=900,
+    ALIPAY_RECONCILE_HISTORY_DAYS=400,
+    ALIPAY_REFUND_RECONCILE_DAYS=90,
+)
+class AlipayReconciliationTests(APITestCase):
+    @patch("apps.accounts.views.payment._query_and_sync_payment_status")
+    def test_old_paid_order_outside_refund_window_is_not_queried(
+        self,
+        mock_query: Mock,
+    ) -> None:
+        now = timezone.now()
+        AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-old-paid-001",
+            subject="Historical paid order",
+            total_amount=Decimal("99.00"),
+            status=AlipayWebsitePayment.Status.PAID,
+            paid_at=now - timedelta(days=91),
+            last_reconciled_at=now - timedelta(days=91),
+        )
+
+        stats = reconcile_alipay_payments_now(limit=100)
+
+        mock_query.assert_not_called()
+        self.assertEqual(stats["queried"], 0)
+
+    @patch("apps.accounts.views.payment._query_and_sync_payment_status")
+    def test_recent_paid_order_is_still_queried_for_refunds(
+        self,
+        mock_query: Mock,
+    ) -> None:
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-recent-paid-001",
+            subject="Recent paid order",
+            total_amount=Decimal("99.00"),
+            status=AlipayWebsitePayment.Status.PAID,
+            paid_at=timezone.now() - timedelta(days=5),
+            last_reconciled_at=timezone.now() - timedelta(hours=1),
+        )
+
+        stats = reconcile_alipay_payments_now(limit=100)
+
+        mock_query.assert_called_once_with(payment=payment)
+        self.assertEqual(stats["queried"], 1)
+
+    @patch("apps.accounts.tasks.process_payment_grant_task_by_id")
+    def test_canceled_grant_task_is_not_retried(
+        self,
+        mock_process: Mock,
+    ) -> None:
+        user = get_user_model().objects.create_user(
+            telephone="13900139000",
+            country_code="+86",
+            password="pass-123456",
+        )
+        module = Module.objects.create(
+            key="reconcile-test-module",
+            name="Reconcile test module",
+        )
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-canceled-grant-001",
+            subject="Canceled grant",
+            total_amount=Decimal("99.00"),
+            status=AlipayWebsitePayment.Status.PAID,
+            paid_at=timezone.now() - timedelta(days=91),
+            last_reconciled_at=timezone.now(),
+        )
+        PaymentGrantTask.objects.create(
+            payment=payment,
+            user=user,
+            module=module,
+            season=None,
+            plan=Entitlement.Plan.LIFETIME,
+            status=PaymentGrantTask.Status.CANCELED,
+        )
+
+        reconcile_alipay_payments_now(limit=100)
+
+        mock_process.assert_not_called()
+
+    @patch("apps.accounts.tasks.revoke_and_compact_payment_entitlement")
+    def test_processed_refund_is_not_reprocessed(
+        self,
+        mock_revoke: Mock,
+    ) -> None:
+        AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-refund-processed-001",
+            subject="Processed refund",
+            total_amount=Decimal("99.00"),
+            status=AlipayWebsitePayment.Status.REFUNDED,
+            paid_at=timezone.now() - timedelta(days=5),
+            refunded_at=timezone.now() - timedelta(days=1),
+            refunded_amount=Decimal("99.00"),
+            refund_entitlement_reconciled_at=timezone.now(),
+        )
+
+        reconcile_alipay_payments_now(limit=100)
+
+        mock_revoke.assert_not_called()
+
+    @patch("apps.accounts.tasks.revoke_and_compact_payment_entitlement")
+    def test_unprocessed_refund_is_marked_after_entitlement_reconciliation(
+        self,
+        mock_revoke: Mock,
+    ) -> None:
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-refund-unprocessed-001",
+            subject="Unprocessed refund",
+            total_amount=Decimal("99.00"),
+            status=AlipayWebsitePayment.Status.REFUNDED,
+            paid_at=timezone.now() - timedelta(days=5),
+            refunded_at=timezone.now() - timedelta(days=1),
+            refunded_amount=Decimal("99.00"),
+        )
+
+        stats = reconcile_alipay_payments_now(limit=100)
+
+        mock_revoke.assert_called_once_with(payment=payment)
+        payment.refresh_from_db()
+        self.assertIsNotNone(payment.refund_entitlement_reconciled_at)
+        self.assertEqual(stats["refund_entitlements_reconciled"], 1)

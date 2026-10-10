@@ -4,7 +4,10 @@ from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 from apps.accounts.models import PaymentGrantTask
-from apps.accounts.services.entitlement_grant_service import grant_or_extend_entitlement
+from apps.accounts.services.entitlement_grant_service import (
+    ExistingLifetimeAccessError,
+    grant_or_extend_entitlement,
+)
 
 
 def enqueue_payment_grant_task(*, payment_grant_task: PaymentGrantTask) -> str:
@@ -83,7 +86,10 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
                 .get(pk=payment_grant_task_id)
             )
 
-            if payment_grant_task.status == PaymentGrantTask.Status.SUCCEEDED:
+            if payment_grant_task.status in {
+                PaymentGrantTask.Status.SUCCEEDED,
+                PaymentGrantTask.Status.CANCELED,
+            }:
                 return
 
             payment_grant_task.attempt_count += 1
@@ -96,14 +102,23 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
             if payment_grant_task.payment.status != payment_grant_task.payment.Status.PAID:
                 raise ValueError("Payment is not confirmed as paid.")
 
-            grant_or_extend_entitlement(
-                user=payment_grant_task.user,
-                module=payment_grant_task.module,
-                season=payment_grant_task.season,
-                plan=payment_grant_task.plan,
-                external_ref=f"alipay_payment:{payment_grant_task.payment.merchant_order_no}",
-                reject_if_lifetime=True,
-            )
+            try:
+                grant_or_extend_entitlement(
+                    user=payment_grant_task.user,
+                    module=payment_grant_task.module,
+                    season=payment_grant_task.season,
+                    plan=payment_grant_task.plan,
+                    external_ref=f"alipay_payment:{payment_grant_task.payment.merchant_order_no}",
+                    reject_if_lifetime=True,
+                )
+            except ExistingLifetimeAccessError as exc:
+                payment_grant_task.status = PaymentGrantTask.Status.CANCELED
+                payment_grant_task.processed_at = timezone.now()
+                payment_grant_task.last_error = str(exc)
+                payment_grant_task.save(
+                    update_fields=["status", "processed_at", "last_error", "updated_at"]
+                )
+                return
 
             payment_grant_task.status = PaymentGrantTask.Status.SUCCEEDED
             payment_grant_task.processed_at = timezone.now()

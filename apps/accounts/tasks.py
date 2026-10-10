@@ -12,6 +12,9 @@ from django.utils import timezone
 from apps.accounts.services.payment_grant_service import (
     process_payment_grant_task_by_id,
 )
+from apps.accounts.services.entitlement_grant_service import (
+    revoke_and_compact_payment_entitlement,
+)
 from apps.accounts.models import AlipayWebsitePayment, PaymentGrantTask
 
 
@@ -50,23 +53,29 @@ def reconcile_alipay_payments_now(*, limit: int = 100) -> dict[str, int]:
     history_start = now - timedelta(
         days=int(getattr(settings, "ALIPAY_RECONCILE_HISTORY_DAYS", 400))
     )
+    refund_reconcile_start = now - timedelta(
+        days=int(getattr(settings, "ALIPAY_REFUND_RECONCILE_DAYS", 90))
+    )
+    reconciliation_due = Q(last_reconciled_at__lte=cutoff) | Q(
+        last_reconciled_at__isnull=True
+    )
+    recent_paid = Q(paid_at__gte=refund_reconcile_start) | Q(
+        paid_at__isnull=True,
+        created_at__gte=refund_reconcile_start,
+    )
     payments = list(
         AlipayWebsitePayment.objects.filter(created_at__gte=history_start)
         .filter(
             Q(status__in=[AlipayWebsitePayment.Status.CREATED, AlipayWebsitePayment.Status.PENDING])
-            | Q(
-                status__in=[
-                    AlipayWebsitePayment.Status.PAID,
-                    AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
-                ],
-                last_reconciled_at__lte=cutoff,
-            )
-            | Q(
-                status__in=[
-                    AlipayWebsitePayment.Status.PAID,
-                    AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
-                ],
-                last_reconciled_at__isnull=True,
+            | (
+                recent_paid
+                & reconciliation_due
+                & Q(
+                    status__in=[
+                        AlipayWebsitePayment.Status.PAID,
+                        AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
+                    ]
+                )
             )
         )
         .order_by("last_reconciled_at", "created_at")[:limit]
@@ -75,7 +84,9 @@ def reconcile_alipay_payments_now(*, limit: int = 100) -> dict[str, int]:
         "queried": 0,
         "query_failed": 0,
         "grant_retried": 0,
+        "grant_canceled": 0,
         "grant_failed": 0,
+        "refund_entitlements_reconciled": 0,
         "notify_payloads_purged": 0,
     }
     for payment in payments:
@@ -98,7 +109,11 @@ def reconcile_alipay_payments_now(*, limit: int = 100) -> dict[str, int]:
     for grant_task in failed_or_pending:
         try:
             process_payment_grant_task_by_id(payment_grant_task_id=grant_task.id)
-            stats["grant_retried"] += 1
+            grant_task.refresh_from_db(fields=["status"])
+            if grant_task.status == PaymentGrantTask.Status.CANCELED:
+                stats["grant_canceled"] += 1
+            else:
+                stats["grant_retried"] += 1
         except (DatabaseError, ValueError) as exc:
             stats["grant_failed"] += 1
             logger.exception(
@@ -106,14 +121,18 @@ def reconcile_alipay_payments_now(*, limit: int = 100) -> dict[str, int]:
                 exc,
                 extra={"grant_task_id": grant_task.id},
             )
-    from apps.accounts.services import revoke_and_compact_payment_entitlement
-
     refunded_payments = AlipayWebsitePayment.objects.filter(
         status=AlipayWebsitePayment.Status.REFUNDED,
+        refund_entitlement_reconciled_at__isnull=True,
     ).order_by("-refunded_at")[:limit]
     for refunded_payment in refunded_payments:
         try:
             revoke_and_compact_payment_entitlement(payment=refunded_payment)
+            refunded_payment.refund_entitlement_reconciled_at = timezone.now()
+            refunded_payment.save(
+                update_fields=["refund_entitlement_reconciled_at", "updated_at"]
+            )
+            stats["refund_entitlements_reconciled"] += 1
         except DatabaseError:
             logger.exception(
                 "Scheduled refund entitlement revocation failed",

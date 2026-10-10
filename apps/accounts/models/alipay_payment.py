@@ -80,6 +80,11 @@ class AlipayWebsitePayment(models.Model):
         blank=True,
         help_text="Timestamp when a full refund was confirmed.",
     )
+    refund_entitlement_reconciled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when entitlement revocation for a full refund was reconciled.",
+    )
 
     class Meta:
         indexes = [

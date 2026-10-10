@@ -333,8 +333,12 @@ def _find_incomplete_paid_purchase(
             season_id=season_id,
             plan=plan,
             payment__status=AlipayWebsitePayment.Status.PAID,
+            status__in=[
+                PaymentGrantTask.Status.PENDING,
+                PaymentGrantTask.Status.PROCESSING,
+                PaymentGrantTask.Status.FAILED,
+            ],
         )
-        .exclude(status=PaymentGrantTask.Status.SUCCEEDED)
         .order_by("-id")
         .first()
     )
@@ -682,7 +686,10 @@ class CreateAlipayPurchaseAPIView(APIView):
                     extra={"grant_task_id": incomplete_paid_grant_task.id},
                 )
             incomplete_paid_grant_task.refresh_from_db()
-            if incomplete_paid_grant_task.status == PaymentGrantTask.Status.SUCCEEDED:
+            if incomplete_paid_grant_task.status in {
+                PaymentGrantTask.Status.SUCCEEDED,
+                PaymentGrantTask.Status.CANCELED,
+            }:
                 return_url = alipay_service.config.return_url if alipay_service else _resolve_frontend_return_url(request)
                 return Response(
                     _build_purchase_response_data(
@@ -1053,7 +1060,10 @@ class AlipayPaymentStatusAPIView(APIView):
 
         if (
             payment.status == AlipayWebsitePayment.Status.PAID
-            and grant_task.status != PaymentGrantTask.Status.SUCCEEDED
+            and grant_task.status not in {
+                PaymentGrantTask.Status.SUCCEEDED,
+                PaymentGrantTask.Status.CANCELED,
+            }
         ):
             try:
                 process_payment_grant_task_by_id(payment_grant_task_id=grant_task.id)
@@ -1070,7 +1080,10 @@ class AlipayPaymentStatusAPIView(APIView):
         is_paid = payment_status in PAID_PAYMENT_STATUSES
         is_refunded = payment_status == AlipayWebsitePayment.Status.REFUNDED
         is_partially_refunded = payment_status == AlipayWebsitePayment.Status.PARTIALLY_REFUNDED
-        is_granted = grant_status == PaymentGrantTask.Status.SUCCEEDED and not is_refunded
+        is_granted = grant_status in {
+            PaymentGrantTask.Status.SUCCEEDED,
+            PaymentGrantTask.Status.CANCELED,
+        } and not is_refunded
         is_pending_grant = is_paid and not is_granted and grant_status in {
             PaymentGrantTask.Status.PENDING,
             PaymentGrantTask.Status.PROCESSING,

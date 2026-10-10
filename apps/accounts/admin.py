@@ -186,6 +186,7 @@ class AlipayWebsitePaymentAdmin(admin.ModelAdmin):
         "last_reconciled_at",
         "refunded_amount",
         "refunded_at",
+        "refund_entitlement_reconciled_at",
     )
 
     def has_delete_permission(self, request, obj=None):

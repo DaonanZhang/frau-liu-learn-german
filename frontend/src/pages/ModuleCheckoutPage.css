@@ -523,11 +523,83 @@
   z-index: 1;
   width: min(100%, 42rem);
   max-height: min(82vh, 46rem);
+  max-height: min(82dvh, 46rem);
   overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 22px 22px 0 0;
   background: #fff;
   box-shadow: 0 -20px 60px rgba(17, 24, 39, 0.22);
   padding: 0.75rem 1rem max(1rem, env(safe-area-inset-bottom));
+}
+
+.module-checkout-page__couponConfirm {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.module-checkout-page__couponConfirmBackdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(17, 24, 39, 0.64);
+}
+
+.module-checkout-page__couponConfirmDialog {
+  position: relative;
+  width: min(100%, 25rem);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(17, 24, 39, 0.28);
+  padding: 1.25rem;
+}
+
+.module-checkout-page__couponConfirmDialog h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 1.1rem;
+}
+
+.module-checkout-page__couponConfirmDialog p {
+  margin: 0.7rem 0 0;
+  color: #4b5563;
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.module-checkout-page__couponConfirmActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 1.1rem;
+}
+
+.module-checkout-page__couponConfirmActions button {
+  min-height: 44px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  background: #fff;
+  color: #374151;
+  font-weight: 800;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.module-checkout-page__couponConfirmActions button.is-primary {
+  border-color: #e45b24;
+  background: #e45b24;
+  color: #fff;
+}
+
+.module-checkout-page__couponConfirmActions button:active {
+  transform: scale(0.98);
 }
 
 .module-checkout-page__couponSheetHandle {

@@ -221,9 +221,12 @@ class PaymentGrantTaskAdmin(admin.ModelAdmin):
 class PromotionCodeRecordAdmin(admin.ModelAdmin):
     list_display = (
         "id", "code", "campaign_name", "organization_name", "remark", "discount_amount", "status",
-        "consumed_by_user", "consumed_at", "expires_at",
+        "redemption_mode", "stacking_policy", "consumed_by_user", "consumed_at", "expires_at",
     )
-    list_filter = ("campaign_name", "organization_name", "status", "consumed_at", "created_at")
+    list_filter = (
+        "campaign_name", "organization_name", "redemption_mode", "stacking_policy",
+        "status", "consumed_at", "created_at",
+    )
     search_fields = ("code", "remark", "campaign_name", "organization_name", "consumed_by_user__telephone")
     readonly_fields = (
         "code", "status", "consumed_by_user", "consumed_at",

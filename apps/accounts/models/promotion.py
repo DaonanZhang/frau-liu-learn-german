@@ -13,6 +13,17 @@ class PromotionCodeRecord(models.Model):
         EXPIRED = "expired", "Expired"
         REVOKED = "revoked", "Revoked"
 
+    class RedemptionMode(models.TextChoices):
+        SINGLE_USE = "single_use", "Single use"
+        REUSABLE = "reusable", "Reusable"
+
+    class StackingPolicy(models.TextChoices):
+        STACK = "stack", "Stack with automatic discounts"
+        EXCLUSIVE_BRAND_FRIEND = (
+            "exclusive_brand_friend",
+            "Cannot stack with the brand-friend discount",
+        )
+
     code = models.CharField(max_length=32, unique=True)
     campaign_name = models.CharField(max_length=128)
     organization_name = models.CharField(max_length=128, blank=True, default="")
@@ -41,6 +52,16 @@ class PromotionCodeRecord(models.Model):
         related_name="promotion_codes",
     )
     coupon_valid_days = models.PositiveIntegerField(null=True, blank=True, default=None)
+    redemption_mode = models.CharField(
+        max_length=16,
+        choices=RedemptionMode.choices,
+        default=RedemptionMode.SINGLE_USE,
+    )
+    stacking_policy = models.CharField(
+        max_length=32,
+        choices=StackingPolicy.choices,
+        default=StackingPolicy.STACK,
+    )
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -101,10 +122,10 @@ class UserCoupon(models.Model):
         on_delete=models.CASCADE,
         related_name="promotion_coupons",
     )
-    promotion_code = models.OneToOneField(
+    promotion_code = models.ForeignKey(
         PromotionCodeRecord,
         on_delete=models.PROTECT,
-        related_name="coupon",
+        related_name="coupons",
     )
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2)
     minimum_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)

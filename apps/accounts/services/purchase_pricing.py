@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.db import models
 from django.utils import timezone
 
-from apps.accounts.models import Entitlement, PurchaseOffer
+from apps.accounts.models import Entitlement, PromotionCodeRecord, PurchaseOffer
 
 BRAND_FRIEND_COUPON_DISCOUNT_AMOUNT = Decimal("5.00")
 BRAND_FRIEND_COUPON_LABEL = "品牌挚友优惠券"
@@ -155,6 +155,7 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
     if coupon is False:
         return automatic
 
+    explicit_coupon = coupon is not None
     if coupon is None:
         from apps.accounts.services.promotion_codes import eligible_coupon_queryset
 
@@ -164,9 +165,23 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
 
     best = automatic
     for candidate in coupons:
-        base_amount = automatic.final_amount
+        replaces_brand_friend = (
+            candidate.promotion_code.stacking_policy
+            == PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND
+            and automatic.brand_friend_coupon_discount_amount > 0
+        )
+        retained_automatic_discount = automatic.automatic_discount_amount
+        retained_brand_friend_discount = automatic.brand_friend_coupon_discount_amount
+        automatic_label = automatic.discount_label
+        if replaces_brand_friend:
+            retained_automatic_discount -= automatic.brand_friend_coupon_discount_amount
+            retained_brand_friend_discount = Decimal("0.00")
+            automatic_label = "" if retained_automatic_discount <= 0 else automatic.discount_label
+        base_amount = automatic.original_amount - retained_automatic_discount
         candidate_final = max(base_amount - candidate.discount_amount, Decimal("0.01"))
-        if candidate_final >= best.final_amount:
+        if candidate_final > best.final_amount or (
+            candidate_final == best.final_amount and not explicit_coupon
+        ):
             continue
         promotion_discount = base_amount - candidate_final
         best = PurchasePricing(
@@ -175,14 +190,12 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
             discount_amount=automatic.original_amount - candidate_final,
             discount_label=" + ".join(
                 label
-                for label in (automatic.discount_label, "优惠券优惠")
+                for label in (automatic_label, "优惠券优惠")
                 if label
             ),
             is_discounted=True,
-            automatic_discount_amount=automatic.automatic_discount_amount,
-            brand_friend_coupon_discount_amount=(
-                automatic.brand_friend_coupon_discount_amount
-            ),
+            automatic_discount_amount=retained_automatic_discount,
+            brand_friend_coupon_discount_amount=retained_brand_friend_discount,
             promotion_discount_amount=promotion_discount,
             coupon=candidate,
         )

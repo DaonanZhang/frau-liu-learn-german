@@ -6,16 +6,27 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
-from apps.accounts.models import Module, ModuleSeason, PurchaseOffer
-from apps.accounts.services.promotion_codes import create_promotion_code_batch
+from apps.accounts.models import Module, ModuleSeason, PromotionCodeRecord, PurchaseOffer
+from apps.accounts.services.promotion_codes import create_promotion_code_batch, store_promotion_code
 
 
 class Command(BaseCommand):
-    help = "Generate database-backed one-time promotion codes for one channel campaign."
+    help = "Generate database-backed promotion codes for one channel campaign."
 
     def add_arguments(self, parser) -> None:
         parser.add_argument("--campaign-name", required=True)
         parser.add_argument("--organization", default="")
+        parser.add_argument("--code", help="Create one promotion code with this exact value.")
+        parser.add_argument(
+            "--reusable",
+            action="store_true",
+            help="Allow the explicitly supplied --code to be redeemed repeatedly.",
+        )
+        parser.add_argument(
+            "--exclusive-brand-friend",
+            action="store_true",
+            help="Make the explicitly supplied --code replace, rather than stack with, the brand-friend discount.",
+        )
         parser.add_argument("--discount", type=Decimal, default=Decimal("5.00"))
         parser.add_argument("--count", type=int, default=1)
         parser.add_argument("--expires-days", type=int, default=360)
@@ -44,6 +55,10 @@ class Command(BaseCommand):
             raise CommandError("--coupon-valid-days must be greater than zero")
         if options["length"] > 32:
             raise CommandError("--length cannot exceed 32")
+        if options.get("code") and options["count"] != 1:
+            raise CommandError("--code requires --count=1")
+        if (options["reusable"] or options["exclusive_brand_friend"]) and not options.get("code"):
+            raise CommandError("--reusable and --exclusive-brand-friend require --code")
 
         module = None
         season = None
@@ -72,25 +87,52 @@ class Command(BaseCommand):
             if offer.module_id != module.id or offer.season_id != getattr(season, "id", None):
                 raise CommandError("The offer does not match the requested module/season scope")
 
+        expires_at = (
+            None
+            if options["no_expiry"]
+            else timezone.now() + timedelta(days=options["expires_days"])
+        )
         try:
-            codes = create_promotion_code_batch(
-                campaign_name=options["campaign_name"],
-                organization_name=options["organization"],
-                count=options["count"],
-                length=options["length"],
-                remark=options["remark"],
-                discount_amount=options["discount"],
-                minimum_order_amount=options["minimum_order"],
-                applicable_module=module,
-                applicable_season=season,
-                applicable_offer=offer,
-                coupon_valid_days=options["coupon_valid_days"],
-                expires_at=(
-                    None
-                    if options["no_expiry"]
-                    else timezone.now() + timedelta(days=options["expires_days"])
-                ),
-            )
+            if options.get("code"):
+                record = store_promotion_code(
+                    code=options["code"],
+                    campaign_name=options["campaign_name"],
+                    organization_name=options["organization"],
+                    remark=options["remark"],
+                    discount_amount=options["discount"],
+                    minimum_order_amount=options["minimum_order"],
+                    applicable_module=module,
+                    applicable_season=season,
+                    applicable_offer=offer,
+                    coupon_valid_days=options["coupon_valid_days"],
+                    expires_at=expires_at,
+                    redemption_mode=(
+                        PromotionCodeRecord.RedemptionMode.REUSABLE
+                        if options["reusable"]
+                        else PromotionCodeRecord.RedemptionMode.SINGLE_USE
+                    ),
+                    stacking_policy=(
+                        PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND
+                        if options["exclusive_brand_friend"]
+                        else PromotionCodeRecord.StackingPolicy.STACK
+                    ),
+                )
+                codes = [record.code]
+            else:
+                codes = create_promotion_code_batch(
+                    campaign_name=options["campaign_name"],
+                    organization_name=options["organization"],
+                    count=options["count"],
+                    length=options["length"],
+                    remark=options["remark"],
+                    discount_amount=options["discount"],
+                    minimum_order_amount=options["minimum_order"],
+                    applicable_module=module,
+                    applicable_season=season,
+                    applicable_offer=offer,
+                    coupon_valid_days=options["coupon_valid_days"],
+                    expires_at=expires_at,
+                )
         except ValueError as exc:
             raise CommandError(str(exc)) from exc
 

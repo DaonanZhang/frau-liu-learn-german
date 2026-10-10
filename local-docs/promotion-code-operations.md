@@ -77,10 +77,11 @@ audit record when a coupon is used.
 
 Use `--module` and optional `--season` instead of `--offer` for a broader
 scope. Omit all three options for a coupon valid across every active offer.
-Promotion coupons always apply after any automatic member discount. An active
-entitlement for another module gives a ¥5 “品牌挚友专享” discount when buying
-exam preparation. For example, a ¥59.90 exam-preparation offer with that
-discount and a ¥10 coupon costs ¥44.90.
+Ordinary promotion coupons apply after any automatic member discount. An
+active entitlement for another module gives a ¥5 “品牌挚友专享” discount when
+buying exam preparation. For example, a ¥59.90 exam-preparation offer with that
+discount and a ¥10 ordinary coupon costs ¥44.90. The configured Kunlun Subtitle
+Group coupon is the exception described below.
 
 Promotion codes expire after 360 days by default. Pass `--no-expiry` when the
 unredeemed promotion code itself should remain redeemable indefinitely. This
@@ -94,7 +95,7 @@ controls how long the unredeemed promotion code remains redeemable.
 
 There is no separate promotion-campaign table. `campaign_name` and
 `organization_name` are stored directly on every `PromotionCodeRecord`.
-`UserCoupon` reads them through its protected one-to-one promotion-code source;
+`UserCoupon` reads them through its protected promotion-code source;
 it does not duplicate those fields. This keeps code generation independent and
 avoids a separate campaign lifecycle.
 
@@ -103,6 +104,32 @@ The management command delegates to
 `apps/accounts/services/promotion_codes.py`. The service creates the complete
 batch atomically and returns the plaintext code list to its trusted caller.
 
+### Kunlun Subtitle Group Code
+
+The single reusable Kunlun Subtitle Group code is `KLDYZMZ`. Create it
+once in the target environment with:
+
+```bash
+.venv/bin/python manage.py generate_promotion_codes \
+  --campaign-name "昆仑字幕组" \
+  --organization "昆仑字幕组" \
+  --code "KLDYZMZ" \
+  --reusable \
+  --exclusive-brand-friend \
+  --no-expiry \
+  --remark "昆仑字幕组长期合作码"
+```
+
+The code text does not activate any behavior. This one database record stores
+that it is reusable and that its issued coupons replace the automatic
+brand-friend discount. Existing and randomly generated promotion codes remain
+single-use and keep their current stacking behavior.
+
+Each redemption creates a separate one-use CNY 5 coupon. When the current
+order has no brand-friend discount, the coupon stacks with other automatic
+pricing. When a brand-friend discount applies, selecting this coupon replaces
+that discount, so the two CNY 5 benefits are not added together.
+
 ## User Coupon Wallet and Checkout
 
 - The signed-in redemption page is `/redeem-code` and is rendered inside the
@@ -110,6 +137,8 @@ batch atomically and returns the plaintext code list to its trusted caller.
   redirects there.
 - Redeeming a promotion code at `/api/accounts/auth/redeem-code/` consumes the
   one-time code and creates one `UserCoupon` owned by the authenticated user.
+- Redeeming the configured `KLDYZMZ` record leaves that code active and
+  creates a new one-use `UserCoupon` on every redemption.
 - `/api/accounts/coupons/` returns only the current user's coupon wallet and
   includes scope, status, expiry, and usage history.
 - `/api/accounts/coupons/choices/?offer_code=<code>` returns server-calculated
@@ -161,14 +190,29 @@ original price, promotion discount, final price, and timestamps:
   --details
 ```
 
+Report only the reusable Kunlun Subtitle Group code:
+
+```bash
+.venv/bin/python manage.py promotion_campaign_report \
+  --campaign-name "昆仑字幕组" \
+  --organization "昆仑字幕组" \
+  --code "KLDYZMZ" \
+  --month 2026-10 \
+  --details
+```
+
+The summary includes coupon redemption count, distinct redeeming users, paid
+orders, distinct paying users, and amount totals. Detail rows list every
+redemption and every paid product purchase.
+
 Only `PaymentDiscountApplication.status=applied` rows count as effective paid
 promotion purchases. Closed orders are released and full refunds are retained
 as `refunded` audit rows rather than counted as current effective purchases.
 
 ## Admin Tables
 
-- `PromotionCodeRecord`: one-time code, campaign/organization strings,
-  operator remark, consumer, consumption time and scope.
+- `PromotionCodeRecord`: code, redemption mode, stacking policy,
+  campaign/organization strings, operator remark, consumption data and scope.
 - `UserCoupon`: issued, reserved, used, expired or revoked user coupon.
 - `PaymentDiscountApplication`: immutable order price snapshot and discount
   lifecycle.

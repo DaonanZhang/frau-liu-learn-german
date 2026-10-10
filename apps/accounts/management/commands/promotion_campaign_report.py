@@ -7,7 +7,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Count, Sum
 from django.utils import timezone
 
-from apps.accounts.models import PaymentDiscountApplication, PromotionCodeRecord
+from apps.accounts.models import PaymentDiscountApplication, PromotionCodeRecord, UserCoupon
 
 
 class Command(BaseCommand):
@@ -16,6 +16,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser) -> None:
         parser.add_argument("--campaign-name", required=True)
         parser.add_argument("--organization", default="")
+        parser.add_argument("--code", default="", help="Limit the report to one exact promotion code.")
         parser.add_argument("--month", help="Calendar month in YYYY-MM format; defaults to the current month.")
         parser.add_argument("--details", action="store_true")
 
@@ -39,6 +40,11 @@ class Command(BaseCommand):
             consumed_at__gte=month_start,
             consumed_at__lt=next_month,
         ).select_related("consumed_by_user")
+        redemptions = UserCoupon.objects.filter(
+            promotion_code__campaign_name=options["campaign_name"],
+            issued_at__gte=month_start,
+            issued_at__lt=next_month,
+        ).select_related("user", "promotion_code")
         paid = PaymentDiscountApplication.objects.filter(
             campaign_name_snapshot=options["campaign_name"],
             status=PaymentDiscountApplication.Status.APPLIED,
@@ -47,7 +53,19 @@ class Command(BaseCommand):
         ).select_related("user", "offer", "payment", "promotion_code")
         if options["organization"]:
             redeemed = redeemed.filter(organization_name=options["organization"])
+            redemptions = redemptions.filter(
+                promotion_code__organization_name=options["organization"]
+            )
             paid = paid.filter(campaign_organization_snapshot=options["organization"])
+        normalized_code = str(options.get("code") or "").strip().upper()
+        if normalized_code:
+            redeemed = redeemed.filter(code=normalized_code)
+            redemptions = redemptions.filter(promotion_code__code=normalized_code)
+            paid = paid.filter(promotion_code__code=normalized_code)
+        redemption_totals = redemptions.aggregate(
+            coupon_redemptions=Count("id"),
+            redeeming_users=Count("user_id", distinct=True),
+        )
         totals = paid.aggregate(
             paid_orders=Count("id"),
             paying_users=Count("user_id", distinct=True),
@@ -57,9 +75,12 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(
-            f"campaign_name={options['campaign_name']} organization={options['organization']} month={month_text}"
+            f"campaign_name={options['campaign_name']} organization={options['organization']} "
+            f"code={normalized_code} month={month_text}"
         )
         self.stdout.write(f"redeemed_codes={redeemed.count()}")
+        self.stdout.write(f"coupon_redemptions={redemption_totals['coupon_redemptions'] or 0}")
+        self.stdout.write(f"redeeming_users={redemption_totals['redeeming_users'] or 0}")
         self.stdout.write(f"paid_orders={totals['paid_orders'] or 0}")
         self.stdout.write(f"paying_users={totals['paying_users'] or 0}")
         self.stdout.write(f"original_amount={(totals['original_amount'] or Decimal('0')):.2f}")
@@ -69,12 +90,12 @@ class Command(BaseCommand):
         if not options["details"]:
             return
         self.stdout.write("# redemptions")
-        for record in redeemed.order_by("consumed_at", "id"):
+        for coupon in redemptions.order_by("issued_at", "id"):
             self.stdout.write(
                 "\t".join([
-                    record.code,
-                    getattr(record.consumed_by_user, "telephone", "") or "",
-                    timezone.localtime(record.consumed_at).isoformat(),
+                    coupon.promotion_code.code,
+                    getattr(coupon.user, "telephone", "") or "",
+                    timezone.localtime(coupon.issued_at).isoformat(),
                 ])
             )
         self.stdout.write("# paid purchases")

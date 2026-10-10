@@ -138,10 +138,11 @@ def redeem_promotion_code(*, user, code: str) -> UserCoupon:
             else None
         ),
     )
-    record.status = PromotionCodeRecord.Status.CONSUMED
-    record.consumed_by_user = user
-    record.consumed_at = now
-    record.save(update_fields=["status", "consumed_by_user", "consumed_at", "updated_at"])
+    if record.redemption_mode == PromotionCodeRecord.RedemptionMode.SINGLE_USE:
+        record.status = PromotionCodeRecord.Status.CONSUMED
+        record.consumed_by_user = user
+        record.consumed_at = now
+        record.save(update_fields=["status", "consumed_by_user", "consumed_at", "updated_at"])
     return coupon
 
 

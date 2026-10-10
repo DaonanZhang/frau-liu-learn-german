@@ -128,6 +128,44 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(duplicate.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(UserCoupon.objects.count(), 1)
 
+    def test_reusable_promotion_code_can_issue_multiple_coupons_to_the_same_user(self) -> None:
+        reusable_record = store_promotion_code(
+            code="KLDYZMZ",
+            campaign_name="昆仑字幕组",
+            organization_name="昆仑字幕组",
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=None,
+            redemption_mode="reusable",
+            stacking_policy="exclusive_brand_friend",
+        )
+
+        first = self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": reusable_record.code},
+            format="json",
+        )
+        second = self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": reusable_record.code},
+            format="json",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_200_OK)
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        reusable_record.refresh_from_db()
+        self.assertEqual(reusable_record.status, PromotionCodeRecord.Status.ACTIVE)
+        self.assertIsNone(reusable_record.consumed_by_user)
+        self.assertIsNone(reusable_record.consumed_at)
+        self.assertEqual(
+            UserCoupon.objects.filter(
+                promotion_code=reusable_record,
+                user=self.user,
+            ).count(),
+            2,
+        )
+
     def test_redeem_expired_promotion_code_returns_specific_message(self) -> None:
         expired_record = store_promotion_code(
             code="EXPIRED001",
@@ -299,6 +337,87 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(redeemed.data["coupon"]["minimum_order_amount"], "0.00")
         self.assertIsNone(redeemed.data["coupon"]["expires_at"])
 
+    def test_generation_command_creates_the_single_configured_kldyzmz_code(self) -> None:
+        output = StringIO()
+
+        call_command(
+            "generate_promotion_codes",
+            campaign_name="昆仑字幕组",
+            organization="昆仑字幕组",
+            code="KLDYZMZ",
+            reusable=True,
+            exclusive_brand_friend=True,
+            no_expiry=True,
+            stdout=output,
+        )
+
+        record = PromotionCodeRecord.objects.get(code="KLDYZMZ")
+        self.assertEqual(record.discount_amount, Decimal("5.00"))
+        self.assertEqual(record.minimum_order_amount, Decimal("0.00"))
+        self.assertEqual(
+            record.redemption_mode,
+            PromotionCodeRecord.RedemptionMode.REUSABLE,
+        )
+        self.assertEqual(
+            record.stacking_policy,
+            PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND,
+        )
+        self.assertIsNone(record.expires_at)
+        self.assertIn("KLDYZMZ", output.getvalue())
+
+    @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True, DEBUG=True)
+    def test_campaign_report_tracks_reusable_code_redemptions_and_paid_products(self) -> None:
+        promotion = store_promotion_code(
+            code="KLDYZMZ",
+            campaign_name="昆仑字幕组",
+            organization_name="昆仑字幕组",
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=None,
+            redemption_mode=PromotionCodeRecord.RedemptionMode.REUSABLE,
+            stacking_policy=PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND,
+        )
+        first_coupon_id = self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": promotion.code},
+            format="json",
+        ).data["coupon"]["id"]
+        self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": promotion.code},
+            format="json",
+        )
+        purchase = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {
+                "offer_code": self.offer.code,
+                "coupon_id": first_coupon_id,
+                "use_coupon": True,
+                "idempotency_key": "00000000-0000-4000-8000-000000000120",
+            },
+            format="json",
+        )
+        self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
+        output = StringIO()
+
+        call_command(
+            "promotion_campaign_report",
+            campaign_name="昆仑字幕组",
+            organization="昆仑字幕组",
+            code="KLDYZMZ",
+            month=timezone.localdate().strftime("%Y-%m"),
+            details=True,
+            stdout=output,
+        )
+
+        report = output.getvalue()
+        self.assertIn("coupon_redemptions=2", report)
+        self.assertIn("redeeming_users=1", report)
+        self.assertIn("paid_orders=1", report)
+        self.assertIn(self.user.telephone, report)
+        self.assertIn(self.offer.code, report)
+
     def test_coupon_choices_default_to_the_largest_effective_discount(self) -> None:
         best_coupon_id = self.redeem().data["coupon"]["id"]
         smaller_record = store_promotion_code(
@@ -409,6 +528,98 @@ class PromotionCodeTests(APITestCase):
         self.assertEqual(application.automatic_discount_amount, Decimal("5.00"))
         self.assertEqual(application.promotion_discount_amount, Decimal("10.00"))
         self.assertEqual(application.final_amount, Decimal("44.90"))
+
+    @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True, DEBUG=True)
+    def test_exclusive_coupon_replaces_brand_friend_discount_without_changing_price(self) -> None:
+        video_module, _ = Module.objects.get_or_create(
+            key="learning_by_video",
+            defaults={"name": "Learning by Video", "is_active": True},
+        )
+        exam_module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        exam_offer = PurchaseOffer.objects.create(
+            code="kldyzmz-brand-friend-exclusive",
+            title="昆仑字幕组互斥测试商品",
+            module=exam_module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            price_amount=Decimal("59.90"),
+            currency="CNY",
+        )
+        Entitlement.objects.create(
+            user=self.user,
+            module=video_module,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+            starts_at=timezone.now(),
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+        promotion = store_promotion_code(
+            code="KLDYZMZ",
+            campaign_name="昆仑字幕组",
+            organization_name="昆仑字幕组",
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=None,
+            redemption_mode=PromotionCodeRecord.RedemptionMode.REUSABLE,
+            stacking_policy=PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND,
+        )
+        coupon_id = self.client.post(
+            "/api/accounts/auth/redeem-code/",
+            {"code": promotion.code},
+            format="json",
+        ).data["coupon"]["id"]
+
+        choices = self.client.get(
+            "/api/accounts/coupons/choices/",
+            {"offer_code": exam_offer.code},
+        )
+
+        self.assertEqual(choices.status_code, status.HTTP_200_OK)
+        self.assertIsNone(choices.data["default_coupon_id"])
+        self.assertEqual(
+            choices.data["no_coupon_pricing"]["brand_friend_coupon_discount_amount"],
+            "5.00",
+        )
+        selected = next(
+            choice for choice in choices.data["choices"]
+            if choice["coupon"]["id"] == coupon_id
+        )
+        self.assertTrue(selected["is_applicable"])
+        self.assertEqual(
+            selected["coupon"]["stacking_policy"],
+            PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND,
+        )
+        self.assertEqual(selected["pricing"]["automatic_discount_amount"], "0.00")
+        self.assertEqual(
+            selected["pricing"]["brand_friend_coupon_discount_amount"],
+            "0.00",
+        )
+        self.assertEqual(selected["pricing"]["promotion_discount_amount"], "5.00")
+        self.assertEqual(selected["pricing"]["final_amount"], "54.90")
+
+        purchase = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {
+                "offer_code": exam_offer.code,
+                "coupon_id": coupon_id,
+                "use_coupon": True,
+                "idempotency_key": "00000000-0000-4000-8000-000000000119",
+            },
+            format="json",
+        )
+
+        self.assertEqual(purchase.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(purchase.data["amount"], "54.90")
+        application = PaymentDiscountApplication.objects.get(
+            payment_id=purchase.data["payment_id"]
+        )
+        self.assertEqual(application.automatic_discount_amount, Decimal("0.00"))
+        self.assertEqual(application.promotion_discount_amount, Decimal("5.00"))
+        self.assertEqual(application.final_amount, Decimal("54.90"))
 
     def test_user_cannot_apply_another_users_coupon(self) -> None:
         coupon_id = self.redeem().data["coupon"]["id"]

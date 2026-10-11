@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { getExerciseOptionSheetWidth } from "./ExerciseOptionSheet.utils.js";
 import "./ExerciseOptionSheet.css";
 
 export default function ExerciseOptionSheet({
@@ -15,6 +16,8 @@ export default function ExerciseOptionSheet({
   const panelRef = useRef(null);
   const anchorRef = useRef(null);
   const [position, setPosition] = useState(null);
+  const optionsSignature = JSON.stringify((options || []).map(({ label, meta }) => ({ label, meta })));
+  const layoutOptions = useMemo(() => JSON.parse(optionsSignature), [optionsSignature]);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -31,9 +34,13 @@ export default function ExerciseOptionSheet({
       const viewportHeight = window.innerHeight;
       const margin = viewportWidth <= 720 ? 8 : 16;
       const gap = viewportWidth <= 720 ? 6 : 9;
-      const sheetWidth = Math.min(448, viewportWidth - margin * 2);
+      const sheetWidth = getExerciseOptionSheetWidth(layoutOptions, {
+        metaPlacement,
+        viewportWidth,
+        margin,
+      });
       const sheetHeight = panelRef.current?.getBoundingClientRect().height
-        || Math.min(options.length * 80 + 28, 416, viewportHeight * 0.6);
+        || Math.min(layoutOptions.length * 80 + 28, 416, viewportHeight * 0.6);
       const spaceAbove = rect.top - margin;
       const spaceBelow = viewportHeight - rect.bottom - margin;
       const placeBelow = spaceBelow >= sheetHeight || spaceBelow >= spaceAbove;
@@ -48,7 +55,7 @@ export default function ExerciseOptionSheet({
         Math.max(rect.left, margin),
         viewportWidth - sheetWidth - margin
       );
-      setPosition({ top, left });
+      setPosition({ top, left, width: sheetWidth });
     }
 
     updatePosition();
@@ -63,7 +70,7 @@ export default function ExerciseOptionSheet({
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [open, options.length]);
+  }, [layoutOptions, metaPlacement, open]);
 
   useEffect(() => {
     if (!open) {

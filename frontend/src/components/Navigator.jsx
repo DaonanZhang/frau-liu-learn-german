@@ -163,7 +163,21 @@ export default function Navigator() {
                 navigate("/profile");
               }}
             >
-              {displayName}
+              <svg
+                className="nav-userIcon"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="nav-usernameLabel">{displayName}</span>
             </button>
             <button className="nav-btn" type="button" onClick={handleLogout}>
               登出

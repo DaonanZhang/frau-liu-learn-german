@@ -1,6 +1,6 @@
 .speaking-detail-page { display: flex; flex-direction: column; gap: 1.2rem; color: #2f3440; }
 .speaking-detail-topbar { display: flex; }
-.speaking-detail-back { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 1rem; border: 1px solid rgba(223, 226, 229, 0.96); border-radius: 999px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 10px 24px rgba(38, 52, 74, 0.06); color: #2f6f5e; font-weight: 700; text-decoration: none; }
+.speaking-detail-back { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 1rem; border: 1px solid rgba(223, 226, 229, 0.96); border-radius: 999px; background: rgba(255, 255, 255, 0.94); box-shadow: 0 10px 24px rgba(38, 52, 74, 0.06); color: #2f6f5e; font-weight: 700; text-decoration: none; white-space: nowrap; }
 .speaking-detail-hero { padding: 1.55rem; border: 1px solid rgba(221, 223, 227, 0.9); border-radius: 1.45rem; background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.58), transparent 30%), linear-gradient(135deg, #efe2c9 0%, #f8f4ec 44%, #dfeaf2 100%); box-shadow: 0 14px 32px rgba(39, 51, 74, 0.07); }
 .speaking-detail-hero__eyebrow, .speaking-detail-card__eyebrow { margin: 0 0 0.35rem; color: #6b5a48; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .speaking-detail-hero h1 { margin: 0; color: #2f2a25; font-size: clamp(1.75rem, 3vw, 2.55rem); line-height: 1.2; }

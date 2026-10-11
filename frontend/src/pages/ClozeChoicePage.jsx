@@ -12,6 +12,7 @@ import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionShe
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
+import { useClozeAnnotationLayout } from "./clozeAnnotationLayout.js";
 import "./ClozeExercisePage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -112,6 +113,13 @@ export default function ClozeChoicePage() {
   const answeredCount = useMemo(() => Object.values(answers).filter(Boolean).length, [answers]);
   const paragraphs = useMemo(() => renderParagraphs(exercise?.content_with_placeholders), [exercise]);
 
+  const {
+    annotationLayout,
+    clozeTextRef,
+    blankRefs,
+    detailsRefs,
+  } = useClozeAnnotationLayout({ blanks, isChecked, paragraphs });
+
   async function toggleFavorite(blank) {
     const nextValue = !favoritedByBlankId[blank.id];
     setFavoritePendingByBlankId((previous) => ({ ...previous, [blank.id]: true }));
@@ -204,7 +212,7 @@ export default function ClozeChoicePage() {
         </section>
 
         <section className="cloze-text-panel">
-          <div className="cloze-text">
+          <div className="cloze-text" ref={clozeTextRef}>
             {paragraphs.map((parts, paragraphIndex) => (
               <p key={`paragraph-${paragraphIndex}`} className="cloze-text__paragraph">
                 {parts.map((part, index) => {
@@ -216,12 +224,21 @@ export default function ClozeChoicePage() {
                   const correctOption = (blank?.options || []).find((option) => option.is_correct);
                   const selectedKey = answers[blankKey] || "";
                   const isCorrect = !!correctOption && selectedKey === correctOption.option_key;
+                  const annotationPosition = annotationLayout[blankKey];
 
                   return (
-                    <span key={blankKey} className="cloze-blank-inline">
+                    <span
+                      key={blankKey}
+                      ref={(node) => {
+                        blankRefs.current[blankKey] = node;
+                      }}
+                      className="cloze-blank-inline"
+                    >
                       <span
                         className={[
                           "cloze-drop-slot",
+                          !selectedKey ? "cloze-drop-slot--empty" : "",
+                          selectedKey ? "cloze-drop-slot--selected" : "",
                         ].filter(Boolean).join(" ")}
                       >
                         <button
@@ -266,33 +283,52 @@ export default function ClozeChoicePage() {
                         }}
                       />
                       {isChecked ? (
-                        <span className="cloze-choice-inline-details">
-                          <span className="cloze-choice-inline-result">
-                            <span
-                              className={[
-                                "cloze-inline-feedback",
-                                isCorrect ? "cloze-inline-feedback--correct" : "cloze-inline-feedback--wrong",
-                              ].join(" ")}
-                            >
-                              {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
-                            </span>
-                            <ExerciseFavoriteButton
-                              isFavorited={Boolean(favoritedByBlankId[blank.id])}
-                              pending={Boolean(favoritePendingByBlankId[blank.id])}
-                              onClick={() => {
-                                toggleFavorite(blank);
-                              }}
-                            />
-                          </span>
-                          {hasScopedExplanation(blank.explanation, blank.options || []) ? (
-                            <span className="cloze-choice-inline-explanation">
-                              Erklärung: <ScopedExplanation
-                                explanation={blank.explanation}
-                                explanationScope={blank.explanation_scope}
-                                options={blank.options || []}
+                        <span
+                          className="cloze-blank-inline__annotation"
+                          style={annotationPosition ? {
+                            "--cloze-annotation-reserve-height": `${annotationPosition.reserveHeight}px`,
+                          } : undefined}
+                        >
+                          <span
+                            ref={(node) => {
+                              detailsRefs.current[blankKey] = node;
+                            }}
+                            className="cloze-choice-inline-details"
+                            style={annotationPosition ? {
+                              "--cloze-annotation-x-offset": `${annotationPosition.xOffset}px`,
+                              "--cloze-annotation-lane-offset": `${annotationPosition.laneOffset}px`,
+                              ...(annotationPosition.width > 0
+                                ? { width: `${annotationPosition.width}px` }
+                                : {}),
+                            } : undefined}
+                          >
+                            <span className="cloze-choice-inline-result">
+                              <span
+                                className={[
+                                  "cloze-inline-feedback",
+                                  isCorrect ? "cloze-inline-feedback--correct" : "cloze-inline-feedback--wrong",
+                                ].join(" ")}
+                              >
+                                {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
+                              </span>
+                              <ExerciseFavoriteButton
+                                isFavorited={Boolean(favoritedByBlankId[blank.id])}
+                                pending={Boolean(favoritePendingByBlankId[blank.id])}
+                                onClick={() => {
+                                  toggleFavorite(blank);
+                                }}
                               />
                             </span>
-                          ) : null}
+                            {hasScopedExplanation(blank.explanation, blank.options || []) ? (
+                              <span className="cloze-choice-inline-explanation">
+                                Erklärung: <ScopedExplanation
+                                  explanation={blank.explanation}
+                                  explanationScope={blank.explanation_scope}
+                                  options={blank.options || []}
+                                />
+                              </span>
+                            ) : null}
+                          </span>
                         </span>
                       ) : null}
                     </span>

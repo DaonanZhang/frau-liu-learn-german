@@ -10,6 +10,7 @@ import {
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
+import { useClozeAnnotationLayout } from "./clozeAnnotationLayout.js";
 import "./ClozeExercisePage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -142,6 +143,13 @@ export default function ClozeMatchingPage() {
     () => options.filter((option) => !assignedOptionKeys.has(option.option_key)),
     [options, assignedOptionKeys]
   );
+
+  const {
+    annotationLayout,
+    clozeTextRef,
+    blankRefs,
+    detailsRefs,
+  } = useClozeAnnotationLayout({ blanks: blankAnswers, isChecked, paragraphs });
 
   function assignOptionToBlank(blankKey, optionKey, sourceBlankKey = "") {
     if (!blankKey || !optionKey) {
@@ -398,7 +406,7 @@ export default function ClozeMatchingPage() {
         </section>
 
         <section className="cloze-text-panel">
-          <div className="cloze-text">
+          <div className="cloze-text" ref={clozeTextRef}>
             {paragraphs.map((parts, paragraphIndex) => (
               <p key={`paragraph-${paragraphIndex}`} className="cloze-text__paragraph">
                 {parts.map((part, index) => {
@@ -412,11 +420,19 @@ export default function ClozeMatchingPage() {
                   const isCorrect = !!correctOption && selectedKey === correctOption.option_key;
 
                   return (
-                    <span key={blankKey} className="cloze-blank-inline">
+                    <span
+                      key={blankKey}
+                      ref={(node) => {
+                        blankRefs.current[blankKey] = node;
+                      }}
+                      className="cloze-blank-inline"
+                    >
                       <span
                         data-cloze-blank-key={blankKey}
                         className={[
                           "cloze-drop-slot",
+                          !selectedKey ? "cloze-drop-slot--empty" : "",
+                          selectedKey ? "cloze-drop-slot--selected" : "",
                           selectedKey && !isChecked ? "cloze-select--selected" : "",
                           isChecked && isCorrect ? "cloze-select--correct" : "",
                           isChecked && selectedKey && !isCorrect ? "cloze-select--wrong" : "",
@@ -473,14 +489,49 @@ export default function ClozeMatchingPage() {
                       </span>
                       {isChecked ? (
                         <span
-                          className={[
-                            "cloze-inline-feedback",
-                            isCorrect
-                              ? "cloze-inline-feedback--correct"
-                              : "cloze-inline-feedback--answer",
-                          ].join(" ")}
+                          className="cloze-blank-inline__annotation"
+                          style={annotationLayout[blankKey] ? {
+                            "--cloze-annotation-reserve-height": `${annotationLayout[blankKey].reserveHeight}px`,
+                          } : undefined}
                         >
-                          {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
+                          <span
+                            ref={(node) => {
+                              detailsRefs.current[blankKey] = node;
+                            }}
+                            className="cloze-choice-inline-details"
+                            style={annotationLayout[blankKey] ? {
+                              "--cloze-annotation-x-offset": `${annotationLayout[blankKey].xOffset}px`,
+                              "--cloze-annotation-lane-offset": `${annotationLayout[blankKey].laneOffset}px`,
+                              ...(annotationLayout[blankKey].width > 0
+                                ? { width: `${annotationLayout[blankKey].width}px` }
+                                : {}),
+                            } : undefined}
+                          >
+                            <span className="cloze-choice-inline-result">
+                              <span
+                                className={[
+                                  "cloze-inline-feedback",
+                                  isCorrect ? "cloze-inline-feedback--correct" : "cloze-inline-feedback--answer",
+                                ].join(" ")}
+                              >
+                                {isCorrect
+                                  ? "Richtig"
+                                  : `Richtig: ${optionMap[correctOption?.option_key]?.option_text || correctOption?.option_text || "-"}`}
+                              </span>
+                              <ExerciseFavoriteButton
+                                isFavorited={Boolean(favoritedByBlankId[blank.id])}
+                                pending={Boolean(favoritePendingByBlankId[blank.id])}
+                                onClick={() => {
+                                  toggleFavorite(blank);
+                                }}
+                              />
+                            </span>
+                            {String(blank.explanation || "").trim() ? (
+                              <span className="cloze-choice-inline-explanation">
+                                Erklärung: <FormattedExplanation text={blank.explanation} />
+                              </span>
+                            ) : null}
+                          </span>
                         </span>
                       ) : null}
                     </span>
@@ -490,43 +541,6 @@ export default function ClozeMatchingPage() {
             ))}
           </div>
         </section>
-
-        {isChecked ? (
-          <section className="cloze-feedback-list">
-            {blankAnswers.map((blank) => {
-              const selectedKey = answers[blank.blank_key] || "";
-              const selectedOption = optionMap[selectedKey];
-              const correctOption = blank.correct_option;
-              const isCorrect = selectedKey === correctOption?.option_key;
-
-              return (
-                <article
-                  key={blank.id}
-                  className={[
-                    "cloze-feedback-card",
-                    isCorrect ? "cloze-feedback-card--correct" : "cloze-feedback-card--wrong",
-                  ].join(" ")}
-                >
-                  <div className="cloze-feedback-card__header">
-                    <strong>{blank.blank_number}</strong>
-                    <ExerciseFavoriteButton
-                      isFavorited={Boolean(favoritedByBlankId[blank.id])}
-                      pending={Boolean(favoritePendingByBlankId[blank.id])}
-                      onClick={() => {
-                        toggleFavorite(blank);
-                      }}
-                    />
-                  </div>
-                  <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
-                  <p>Richtige Antwort: {correctOption?.option_text || "-"}</p>
-                  {String(blank.explanation || "").trim() ? (
-                    <p>Erklärung: <FormattedExplanation text={blank.explanation} /></p>
-                  ) : null}
-                </article>
-              );
-            })}
-          </section>
-        ) : null}
 
         {touchDragPosition && draggedOptionKey ? (
           <div

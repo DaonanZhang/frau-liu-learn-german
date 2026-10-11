@@ -1,7 +1,7 @@
 .exercise-option-sheet {
   position: fixed;
   z-index: 1000;
-  width: min(28rem, calc(100vw - 2rem));
+  width: min(18rem, calc(100vw - 2rem));
 }
 
 .exercise-option-sheet:not([style]) {
@@ -103,6 +103,6 @@
 
 @media (max-width: 720px) {
   .exercise-option-sheet {
-    width: calc(100vw - 1rem);
+    width: min(18rem, calc(100vw - 1.5rem));
   }
 }

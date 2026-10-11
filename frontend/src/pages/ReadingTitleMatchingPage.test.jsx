@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -5,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchReadingTitleMatchingExerciseDetail } from "../api/exam_preparation/readingTitleMatching.js";
 import { fetchReadingTitleMatchingItemStates } from "../api/exam_preparation/userExerciseStates.js";
 import ReadingTitleMatchingPage from "./ReadingTitleMatchingPage.jsx";
+
+const readingTitleStyles = readFileSync(resolve("src/pages/ReadingTitleMatchingPage.css"), "utf8");
 
 vi.mock("../api/exam_preparation/readingTitleMatching.js", () => ({
   fetchReadingTitleMatchingExerciseDetail: vi.fn(),
@@ -33,6 +37,13 @@ describe("reading title matching options", () => {
       }],
     });
     fetchReadingTitleMatchingItemStates.mockResolvedValue({ results: [] });
+  });
+
+  it("keeps the unanswered title picker shorter than the full text row", () => {
+    expect(readingTitleStyles).toMatch(/\.reading-title-inline-answer--inline\s*\{[^}]*width:\s*max-content/);
+    expect(readingTitleStyles).toMatch(/\.reading-title-select\s*\{[^}]*width:\s*auto/);
+    expect(readingTitleStyles).toMatch(/\.reading-title-inline-answer--empty\s*\{[^}]*width:\s*max-content/);
+    expect(readingTitleStyles).toMatch(/\.reading-title-select-trigger--empty\s*\{[^}]*width:\s*auto/);
   });
 
   it("shows each option letter before its title", async () => {

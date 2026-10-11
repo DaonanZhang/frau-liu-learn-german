@@ -40,11 +40,13 @@
   color: #2f6f5e;
   text-decoration: none;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .cloze-topbar__meta {
   color: #6b7280;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .cloze-hero {
@@ -230,7 +232,7 @@
   flex-direction: column;
   gap: 0.35rem;
   margin: 0.22rem 0.3rem;
-  vertical-align: middle;
+  vertical-align: baseline;
 }
 
 .cloze-select--selected {
@@ -262,6 +264,21 @@
   background: rgba(47, 111, 94, 0.08);
 }
 
+.cloze-drop-slot--empty {
+  min-width: 6rem;
+  width: 6rem;
+  min-height: 3.5rem;
+  height: 3.5rem;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cloze-drop-slot--selected {
+  min-width: 0;
+  width: max-content;
+  max-width: 100%;
+}
+
 .cloze-drop-slot__placeholder {
   color: #6b7280;
   font-weight: 700;
@@ -279,6 +296,11 @@
   font-weight: 700;
   cursor: grab;
   text-align: center;
+}
+
+.cloze-drop-slot--selected .cloze-drop-slot__chip {
+  width: auto;
+  max-width: 100%;
 }
 
 .cloze-drop-slot__chip--correct {
@@ -299,6 +321,8 @@
 
 .cloze-choice-slot-trigger--empty {
   display: inline-flex;
+  width: auto;
+  min-width: 3rem;
   align-items: center;
   justify-content: center;
   border: none;
@@ -331,13 +355,29 @@
   gap: 0.35rem;
 }
 
+.cloze-blank-inline__annotation {
+  display: block;
+  width: 0;
+  min-width: 0;
+  height: var(--cloze-annotation-reserve-height, auto);
+  min-height: 0;
+}
+
 .cloze-choice-inline-details {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 0.4rem;
-  max-width: min(34rem, 80vw);
+  width: max-content;
+  max-width: min(34rem, calc(100vw - 2rem));
+  box-sizing: border-box;
   line-height: 1.55;
+  white-space: normal;
+  transform: translate(
+    var(--cloze-annotation-x-offset, 0px),
+    var(--cloze-annotation-lane-offset, 0px)
+  );
+  transform-origin: top left;
 }
 
 .cloze-choice-inline-explanation {
@@ -445,8 +485,9 @@
   }
 
   .cloze-topbar {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
   }
 
   .cloze-hero__badges {
@@ -458,20 +499,18 @@
     align-items: flex-start;
   }
 
-  .cloze-blank-inline {
-    display: flex;
-    width: 100%;
-    margin: 0.35rem 0;
+  .cloze-drop-slot--empty {
+    width: 6rem;
+    min-width: 6rem;
+    min-height: 3.5rem;
+    height: 3.5rem;
+    max-width: 100%;
   }
 
-  .cloze-choice-inline-details {
-    width: 100%;
-    max-width: none;
-  }
-
-  .cloze-drop-slot {
-    width: 100%;
+  .cloze-drop-slot--selected {
+    width: max-content;
     min-width: 0;
+    max-width: 100%;
   }
 
   .cloze-actions {

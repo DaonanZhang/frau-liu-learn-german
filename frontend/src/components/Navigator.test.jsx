@@ -34,3 +34,25 @@ describe("mock exam navigation release gate", () => {
     expect(screen.getByRole("button", { name: "延长备考季" })).toBeInTheDocument();
   });
 });
+
+describe("profile navigation", () => {
+  beforeEach(() => {
+    authMocks.useAuth.mockReturnValue({
+      user: { username: "测试用户", telephone: "13800138000" },
+      loading: false,
+      logout: vi.fn(),
+    });
+  });
+
+  it("places a decorative user icon before the username inside the profile control", () => {
+    render(<MemoryRouter><Navigator /></MemoryRouter>);
+
+    const profileButton = screen.getByRole("button", { name: "测试用户" });
+    const icon = profileButton.querySelector(".nav-userIcon");
+    const label = profileButton.querySelector(".nav-usernameLabel");
+
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect(label).toHaveTextContent("测试用户");
+    expect(icon.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});

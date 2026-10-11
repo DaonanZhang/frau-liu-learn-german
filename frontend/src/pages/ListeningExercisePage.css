@@ -39,11 +39,13 @@
   color: #2f6f5e;
   text-decoration: none;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .listening-exercise-topbar__meta {
   color: #6b7280;
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .listening-exercise-hero {
@@ -577,6 +579,12 @@
   .listening-exercise-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .listening-exercise-topbar {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
   }
 
   .listening-exercise-hero {

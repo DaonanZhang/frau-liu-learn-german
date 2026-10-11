@@ -208,12 +208,19 @@ export default function ReadingTitleMatchingPage() {
                 <article key={item.id} className="reading-title-text-card">
                   <div className="reading-title-text-card__topline">
                     <div className="reading-title-text-card__badge">Text {item.item_number}</div>
-                    <div className="reading-title-inline-answer reading-title-inline-answer--inline">
+                    <div
+                      className={[
+                        "reading-title-inline-answer",
+                        "reading-title-inline-answer--inline",
+                        !selectedKey ? "reading-title-inline-answer--empty" : "",
+                      ].filter(Boolean).join(" ")}
+                    >
                       <button
                         type="button"
                         className={[
                           "reading-title-select",
                           "reading-title-select-trigger",
+                          !selectedKey ? "reading-title-select-trigger--empty" : "",
                           selectedKey && !isChecked ? "reading-title-select--selected" : "",
                           isChecked && isCorrect ? "reading-title-select--correct" : "",
                           isChecked && selectedKey && !isCorrect ? "reading-title-select--wrong" : "",

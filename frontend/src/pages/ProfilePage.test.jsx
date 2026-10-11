@@ -1,8 +1,12 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ProfilePage from "./ProfilePage.jsx";
+
+const profileStyles = readFileSync(resolve("src/pages/ProfilePage.css"), "utf8");
 
 
 const mocks = vi.hoisted(() => ({
@@ -66,5 +70,14 @@ describe("ProfilePage coupon module picker", () => {
     expect(screen.queryByRole("button", { name: /Vlog季/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /科普季/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /备考季/ })).toBeInTheDocument();
+  });
+});
+
+describe("ProfilePage phone country selector", () => {
+  it("reserves extra right padding for the native dropdown arrow", () => {
+    expect(profileStyles).toMatch(/\.profile-select\s*\{[^}]*padding-right:\s*2rem/);
+    expect(profileStyles).toMatch(/\.profile-select\s*\{[^}]*appearance:\s*none/);
+    expect(profileStyles).toMatch(/\.profile-select\s*\{[^}]*background-position:/);
+    expect(profileStyles).toMatch(/\.profile-input--readonly\s*\{[^}]*background-color:/);
   });
 });

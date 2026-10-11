@@ -9,9 +9,15 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import {
+  AnnotatableTextRegion,
+  ExamTextAnnotationProvider,
+  useExamTextAnnotations,
+} from "../components/examPreparation/ExamTextAnnotations.jsx";
 import ListeningTranscript from "../components/examPreparation/ListeningTranscript.jsx";
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
+import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import "./ListeningExercisePage.css";
 
 const INSTRUCTION_BY_TYPE = {
@@ -36,6 +42,22 @@ function formatAudioTime(seconds) {
   const minutes = Math.floor(safeSeconds / 60);
   const remainingSeconds = safeSeconds % 60;
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function ListeningResetButton({ onReset }) {
+  const { clearAnnotations } = useExamTextAnnotations();
+
+  return (
+    <ExamActionButton
+      className="listening-exercise-reset-btn"
+      onClick={() => {
+        clearAnnotations();
+        onReset();
+      }}
+      label="Wiederholen"
+      icon="rotate"
+    />
+  );
 }
 
 export default function ListeningExercisePage({
@@ -285,7 +307,10 @@ export default function ListeningExercisePage({
   }
 
   return (
-    <div className="listening-exercise-page">
+    <ExamTextAnnotationProvider
+      scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+    >
+      <div className="listening-exercise-page">
       <div className="listening-exercise-shell">
         <div className="listening-exercise-topbar">
           <Link to={backTo} className="listening-exercise-topbar__back">
@@ -324,7 +349,9 @@ export default function ListeningExercisePage({
           <div className="listening-exercise-instruction__header">
             <span className="listening-exercise-instruction__label">Anleitung</span>
           </div>
-          <p>{INSTRUCTION_BY_TYPE[listeningType] || INSTRUCTION_BY_TYPE.short_text_true_false_once}</p>
+          <AnnotatableTextRegion regionId="task" as="p">
+            {INSTRUCTION_BY_TYPE[listeningType] || INSTRUCTION_BY_TYPE.short_text_true_false_once}
+          </AnnotatableTextRegion>
         </section>
 
         <section className="listening-exercise-audio-panel">
@@ -448,7 +475,13 @@ export default function ListeningExercisePage({
           </div>
         </section>
 
-        {isChecked ? <ListeningTranscript script={exercise?.script} /> : null}
+        {isChecked ? (
+          <ListeningTranscript
+            script={exercise?.script}
+            annotationRegionPrefix="transcript"
+            annotationsEnabled
+          />
+        ) : null}
 
         <section className="listening-exercise-questions">
           <div className="listening-exercise-questions__header">
@@ -475,7 +508,9 @@ export default function ListeningExercisePage({
                       <span className="listening-exercise-question-card__number">
                         Aufgabe {question.question_number}
                       </span>
-                      <h3>{question.question_text}</h3>
+                      <AnnotatableTextRegion regionId={`question:${question.id}`} as="h3">
+                        {question.question_text}
+                      </AnnotatableTextRegion>
                     </div>
                   </div>
 
@@ -512,7 +547,12 @@ export default function ListeningExercisePage({
                               }));
                             }}
                           />
-                          <span className="listening-exercise-option__key">{option.option_text}</span>
+                          <AnnotatableTextRegion
+                            regionId={`option:${question.id}:${option.id ?? option.option_key}`}
+                            className="listening-exercise-option__key"
+                          >
+                            {option.option_text}
+                          </AnnotatableTextRegion>
                         </label>
                       );
                     })}
@@ -544,11 +584,14 @@ export default function ListeningExercisePage({
                       </p>
                       {hasScopedExplanation(question.explanation, question.answer_options || []) ? (
                         <p className="listening-exercise-feedback__line">
-                          Erklärung: <ScopedExplanation
-                            explanation={question.explanation}
-                            explanationScope={question.explanation_scope}
-                            options={question.answer_options || []}
-                          />
+                          Erklärung:{" "}
+                          <AnnotatableTextRegion regionId={`explanation:${question.id}`}>
+                            <ScopedExplanation
+                              explanation={question.explanation}
+                              explanationScope={question.explanation_scope}
+                              options={question.answer_options || []}
+                            />
+                          </AnnotatableTextRegion>
                         </p>
                       ) : null}
                     </div>
@@ -567,20 +610,18 @@ export default function ListeningExercisePage({
               icon="check"
             />
             {isChecked ? (
-              <ExamActionButton
-                className="listening-exercise-reset-btn"
-                onClick={() => {
+              <ListeningResetButton
+                onReset={() => {
                   setAnswers({});
                   setIsChecked(false);
                   setErrorText("");
                 }}
-                label="Wiederholen"
-                icon="rotate"
               />
             ) : null}
           </div>
         </section>
       </div>
-    </div>
+      </div>
+    </ExamTextAnnotationProvider>
   );
 }

@@ -10,6 +10,7 @@ import {
   deleteSavedMockExam,
   fetchSavedMockExams,
 } from "../api/exam_preparation/mockExams.js";
+import { clearAnnotationScope, mockAnnotationScope } from "../utils/examTextAnnotations.js";
 import ExamPreparationContentSearch from "../components/examPreparation/ExamPreparationContentSearch.jsx";
 import "./ExamPreparationModulePage.css";
 
@@ -105,6 +106,7 @@ export default function ExamPreparationModulePage() {
     setRecordPending(record.id);
     try {
       await deleteSavedMockExam(record.id);
+      clearAnnotationScope(mockAnnotationScope(record.id));
       if (localStorage.getItem(activeAttemptKey) === String(record.id)) {
         localStorage.removeItem(activeAttemptKey);
         localStorage.removeItem(sessionKey);
@@ -119,6 +121,10 @@ export default function ExamPreparationModulePage() {
 
   async function openMockExam() {
     if (hasFullAccess) {
+      const previousAttemptId = localStorage.getItem(activeAttemptKey);
+      if (previousAttemptId) {
+        clearAnnotationScope(mockAnnotationScope(previousAttemptId));
+      }
       sessionStorage.removeItem(sessionKey);
       localStorage.removeItem(sessionKey);
       localStorage.removeItem(activeAttemptKey);

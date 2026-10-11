@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext.jsx";
 import { apiFetch } from "../client.js";
+import { clearAllExamAnnotations } from "../../utils/examTextAnnotations.js";
 import {
   clearDeviceActivityId,
   getOrCreateDeviceActivityId,
@@ -214,6 +215,7 @@ export function AuthProvider({ children }) {
     notifyLogin,
     logout: () => {
       clearAuthTokens();
+      clearAllExamAnnotations();
       setUser(null);
       setLoading(false);
     },

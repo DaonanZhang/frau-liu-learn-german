@@ -8,11 +8,44 @@ import {
   saveReadingAdMatchingItemState,
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
+import {
+  AnnotatableTextRegion,
+  ExamTextAnnotationProvider,
+  useExamTextAnnotations,
+} from "../components/examPreparation/ExamTextAnnotations.jsx";
 import ReadingAdMatchingWorkspace from "../components/examPreparation/ReadingAdMatchingWorkspace.jsx";
+import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import "./ReadingAdMatchingPage.css";
 
 const FALLBACK_INSTRUCTION =
   "Lesen sie die Situationen 1-10 und die Anzeigen a-l. Finden sie für jede die passende Anzeige. Sie können jede Anzeige nur einmal benutzen. Markieren sie Ihre Lösungen für die Aufgaben 1–10 auf dem Antwortbogen. Wenn Sie zu einer Situation keine Anzeige finden, markieren Sie x.";
+
+function ReadingAdMatchingActions({ isChecked, items, answeredCount, handleCheck, onReset }) {
+  const { clearAnnotations } = useExamTextAnnotations();
+
+  return (
+    <div className="reading-ad-actions">
+      <ExamActionButton
+        className="reading-ad-check-btn"
+        disabled={isChecked || !items.length || answeredCount !== items.length}
+        onClick={handleCheck}
+        label="Prüfen"
+        icon="check"
+      />
+      {isChecked ? (
+        <ExamActionButton
+          className="reading-ad-reset-btn"
+          onClick={() => {
+            onReset();
+            clearAnnotations();
+          }}
+          label="Wiederholen"
+          icon="rotate"
+        />
+      ) : null}
+    </div>
+  );
+}
 
 export default function ReadingAdMatchingPage() {
   const { exerciseId } = useParams();
@@ -90,6 +123,9 @@ export default function ReadingAdMatchingPage() {
   const answeredCount = useMemo(() => {
     return Object.values(answers).filter(Boolean).length;
   }, [answers]);
+  const annotationScope = exercise
+    ? exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)
+    : null;
 
   async function toggleFavorite(item) {
     const nextValue = !favoritedByItemId[item.id];
@@ -153,8 +189,9 @@ export default function ReadingAdMatchingPage() {
   }
 
   return (
-    <div className="reading-ad-page">
-      <div className="reading-ad-shell">
+    <ExamTextAnnotationProvider scope={annotationScope}>
+      <div className="reading-ad-page">
+        <div className="reading-ad-shell">
         <div className="reading-ad-topbar">
           <Link to="/modules/exam-preparation/lesen/ad-matching" className="reading-ad-topbar__back">
             ← Zurück zu Lesen
@@ -189,7 +226,9 @@ export default function ReadingAdMatchingPage() {
           <div className="reading-ad-instruction__header">
             <span className="reading-ad-instruction__label">Anleitung</span>
           </div>
-          <p>{exercise?.instruction || FALLBACK_INSTRUCTION}</p>
+          <AnnotatableTextRegion regionId="task" as="p">
+            {exercise?.instruction || FALLBACK_INSTRUCTION}
+          </AnnotatableTextRegion>
         </section>
 
         <ReadingAdMatchingWorkspace
@@ -197,6 +236,7 @@ export default function ReadingAdMatchingPage() {
           exercise={exercise}
           answers={answers}
           review={isChecked}
+          annotationsEnabled
           onAnswer={(itemId, adKey) => {
             setAnswers((previous) => ({ ...previous, [itemId]: adKey }));
           }}
@@ -207,28 +247,19 @@ export default function ReadingAdMatchingPage() {
           })}
         />
 
-        <div className="reading-ad-actions">
-          <ExamActionButton
-            className="reading-ad-check-btn"
-            disabled={isChecked || !items.length || answeredCount !== items.length}
-            onClick={handleCheck}
-            label="Prüfen"
-            icon="check"
-          />
-          {isChecked ? (
-            <ExamActionButton
-              className="reading-ad-reset-btn"
-              onClick={() => {
-                setAnswers({});
-                setIsChecked(false);
-                setWorkspaceResetKey((value) => value + 1);
-              }}
-              label="Wiederholen"
-              icon="rotate"
-            />
-          ) : null}
+        <ReadingAdMatchingActions
+          isChecked={isChecked}
+          items={items}
+          answeredCount={answeredCount}
+          handleCheck={handleCheck}
+          onReset={() => {
+            setAnswers({});
+            setIsChecked(false);
+            setWorkspaceResetKey((value) => value + 1);
+          }}
+        />
         </div>
       </div>
-    </div>
+    </ExamTextAnnotationProvider>
   );
 }

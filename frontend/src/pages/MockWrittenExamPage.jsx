@@ -18,6 +18,10 @@ import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavori
 import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
 import ListeningTranscript from "../components/examPreparation/ListeningTranscript.jsx";
 import ReadingAdMatchingWorkspace from "../components/examPreparation/ReadingAdMatchingWorkspace.jsx";
+import {
+  AnnotatableTextRegion,
+  ExamTextAnnotationProvider,
+} from "../components/examPreparation/ExamTextAnnotations.jsx";
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import {
@@ -36,6 +40,7 @@ import {
   saveReadingUnderstandingQuestionState,
   saveWritingExerciseState,
 } from "../api/exam_preparation/userExerciseStates.js";
+import { clearAnnotationScope, mockAnnotationScope } from "../utils/examTextAnnotations.js";
 import "./MockWrittenExamPage.css";
 import "./ReadingAdMatchingPage.css";
 
@@ -217,6 +222,10 @@ function textBlocks(text) {
   ));
 }
 
+function MockTextRegion({ regionId, as = "span", children, ...props }) {
+  return <AnnotatableTextRegion as={as} regionId={regionId} {...props}>{children}</AnnotatableTextRegion>;
+}
+
 function ChoiceField({
   value,
   options,
@@ -230,6 +239,10 @@ function ChoiceField({
   explanation = "",
   explanationScope = "question",
   favorite,
+  annotationRegionPrefix = "",
+  annotationQuestionId = "",
+  questionNumber = "",
+  questionText = "",
 }) {
   const isCorrect = review && value && value === correctKey;
   const isWrong = review && value !== correctKey;
@@ -243,7 +256,12 @@ function ChoiceField({
   const correctText = correctOption?.option_text ?? correctOption?.ad_text_markdown ?? "";
   return (
     <article className={`${prefix}-question-card mock-exam-choice-field${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}>
-      {label ? <div className={`${prefix}-question-card__header`}><h3>{label}</h3>{favorite && !review ? <ExerciseFavoriteButton {...favorite} /> : null}</div> : null}
+      {label ? <div className={`${prefix}-question-card__header`}><h3>
+        {questionNumber ? <><span>{questionNumber}.</span>{" "}</> : null}
+        {annotationRegionPrefix && annotationQuestionId
+          ? <MockTextRegion regionId={`${annotationRegionPrefix}:question:${annotationQuestionId}`}>{questionText || label}</MockTextRegion>
+          : questionText || label}
+      </h3>{favorite && !review ? <ExerciseFavoriteButton {...favorite} /> : null}</div> : null}
       <div className={`${prefix}-option-grid`}>
         {options.map((option) => {
           const optionKey = option.option_key ?? option.ad_key;
@@ -263,8 +281,18 @@ function ChoiceField({
                 onChange={() => onChange(optionKey)}
                 disabled={disabled}
               />
-              <span className={`${prefix}-option__key`}>{variant === "listening" ? textBlocks(optionText) : optionKey}</span>
-              {variant !== "listening" ? <span className={`${prefix}-option__text`}>{textBlocks(optionText)}</span> : null}
+              {variant !== "listening" ? <span className={`${prefix}-option__key`}>{optionKey}</span> : null}
+              {variant !== "listening" ? (
+                <MockTextRegion as="span" className={`${prefix}-option__text`}
+                  regionId={`${annotationRegionPrefix}:option:${annotationQuestionId}:${optionKey}`}>
+                  {textBlocks(optionText)}
+                </MockTextRegion>
+              ) : (
+                <MockTextRegion as="span" className={`${prefix}-option__key`}
+                  regionId={`${annotationRegionPrefix}:option:${annotationQuestionId}:${optionKey}`}>
+                  {textBlocks(optionText)}
+                </MockTextRegion>
+              )}
             </label>
           );
         })}
@@ -282,11 +310,13 @@ function ChoiceField({
           </p>
           {hasScopedExplanation(explanation, options) ? (
             <p className={`${feedbackPrefix}-feedback__line`}>
-              Erklärung: <ScopedExplanation
-                explanation={explanation}
-                explanationScope={explanationScope}
-                options={options}
-              />
+              Erklärung: <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:explanation:${annotationQuestionId}`}>
+                <ScopedExplanation
+                  explanation={explanation}
+                  explanationScope={explanationScope}
+                  options={options}
+                />
+              </MockTextRegion>
             </p>
           ) : null}
         </div>
@@ -308,6 +338,8 @@ function MatchingSelect({
   explanation = "",
   explanationScope = "question",
   favorite,
+  annotationRegionPrefix = "",
+  annotationId = "",
 }) {
   const [open, setOpen] = useState(false);
   const isCorrect = Boolean(value) && value === correctKey;
@@ -324,13 +356,29 @@ function MatchingSelect({
         {selected && variant === "title" ? (
           <>
             <span className="reading-title-select__key">{selected.option_key}</span>
-            <span className="reading-title-select__label">{selected.option_text}</span>
+            {open ? <span className="reading-title-select__label">{selected.option_text}</span> : (
+              <MockTextRegion as="span" className="reading-title-select__label"
+                regionId={`${annotationRegionPrefix}:option:${annotationId}:${selected.option_key}`}>
+                {selected.option_text}
+              </MockTextRegion>
+            )}
           </>
-        ) : selected?.option_text || (variant === "title" ? "Überschrift auswählen" : placeholder)}
+        ) : selected ? (
+          open ? selected.option_text : (
+            <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:option:${annotationId}:${selected.option_key}`}>
+              {selected.option_text}
+            </MockTextRegion>
+          )
+        ) : (variant === "title" ? "Überschrift auswählen" : placeholder)}
       </button>
       <ExerciseOptionSheet open={open} title={title || "请选择答案"} selectedValue={displayedValue || ""}
         options={options.map((option) => ({ value: option.option_key, label: option.option_text, meta: option.option_key }))}
         metaPlacement={variant === "title" ? "before" : "after"}
+        renderOptionLabel={(option) => (
+          <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:option:${annotationId}:${option.value}`}>
+            {option.label}
+          </MockTextRegion>
+        )}
         onClose={() => setOpen(false)} onSelect={onChange} />
       {review && variant !== "title" ? (
         <span className="cloze-choice-inline-details">
@@ -342,11 +390,13 @@ function MatchingSelect({
           </span>
           {hasScopedExplanation(explanation, options) ? (
             <span className="cloze-choice-inline-explanation">
-              Erklärung: <ScopedExplanation
-                explanation={explanation}
-                explanationScope={explanationScope}
-                options={options}
-              />
+              Erklärung: <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:explanation:${annotationId}`}>
+                <ScopedExplanation
+                  explanation={explanation}
+                  explanationScope={explanationScope}
+                  options={options}
+                />
+              </MockTextRegion>
             </span>
           ) : null}
         </span>
@@ -362,7 +412,9 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
     .filter(Boolean)
     .map((part, index) => {
       if (!/^\{\{blank_\d+\}\}$/.test(part)) {
-        return <span key={`${index}-${part}`}>{textBlocks(part)}</span>;
+        return <MockTextRegion key={`${index}-${part}`} as="span" regionId={`${partKey}:source:${index}`}>
+          {textBlocks(part)}
+        </MockTextRegion>;
       }
       const blank = blankMap[part.replace(/[{}]/g, "")];
       if (!blank) return <span key={part}>{part}</span>;
@@ -382,6 +434,8 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
           explanation={blank.explanation}
           explanationScope={blank.explanation_scope}
           favorite={review ? favoriteFor(blank.id) : null}
+          annotationRegionPrefix={partKey}
+          annotationId={blank.id}
         />
       );
     });
@@ -389,6 +443,7 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
 
 function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, review, favoriteFor, questionNumbers }) {
   const [selectedOptionKey, setSelectedOptionKey] = useState("");
+  const [touchDrag, setTouchDrag] = useState(null);
   const blanks = exercise.blank_answers || [];
   const options = exercise.options || [];
   const blankMap = Object.fromEntries(blanks.map((blank) => [blank.blank_key, blank]));
@@ -408,25 +463,62 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
     setSelectedOptionKey("");
   }
 
+  function handleTouchDragStart(event, optionKey) {
+    if (disabled || !["touch", "pen"].includes(event.pointerType)) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    setTouchDrag({ optionKey, x: event.clientX, y: event.clientY });
+  }
+
+  function handleTouchDragMove(event) {
+    if (!touchDrag) return;
+    setTouchDrag((previous) => ({ ...previous, x: event.clientX, y: event.clientY }));
+  }
+
+  function handleTouchDragEnd(event) {
+    if (!touchDrag) return;
+    const target = event.target?.closest?.("[data-mock-cloze-blank]")
+      || document.elementFromPoint?.(event.clientX, event.clientY)?.closest?.("[data-mock-cloze-blank]");
+    const blank = target ? blankMap[target.dataset.mockClozeBlank] : null;
+    if (blank) assignOption(blank, touchDrag.optionKey);
+    setTouchDrag(null);
+  }
+
+  function clearDragState() {
+    setTouchDrag(null);
+    setSelectedOptionKey("");
+  }
+
   return (
     <>
       {!review ? (
-        <section className="mock-cloze-matching-pool mock-cloze-matching-pool--sticky" aria-label="选项区">
+        <section className="mock-cloze-matching-pool mock-cloze-matching-pool--sticky" aria-label="选项区"
+          onPointerMove={handleTouchDragMove} onPointerUp={handleTouchDragEnd} onPointerCancel={clearDragState}>
           <div className="mock-cloze-matching-pool__heading"><strong>选项区</strong><span>拖动或选择一个选项后点击对应空格</span></div>
           <div className="mock-cloze-matching-pool__options">
             {poolOptions.map((option) => (
               <button
                 key={option.option_key}
                 type="button"
-                draggable
                 className={`mock-cloze-matching-pool__option${selectedOptionKey === option.option_key ? " is-selected" : ""}`}
                 onClick={() => setSelectedOptionKey((previous) => previous === option.option_key ? "" : option.option_key)}
-                onDragStart={(event) => {
-                  event.dataTransfer.setData("text/plain", option.option_key);
-                  setSelectedOptionKey(option.option_key);
-                }}
               >
+                <span
+                  className="mock-cloze-matching-pool__handle"
+                  draggable={!disabled}
+                  aria-label={`拖动${option.option_text}`}
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData("text/plain", option.option_key);
+                    setSelectedOptionKey(option.option_key);
+                  }}
+                  onDragEnd={clearDragState}
+                  onPointerDown={(event) => handleTouchDragStart(event, option.option_key)}
+                  onPointerMove={handleTouchDragMove}
+                  onPointerUp={handleTouchDragEnd}
+                  onPointerCancel={clearDragState}
+                >⋮⋮</span>
+                <MockTextRegion as="span" regionId={`${partKey}:option:${option.id || option.option_key}`}>
                 {option.option_text}
+                </MockTextRegion>
               </button>
             ))}
             {!poolOptions.length ? <span className="mock-cloze-matching-pool__empty">所有选项均已填入空格。</span> : null}
@@ -439,7 +531,9 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
           .filter(Boolean)
           .map((part, index) => {
             if (!/^\{\{blank_\d+\}\}$/.test(part)) {
-              return <span key={`${index}-${part}`}>{textBlocks(part)}</span>;
+              return <MockTextRegion key={`${index}-${part}`} as="span" regionId={`${partKey}:source:${index}`}>
+                {textBlocks(part)}
+              </MockTextRegion>;
             }
             const blank = blankMap[part.replace(/[{}]/g, "")];
             if (!blank) return <span key={part}>{part}</span>;
@@ -452,24 +546,33 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
             return (
               <span key={key} className="mock-cloze-matching-blank">
                 <span
+                  data-mock-cloze-blank={blank.blank_key}
                   className={`mock-cloze-matching-slot${selectedOptionKey ? " is-ready" : ""}${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}
                   onClick={() => {
                     if (selectedOptionKey) assignOption(blank, selectedOptionKey);
                     else if (selectedKey) assignOption(blank, "");
                   }}
                   onDragOver={(event) => event.preventDefault()}
+                  onPointerUp={handleTouchDragEnd}
                   onDrop={(event) => {
                     event.preventDefault();
                     assignOption(blank, event.dataTransfer.getData("text/plain") || selectedOptionKey);
                   }}
                 >
-                  {selectedKey ? <span className="mock-cloze-matching-slot__chip">{optionMap[selectedKey]?.option_text || selectedKey}</span> : <span>{displayNumber}</span>}
+                  {selectedKey ? (
+                    <span className="mock-cloze-matching-slot__chip">
+                      <MockTextRegion as="span" regionId={`${partKey}:option:${optionMap[selectedKey]?.id || selectedKey}`}>
+                        {optionMap[selectedKey]?.option_text || selectedKey}
+                      </MockTextRegion>
+                    </span>
+                  ) : <span>{displayNumber}</span>}
                 </span>
                 {review && isWrong ? <small>正确答案：{optionMap[correctKey]?.option_text || correctKey || "—"}</small> : null}
               </span>
             );
           })}
       </div>
+      {touchDrag ? <span className="mock-cloze-matching-touch-preview" style={{ left: touchDrag.x, top: touchDrag.y }}>{optionMap[touchDrag.optionKey]?.option_text || touchDrag.optionKey}</span> : null}
       {review ? (
         <section className="cloze-feedback-list">
           {blanks.map((blank) => {
@@ -490,7 +593,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
                 <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
                 <p>Richtige Antwort: {correctOption?.option_text || correctOption?.option_key || "-"}</p>
                 {String(blank.explanation || "").trim() ? (
-                  <p>Erklärung: <FormattedExplanation text={blank.explanation} /></p>
+                  <p>Erklärung: <MockTextRegion as="span" regionId={`${partKey}:explanation:${blank.id}`}><FormattedExplanation text={blank.explanation} /></MockTextRegion></p>
                 ) : null}
               </article>
             );
@@ -519,9 +622,10 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
               <div className="reading-title-text-card__badge">Text {displayNumber}</div>
                 <MatchingSelect value={answers[key] || ""} options={exercise.options || []}
                 correctKey={item.correct_option?.option_key} onChange={(value) => setAnswer(key, value)}
-                disabled={disabled} review={review} variant="title" title={`Text ${displayNumber}`} />
+                disabled={disabled} review={review} variant="title" title={`Text ${displayNumber}`}
+                annotationRegionPrefix={partKey} annotationId={`title:${item.id}`} />
             </div>
-            <div>{textBlocks(item.text)}</div>
+            <MockTextRegion as="div" regionId={`${partKey}:item:${item.id}`}>{textBlocks(item.text)}</MockTextRegion>
             {review ? (
               <div className={`reading-title-feedback ${answers[key] === item.correct_option?.option_key ? "reading-title-feedback--correct" : "reading-title-feedback--wrong"}`}>
                 <div className="reading-title-feedback__header">
@@ -535,7 +639,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
                 </p>
                 {String(item.explanation || "").trim() ? (
                   <p className="reading-title-feedback__line">
-                    Erklärung: <FormattedExplanation text={item.explanation} />
+                    Erklärung: <MockTextRegion as="span" regionId={`${partKey}:explanation:${item.id}`}><FormattedExplanation text={item.explanation} /></MockTextRegion>
                   </p>
                 ) : null}
               </div>
@@ -547,16 +651,18 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
   } else if (partKey === "reading_understanding") {
     body = (
       <>
-        <div className="mock-exam-source-text">{textBlocks(exercise.text_markdown)}</div>
+        <MockTextRegion as="div" className="mock-exam-source-text" regionId={`${partKey}:passage`}>{textBlocks(exercise.text_markdown)}</MockTextRegion>
         {(exercise.questions || []).map((question) => {
           const key = answerKey(partKey, question.id);
           const displayNumber = displayQuestionNumber(questionNumbers, partKey, question.id, question.question_number);
           const correct = (question.answer_options || []).find((option) => option.is_correct)?.option_key;
-          return <ChoiceField key={key} label={`${displayNumber}. ${question.question_text}`}
+          return <ChoiceField key={key} label={question.question_text}
             value={answers[key] || ""} options={question.answer_options || []} correctKey={correct}
             onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review} variant="reading"
             explanation={question.explanation} explanationScope={question.explanation_scope}
-            favorite={review ? favoriteFor(partKey, question.id) : null} />;
+            favorite={review ? favoriteFor(partKey, question.id) : null}
+            annotationRegionPrefix={partKey} annotationQuestionId={question.id}
+            questionNumber={displayNumber} questionText={question.question_text} />;
         })}
       </>
     );
@@ -580,6 +686,8 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
         review={review}
         onAnswer={(itemId, value) => setAnswer(answerKey(partKey, itemId), value)}
         favoriteFor={review ? (item) => favoriteFor(partKey, item.id) : null}
+        annotationsEnabled
+        annotationRegionPrefix={partKey}
       />
     </>;
   } else if (partKey === "cloze_choice") {
@@ -595,20 +703,22 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
       const key = answerKey(partKey, question.id);
       const displayNumber = displayQuestionNumber(questionNumbers, partKey, question.id, question.question_number);
       const correct = (question.answer_options || []).find((option) => option.is_correct)?.option_key;
-      return <ChoiceField key={key} label={`${displayNumber}. ${question.question_text}`}
+      return <ChoiceField key={key} label={question.question_text}
         value={answers[key] || ""} options={question.answer_options || []} correctKey={correct}
         onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review} variant="listening"
         explanation={question.explanation} explanationScope={question.explanation_scope}
-        favorite={review ? favoriteFor(partKey, question.id) : null} />;
+        favorite={review ? favoriteFor(partKey, question.id) : null}
+        annotationRegionPrefix={partKey} annotationQuestionId={question.id}
+        questionNumber={displayNumber} questionText={question.question_text} />;
     });
   } else if (partKey === "writing") {
     body = (
       <div className="mock-exam-writing-grid">
         <div className="mock-exam-source-text">
           <h3>Anleitung</h3>
-          <p>{textBlocks(exercise.request_text)}</p>
+          <MockTextRegion as="p" regionId={`${partKey}:request`}>{textBlocks(exercise.request_text)}</MockTextRegion>
           <h3>Aufgabe</h3>
-          <p>{textBlocks(exercise.task_text)}</p>
+          <MockTextRegion as="p" regionId={`${partKey}:task`}>{textBlocks(exercise.task_text)}</MockTextRegion>
         </div>
         <label className="mock-exam-writing-field">
           <span>Meine Antwort {review ? <ExerciseFavoriteButton {...favoriteFor(partKey, exercise.id)} /> : null}</span>
@@ -629,11 +739,11 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
       {introduction ? (
         <section className="mock-exam-introduction">
           <span className="mock-exam-introduction__label">Einleitung</span>
-          <p>{textBlocks(introduction)}</p>
+          <MockTextRegion as="p" regionId={`${partKey}:introduction`}>{textBlocks(introduction)}</MockTextRegion>
         </section>
       ) : null}
       {partKey.startsWith("listening_") && review ? (
-        <ListeningTranscript script={exercise.script} />
+        <ListeningTranscript script={exercise.script} annotationRegionPrefix={`${partKey}:transcript`} annotationsEnabled />
       ) : null}
       {body}
     </section>
@@ -753,8 +863,8 @@ export default function MockWrittenExamPage() {
     const snapshot = { exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, wasEarlySubmitted, ...next };
     if (snapshot.exam) {
       const serialized = JSON.stringify(snapshot);
-      sessionStorage.setItem(sessionKey, serialized);
-      localStorage.setItem(sessionKey, serialized);
+      try { sessionStorage.setItem(sessionKey, serialized); } catch { /* best effort */ }
+      try { localStorage.setItem(sessionKey, serialized); } catch { /* best effort */ }
     }
   }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, wasEarlySubmitted, sessionKey]);
 
@@ -852,6 +962,7 @@ export default function MockWrittenExamPage() {
         setAnswers({}); setWritingText(""); setWritingAssessment({ ...EMPTY_WRITING_ASSESSMENT });
         setAudioStep(0); setAudioStepStartedAt(0); setWasEarlySubmitted(false);
         setAttemptId(data.attempt_id); setIsFavorite(false); setIsSavedReview(false); setFavoriteMessage("");
+        clearAnnotationScope(mockAnnotationScope(data.attempt_id));
         localStorage.setItem(activeAttemptKey, String(data.attempt_id));
         const initialSnapshot = JSON.stringify({ exam: data, phase: "reading", deadline: nextDeadline,
           activePart: READING_PART_KEYS[0], answers: {}, writingText: "",
@@ -1031,6 +1142,7 @@ export default function MockWrittenExamPage() {
   }
   async function completeExam(finalWritingAssessment, earlySubmitted = false) {
     submissionStartedRef.current = true;
+    if (attemptId) clearAnnotationScope(mockAnnotationScope(attemptId));
     audioRef.current?.pause();
     setNeedsAudioGesture(false);
     setWritingAssessment(finalWritingAssessment);
@@ -1070,6 +1182,7 @@ export default function MockWrittenExamPage() {
     await completeExam(writingAssessment, false);
   }
   function newExam() {
+    if (attemptId) clearAnnotationScope(mockAnnotationScope(attemptId));
     sessionStorage.removeItem(sessionKey); localStorage.removeItem(sessionKey); localStorage.removeItem(activeAttemptKey);
     setExam(null); setAttemptId(null); setIsFavorite(false); setIsSavedReview(false); setWasEarlySubmitted(false);
     createRequestIdRef.current = createRequestId();
@@ -1179,30 +1292,32 @@ export default function MockWrittenExamPage() {
   const questionNumbers = useMemo(() => Object.fromEntries(
     answerSheetRows.map((row) => [row.answerKey, row.number]),
   ), [answerSheetRows]);
+  const annotationScope = attemptId && !isSavedReview && phase !== "results"
+    ? mockAnnotationScope(attemptId)
+    : null;
 
   if (phase === "loading") return <div className="mock-exam-state"><span className="mock-exam-spinner" /><h1>正在准备模拟考试…</h1></div>;
   if (phase === "error") return <div className="mock-exam-state"><h1>暂时无法开始</h1><p>{errorText}</p><Link to="/modules/exam-preparation/purchase" className="mock-exam-primary">购买以解锁</Link><Link to="/modules/exam-preparation">返回备考季</Link></div>;
   if (!exam) return null;
 
+  let phaseContent;
   if (phase === "collection") {
-    return <div className="mock-exam-state mock-exam-state--collection"><span className="mock-exam-kicker">第一部分已收卷</span><h1>答案已锁定</h1><p>听力考试将在倒计时结束后自动开始，请准备好耳机并保持页面开启。</p><div className="mock-exam-collection-timer"><strong className="mock-exam-big-time">{formatTime(remainingSeconds)}</strong><button className="mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div><button className="mock-exam-primary" onClick={enterListening}>立即进入听力</button></div>;
-  }
-
-  if (phase === "writing_review") {
+    phaseContent = <div className="mock-exam-state mock-exam-state--collection"><span className="mock-exam-kicker">第一部分已收卷</span><h1>答案已锁定</h1><p>听力考试将在倒计时结束后自动开始，请准备好耳机并保持页面开启。</p><div className="mock-exam-collection-timer"><strong className="mock-exam-big-time">{formatTime(remainingSeconds)}</strong><button className="mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div><button className="mock-exam-primary" onClick={enterListening}>立即进入听力</button></div>;
+  } else if (phase === "writing_review") {
     const example = exam.parts.writing?.example_texts?.[0];
     const assessmentComplete = isWritingAssessmentComplete(writingAssessment);
-    return (
+    phaseContent = (
       <div className="mock-exam-review-backdrop" role="dialog" aria-modal="true" aria-labelledby="writing-review-title">
         <section className="mock-exam-writing-review">
           <div className="mock-exam-writing-review__body">
             <div className="mock-exam-writing-review__head"><div><span>Schreiben · 自评</span><h1 id="writing-review-title">对照范文评估你的写作</h1></div></div>
             <div className="mock-exam-writing-review__compare">
               <article><h2>Meine Antwort</h2><div>{textBlocks(writingText || "（未作答）")}</div></article>
-              <article><h2>Beispieltext</h2><div>{textBlocks(example?.example_text || "暂无范文")}</div></article>
+              <article><h2>Beispieltext</h2><MockTextRegion as="div" regionId="writing:example">{textBlocks(example?.example_text || "暂无范文")}</MockTextRegion></article>
             </div>
-            <div className="mock-exam-rubric"><h2>评分方法</h2><p>三个维度分别按 5、3、1、0 分计分，维度总分乘以 3，写作满分为 45 分。主题偏离时写作计 0 分。</p></div>
+            <div className="mock-exam-rubric"><h2>评分方法</h2><MockTextRegion as="p" regionId="writing:assessment:instructions">三个维度分别按 5、3、1、0 分计分，维度总分乘以 3，写作满分为 45 分。主题偏离时写作计 0 分。</MockTextRegion></div>
             <fieldset className="mock-exam-topic-check">
-              <legend>文章是否围绕题目要求和给定情境展开？</legend>
+              <legend><MockTextRegion as="span" regionId="writing:assessment:topic">文章是否围绕题目要求和给定情境展开？</MockTextRegion></legend>
               <label className={writingAssessment.topic_relevant === true ? "is-selected" : ""}>
                 <input type="radio" name="writing-topic" checked={writingAssessment.topic_relevant === true}
                   onChange={() => setWritingAssessment((previous) => ({ ...previous, topic_relevant: true }))} />
@@ -1217,13 +1332,13 @@ export default function MockWrittenExamPage() {
             {writingAssessment.topic_relevant === true ? <div className="mock-exam-assessment-list">
               {WRITING_CRITERIA.map((criterion) => (
                 <fieldset className="mock-exam-grade-picker" key={criterion.key}>
-                  <legend>{criterion.title}</legend>
+                  <legend><MockTextRegion as="span" regionId={`writing:assessment:${criterion.key}:title`}>{criterion.title}</MockTextRegion></legend>
                   {Object.entries(criterion.options).map(([grade, description]) => (
                     <label key={grade} className={writingAssessment[criterion.key] === grade ? "is-selected" : ""}>
                       <input type="radio" name={`writing-${criterion.key}`} value={grade}
                         checked={writingAssessment[criterion.key] === grade}
                         onChange={() => setWritingAssessment((previous) => ({ ...previous, [criterion.key]: grade }))} />
-                      <strong>{grade}</strong><span>{WRITING_GRADE_POINTS[grade]} 分</span><p>{description}</p>
+                      <strong>{grade}</strong><span>{WRITING_GRADE_POINTS[grade]} 分</span><MockTextRegion as="p" regionId={`writing:assessment:${criterion.key}:${grade}`}>{description}</MockTextRegion>
                     </label>
                   ))}
                 </fieldset>
@@ -1246,7 +1361,7 @@ export default function MockWrittenExamPage() {
         </section>
       </div>
     );
-  }
+  } else {
 
   const isResults = phase === "results";
   const visibleAnswerSheetRows = isResults
@@ -1274,7 +1389,7 @@ export default function MockWrittenExamPage() {
     });
   }
 
-  return (
+  phaseContent = (
     <div className={`mock-exam-page${isResults ? " is-results" : ""}`}>
       <header className="mock-exam-header">
         <div><button className="mock-exam-back" onClick={() => navigate("/modules/exam-preparation")}>← 退出模拟</button><span className="mock-exam-kicker">telc B1 · 笔试模拟</span><h1>{isResults ? "考试结果与答案回顾" : phase === "reading" ? "Lesen & Sprachbausteine" : phase === "listening" ? "Hören" : "Schreiben"}</h1></div>
@@ -1352,4 +1467,7 @@ export default function MockWrittenExamPage() {
       {!isResults ? <footer className="mock-exam-footer"><div><strong>上交答题卡</strong></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
     </div>
   );
+  }
+
+  return <ExamTextAnnotationProvider scope={annotationScope}>{phaseContent}</ExamTextAnnotationProvider>;
 }

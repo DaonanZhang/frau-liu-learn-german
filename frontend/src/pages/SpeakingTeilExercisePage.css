@@ -77,13 +77,16 @@
 .speaking-dialogue-pool h3, .speaking-dialogue-board__header h3 { margin: 0; color: #2f6f5e; font-size: 0.92rem; }
 .speaking-dialogue-pool__cards { display: flex; flex-direction: column; gap: 0.65rem; margin-top: 0.75rem; }
 .speaking-dialogue-pool__empty { margin: 0; color: #89919b; font-size: 0.85rem; }
-.speaking-dialogue-card { min-width: 0; padding: 0.78rem 0.88rem; border: 1px solid #eadbc8; border-radius: 0.9rem; background: #fffaf2; box-shadow: 0 8px 18px rgba(38, 52, 74, 0.06); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.speaking-dialogue-card { min-width: 0; padding: 0.78rem 0.88rem; border: 1px solid #eadbc8; border-radius: 0.9rem; background: #fffaf2; box-shadow: 0 8px 18px rgba(38, 52, 74, 0.06); cursor: grab; touch-action: auto; user-select: none; -webkit-user-select: none; }
 .speaking-dialogue-card:active { cursor: grabbing; }
 .speaking-dialogue-card.is-dragging { border-style: dashed; opacity: 0.42; box-shadow: none; }
 .speaking-dialogue-card.is-selected { border-color: #2f6f5e; box-shadow: 0 0 0 3px rgba(47, 111, 94, 0.14), 0 10px 22px rgba(38, 52, 74, 0.08); }
 .speaking-dialogue-card--tn2 { border-color: #cfe1dc; background: #eef6f4; }
 .speaking-dialogue-card > span, .speaking-dialogue-card__heading > span, .speaking-dialogue-drag-preview > span { color: #2f6f5e; font-size: 0.75rem; font-weight: 800; }
+.speaking-dialogue-card__handle { display: inline-flex; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
+.speaking-dialogue-card__handle:active { cursor: grabbing; }
 .speaking-dialogue-card p, .speaking-dialogue-drag-preview p { margin: 0.35rem 0 0; color: #3f4955; line-height: 1.55; white-space: pre-line; }
+.speaking-dialogue-card__text { user-select: text; -webkit-user-select: text; touch-action: auto; cursor: text; }
 .speaking-dialogue-board { padding: 1rem; scroll-margin-top: 1rem; border: 1px solid #d8dfdc; border-radius: 1rem; background: #f8faf9; }
 .speaking-dialogue-board.is-wrong { border-color: #edb6b6; background: #fff0ed; }
 .speaking-dialogue-board.is-correct { border-color: #b9dfc7; background: #e8f7ef; }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   fetchClozeMatchingExerciseDetail,
@@ -10,6 +10,12 @@ import {
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
+import {
+  AnnotatableTextRegion,
+  ExamTextAnnotationProvider,
+  useExamTextAnnotations,
+} from "../components/examPreparation/ExamTextAnnotations.jsx";
+import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import { useClozeAnnotationLayout } from "./clozeAnnotationLayout.js";
 import "./ClozeExercisePage.css";
 
@@ -39,6 +45,22 @@ function findPointerDropTarget(clientX, clientY) {
     blankKey: blankElement?.dataset.clozeBlankKey || "",
     isPool: Boolean(target?.closest("[data-cloze-pool]")),
   };
+}
+
+function ClozeMatchingResetAction({ onReset }) {
+  const { clearAnnotations } = useExamTextAnnotations();
+
+  return (
+    <ExamActionButton
+      className="cloze-reset-btn"
+      onClick={() => {
+        onReset();
+        clearAnnotations();
+      }}
+      label="Wiederholen"
+      icon="rotate"
+    />
+  );
 }
 
 export default function ClozeMatchingPage() {
@@ -309,8 +331,11 @@ export default function ClozeMatchingPage() {
   }
 
   return (
-    <div className="cloze-page">
-      <div className="cloze-shell">
+    <ExamTextAnnotationProvider
+      scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+    >
+      <div className="cloze-page">
+        <div className="cloze-shell">
         <div className="cloze-topbar">
           <Link to="/modules/exam-preparation/sprachbausteine/cloze-matching" className="cloze-topbar__back">
             ← Zurück zu Sprachbausteine
@@ -339,10 +364,12 @@ export default function ClozeMatchingPage() {
           ) : null}
         </section>
 
-        <section className="cloze-instruction">
-          <span className="cloze-section-label">Beschreibung</span>
-          <p>{FALLBACK_INSTRUCTION}</p>
-        </section>
+          <section className="cloze-instruction">
+            <span className="cloze-section-label">Beschreibung</span>
+            <AnnotatableTextRegion as="p" regionId="task">
+              {FALLBACK_INSTRUCTION}
+            </AnnotatableTextRegion>
+          </section>
 
         <section className="cloze-pool-panel">
           <div className="cloze-section-heading">
@@ -378,25 +405,40 @@ export default function ClozeMatchingPage() {
               <button
                 key={option.id}
                 type="button"
-                draggable={!isChecked}
                 className={[
                   "cloze-pool-chip",
                   option.is_extra ? "cloze-pool-chip--extra" : "",
                 ].filter(Boolean).join(" ")}
-                onDragStart={() => {
+                onDragStart={(event) => {
+                  if (!event.target.closest(".cloze-drag-handle")) {
+                    event.preventDefault();
+                    return;
+                  }
                   handleDragStart(option.option_key, "");
                 }}
                 onDragEnd={handleDragEnd}
-                onPointerDown={(event) => {
-                  handlePointerDragStart(event, option.option_key, "");
-                }}
-                onPointerMove={handlePointerDragMove}
-                onPointerUp={handlePointerDragEnd}
-                onPointerCancel={(event) => {
-                  handlePointerDragEnd(event, true);
-                }}
               >
-                {option.option_text}
+                <span
+                  className="cloze-drag-handle"
+                  draggable={!isChecked}
+                  aria-hidden="true"
+                  onPointerDown={(event) => {
+                    handlePointerDragStart(event, option.option_key, "");
+                  }}
+                  onPointerMove={handlePointerDragMove}
+                  onPointerUp={handlePointerDragEnd}
+                  onPointerCancel={(event) => {
+                    handlePointerDragEnd(event, true);
+                  }}
+                >
+                  ⋮⋮
+                </span>
+                <AnnotatableTextRegion
+                  as="span"
+                  regionId={`option:pool:${option.id || option.option_key}`}
+                >
+                  {option.option_text}
+                </AnnotatableTextRegion>
               </button>
             ))}
             {!poolOptions.length ? (
@@ -405,23 +447,37 @@ export default function ClozeMatchingPage() {
           </div>
         </section>
 
-        <section className="cloze-text-panel">
-          <div className="cloze-text" ref={clozeTextRef}>
+          <section className="cloze-text-panel">
+            <div className="cloze-text" ref={clozeTextRef}>
             {paragraphs.map((parts, paragraphIndex) => (
               <p key={`paragraph-${paragraphIndex}`} className="cloze-text__paragraph">
                 {parts.map((part, index) => {
                   if (!/^\{\{blank_\d+\}\}$/.test(part)) {
-                    return <span key={`${paragraphIndex}-${part}-${index}`}>{part}</span>;
+                    if (/^\{\{blank_\d+\}\}$/.test(parts[index - 1] || "")) {
+                      return null;
+                    }
+                    return (
+                      <AnnotatableTextRegion
+                        key={`${paragraphIndex}-${part}-${index}`}
+                        as="span"
+                        regionId={`source:${paragraphIndex}:${index}`}
+                      >
+                        {part}
+                      </AnnotatableTextRegion>
+                    );
                   }
                   const blankKey = extractBlankKey(part);
                   const blank = blankMap[blankKey];
                   const correctOption = blank?.correct_option;
                   const selectedKey = answers[blankKey] || "";
                   const isCorrect = !!correctOption && selectedKey === correctOption.option_key;
+                  const followingText = parts[index + 1] && !/^\{\{blank_\d+\}\}$/.test(parts[index + 1])
+                    ? parts[index + 1]
+                    : "";
 
                   return (
+                    <Fragment key={blankKey}>
                     <span
-                      key={blankKey}
                       ref={(node) => {
                         blankRefs.current[blankKey] = node;
                       }}
@@ -460,26 +516,41 @@ export default function ClozeMatchingPage() {
                         {selectedKey ? (
                           <button
                             type="button"
-                            draggable={!isChecked}
                             className={[
                               "cloze-drop-slot__chip",
                               isChecked && isCorrect ? "cloze-drop-slot__chip--correct" : "",
                               isChecked && selectedKey && !isCorrect ? "cloze-drop-slot__chip--wrong" : "",
                             ].filter(Boolean).join(" ")}
-                            onDragStart={() => {
+                            onDragStart={(event) => {
+                              if (!event.target.closest(".cloze-drag-handle")) {
+                                event.preventDefault();
+                                return;
+                              }
                               handleDragStart(selectedKey, blankKey);
                             }}
                             onDragEnd={handleDragEnd}
-                            onPointerDown={(event) => {
-                              handlePointerDragStart(event, selectedKey, blankKey);
-                            }}
-                            onPointerMove={handlePointerDragMove}
-                            onPointerUp={handlePointerDragEnd}
-                            onPointerCancel={(event) => {
-                              handlePointerDragEnd(event, true);
-                            }}
                           >
-                            {optionMap[selectedKey]?.option_text || selectedKey}
+                            <span
+                              className="cloze-drag-handle"
+                              draggable={!isChecked}
+                              aria-hidden="true"
+                              onPointerDown={(event) => {
+                                handlePointerDragStart(event, selectedKey, blankKey);
+                              }}
+                              onPointerMove={handlePointerDragMove}
+                              onPointerUp={handlePointerDragEnd}
+                              onPointerCancel={(event) => {
+                                handlePointerDragEnd(event, true);
+                              }}
+                            >
+                              ⋮⋮
+                            </span>
+                            <AnnotatableTextRegion
+                              as="span"
+                              regionId={`option:${blank.id}:${optionMap[selectedKey]?.id || selectedKey}`}
+                            >
+                              {optionMap[selectedKey]?.option_text || selectedKey}
+                            </AnnotatableTextRegion>
                           </button>
                         ) : (
                           <span className="cloze-drop-slot__placeholder">
@@ -528,19 +599,28 @@ export default function ClozeMatchingPage() {
                             </span>
                             {String(blank.explanation || "").trim() ? (
                               <span className="cloze-choice-inline-explanation">
-                                Erklärung: <FormattedExplanation text={blank.explanation} />
+                                Erklärung:{" "}
+                                <AnnotatableTextRegion as="span" regionId={`explanation:${blank.id}`}>
+                                  <FormattedExplanation text={blank.explanation} />
+                                </AnnotatableTextRegion>
                               </span>
                             ) : null}
                           </span>
                         </span>
                       ) : null}
                     </span>
+                    {followingText ? (
+                      <AnnotatableTextRegion as="span" regionId={`blank-context:${blank.id}`}>
+                        {followingText}
+                      </AnnotatableTextRegion>
+                    ) : null}
+                    </Fragment>
                   );
                 })}
               </p>
             ))}
-          </div>
-        </section>
+            </div>
+          </section>
 
         {touchDragPosition && draggedOptionKey ? (
           <div
@@ -562,21 +642,19 @@ export default function ClozeMatchingPage() {
               icon="check"
             />
             {isChecked ? (
-              <ExamActionButton
-                className="cloze-reset-btn"
-                onClick={() => {
+              <ClozeMatchingResetAction
+                onReset={() => {
                   setAnswers({});
                   setIsChecked(false);
                   setSaveStateText("");
                 }}
-                label="Wiederholen"
-                icon="rotate"
               />
             ) : null}
           </div>
         </section>
         {saveStateText ? <p className="cloze-state-note">{saveStateText}</p> : null}
+        </div>
       </div>
-    </div>
+    </ExamTextAnnotationProvider>
   );
 }

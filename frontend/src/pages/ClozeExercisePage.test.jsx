@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -15,6 +15,7 @@ import {
 import { layoutClozeAnnotations, useClozeAnnotationLayout } from "./clozeAnnotationLayout.js";
 import ClozeChoicePage from "./ClozeChoicePage.jsx";
 import ClozeMatchingPage from "./ClozeMatchingPage.jsx";
+import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 
 vi.mock("../api/exam_preparation/clozeExercises.js", () => ({
   fetchClozeChoiceExerciseDetail: vi.fn(),
@@ -30,6 +31,15 @@ vi.mock("../api/exam_preparation/userExerciseStates.js", () => ({
 
 const appLayoutStyles = readFileSync(resolve("src/layouts/AppLayout.css"), "utf8");
 const clozeStyles = readFileSync(resolve("src/pages/ClozeExercisePage.css"), "utf8");
+
+function selectText(element, start, end) {
+  const range = document.createRange();
+  range.setStart(element.firstChild, start);
+  range.setEnd(element.firstChild, end);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
 
 function AnnotationLayoutHarness({ isChecked, intrinsicWidth }) {
   const blanks = [{ blank_key: "blank_1" }];
@@ -165,7 +175,7 @@ describe("Cloze exercise layout", () => {
   beforeEach(() => {
     fetchClozeChoiceExerciseDetail.mockResolvedValue({
       id: 17,
-      exercise_base: { title: "Cloze", external_id: "17", level: "B1" },
+      exercise_base: { title: "Cloze", external_id: "17", level: "B1", exercise_type: "CLOZE_CHOICE" },
       content_with_placeholders: "Vor {{blank_1}} nach.",
       blanks: [{
         id: 101,
@@ -236,7 +246,7 @@ describe("Cloze exercise layout", () => {
   it("keeps Teil 2 unanswered slots compact and selected slots fitted to their text", async () => {
     fetchClozeMatchingExerciseDetail.mockResolvedValue({
       id: 18,
-      exercise_base: { title: "Matching", external_id: "18", level: "B1" },
+      exercise_base: { title: "Matching", external_id: "18", level: "B1", exercise_type: "CLOZE_MATCHING" },
       content_with_placeholders: "Vor {{blank_1}} nach.",
       options: [{ id: 1, option_key: "A", option_text: "Lange Antwort" }],
       blank_answers: [{
@@ -298,7 +308,7 @@ describe("Cloze exercise layout", () => {
   it("renders Teil 2 checked answers and explanations inline without a feedback list", async () => {
     fetchClozeMatchingExerciseDetail.mockResolvedValue({
       id: 19,
-      exercise_base: { title: "Matching", external_id: "19", level: "B1" },
+      exercise_base: { title: "Matching", external_id: "19", level: "B1", exercise_type: "CLOZE_MATCHING" },
       content_with_placeholders: "Vor {{blank_1}} und {{blank_2}} nach.",
       options: [
         { id: 1, option_key: "A", option_text: "Richtig gewählt" },
@@ -377,5 +387,188 @@ describe("Cloze exercise layout", () => {
     expect(getComputedStyle(pool).position).toBe("sticky");
     expect(getComputedStyle(pool).top).toBe("0px");
     expect(getComputedStyle(pool).zIndex).toBe("20");
+  });
+
+  it("registers granular choice learning regions while keeping controls outside regions", async () => {
+    fetchClozeChoiceBlankStates.mockResolvedValue({ results: [] });
+    fetchClozeChoiceExerciseDetail.mockResolvedValue({
+      id: 17,
+      exercise_base: { title: "Cloze", external_id: "17", level: "B1", exercise_type: "CLOZE_CHOICE" },
+      content_with_placeholders: "Vor {{blank_1}} nach.",
+      blanks: [{
+        id: 101,
+        blank_key: "blank_1",
+        blank_number: 1,
+        explanation: "Warum diese Antwort passt.",
+        options: [
+          { id: 11, option_key: "A", option_text: "Antwort A", is_correct: true },
+          { id: 12, option_key: "B", option_text: "Antwort B", is_correct: false },
+        ],
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/exercise/17"]}>
+        <Routes>
+          <Route path="/exercise/:exerciseId" element={<ClozeChoicePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Lesen Sie den Text und schließen Sie die Lücken. Welche Lösung ist jeweils richtig?"))
+      .toHaveAttribute("data-exam-annotation-region", "task");
+    expect(screen.getByText(/Vor/).closest('[data-exam-annotation-region="source:0:0"]')).toBeInTheDocument();
+    expect(screen.getByText(/nach\./).closest('[data-exam-annotation-region="blank-context:101"]')).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prüfen" })).not.toHaveAttribute("data-exam-annotation-region");
+
+    fireEvent.click(screen.getByRole("button", { name: /1/ }));
+    expect(screen.getByText("Antwort A", { selector: '[data-exam-annotation-region="option:101:11"]' }))
+      .toBeInTheDocument();
+    expect(screen.getByText("Antwort B", { selector: '[data-exam-annotation-region="option:101:12"]' }))
+      .toBeInTheDocument();
+    expect(screen.getByRole("dialog").closest("[data-exam-annotation-region]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Antwort B/ }));
+    expect(screen.getByRole("button", { name: /Antwort B/ })).toBeInTheDocument();
+  });
+
+  it("keeps choice checking and clears only the current annotation scope on Wiederholen", async () => {
+    window.Highlight = class FakeHighlight {
+      constructor(...ranges) {
+        this.ranges = ranges;
+      }
+    };
+    window.CSS = { highlights: new Map() };
+    const scope = exerciseAnnotationScope("CLOZE_CHOICE", 17);
+    const unrelatedScope = exerciseAnnotationScope("CLOZE_MATCHING", 18);
+    sessionStorage.setItem(unrelatedScope, JSON.stringify({ version: 1, regions: { source: [{ start: 0, end: 3, highlight: true, underline: false }] } }));
+    fetchClozeChoiceBlankStates.mockResolvedValue({ results: [] });
+
+    render(
+      <MemoryRouter initialEntries={["/exercise/17"]}>
+        <Routes>
+          <Route path="/exercise/:exerciseId" element={<ClozeChoicePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const context = await screen.findByText(/nach\./, { selector: '[data-exam-annotation-region="blank-context:101"]' });
+    selectText(context, 1, 5);
+    document.dispatchEvent(new Event("selectionchange"));
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    expect(JSON.parse(sessionStorage.getItem(scope)).regions["blank-context:101"])
+      .toEqual([{ start: 1, end: 5, highlight: true, underline: false }]);
+
+    fireEvent.click(await screen.findByRole("button", { name: /1/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Antwort/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    const reset = await screen.findByRole("button", { name: "Wiederholen" });
+    expect(screen.getByText(/Richtig/)).toBeInTheDocument();
+    fireEvent.click(reset);
+    await waitFor(() => expect(sessionStorage.getItem(scope)).toBeNull());
+    expect(sessionStorage.getItem(unrelatedScope)).not.toBeNull();
+  });
+
+  it("persists a real text selection through checking and suppresses only modal text-drag clicks", async () => {
+    window.Highlight = class FakeHighlight {
+      constructor(...ranges) {
+        this.ranges = ranges;
+      }
+    };
+    window.CSS = { highlights: new Map() };
+    const scope = exerciseAnnotationScope("CLOZE_CHOICE", 17);
+    const unrelatedScope = exerciseAnnotationScope("CLOZE_MATCHING", 18);
+    sessionStorage.setItem(unrelatedScope, JSON.stringify({ version: 1, regions: { source: [{ start: 0, end: 3, highlight: true, underline: false }] } }));
+    fetchClozeChoiceBlankStates.mockResolvedValue({ results: [] });
+    fetchClozeChoiceExerciseDetail.mockResolvedValue({
+      id: 17,
+      exercise_base: { title: "Cloze", external_id: "17", level: "B1", exercise_type: "CLOZE_CHOICE" },
+      content_with_placeholders: "Vor {{blank_1}} nach.",
+      blanks: [{
+        id: 101,
+        blank_key: "blank_1",
+        blank_number: 1,
+        explanation: "Warum diese Antwort passt.",
+        options: [
+          { id: 11, option_key: "A", option_text: "Antwort A", is_correct: true },
+          { id: 12, option_key: "B", option_text: "Antwort B", is_correct: false },
+        ],
+      }],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/exercise/17"]}>
+        <Routes>
+          <Route path="/exercise/:exerciseId" element={<ClozeChoicePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const context = await screen.findByText(/nach\./, { selector: '[data-exam-annotation-region="blank-context:101"]' });
+    selectText(context, 1, 5);
+    expect(window.getSelection().toString()).toBe("nach");
+    document.dispatchEvent(new Event("selectionchange"));
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    expect(JSON.parse(sessionStorage.getItem(scope)).regions["blank-context:101"])
+      .toEqual([{ start: 1, end: 5, highlight: true, underline: false }]);
+
+    fireEvent.click(screen.getByRole("button", { name: /1/ }));
+    const optionText = screen.getByText("Antwort A", { selector: '[data-exam-annotation-region="option:101:11"]' });
+    window.getSelection().removeAllRanges();
+    fireEvent.pointerDown(optionText, { pointerId: 31 });
+    selectText(optionText, 0, 4);
+    document.dispatchEvent(new Event("selectionchange"));
+    fireEvent.pointerUp(optionText, { pointerId: 31 });
+    fireEvent.click(optionText);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    window.getSelection().removeAllRanges();
+    fireEvent.pointerDown(optionText, { pointerId: 32 });
+    fireEvent.pointerUp(optionText, { pointerId: 32 });
+    fireEvent.click(optionText);
+    expect(screen.getByRole("button", { name: /Antwort A/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    await screen.findByRole("button", { name: "Wiederholen" });
+    expect(sessionStorage.getItem(scope)).toContain("blank-context:101");
+    fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
+    await waitFor(() => expect(sessionStorage.getItem(scope)).toBeNull());
+    expect(sessionStorage.getItem(unrelatedScope)).not.toBeNull();
+  });
+
+  it("keeps matching drag and drop operational with annotatable option labels", async () => {
+    fetchClozeMatchingExerciseDetail.mockResolvedValue({
+      id: 18,
+      exercise_base: { title: "Matching", external_id: "18", level: "B1", exercise_type: "CLOZE_MATCHING" },
+      content_with_placeholders: "Vor {{blank_1}} nach.",
+      options: [{ id: 21, option_key: "A", option_text: "Lange Antwort" }],
+      blank_answers: [{ id: 201, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" }, explanation: "Erklärung" }],
+    });
+    fetchClozeMatchingBlankStates.mockResolvedValue({ results: [] });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/matching/18"]}>
+        <Routes>
+          <Route path="/matching/:exerciseId" element={<ClozeMatchingPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const option = await screen.findByRole("button", { name: "Lange Antwort" });
+    expect(screen.getByText(/Lesen Sie den folgenden Text/)).toHaveAttribute(
+      "data-exam-annotation-region",
+      "task",
+    );
+    expect(screen.getByText(/Vor/).closest('[data-exam-annotation-region="source:0:0"]')).toBeInTheDocument();
+    expect(screen.getByText(/nach\./).closest('[data-exam-annotation-region="blank-context:201"]')).toBeInTheDocument();
+    expect(screen.getByText("Lange Antwort", { selector: '[data-exam-annotation-region="option:pool:21"]' }))
+      .toBeInTheDocument();
+    expect(option.closest("[data-exam-annotation-region]")).toBeNull();
+    const slot = container.querySelector('[data-cloze-blank-key="blank_1"]');
+    fireEvent.dragStart(option.querySelector(".cloze-drag-handle"));
+    fireEvent.dragOver(slot);
+    fireEvent.drop(slot);
+    expect(screen.getByRole("button", { name: "Lange Antwort" })).toHaveClass("cloze-drop-slot__chip");
+    expect(screen.getByText("Lange Antwort", { selector: '[data-exam-annotation-region="option:201:21"]' }))
+      .toBeInTheDocument();
   });
 });

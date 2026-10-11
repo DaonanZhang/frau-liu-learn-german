@@ -4,12 +4,65 @@ import { fetchSpeakingTeilExerciseDetail } from "../api/exam_preparation/speakin
 import { fetchSpeakingTurnStates, saveSpeakingTurnState } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import {
+  AnnotatableTextRegion,
+  ExamTextAnnotationProvider,
+  useExamTextAnnotations,
+} from "../components/examPreparation/ExamTextAnnotations.jsx";
 import SpeakingPracticeRecorder from "../components/examPreparation/SpeakingPracticeRecorder.jsx";
+import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import "./SpeakingTeilExercisePage.css";
 
 const TITLES = { 1: "Einander kennenlernen", 2: "Über ein Thema sprechen", 3: "Gemeinsam etwas planen" };
 const turnKey = (turn) => `turn:${turn.sequence}`;
 const orderStateKey = (key) => key === "all" ? "dialogue-order:all" : `dialogue-order:section:${key}`;
+
+function stableContentKey(value, fallback = "") {
+  if (value == null) return fallback;
+  if (typeof value !== "object") return String(value);
+  return String(value.id ?? value.key ?? value.slug ?? value.sequence ?? value.participant ?? value.type ?? value.title ?? fallback);
+}
+
+function sectionKey(section) {
+  return stableContentKey(section, "section");
+}
+
+function regionContentKey(value, section = null) {
+  const explicitKey = value && typeof value === "object"
+    ? value.id ?? value.key ?? value.slug
+    : null;
+  if (explicitKey != null) return String(explicitKey);
+  const fallbackKey = stableContentKey(value, "content");
+  return section ? `${section}:${fallbackKey}` : fallbackKey;
+}
+
+function turnAnnotationId(turn, section = null) {
+  return `turn:${regionContentKey(turn, section)}`;
+}
+
+function materialAnnotationId(value, fallback = "material") {
+  return `material:${stableContentKey(value, fallback)}`;
+}
+
+function explanationAnnotationId(turn, section = null, purpose = "") {
+  return `explanation:${purpose ? `${purpose}:` : ""}${regionContentKey(turn, section)}`;
+}
+
+function SpeakingResetAction({ onReset }) {
+  const { clearAnnotations } = useExamTextAnnotations();
+
+  return (
+    <ExamActionButton
+      className="speaking-detail-reset-btn"
+      label="Wiederholen"
+      icon="rotate"
+      onClick={() => {
+        onReset();
+        clearAnnotations();
+      }}
+    />
+  );
+}
 
 function SectionArrowNavigation({ activeSection, sectionCount, onSelect, position }) {
   return (
@@ -54,7 +107,7 @@ function restoreOrder(turns, state) {
   return savedKeys.map((key) => turnByKey.get(key)).filter(Boolean);
 }
 
-function DialogueTurn({ turn, recorderId, showPractice = false, favoriteProps = null }) {
+function DialogueTurn({ turn, recorderId, showPractice = false, favoriteProps = null, annotationRegionId = null }) {
   const role = turn.role || "TN1";
   const roleKind = role.startsWith("Prüfer") ? "examiner" : role.toLowerCase();
   return (
@@ -62,7 +115,9 @@ function DialogueTurn({ turn, recorderId, showPractice = false, favoriteProps = 
       <div className="speaking-detail-turn__heading">
         <span className="speaking-detail-turn__role">{role}</span>
       </div>
-      <p>{turn.text}</p>
+      {annotationRegionId ? (
+        <AnnotatableTextRegion as="p" regionId={annotationRegionId}>{turn.text}</AnnotatableTextRegion>
+      ) : <p>{turn.text}</p>}
       {showPractice ? (
         <div className="speaking-detail-turn__practice">
           <SpeakingPracticeRecorder key={recorderId} language="zh" recordingId={recorderId} audioUrl={turn.audio_url} />
@@ -73,7 +128,7 @@ function DialogueTurn({ turn, recorderId, showPractice = false, favoriteProps = 
   );
 }
 
-function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favoriteForTurn, dialogLabel = "Dialog" }) {
+function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favoriteForTurn, dialogLabel = "Dialog", annotationSectionKey = null }) {
   const touchDragRef = useRef(null);
   const suppressClickRef = useRef(false);
   const boardRef = useRef(null);
@@ -138,7 +193,11 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
   }
 
   function handlePointerDown(event, key) {
-    if (checked || event.pointerType === "mouse" || event.target.closest("button")) return;
+    if (
+      checked
+      || event.pointerType === "mouse"
+      || event.target.closest("button")
+    ) return;
     event.preventDefault();
     touchDragRef.current = {
       pointerId: event.pointerId,
@@ -195,6 +254,10 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
     return {
       draggable: !checked,
       onDragStart: (event) => {
+        if (event.target.closest?.("[data-speaking-card-text]")) {
+          event.preventDefault();
+          return;
+        }
         event.dataTransfer.effectAllowed = "move";
         event.dataTransfer.setData("text/plain", key);
         setDraggedKey(key);
@@ -242,7 +305,6 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
             <article
               key={turnKey(turn)}
               className={`speaking-dialogue-card speaking-dialogue-card--${role.toLowerCase()}${draggedKey === turnKey(turn) ? " is-dragging" : ""}${selectedKey === turnKey(turn) ? " is-selected" : ""}`}
-              {...draggableProps(turn)}
               role="button"
               tabIndex={checked ? -1 : 0}
               aria-pressed={selectedKey === turnKey(turn)}
@@ -256,8 +318,23 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
                 }
               }}
             >
-              <span>{role}</span>
-              <p>{turn.text}</p>
+              <span
+                className="speaking-dialogue-card__handle"
+                data-speaking-drag-handle="true"
+                style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none", cursor: "grab" }}
+                {...draggableProps(turn)}
+              >
+                {role}
+              </span>
+              <AnnotatableTextRegion
+                as="p"
+                className="speaking-dialogue-card__text"
+                data-speaking-card-text="true"
+                regionId={turnAnnotationId(turn, annotationSectionKey)}
+                style={{ userSelect: "text", WebkitUserSelect: "text", touchAction: "auto", cursor: "text" }}
+              >
+                {turn.text}
+              </AnnotatableTextRegion>
             </article>
           ))}
           {!poolTurns.length ? <p className="speaking-dialogue-pool__empty">已全部放入对话区</p> : null}
@@ -337,7 +414,6 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
             <div key={turnKey(turn)} className="speaking-dialogue-board__item">
               <article
                 className={`speaking-dialogue-card speaking-dialogue-card--${String(turn.role || "TN1").toLowerCase()} speaking-dialogue-card--placed${draggedKey === turnKey(turn) ? " is-dragging" : ""}`}
-                {...draggableProps(turn)}
                 data-speaking-board-item-index={index}
                 onDragOver={(event) => {
                   if (checked) return;
@@ -357,7 +433,14 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
                 }}
               >
                 <div className="speaking-dialogue-card__heading">
-                  <span>{turn.role || "TN1"}</span>
+                  <span
+                    className="speaking-dialogue-card__handle"
+                    data-speaking-drag-handle="true"
+                    style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none", cursor: "grab" }}
+                    {...draggableProps(turn)}
+                  >
+                    {turn.role || "TN1"}
+                  </span>
                   {!checked ? (
                     <div className="speaking-dialogue-card__actions">
                       <button type="button" onClick={() => move(index, -1)} disabled={index === 0} aria-label="向上移动">↑</button>
@@ -366,7 +449,15 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
                     </div>
                   ) : null}
                 </div>
-                <p>{turn.text}</p>
+                <AnnotatableTextRegion
+                  as="p"
+                  className="speaking-dialogue-card__text"
+                  data-speaking-card-text="true"
+                  regionId={turnAnnotationId(turn, annotationSectionKey)}
+                  style={{ userSelect: "text", WebkitUserSelect: "text", touchAction: "auto", cursor: "text" }}
+                >
+                  {turn.text}
+                </AnnotatableTextRegion>
               </article>
               {renderDropZone(index + 1)}
             </div>
@@ -384,7 +475,14 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
           <h3>Richtige Reihenfolge</h3>
           <div className="speaking-detail-dialogue">
             {turns.map((turn) => (
-              <DialogueTurn key={turnKey(turn)} turn={turn} showPractice recorderId={`${recorderPrefix}-${turn.sequence}`} favoriteProps={favoriteForTurn(turn)} />
+              <DialogueTurn
+                key={turnKey(turn)}
+                turn={turn}
+                showPractice
+                recorderId={`${recorderPrefix}-${turn.sequence}`}
+                favoriteProps={favoriteForTurn(turn)}
+                annotationRegionId={explanationAnnotationId(turn, annotationSectionKey)}
+              />
             ))}
           </div>
         </div>
@@ -519,6 +617,9 @@ export default function SpeakingTeilExercisePage({ teil }) {
   const currentSection = sections[activeSection];
 
   return (
+    <ExamTextAnnotationProvider
+      scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+    >
     <div className="speaking-detail-page">
       <div className="speaking-detail-topbar"><Link to={`/modules/exam-preparation/sprechen/teil-${teil}`} className="speaking-detail-back">← Zurück zu Sprechen Teil {teil}</Link></div>
       <header className="speaking-detail-hero">
@@ -528,26 +629,32 @@ export default function SpeakingTeilExercisePage({ teil }) {
       </header>
       <section className="speaking-detail-card speaking-detail-task">
         <p className="speaking-detail-card__eyebrow">Aufgabe</p><h2>{TITLES[teil]}</h2>
-        <p className="speaking-detail-task__instruction">{exercise.instruction}</p>
-        {content.task ? <p className="speaking-detail-task__text">{content.task}</p> : null}
-        {Number(teil) === 1 && topics.length ? <div className="speaking-detail-topic-list">{topics.map((topic) => <span key={topic}>{topic}</span>)}</div> : null}
-        {Number(teil) === 2 && cards.length ? <div className="speaking-detail-opinion-grid">{cards.map((card) => <article className="speaking-detail-opinion" key={card.participant}><span>{card.participant}</span><h3>{card.title}</h3><p>{card.content}</p></article>)}</div> : null}
+        <AnnotatableTextRegion as="p" className="speaking-detail-task__instruction" regionId="task">{exercise.instruction}</AnnotatableTextRegion>
+        {content.task ? <AnnotatableTextRegion as="p" className="speaking-detail-task__text" regionId="material:task">{content.task}</AnnotatableTextRegion> : null}
+        {Number(teil) === 1 && topics.length ? <div className="speaking-detail-topic-list">{topics.map((topic) => <AnnotatableTextRegion as="span" key={topic} regionId={materialAnnotationId(topic, "topic")}>{topic}</AnnotatableTextRegion>)}</div> : null}
+        {Number(teil) === 2 && cards.length ? <div className="speaking-detail-opinion-grid">{cards.map((card) => <AnnotatableTextRegion as="article" className="speaking-detail-opinion" key={stableContentKey(card, "card")} regionId={materialAnnotationId(card, "card")}><span>{card.participant}</span><h3>{card.title}</h3><p>{card.content}</p></AnnotatableTextRegion>)}</div> : null}
       </section>
       {Number(teil) === 1 ? (
-        <section className="speaking-detail-card speaking-detail-example"><div className="speaking-detail-dialogue speaking-detail-dialogue--flush">{dialogue.map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} showPractice recorderId={`teil-1-${exerciseId}-${turn.sequence}`} />)}</div></section>
+        <section className="speaking-detail-card speaking-detail-example"><div className="speaking-detail-dialogue speaking-detail-dialogue--flush">{dialogue.map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} showPractice recorderId={`teil-1-${exerciseId}-${turn.sequence}`} annotationRegionId={turnAnnotationId(turn)} />)}</div></section>
       ) : null}
       {Number(teil) === 2 ? (
         <section className="speaking-detail-card speaking-detail-example">
           <p className="speaking-detail-card__eyebrow">Reihenfolge</p><h2>对话排序</h2>
           <DialogueBuilder turns={dialogue} value={orders.all || []} onChange={(value) => { setOrders({ all: value }); setChecked({ all: false }); }} checked={Boolean(checked.all)} recorderPrefix={`teil-2-${exerciseId}`} favoriteForTurn={favoriteForTurn} />
-          <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked.all) || !dialogue.length || (orders.all || []).length !== dialogue.length} onClick={() => checkSection("all", dialogue)} />{checked.all ? <ExamActionButton className="speaking-detail-reset-btn" label="Wiederholen" icon="rotate" onClick={() => resetSection("all")} /> : null}</div>
+          <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked.all) || !dialogue.length || (orders.all || []).length !== dialogue.length} onClick={() => checkSection("all", dialogue)} />{checked.all ? <SpeakingResetAction onReset={() => resetSection("all")} /> : null}</div>
         </section>
       ) : null}
       {Number(teil) === 3 && currentSection ? (
         <section className="speaking-detail-card speaking-detail-example">
           <div className="speaking-detail-carousel-header">
             <h2 className="speaking-detail-carousel-title">
-              {currentSection.type}
+              <AnnotatableTextRegion
+                as="span"
+                regionId={`section:${sectionKey(currentSection)}`}
+                style={{ color: "inherit", fontSize: "inherit", fontWeight: "inherit" }}
+              >
+                {currentSection.type}
+              </AnnotatableTextRegion>
               <span>{activeSection + 1} / {sections.length}</span>
             </h2>
           </div>
@@ -567,12 +674,13 @@ export default function SpeakingTeilExercisePage({ teil }) {
               </button>
             ))}
           </nav>
-          <DialogueBuilder key={activeSection} turns={currentSection.turns || []} value={orders[activeSection] || []} onChange={(value) => { setShowAll(false); setOrders((previous) => ({ ...previous, [activeSection]: value })); setChecked((previous) => ({ ...previous, [activeSection]: false })); }} checked={Boolean(checked[activeSection])} recorderPrefix={`teil-3-${exerciseId}-${activeSection}`} favoriteForTurn={favoriteForTurn} />
+          <DialogueBuilder key={activeSection} turns={currentSection.turns || []} value={orders[activeSection] || []} onChange={(value) => { setShowAll(false); setOrders((previous) => ({ ...previous, [activeSection]: value })); setChecked((previous) => ({ ...previous, [activeSection]: false })); }} checked={Boolean(checked[activeSection])} recorderPrefix={`teil-3-${exerciseId}-${activeSection}`} favoriteForTurn={favoriteForTurn} annotationSectionKey={sectionKey(currentSection)} />
           <SectionArrowNavigation activeSection={activeSection} sectionCount={sections.length} onSelect={setActiveSection} position="bottom" />
-          <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked[activeSection]) || !(currentSection.turns || []).length || (orders[activeSection] || []).length !== (currentSection.turns || []).length} onClick={() => checkSection(activeSection, currentSection.turns || [])} />{checked[activeSection] ? <ExamActionButton className="speaking-detail-reset-btn" label="Wiederholen" icon="rotate" onClick={() => resetSection(activeSection)} /> : null}<button type="button" className="speaking-detail-toggle-all" disabled={!isTeil3Complete} onClick={() => setShowAll((value) => !value)}>{showAll ? "完整对话收起" : "展示全部完整对话"}</button></div>
-          {showAll ? <div className="speaking-detail-full-dialogue"><h3>Vollständiger Dialog</h3>{sections.map((section) => <section key={section.type}><h4>{section.type}</h4><div className="speaking-detail-dialogue">{(section.turns || []).map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} />)}</div></section>)}</div> : null}
+          <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked[activeSection]) || !(currentSection.turns || []).length || (orders[activeSection] || []).length !== (currentSection.turns || []).length} onClick={() => checkSection(activeSection, currentSection.turns || [])} />{checked[activeSection] ? <SpeakingResetAction onReset={() => resetSection(activeSection)} /> : null}<button type="button" className="speaking-detail-toggle-all" disabled={!isTeil3Complete} onClick={() => setShowAll((value) => !value)}>{showAll ? "完整对话收起" : "展示全部完整对话"}</button></div>
+          {showAll ? <div className="speaking-detail-full-dialogue"><h3>Vollständiger Dialog</h3>{sections.map((section) => { const key = sectionKey(section); return <section key={key}><AnnotatableTextRegion as="h4" regionId={`explanation:section:${key}`}>{section.type}</AnnotatableTextRegion><div className="speaking-detail-dialogue">{(section.turns || []).map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} annotationRegionId={explanationAnnotationId(turn, key, "full")} />)}</div></section>; })}</div> : null}
         </section>
       ) : null}
     </div>
+    </ExamTextAnnotationProvider>
   );
 }

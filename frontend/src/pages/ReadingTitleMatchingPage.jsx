@@ -11,10 +11,32 @@ import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx
 import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionSheet.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
+import {
+  AnnotatableTextRegion,
+  ExamTextAnnotationProvider,
+  useExamTextAnnotations,
+} from "../components/examPreparation/ExamTextAnnotations.jsx";
+import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import "./ReadingTitleMatchingPage.css";
 
 const FALLBACK_INSTRUCTION =
   "Lesen Sie die Überschriften und die Texte. Finden Sie für jeden Text die passende Überschrift. Sie können jede Überschrift nur einmal benutzen.";
+
+function ReadingTitleResetAction({ onReset }) {
+  const { clearAnnotations } = useExamTextAnnotations();
+
+  return (
+    <ExamActionButton
+      className="reading-title-reset-btn"
+      onClick={() => {
+        onReset();
+        clearAnnotations();
+      }}
+      label="Wiederholen"
+      icon="rotate"
+    />
+  );
+}
 
 export default function ReadingTitleMatchingPage() {
   const { exerciseId } = useParams();
@@ -159,8 +181,11 @@ export default function ReadingTitleMatchingPage() {
   }
 
   return (
-    <div className="reading-title-page">
-      <div className="reading-title-shell">
+    <ExamTextAnnotationProvider
+      scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+    >
+      <div className="reading-title-page">
+        <div className="reading-title-shell">
         <div className="reading-title-topbar">
           <Link to="/modules/exam-preparation/lesen/title-matching" className="reading-title-topbar__back">
             ← Zurück zu Lesen
@@ -195,7 +220,9 @@ export default function ReadingTitleMatchingPage() {
           <div className="reading-title-instruction__header">
             <span className="reading-title-instruction__label">Anleitung</span>
           </div>
-          <p>{exercise?.instruction || FALLBACK_INSTRUCTION}</p>
+          <AnnotatableTextRegion as="p" regionId="task">
+            {exercise?.instruction || FALLBACK_INSTRUCTION}
+          </AnnotatableTextRegion>
         </section>
 
         <section className="reading-title-texts">
@@ -235,7 +262,19 @@ export default function ReadingTitleMatchingPage() {
                         {selectedKey ? (
                           <>
                             <span className="reading-title-select__key">{selectedKey}</span>
-                            <span className="reading-title-select__label">{selectedOption?.option_text || selectedKey}</span>
+                            {String(activeItemId) === String(item.id) ? (
+                              <span className="reading-title-select__label">
+                                {selectedOption?.option_text || selectedKey}
+                              </span>
+                            ) : (
+                              <AnnotatableTextRegion
+                                as="span"
+                                className="reading-title-select__label"
+                                regionId={`option:${item.id}:${selectedOption?.id || selectedKey}`}
+                              >
+                                {selectedOption?.option_text || selectedKey}
+                              </AnnotatableTextRegion>
+                            )}
                           </>
                         ) : "Überschrift auswählen"}
                       </button>
@@ -246,10 +285,19 @@ export default function ReadingTitleMatchingPage() {
                         selectedValue={selectedKey}
                         options={options.map((option) => ({
                           value: option.option_key,
+                          id: option.id,
                           label: option.option_text,
                           meta: option.option_key,
                         }))}
                         metaPlacement="before"
+                        renderOptionLabel={(option) => (
+                          <AnnotatableTextRegion
+                            as="span"
+                            regionId={`option:${item.id}:${option.id || option.value}`}
+                          >
+                            {option.label}
+                          </AnnotatableTextRegion>
+                        )}
                         onClose={() => {
                           setActiveItemId("");
                         }}
@@ -265,7 +313,9 @@ export default function ReadingTitleMatchingPage() {
                       />
                     </div>
                   </div>
-                  <p>{item.text}</p>
+                  <AnnotatableTextRegion as="p" regionId={`item:${item.id}`}>
+                    {item.text}
+                  </AnnotatableTextRegion>
 
                   {isChecked ? (
                     <div
@@ -291,7 +341,10 @@ export default function ReadingTitleMatchingPage() {
                       </p>
                       {String(item.explanation || "").trim() ? (
                         <p className="reading-title-feedback__line">
-                          Erklärung: <FormattedExplanation text={item.explanation} />
+                          Erklärung:{" "}
+                          <AnnotatableTextRegion as="span" regionId={`explanation:${item.id}`}>
+                            <FormattedExplanation text={item.explanation} />
+                          </AnnotatableTextRegion>
                         </p>
                       ) : null}
                     </div>
@@ -309,19 +362,17 @@ export default function ReadingTitleMatchingPage() {
               icon="check"
             />
             {isChecked ? (
-              <ExamActionButton
-                className="reading-title-reset-btn"
-                onClick={() => {
+              <ReadingTitleResetAction
+                onReset={() => {
                   setAnswers({});
                   setIsChecked(false);
                 }}
-                label="Wiederholen"
-                icon="rotate"
               />
             ) : null}
           </div>
         </section>
       </div>
-    </div>
+      </div>
+    </ExamTextAnnotationProvider>
   );
 }

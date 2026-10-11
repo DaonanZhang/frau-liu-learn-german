@@ -1,10 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { AnnotatableTextRegion } from "./ExamTextAnnotations.jsx";
 import ExerciseFavoriteButton from "./ExerciseFavoriteButton.jsx";
 import FormattedExplanation from "./FormattedExplanation.jsx";
 
 function isNoMatchOption(ad) {
   return Boolean(ad?.is_no_match_option) || String(ad?.ad_key || "").trim().toLowerCase() === "x";
+}
+
+function TextRegion({ enabled, regionId, as = "span", children, ...props }) {
+  if (enabled) {
+    return (
+      <AnnotatableTextRegion regionId={regionId} as={as} {...props}>
+        {children}
+      </AnnotatableTextRegion>
+    );
+  }
+
+  const Element = as;
+  return <Element {...props}>{children}</Element>;
 }
 
 /**
@@ -16,6 +30,8 @@ export default function ReadingAdMatchingWorkspace({
   onAnswer,
   review = false,
   favoriteFor,
+  annotationsEnabled = false,
+  annotationRegionPrefix = "",
 }) {
   const [activeItemIndex, setActiveItemIndex] = useState(0);
   const [activeAdPage, setActiveAdPage] = useState(0);
@@ -48,6 +64,7 @@ export default function ReadingAdMatchingWorkspace({
   const safeActiveAdPage = Math.min(activeAdPage, Math.max(0, adPages.length - 1));
   const visibleAds = adPages[safeActiveAdPage] || [];
   const goToAdPage = (index) => setActiveAdPage(Math.max(0, Math.min(index, Math.max(0, adPages.length - 1))));
+  const regionId = (id) => annotationRegionPrefix ? `${annotationRegionPrefix}:${id}` : id;
 
   return (
     <section className="reading-ad-workspace">
@@ -67,11 +84,17 @@ export default function ReadingAdMatchingWorkspace({
                 className={`reading-ad-card${isSelected ? " reading-ad-card--selected" : ""}`}
               >
                 <span className="reading-ad-card__number">Anzeige {String(ad.ad_key || "").toLocaleUpperCase()}</span>
-                {lines.map((line, index) => (
-                  <p key={index} className={`reading-ad-card__line${index === 0 ? " reading-ad-card__line--heading" : ""}`}>
-                    {line}
-                  </p>
-                ))}
+                <TextRegion
+                  enabled={annotationsEnabled}
+                  regionId={regionId(`ad:${ad.id}`)}
+                  as="div"
+                >
+                  {lines.map((line, index) => (
+                    <p key={index} className={`reading-ad-card__line${index === 0 ? " reading-ad-card__line--heading" : ""}`}>
+                      {line}
+                    </p>
+                  ))}
+                </TextRegion>
               </article>
             );
           })}
@@ -126,7 +149,12 @@ export default function ReadingAdMatchingWorkspace({
             </div>
             <h3 className="reading-ad-question-card__title">
               <span className="reading-ad-question-card__number">{currentItem.item_number}.</span>{" "}
-              {currentItem.item_text}
+              <TextRegion
+                enabled={annotationsEnabled}
+                regionId={regionId(`item:${currentItem.id}`)}
+              >
+                {currentItem.item_text}
+              </TextRegion>
             </h3>
             <div className="reading-ad-option-grid">
               {ads.map((ad) => {
@@ -157,7 +185,13 @@ export default function ReadingAdMatchingWorkspace({
                       onChange={() => onAnswer(currentItem.id, ad.ad_key)}
                     />
                     <span className="reading-ad-option__circle" />
-                    <span className="reading-ad-option__key">{String(ad.ad_key || "").toLocaleUpperCase()}</span>
+                    <TextRegion
+                      enabled={annotationsEnabled}
+                      regionId={regionId(`option:${currentItem.id}:${ad.id}`)}
+                      className="reading-ad-option__key"
+                    >
+                      {String(ad.ad_key || "").toLocaleUpperCase()}
+                    </TextRegion>
                   </label>
                 );
               })}
@@ -170,7 +204,15 @@ export default function ReadingAdMatchingWorkspace({
                 </div>
                 <p className="reading-ad-feedback__line">Richtige Antwort: {String(currentItem.correct_ad?.ad_key || "").toLocaleUpperCase()}</p>
                 {String(currentItem.explanation || "").trim() ? (
-                  <p className="reading-ad-feedback__line">Erklärung: <FormattedExplanation text={currentItem.explanation} /></p>
+                  <p className="reading-ad-feedback__line">
+                    Erklärung:{" "}
+                    <TextRegion
+                      enabled={annotationsEnabled}
+                      regionId={regionId(`explanation:${currentItem.id}`)}
+                    >
+                      <FormattedExplanation text={currentItem.explanation} />
+                    </TextRegion>
+                  </p>
                 ) : null}
               </div>
             ) : null}

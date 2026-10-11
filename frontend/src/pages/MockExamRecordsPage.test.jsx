@@ -3,7 +3,11 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import MockExamRecordsPage from "./MockExamRecordsPage.jsx";
-import { fetchSavedMockExams } from "../api/exam_preparation/mockExams.js";
+import { deleteSavedMockExam, fetchSavedMockExams } from "../api/exam_preparation/mockExams.js";
+import { mockAnnotationScope } from "../utils/examTextAnnotations.js";
+import Swal from "sweetalert2";
+
+vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
 
 vi.mock("../api/auth/useAuth.js", () => ({
   useAuth: () => ({
@@ -43,6 +47,10 @@ function record(id) {
 
 describe("mock exam records pagination", () => {
   beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    Swal.fire.mockReset();
+    deleteSavedMockExam.mockReset();
     fetchSavedMockExams.mockImplementation((scope, page) => Promise.resolve({
       count: 12,
       next: page === 1 ? "next" : null,
@@ -62,5 +70,54 @@ describe("mock exam records pagination", () => {
     await waitFor(() => expect(fetchSavedMockExams).toHaveBeenCalledWith("history", 2, 10));
     expect(screen.getByRole("button", { name: "上一页" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled();
+  });
+
+  it("clears only the deleted attempt annotations after a successful delete", async () => {
+    sessionStorage.setItem(mockAnnotationScope(31), JSON.stringify({ version: 1, regions: { question: [{ start: 0, end: 1, highlight: true }] } }));
+    sessionStorage.setItem(mockAnnotationScope(32), JSON.stringify({ version: 1, regions: { question: [{ start: 0, end: 1, underline: true }] } }));
+    sessionStorage.setItem("exam-annotations:v1:exercise:other:1", JSON.stringify({ version: 1, regions: {} }));
+    deleteSavedMockExam.mockResolvedValue({});
+    Swal.fire.mockResolvedValue({ isConfirmed: true });
+    fetchSavedMockExams.mockResolvedValue({ count: 3, next: null, previous: null, results: [record(31), record(32)] });
+    render(<MemoryRouter><MockExamRecordsPage /></MemoryRouter>);
+
+    const records = await screen.findByText("3 场");
+    expect(records).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "删除" })[0]);
+
+    await waitFor(() => expect(deleteSavedMockExam).toHaveBeenCalledWith(31));
+    expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
+    expect(sessionStorage.getItem(mockAnnotationScope(32))).not.toBeNull();
+    expect(sessionStorage.getItem("exam-annotations:v1:exercise:other:1")).not.toBeNull();
+  });
+
+  it("keeps annotations when deleting an attempt fails", async () => {
+    const annotation = JSON.stringify({ version: 1, regions: { question: [{ start: 0, end: 1, highlight: true }] } });
+    sessionStorage.setItem(mockAnnotationScope(31), annotation);
+    deleteSavedMockExam.mockRejectedValue(new Error("delete failed"));
+    Swal.fire.mockResolvedValue({ isConfirmed: true });
+    fetchSavedMockExams.mockResolvedValue({ count: 1, next: null, previous: null, results: [record(31)] });
+    render(<MemoryRouter><MockExamRecordsPage /></MemoryRouter>);
+
+    await screen.findByText("1 场");
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+
+    await waitFor(() => expect(deleteSavedMockExam).toHaveBeenCalledWith(31));
+    expect(sessionStorage.getItem(mockAnnotationScope(31))).toBe(annotation);
+  });
+
+  it("keeps annotations and skips the API when deletion is cancelled", async () => {
+    const annotation = JSON.stringify({ version: 1, regions: { question: [{ start: 0, end: 1, highlight: true }] } });
+    sessionStorage.setItem(mockAnnotationScope(31), annotation);
+    Swal.fire.mockResolvedValue({ isConfirmed: false });
+    fetchSavedMockExams.mockResolvedValue({ count: 1, next: null, previous: null, results: [record(31)] });
+    render(<MemoryRouter><MockExamRecordsPage /></MemoryRouter>);
+
+    await screen.findByText("1 场");
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+
+    await waitFor(() => expect(Swal.fire).toHaveBeenCalled());
+    expect(deleteSavedMockExam).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(mockAnnotationScope(31))).toBe(annotation);
   });
 });

@@ -13,6 +13,12 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import {
+  AnnotatableTextRegion,
+  ExamTextAnnotationProvider,
+  useExamTextAnnotations,
+} from "../components/examPreparation/ExamTextAnnotations.jsx";
+import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import "./ExamPreparationWritingDetailPage.css";
 
 function renderStoredLineBreaks(text, fallback = "") {
@@ -54,6 +60,22 @@ const WRITING_GUIDE_STEPS = [
     description: "把你的完整德语作文输入“我的作答”。页面会自动统计词数，完成后点击 Prüfen。",
   },
 ];
+
+function WritingResetAction({ onReset }) {
+  const { clearAnnotations } = useExamTextAnnotations();
+
+  return (
+    <ExamActionButton
+      className="writing-detail-reset-btn"
+      onClick={() => {
+        onReset();
+        clearAnnotations();
+      }}
+      label="Wiederholen"
+      icon="rotate"
+    />
+  );
+}
 
 export default function ExamPreparationWritingDetailPage() {
   const { exerciseId } = useParams();
@@ -294,7 +316,10 @@ export default function ExamPreparationWritingDetailPage() {
   }
 
   return (
-    <div className="writing-detail-page">
+    <ExamTextAnnotationProvider
+      scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+    >
+      <div className="writing-detail-page">
       <div className="writing-detail-shell">
         <div className="writing-detail-topbar">
           <Link to="/modules/exam-preparation/schreiben" className="writing-detail-topbar__back">
@@ -334,7 +359,9 @@ export default function ExamPreparationWritingDetailPage() {
           ].filter(Boolean).join(" ")}
         >
           <h2>Anleitung</h2>
-          <p>{renderStoredLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}</p>
+          <AnnotatableTextRegion as="p" regionId="task">
+            {renderStoredLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}
+          </AnnotatableTextRegion>
         </section>
 
         <section className="writing-detail-meta-panel">
@@ -378,7 +405,9 @@ export default function ExamPreparationWritingDetailPage() {
             ].filter(Boolean).join(" ")}
           >
             <h2>写作要求</h2>
-            <p>{renderStoredLineBreaks(exercise?.task_text, "请根据题目要求完成写作。")}</p>
+            <AnnotatableTextRegion as="p" regionId="prompt">
+              {renderStoredLineBreaks(exercise?.task_text, "请根据题目要求完成写作。")}
+            </AnnotatableTextRegion>
           </article>
 
           <article
@@ -429,7 +458,11 @@ export default function ExamPreparationWritingDetailPage() {
                     <h2>
                       {exampleTexts.length > 1 ? `Mustertext ${index + 1}` : "Mustertext"}
                     </h2>
-                    {example.note ? <span>{example.note}</span> : null}
+                    {example.note ? (
+                      <AnnotatableTextRegion as="span" regionId={`explanation:${example.id}`}>
+                        {example.note}
+                      </AnnotatableTextRegion>
+                    ) : null}
                   </div>
                   <ExerciseFavoriteButton
                     isFavorited={Boolean(exampleFavoriteById[example.id])}
@@ -438,7 +471,9 @@ export default function ExamPreparationWritingDetailPage() {
                     label="收藏 Mustertext"
                   />
                 </div>
-                <p>{renderStoredLineBreaks(example.example_text)}</p>
+                <AnnotatableTextRegion as="p" regionId={`reference-answer:${example.id}`}>
+                  {renderStoredLineBreaks(example.example_text)}
+                </AnnotatableTextRegion>
               </article>
             ))}
           </section>
@@ -457,21 +492,19 @@ export default function ExamPreparationWritingDetailPage() {
               icon="check"
             />
             {isChecked ? (
-              <ExamActionButton
-                className="writing-detail-reset-btn"
-                onClick={() => {
+              <WritingResetAction
+                onReset={() => {
                   setDraftText("");
                   setIsChecked(false);
                   setTimerStarted(false);
                   setSubmittedTimeSpentSeconds(null);
                   setRemainingSeconds((exercise?.time_limit_minutes || 30) * 60);
                 }}
-                label="Wiederholen"
-                icon="rotate"
               />
             ) : null}
           </div>
         </section>
+      </div>
       </div>
 
       {guideStep !== null ? (
@@ -539,6 +572,6 @@ export default function ExamPreparationWritingDetailPage() {
           </section>
         </>
       ) : null}
-    </div>
+    </ExamTextAnnotationProvider>
   );
 }

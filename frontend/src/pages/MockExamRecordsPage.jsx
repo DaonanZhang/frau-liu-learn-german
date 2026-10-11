@@ -12,6 +12,7 @@ import {
   retakeSavedMockExam,
   updateSavedMockExam,
 } from "../api/exam_preparation/mockExams.js";
+import { clearAnnotationScope, mockAnnotationScope } from "../utils/examTextAnnotations.js";
 import "./MockExamRecordsPage.css";
 
 const PHASE_LABELS = {
@@ -93,6 +94,7 @@ export default function MockExamRecordsPage() {
     setPendingId(record.id);
     try {
       await deleteSavedMockExam(record.id);
+      clearAnnotationScope(mockAnnotationScope(record.id));
       clearLocalAttempt(record.id);
       setRecords((items) => items.filter((item) => item.id !== record.id));
       setFavorites((items) => items.filter((item) => item.id !== record.id));

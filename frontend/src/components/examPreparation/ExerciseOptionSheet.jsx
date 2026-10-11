@@ -10,6 +10,7 @@ export default function ExerciseOptionSheet({
   options = [],
   selectedValue = "",
   metaPlacement = "after",
+  renderOptionLabel,
   onClose,
   onSelect,
 }) {
@@ -133,7 +134,11 @@ export default function ExerciseOptionSheet({
               {metaPlacement === "before" && option.meta ? (
                 <span className="exercise-option-sheet__option-meta">{option.meta}</span>
               ) : null}
-              <span className="exercise-option-sheet__option-label">{option.label}</span>
+              <span className="exercise-option-sheet__option-label">
+                {typeof renderOptionLabel === "function"
+                  ? renderOptionLabel(option)
+                  : option.label}
+              </span>
               {metaPlacement !== "before" && option.meta ? (
                 <span className="exercise-option-sheet__option-meta">{option.meta}</span>
               ) : null}

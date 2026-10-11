@@ -1,11 +1,18 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import MockWrittenExamPage from "./MockWrittenExamPage.jsx";
 import MockExamAnswerSheet from "../components/examPreparation/MockExamAnswerSheet.jsx";
+import { mockAnnotationScope } from "../utils/examTextAnnotations.js";
+import {
+  createMockExam,
+  fetchSavedMockExam,
+  submitSavedMockExam,
+  updateSavedMockExam,
+} from "../api/exam_preparation/mockExams.js";
 
 const mockExamStyleSource = readFileSync(resolve("src/pages/MockWrittenExamPage.css"), "utf8");
 const clozeExerciseStyleSource = readFileSync(resolve("src/pages/ClozeExercisePage.css"), "utf8");
@@ -14,6 +21,10 @@ const readingAdStyleSource = readFileSync(resolve("src/pages/ReadingAdMatchingPa
 
 vi.mock("../api/auth/useAuth.js", () => ({
   useAuth: () => ({ user: { id: 7 } }),
+}));
+
+vi.mock("../utils/confirmMockExamAction.js", () => ({
+  confirmMockExamAction: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("../api/exam_preparation/mockExams.js", async (importOriginal) => {
@@ -197,6 +208,25 @@ function mockExamState(partKey, exercise, phase = "reading") {
     wasEarlySubmitted: false,
   };
 }
+
+function FakeHighlight(...ranges) {
+  this.ranges = ranges;
+}
+
+function selectText(element, start, end) {
+  const range = document.createRange();
+  range.setStart(element.firstChild, start);
+  range.setEnd(element.firstChild, end);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+}
+
+afterEach(() => {
+  delete window.Highlight;
+  delete window.CSS;
+});
 
 describe("mock exam answer sheet", () => {
   let styleElement;
@@ -472,6 +502,81 @@ describe("mock exam exercise layout", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+  });
+
+  it("uses one attempt annotation scope and exposes prefixed learning-text regions", async () => {
+    const exercise = {
+      exercise_base: { title: "Lesen 2", exam_type: "telc" },
+      text_markdown: "Lesetext",
+      questions: [{
+        id: 101,
+        question_number: 1,
+        question_text: "Lesefrage",
+        answer_options: [{ id: 1, option_key: "A", option_text: "Ja", is_correct: true }],
+      }],
+    };
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      ...mockExamState("reading_understanding", exercise),
+      attemptId: 31,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    await screen.findByRole("heading", { name: "Lesen 2" });
+    expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
+    expect(document.querySelector('[data-exam-annotation-region="reading_understanding:passage"]')).toHaveTextContent("Lesetext");
+    expect(document.querySelector('[data-exam-annotation-region="reading_understanding:question:101"]')).toHaveTextContent("Lesefrage");
+  });
+
+  it("renders one question number for reading-understanding headings and pure question annotation text", async () => {
+    const exercise = {
+      exercise_base: { title: "Lesen 2", exam_type: "telc" },
+      text_markdown: "Lesetext",
+      questions: [{
+        id: 101,
+        question_number: 1,
+        question_text: "Lesefrage",
+        answer_options: [{ id: 1, option_key: "A", option_text: "Ja", is_correct: true }],
+      }],
+    };
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(
+      mockExamState("reading_understanding", exercise),
+    ));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    const heading = await screen.findByRole("heading", { name: "1. Lesefrage", level: 3 });
+    expect(heading).toHaveTextContent(/^1\.\s+Lesefrage$/);
+    expect(heading).not.toHaveTextContent("1. 1.");
+    expect(screen.getByRole("radio")).toHaveAttribute("name", "Lesefrage");
+    const region = document.querySelector('[data-exam-annotation-region="reading_understanding:question:101"]');
+    expect(region).toHaveTextContent("Lesefrage");
+    expect(region).not.toHaveTextContent("1.");
+  });
+
+  it("renders one question number for listening headings and pure question annotation text", async () => {
+    const exercise = {
+      exercise_base: { title: "Hören 1", exam_type: "telc" },
+      questions: [{
+        id: 201,
+        question_number: 1,
+        question_text: "Hörfrage",
+        answer_options: [{ id: 1, option_key: "A", option_text: "Richtig", is_correct: true }],
+      }],
+    };
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(
+      mockExamState("listening_teil1", exercise, "listening"),
+    ));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    const heading = await screen.findByRole("heading", { name: "1. Hörfrage", level: 3 });
+    expect(heading).toHaveTextContent(/^1\.\s+Hörfrage$/);
+    expect(heading).not.toHaveTextContent("1. 1.");
+    expect(screen.getByRole("radio")).toHaveAttribute("name", "Hörfrage");
+    const region = document.querySelector('[data-exam-annotation-region="listening_teil1:question:201"]');
+    expect(region).toHaveTextContent("Hörfrage");
+    expect(region).not.toHaveTextContent("1.");
   });
 
   it("centers selected answers in regular Sprachbausteine slots", () => {
@@ -1590,5 +1695,408 @@ describe("mock exam answer review", () => {
     const feedbackCard = explanation.closest(".cloze-feedback-card");
     expect(feedbackCard).toBeInTheDocument();
     expect(feedbackCard).toContainElement(screen.getByRole("button", { name: "收藏这道题" }));
+  });
+});
+
+describe("mock exam annotations", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    window.Highlight = FakeHighlight;
+    window.CSS = { highlights: new Map() };
+  });
+
+  function saveState(exam, overrides = {}) {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      ...mockExamState("reading_understanding", exam.parts.reading_understanding, "reading"),
+      exam,
+      attemptId: 31,
+      ...overrides,
+    }));
+  }
+
+  it("persists a real selection in the attempt scope across part switches", async () => {
+    const exam = {
+      parts: {
+        reading_understanding: {
+          exercise_base: { title: "Lesen 2", exam_type: "telc" },
+          text_markdown: "Passage for notes",
+          questions: [],
+        },
+        cloze_choice: {
+          exercise_base: { title: "Sprachbausteine 1", exam_type: "telc" },
+          content_with_placeholders: "Cloze source",
+          blanks: [],
+        },
+      },
+    };
+    saveState(exam);
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    const passage = await screen.findByText("Passage for notes");
+    selectText(passage, 0, 7);
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    expect(JSON.parse(sessionStorage.getItem(mockAnnotationScope(31))).regions["reading_understanding:passage"])
+      .toEqual([{ start: 0, end: 7, highlight: true, underline: false }]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sprachbausteine · Teil 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 2" }));
+    expect(document.querySelector('[data-exam-annotation-region="reading_understanding:passage"]')).toHaveTextContent("Passage for notes");
+    expect(JSON.parse(sessionStorage.getItem(mockAnnotationScope(31))).regions["reading_understanding:passage"])
+      .toHaveLength(1);
+  });
+
+  it("keeps in-memory annotations when session storage writes fail", async () => {
+    const exam = {
+      parts: {
+        reading_understanding: {
+          exercise_base: { title: "Lesen 2", exam_type: "telc" },
+          text_markdown: "Storage independent passage",
+          questions: [],
+        },
+        cloze_choice: {
+          exercise_base: { title: "Sprachbausteine 1", exam_type: "telc" },
+          content_with_placeholders: "Other source",
+          blanks: [],
+        },
+      },
+    };
+    saveState(exam);
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const passage = await screen.findByText("Storage independent passage");
+    selectText(passage, 0, 7);
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota"); });
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sprachbausteine · Teil 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 2" }));
+    selectText(screen.getByText("Storage independent passage"), 0, 7);
+    expect(await screen.findByRole("button", { name: "高亮" })).toHaveAttribute("aria-pressed", "true");
+    setItem.mockRestore();
+  });
+
+  it("keeps region IDs unique, flat, and outside exam chrome", async () => {
+    saveState({
+      parts: {
+        reading_understanding: {
+          exercise_base: { title: "Lesen 2", exam_type: "telc" },
+          text_markdown: "Passage",
+          questions: [{ id: 1, question_number: 1, question_text: "Question", answer_options: [{ id: 2, option_key: "A", option_text: "Option", is_correct: true }], explanation: "Explanation" }],
+        },
+      },
+    });
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Lesen 2" });
+    const regions = [...container.querySelectorAll("[data-exam-annotation-region]")];
+    expect(new Set(regions.map((region) => region.dataset.examAnnotationRegion)).size).toBe(regions.length);
+    regions.forEach((region) => expect(region.querySelector("[data-exam-annotation-region]")).toBeNull());
+    expect(screen.getByRole("button", { name: "← 退出模拟" }).closest("[data-exam-annotation-region]")).toBeNull();
+    expect(screen.getByRole("button", { name: "提前交卷" }).closest("[data-exam-annotation-region]")).toBeNull();
+    expect(screen.getAllByRole("radio")[0].closest("[data-exam-annotation-region]")).toBeNull();
+  });
+
+  it("does not duplicate a selected matching chip while its modal is open", async () => {
+    saveState({
+      parts: {
+        reading_title_matching: {
+          exercise_base: { title: "Lesen 1", exam_type: "telc" },
+          options: [{ id: 2, option_key: "A", option_text: "Headline" }],
+          items: [{ id: 1, item_number: 1, text: "Text", correct_option: { option_key: "A" } }],
+        },
+      },
+    }, { activePart: "reading_title_matching" });
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Lesen 1" });
+    const selector = screen.getByRole("button", { name: "Überschrift auswählen" });
+    fireEvent.click(selector);
+    expect(document.querySelectorAll('[data-exam-annotation-region="reading_title_matching:option:title:1:A"]')).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /A Headline/ }));
+    expect(document.querySelectorAll('[data-exam-annotation-region="reading_title_matching:option:title:1:A"]')).toHaveLength(1);
+  });
+
+  it("uses a desktop drag handle and touch drag without suppressing text pointerdown", async () => {
+    saveState({
+      parts: {
+        cloze_matching: {
+          exercise_base: { title: "Sprachbausteine 2", exam_type: "telc" },
+          content_with_placeholders: "Ich {{blank_1}}.",
+          options: [{ id: 1, option_key: "A", option_text: "lerne" }],
+          blank_answers: [{ id: 2, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" } }],
+        },
+      },
+    }, { activePart: "cloze_matching" });
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Sprachbausteine 2" });
+    const poolText = document.querySelector('[data-exam-annotation-region="cloze_matching:option:1"]');
+    const handle = screen.getByRole("button", { name: /拖动lerne/ }).querySelector(".mock-cloze-matching-pool__handle");
+    const slot = document.querySelector(".mock-cloze-matching-slot");
+    const dataTransfer = { setData: vi.fn(), getData: vi.fn(() => "A") };
+    const pointerDown = new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse" });
+    poolText.dispatchEvent(pointerDown);
+    expect(pointerDown.defaultPrevented).toBe(false);
+    fireEvent.dragStart(handle, { dataTransfer });
+    fireEvent.dragOver(slot);
+    fireEvent.drop(slot, { dataTransfer });
+    await waitFor(() => expect(slot).toHaveTextContent("lerne"));
+    expect(handle).toHaveAttribute("draggable", "true");
+  });
+
+  it("moves a matching option through touch pointer events and clears the preview", async () => {
+    saveState({
+      parts: {
+        cloze_matching: {
+          exercise_base: { title: "Sprachbausteine 2", exam_type: "telc" },
+          content_with_placeholders: "Ich {{blank_1}}.",
+          options: [{ id: 1, option_key: "A", option_text: "lerne" }],
+          blank_answers: [{ id: 2, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" } }],
+        },
+      },
+    }, { activePart: "cloze_matching" });
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Sprachbausteine 2" });
+    const handle = screen.getByRole("button", { name: /拖动lerne/ }).querySelector(".mock-cloze-matching-pool__handle");
+    const slot = document.querySelector(".mock-cloze-matching-slot");
+    fireEvent.pointerDown(handle, { pointerType: "touch", pointerId: 1, clientX: 1, clientY: 1 });
+    expect(document.querySelector(".mock-cloze-matching-touch-preview")).toBeInTheDocument();
+    fireEvent.pointerMove(handle, { pointerType: "touch", pointerId: 1, clientX: 2, clientY: 2 });
+    fireEvent.pointerUp(slot, { pointerType: "touch", pointerId: 1, clientX: 2, clientY: 2 });
+    await waitFor(() => expect(slot).toHaveTextContent("lerne"));
+    expect(document.querySelector(".mock-cloze-matching-touch-preview")).not.toBeInTheDocument();
+  });
+});
+
+describe("mock exam annotation scope acceptance", () => {
+  const scopeValue = (marker) => JSON.stringify({
+    version: 1,
+    regions: { "reading_understanding:passage": [{ start: 0, end: 4, highlight: marker === "old" }] },
+  });
+
+  function writingExam() {
+    return {
+      parts: {
+        reading_understanding: {
+          exercise_base: { title: "Lesen 2", exam_type: "telc" },
+          text_markdown: "Passage",
+          questions: [],
+        },
+        writing: {
+          exercise_base: { title: "Schreiben", exam_type: "telc" },
+          request_text: "Writing request",
+          task_text: "Writing task",
+          example_texts: [{ example_text: "Example answer" }],
+        },
+      },
+    };
+  }
+
+  function writingReviewState(overrides = {}) {
+    return {
+      ...mockExamState("writing", writingExam().parts.writing, "writing_review"),
+      exam: writingExam(),
+      activePart: "writing",
+      attemptId: 31,
+      writingText: "My answer",
+      writingAssessment: {
+        topic_relevant: false,
+        task_completion: "",
+        communicative_design: "",
+        formal_accuracy: "",
+      },
+      ...overrides,
+    };
+  }
+
+  function saveSnapshot(snapshot) {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(snapshot));
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.clearAllMocks();
+    createMockExam.mockReset();
+    fetchSavedMockExam.mockReset();
+    submitSavedMockExam.mockReset();
+    updateSavedMockExam.mockReset();
+    window.Highlight = FakeHighlight;
+    window.CSS = { highlights: new Map() };
+  });
+
+  it("clears the attempt scope before a successful self-assessment submit and keeps the existing payload contract", async () => {
+    saveSnapshot(writingReviewState());
+    sessionStorage.setItem(mockAnnotationScope(31), scopeValue("old"));
+    submitSavedMockExam.mockResolvedValueOnce({});
+    fetchSavedMockExam.mockResolvedValueOnce({ is_completed: false });
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("radio", { name: /否/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "查看得分" }));
+
+    expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
+    await waitFor(() => expect(submitSavedMockExam).toHaveBeenCalled());
+    const payload = submitSavedMockExam.mock.calls[0][1];
+    expect(Object.keys(payload).sort()).toEqual([
+      "answers", "is_favorite", "progress", "writing_assessment", "writing_text",
+    ].sort());
+    expect(payload).not.toHaveProperty("annotations");
+  });
+
+  it.each([
+    ["submit rejection", { submit: new Error("submit") }],
+    ["completed fetch rejection", { fetch: new Error("fetch") }],
+  ])("clears the attempt scope when %s", async (_label, failures) => {
+    saveSnapshot(writingReviewState());
+    sessionStorage.setItem(mockAnnotationScope(31), scopeValue("old"));
+    if (failures.submit) submitSavedMockExam.mockRejectedValueOnce(failures.submit);
+    else submitSavedMockExam.mockResolvedValueOnce({});
+    if (failures.fetch) fetchSavedMockExam.mockRejectedValueOnce(failures.fetch);
+    else fetchSavedMockExam.mockResolvedValueOnce({ is_completed: false });
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("radio", { name: /否/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "查看得分" }));
+
+    await waitFor(() => expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull());
+    await waitFor(() => expect(submitSavedMockExam).toHaveBeenCalled());
+    const payload = submitSavedMockExam.mock.calls[0][1];
+    expect(payload).not.toHaveProperty("annotations");
+    if (failures.fetch) await waitFor(() => expect(fetchSavedMockExam).toHaveBeenCalledWith(31));
+  });
+
+  it("clears the scope on confirmed early submission and sends no annotation field", async () => {
+    saveSnapshot({
+      ...mockExamState("reading_understanding", writingExam().parts.reading_understanding, "reading"),
+      exam: writingExam(),
+      attemptId: 31,
+    });
+    sessionStorage.setItem(mockAnnotationScope(31), scopeValue("old"));
+    submitSavedMockExam.mockResolvedValueOnce({});
+    fetchSavedMockExam.mockResolvedValueOnce({ is_completed: false });
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "提前交卷" }));
+
+    await waitFor(() => expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull());
+    await waitFor(() => expect(submitSavedMockExam).toHaveBeenCalled());
+    const payload = submitSavedMockExam.mock.calls[0][1];
+    expect(Object.keys(payload).sort()).toEqual([
+      "answers", "is_favorite", "progress", "writing_assessment", "writing_text",
+    ].sort());
+    expect(payload).not.toHaveProperty("annotations");
+  });
+
+  it("clears the old and newly created scopes when starting another exam from results", async () => {
+    saveSnapshot({
+      ...writingReviewState({ phase: "results", deadline: 0, activePart: "reading_understanding" }),
+    });
+    sessionStorage.setItem(mockAnnotationScope(31), scopeValue("old"));
+    sessionStorage.setItem(mockAnnotationScope(42), scopeValue("new"));
+    createMockExam.mockResolvedValueOnce({
+      attempt_id: 42,
+      ...writingExam(),
+      progress: {},
+    });
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "再考一套" }));
+
+    await waitFor(() => expect(createMockExam).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Lesen & Sprachbausteine" })).toBeInTheDocument());
+    expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
+    expect(sessionStorage.getItem(mockAnnotationScope(42))).toBeNull();
+  });
+
+  it("preserves annotations when resuming an unfinished attempt", async () => {
+    const value = scopeValue("old");
+    sessionStorage.setItem(mockAnnotationScope(77), value);
+    fetchSavedMockExam.mockResolvedValueOnce({
+      id: 77,
+      exam: writingExam(),
+      answers: {},
+      writing_text: "",
+      writing_assessment: {},
+      is_favorite: false,
+      progress: { phase: "reading", deadline: Date.now() + 60_000, active_part: "reading_understanding" },
+    });
+
+    render(<MemoryRouter initialEntries={["/modules/exam-preparation/mock-exam?attempt=77"]}><MockWrittenExamPage /></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Lesen 2" });
+
+    expect(sessionStorage.getItem(mockAnnotationScope(77))).toBe(value);
+  });
+
+  it.each([
+    ["saved", "/modules/exam-preparation/mock-exam?saved=88", { is_completed: true, id: 88 }],
+    ["results", "/modules/exam-preparation/mock-exam", null],
+  ])("keeps the pre-existing scope untouched in %s review", async (_label, route, savedMeta) => {
+    const attemptId = savedMeta?.id || 31;
+    const value = scopeValue("old");
+    sessionStorage.setItem(mockAnnotationScope(attemptId), value);
+    if (savedMeta) {
+      fetchSavedMockExam.mockResolvedValueOnce({
+        ...savedMeta,
+        exam: writingExam(),
+        answers: {}, writing_text: "", writing_assessment: {}, is_favorite: true,
+        progress: { phase: "results" },
+      });
+    } else {
+      saveSnapshot(writingReviewState({ phase: "results", deadline: 0, activePart: "reading_understanding" }));
+    }
+
+    render(<MemoryRouter initialEntries={[route]}><MockWrittenExamPage /></MemoryRouter>);
+    await screen.findByRole("heading", { name: "考试结果与答案回顾" });
+
+    if (savedMeta) fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 2" }));
+    const passage = document.querySelector('[data-exam-annotation-region="reading_understanding:passage"]');
+    selectText(passage.querySelector("span") || passage, 0, 4);
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+
+    expect(sessionStorage.getItem(mockAnnotationScope(attemptId))).toBe(value);
+  });
+
+  it("autosaves only the existing progress fields", async () => {
+    saveSnapshot({
+      ...mockExamState("reading_understanding", writingExam().parts.reading_understanding, "reading"),
+      exam: writingExam(),
+      attemptId: 31,
+    });
+    updateSavedMockExam.mockResolvedValue({});
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await waitFor(() => expect(updateSavedMockExam).toHaveBeenCalled(), { timeout: 1500 });
+    const payload = updateSavedMockExam.mock.calls[0][1];
+    expect(Object.keys(payload).sort()).toEqual([
+      "answers", "is_favorite", "progress", "writing_assessment", "writing_text",
+    ].sort());
+    expect(payload).not.toHaveProperty("annotations");
+  });
+
+  it("suppresses a generated modal-option click after a real text selection, then allows the next click", async () => {
+    saveSnapshot({
+      ...mockExamState("reading_title_matching", {
+        exercise_base: { title: "Lesen 1", exam_type: "telc" },
+        options: [{ id: 2, option_key: "A", option_text: "Headline" }],
+        items: [{ id: 1, item_number: 1, text: "Text", correct_option: { option_key: "A" } }],
+      }, "reading"),
+      attemptId: 31,
+    });
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole("button", { name: "Überschrift auswählen" }));
+    const option = await screen.findByRole("button", { name: "A Headline" });
+    const optionRegion = document.querySelector('[data-exam-annotation-region="reading_title_matching:option:title:1:A"]');
+    fireEvent.pointerDown(option, { pointerId: 1, pointerType: "mouse" });
+    selectText(optionRegion, 0, 4);
+    fireEvent.pointerUp(option, { pointerId: 1, pointerType: "mouse" });
+    fireEvent.click(option);
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Überschrift auswählen" })).toBeInTheDocument();
+
+    window.getSelection().removeAllRanges();
+    fireEvent.pointerDown(option, { pointerId: 2, pointerType: "mouse" });
+    fireEvent.pointerUp(option, { pointerId: 2, pointerType: "mouse" });
+    fireEvent.click(option);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "AHeadline" })).toBeInTheDocument();
   });
 });

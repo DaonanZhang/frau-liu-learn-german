@@ -182,7 +182,7 @@
   border: 1px solid rgba(207, 99, 39, 0.24);
   color: #9a4210;
   font-weight: 700;
-  cursor: grab;
+  cursor: default;
   text-align: left;
 }
 
@@ -294,7 +294,7 @@
   padding: 0.4rem 0.7rem;
   font: inherit;
   font-weight: 700;
-  cursor: grab;
+  cursor: default;
   text-align: center;
 }
 
@@ -523,16 +523,25 @@
   }
 }
 
+.cloze-drag-handle {
+  cursor: grab;
+  flex: 0 0 auto;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.cloze-pool-chip > [data-exam-annotation-region],
+.cloze-drop-slot__chip > [data-exam-annotation-region] {
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: auto;
+}
+
 @media (max-width: 700px) {
   html:has(.cloze-page),
   body:has(.cloze-page) {
     overflow-x: clip;
-  }
-
-  .cloze-pool-chip,
-  .cloze-drop-slot__chip {
-    touch-action: none;
-    user-select: none;
-    -webkit-user-select: none;
   }
 }

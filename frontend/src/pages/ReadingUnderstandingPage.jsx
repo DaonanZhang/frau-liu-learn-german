@@ -11,10 +11,32 @@ import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
+import {
+  AnnotatableTextRegion,
+  ExamTextAnnotationProvider,
+  useExamTextAnnotations,
+} from "../components/examPreparation/ExamTextAnnotations.jsx";
+import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import "./ReadingUnderstandingPage.css";
 
 const FALLBACK_INSTRUCTION =
   "Lesen Sie den Text und die Aufgaben. Welche Lösung (a, b oder c) ist jeweils richtig?";
+
+function ReadingUnderstandingResetAction({ onReset }) {
+  const { clearAnnotations } = useExamTextAnnotations();
+
+  return (
+    <ExamActionButton
+      className="reading-understanding-reset-btn"
+      onClick={() => {
+        onReset();
+        clearAnnotations();
+      }}
+      label="Wiederholen"
+      icon="rotate"
+    />
+  );
+}
 
 export default function ReadingUnderstandingPage() {
   const { exerciseId } = useParams();
@@ -166,8 +188,11 @@ export default function ReadingUnderstandingPage() {
   }
 
   return (
-    <div className="reading-understanding-page">
-      <div className="reading-understanding-shell">
+    <ExamTextAnnotationProvider
+      scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+    >
+      <div className="reading-understanding-page">
+        <div className="reading-understanding-shell">
         <div className="reading-understanding-topbar">
           <Link to="/modules/exam-preparation/lesen/understanding" className="reading-understanding-topbar__back">
             ← Zurück zu Lesen
@@ -202,21 +227,23 @@ export default function ReadingUnderstandingPage() {
           <div className="reading-understanding-instruction__header">
             <span className="reading-understanding-instruction__label">Anleitung</span>
           </div>
-          <p>{FALLBACK_INSTRUCTION}</p>
+          <AnnotatableTextRegion as="p" regionId="task">
+            {FALLBACK_INSTRUCTION}
+          </AnnotatableTextRegion>
         </section>
 
         <section className="reading-understanding-text">
           <div className="reading-understanding-text__header">
             <span className="reading-understanding-text__label">Lesetext</span>
           </div>
-          <div className="reading-understanding-text__content">
+          <AnnotatableTextRegion as="div" regionId="passage" className="reading-understanding-text__content">
             {String(exercise?.text_markdown || "")
               .split(/\n+/)
               .filter(Boolean)
               .map((paragraph, index) => (
                 <p key={index}>{paragraph}</p>
               ))}
-          </div>
+          </AnnotatableTextRegion>
         </section>
 
         <section className="reading-understanding-questions">
@@ -224,9 +251,9 @@ export default function ReadingUnderstandingPage() {
             {questions.map((question) => (
               <article key={question.id} className="reading-understanding-question-card">
                 <div className="reading-understanding-question-card__header">
-                  <h3>
+                  <AnnotatableTextRegion as="h3" regionId={`question:${question.id}`}>
                     {question.question_number}. {question.question_text}
-                  </h3>
+                  </AnnotatableTextRegion>
                 </div>
 
                 <div className="reading-understanding-option-grid">
@@ -264,7 +291,13 @@ export default function ReadingUnderstandingPage() {
                           }}
                         />
                         <span className="reading-understanding-option__key">{option.option_key}</span>
-                        <span className="reading-understanding-option__text">{option.option_text}</span>
+                        <AnnotatableTextRegion
+                          as="span"
+                          className="reading-understanding-option__text"
+                          regionId={`option:${question.id}:${option.id}`}
+                        >
+                          {option.option_text}
+                        </AnnotatableTextRegion>
                       </label>
                     );
                   })}
@@ -306,11 +339,14 @@ export default function ReadingUnderstandingPage() {
                     </p>
                     {hasScopedExplanation(question.explanation, question.answer_options || []) ? (
                       <p className="reading-understanding-feedback__line">
-                        Erklärung: <ScopedExplanation
-                          explanation={question.explanation}
-                          explanationScope={question.explanation_scope}
-                          options={question.answer_options || []}
-                        />
+                        Erklärung:{" "}
+                        <AnnotatableTextRegion as="span" regionId={`explanation:${question.id}`}>
+                          <ScopedExplanation
+                            explanation={question.explanation}
+                            explanationScope={question.explanation_scope}
+                            options={question.answer_options || []}
+                          />
+                        </AnnotatableTextRegion>
                       </p>
                     ) : null}
                   </div>
@@ -328,19 +364,17 @@ export default function ReadingUnderstandingPage() {
               icon="check"
             />
             {isChecked ? (
-              <ExamActionButton
-                className="reading-understanding-reset-btn"
-                onClick={() => {
+              <ReadingUnderstandingResetAction
+                onReset={() => {
                   setAnswers({});
                   setIsChecked(false);
                 }}
-                label="Wiederholen"
-                icon="rotate"
               />
             ) : null}
           </div>
         </section>
+        </div>
       </div>
-    </div>
+    </ExamTextAnnotationProvider>
   );
 }

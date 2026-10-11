@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   fetchClozeChoiceExerciseDetail,
@@ -12,6 +12,16 @@ import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionShe
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
+import {
+  AnnotatableTextRegion,
+  ExamTextAnnotationProvider,
+  useExamTextAnnotations,
+} from "../components/examPreparation/ExamTextAnnotations.jsx";
+import {
+  domPointToTextOffset,
+  exerciseAnnotationScope,
+  findAnnotationSegmentAtOffset,
+} from "../utils/examTextAnnotations.js";
 import { useClozeAnnotationLayout } from "./clozeAnnotationLayout.js";
 import "./ClozeExercisePage.css";
 
@@ -32,6 +42,95 @@ function renderParagraphs(content) {
 
 function extractBlankKey(token) {
   return token.replace(/[{}]/g, "");
+}
+
+function ClozeChoiceResetAction({ onReset }) {
+  const { clearAnnotations } = useExamTextAnnotations();
+
+  return (
+    <ExamActionButton
+      className="cloze-reset-btn"
+      onClick={() => {
+        onReset();
+        clearAnnotations();
+      }}
+      label="Wiederholen"
+      icon="rotate"
+    />
+  );
+}
+
+function pointerTextPoint(event) {
+  const documentRef = event.currentTarget.ownerDocument;
+  if (typeof documentRef.caretPositionFromPoint === "function") {
+    const point = documentRef.caretPositionFromPoint(event.clientX, event.clientY);
+    if (point) return { node: point.offsetNode, offset: point.offset };
+  }
+  if (typeof documentRef.caretRangeFromPoint === "function") {
+    const range = documentRef.caretRangeFromPoint(event.clientX, event.clientY);
+    if (range) return { node: range.startContainer, offset: range.startOffset };
+  }
+  return null;
+}
+
+function pointerHitsAnnotation(event, state) {
+  const region = event.target.closest?.("[data-exam-annotation-region]");
+  if (!region) return false;
+  const point = pointerTextPoint(event);
+  if (!point) return false;
+  const offset = domPointToTextOffset(region, point.node, point.offset);
+  return offset !== null
+    && Boolean(findAnnotationSegmentAtOffset(state.regions[region.dataset.examAnnotationRegion] || [], offset));
+}
+
+function ClozeChoiceSlotTrigger({
+  blank,
+  selectedKey,
+  isChecked,
+  isCorrect,
+  expanded,
+  onOpen,
+}) {
+  const { state } = useExamTextAnnotations();
+  const suppressChoiceClickRef = useRef(false);
+  const selectedOption = (blank?.options || []).find((option) => option.option_key === selectedKey);
+
+  return (
+    <button
+      type="button"
+      className={[
+        "cloze-choice-slot-trigger",
+        selectedKey ? "cloze-drop-slot__chip" : "cloze-choice-slot-trigger--empty",
+        isChecked && isCorrect ? "cloze-drop-slot__chip--correct" : "",
+        isChecked && selectedKey && !isCorrect ? "cloze-drop-slot__chip--wrong" : "",
+      ].filter(Boolean).join(" ")}
+      onPointerDown={(event) => {
+        suppressChoiceClickRef.current = pointerHitsAnnotation(event, state);
+      }}
+      onClick={() => {
+        if (suppressChoiceClickRef.current) {
+          suppressChoiceClickRef.current = false;
+          return;
+        }
+        onOpen();
+      }}
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+    >
+      {selectedKey
+        ? expanded
+          ? (selectedOption?.option_text || selectedKey)
+          : (
+          <AnnotatableTextRegion
+            as="span"
+            regionId={`option:${blank.id}:${selectedOption?.id || selectedKey}`}
+          >
+            {selectedOption?.option_text || selectedKey}
+          </AnnotatableTextRegion>
+          )
+        : <span className="cloze-drop-slot__placeholder">{blank?.blank_number || ""}</span>}
+    </button>
+  );
 }
 
 export default function ClozeChoicePage() {
@@ -176,8 +275,11 @@ export default function ClozeChoicePage() {
   }
 
   return (
-    <div className="cloze-page">
-      <div className="cloze-shell">
+    <ExamTextAnnotationProvider
+      scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+    >
+      <div className="cloze-page">
+        <div className="cloze-shell">
         <div className="cloze-topbar">
           <Link to="/modules/exam-preparation/sprachbausteine/cloze-choice" className="cloze-topbar__back">
             ← Zurück zu Sprachbausteine
@@ -206,18 +308,31 @@ export default function ClozeChoicePage() {
           ) : null}
         </section>
 
-        <section className="cloze-instruction">
-          <span className="cloze-section-label">Beschreibung</span>
-          <p>{FALLBACK_INSTRUCTION}</p>
-        </section>
+          <section className="cloze-instruction">
+            <span className="cloze-section-label">Beschreibung</span>
+            <AnnotatableTextRegion as="p" regionId="task">
+              {FALLBACK_INSTRUCTION}
+            </AnnotatableTextRegion>
+          </section>
 
-        <section className="cloze-text-panel">
-          <div className="cloze-text" ref={clozeTextRef}>
+          <section className="cloze-text-panel">
+            <div className="cloze-text" ref={clozeTextRef}>
             {paragraphs.map((parts, paragraphIndex) => (
               <p key={`paragraph-${paragraphIndex}`} className="cloze-text__paragraph">
                 {parts.map((part, index) => {
                   if (!/^\{\{blank_\d+\}\}$/.test(part)) {
-                    return <span key={`${paragraphIndex}-${part}-${index}`}>{part}</span>;
+                    if (/^\{\{blank_\d+\}\}$/.test(parts[index - 1] || "")) {
+                      return null;
+                    }
+                    return (
+                      <AnnotatableTextRegion
+                        key={`${paragraphIndex}-${part}-${index}`}
+                        as="span"
+                        regionId={`source:${paragraphIndex}:${index}`}
+                      >
+                        {part}
+                      </AnnotatableTextRegion>
+                    );
                   }
                   const blankKey = extractBlankKey(part);
                   const blank = blankMap[blankKey];
@@ -225,10 +340,13 @@ export default function ClozeChoicePage() {
                   const selectedKey = answers[blankKey] || "";
                   const isCorrect = !!correctOption && selectedKey === correctOption.option_key;
                   const annotationPosition = annotationLayout[blankKey];
+                  const followingText = parts[index + 1] && !/^\{\{blank_\d+\}\}$/.test(parts[index + 1])
+                    ? parts[index + 1]
+                    : "";
 
                   return (
+                    <Fragment key={blankKey}>
                     <span
-                      key={blankKey}
                       ref={(node) => {
                         blankRefs.current[blankKey] = node;
                       }}
@@ -241,24 +359,16 @@ export default function ClozeChoicePage() {
                           selectedKey ? "cloze-drop-slot--selected" : "",
                         ].filter(Boolean).join(" ")}
                       >
-                        <button
-                          type="button"
-                          className={[
-                            "cloze-choice-slot-trigger",
-                            selectedKey ? "cloze-drop-slot__chip" : "cloze-choice-slot-trigger--empty",
-                            isChecked && isCorrect ? "cloze-drop-slot__chip--correct" : "",
-                            isChecked && selectedKey && !isCorrect ? "cloze-drop-slot__chip--wrong" : "",
-                          ].filter(Boolean).join(" ")}
-                          onClick={() => {
+                        <ClozeChoiceSlotTrigger
+                          blank={blank}
+                          selectedKey={selectedKey}
+                          isChecked={isChecked}
+                          isCorrect={isCorrect}
+                          expanded={activeBlankKey === blankKey}
+                          onOpen={() => {
                             setActiveBlankKey(blankKey);
                           }}
-                          aria-haspopup="dialog"
-                          aria-expanded={activeBlankKey === blankKey}
-                        >
-                          {selectedKey
-                            ? (blank?.options || []).find((option) => option.option_key === selectedKey)?.option_text || selectedKey
-                            : <span className="cloze-drop-slot__placeholder">{blank?.blank_number || ""}</span>}
-                        </button>
+                        />
                       </span>
                       <ExerciseOptionSheet
                         open={activeBlankKey === blankKey}
@@ -267,8 +377,17 @@ export default function ClozeChoicePage() {
                         selectedValue={selectedKey}
                         options={blank?.options?.map((option) => ({
                           value: option.option_key,
+                          id: option.id,
                           label: option.option_text,
                         })) || []}
+                        renderOptionLabel={(option) => (
+                          <AnnotatableTextRegion
+                            as="span"
+                            regionId={`option:${blank.id}:${option.id || option.value}`}
+                          >
+                            {option.label}
+                          </AnnotatableTextRegion>
+                        )}
                         onClose={() => {
                           setActiveBlankKey("");
                         }}
@@ -321,23 +440,32 @@ export default function ClozeChoicePage() {
                             </span>
                             {hasScopedExplanation(blank.explanation, blank.options || []) ? (
                               <span className="cloze-choice-inline-explanation">
-                                Erklärung: <ScopedExplanation
-                                  explanation={blank.explanation}
-                                  explanationScope={blank.explanation_scope}
-                                  options={blank.options || []}
-                                />
+                                Erklärung:{" "}
+                                <AnnotatableTextRegion as="span" regionId={`explanation:${blank.id}`}>
+                                  <ScopedExplanation
+                                    explanation={blank.explanation}
+                                    explanationScope={blank.explanation_scope}
+                                    options={blank.options || []}
+                                  />
+                                </AnnotatableTextRegion>
                               </span>
                             ) : null}
                           </span>
                         </span>
                       ) : null}
                     </span>
+                    {followingText ? (
+                      <AnnotatableTextRegion as="span" regionId={`blank-context:${blank.id}`}>
+                        {followingText}
+                      </AnnotatableTextRegion>
+                    ) : null}
+                    </Fragment>
                   );
                 })}
               </p>
             ))}
-          </div>
-        </section>
+            </div>
+          </section>
 
         <section className="cloze-actions">
           <div className="cloze-actions__buttons">
@@ -349,19 +477,17 @@ export default function ClozeChoicePage() {
               icon="check"
             />
             {isChecked ? (
-              <ExamActionButton
-                className="cloze-reset-btn"
-                onClick={() => {
+              <ClozeChoiceResetAction
+                onReset={() => {
                   setAnswers({});
                   setIsChecked(false);
                 }}
-                label="Wiederholen"
-                icon="rotate"
               />
             ) : null}
           </div>
         </section>
+        </div>
       </div>
-    </div>
+    </ExamTextAnnotationProvider>
   );
 }

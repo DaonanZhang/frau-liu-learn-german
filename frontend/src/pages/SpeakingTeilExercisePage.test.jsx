@@ -322,6 +322,34 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     }));
   });
 
+  it("keeps selected previews role-colored and makes only the TN handle draggable", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue(teil2Exercise);
+    renderPage(2, 45);
+
+    const firstText = await screen.findByText("Was möchtest du im Urlaub machen?");
+    const secondText = screen.getByText("Ich möchte wandern.");
+    const handles = Array.from(document.querySelectorAll("[data-speaking-drag-handle]"));
+    const draggableElements = Array.from(document.querySelectorAll('[draggable="true"]'));
+
+    expect(handles).toHaveLength(2);
+    expect(draggableElements).toEqual(handles);
+    handles.forEach((handle) => {
+      expect(handle).toHaveClass("speaking-dialogue-card__handle");
+      expect(handle).toHaveAttribute("data-speaking-drag-handle", "true");
+    });
+    expect(firstText).not.toHaveAttribute("draggable");
+    expect(firstText).toHaveClass("speaking-dialogue-card__text");
+
+    fireEvent.click(firstText);
+    const selectedPreview = document.querySelector(".speaking-dialogue-board__selected");
+    expect(selectedPreview).toHaveClass("speaking-dialogue-board__selected--tn1");
+    expect(selectedPreview).not.toHaveClass("speaking-dialogue-board__selected--tn2");
+
+    fireEvent.click(secondText);
+    expect(selectedPreview).toHaveClass("speaking-dialogue-board__selected--tn2");
+    expect(selectedPreview).not.toHaveClass("speaking-dialogue-board__selected--tn1");
+  });
+
   it("resets only the active section answers while clearing all marks for a multi-section exercise", async () => {
     const scope = exerciseAnnotationScope("SPEAKING_TEIL3", 46);
     sessionStorage.setItem(scope, JSON.stringify({

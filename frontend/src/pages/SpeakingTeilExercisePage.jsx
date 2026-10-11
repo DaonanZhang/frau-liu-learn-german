@@ -16,6 +16,7 @@ import "./SpeakingTeilExercisePage.css";
 const TITLES = { 1: "Einander kennenlernen", 2: "Über ein Thema sprechen", 3: "Gemeinsam etwas planen" };
 const turnKey = (turn) => `turn:${turn.sequence}`;
 const orderStateKey = (key) => key === "all" ? "dialogue-order:all" : `dialogue-order:section:${key}`;
+const speakingRoleKind = (role) => String(role || "TN1").trim().toLowerCase() === "tn2" ? "tn2" : "tn1";
 
 function stableContentKey(value, fallback = "") {
   if (value == null) return fallback;
@@ -140,8 +141,8 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
   const shuffledPool = useMemo(() => shuffledTurns(turns), [turns]);
   const boardKeys = new Set(value.map(turnKey));
   const availableTurns = shuffledPool.filter((turn) => !boardKeys.has(turnKey(turn)));
-  const tn1Pool = availableTurns.filter((turn) => String(turn.role || "TN1").toUpperCase() !== "TN2");
-  const tn2Pool = availableTurns.filter((turn) => String(turn.role || "TN1").toUpperCase() === "TN2");
+  const tn1Pool = availableTurns.filter((turn) => speakingRoleKind(turn.role) === "tn1");
+  const tn2Pool = availableTurns.filter((turn) => speakingRoleKind(turn.role) === "tn2");
   const draggedTurn = turns.find((turn) => turnKey(turn) === draggedKey);
   const selectedTurn = turns.find((turn) => turnKey(turn) === selectedKey);
   const orderIsCorrect = checked && isCorrectOrder(value, turns);
@@ -304,7 +305,7 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
           {poolTurns.map((turn) => (
             <article
               key={turnKey(turn)}
-              className={`speaking-dialogue-card speaking-dialogue-card--${role.toLowerCase()}${draggedKey === turnKey(turn) ? " is-dragging" : ""}${selectedKey === turnKey(turn) ? " is-selected" : ""}`}
+              className={`speaking-dialogue-card speaking-dialogue-card--${speakingRoleKind(role)}${draggedKey === turnKey(turn) ? " is-dragging" : ""}${selectedKey === turnKey(turn) ? " is-selected" : ""}`}
               role="button"
               tabIndex={checked ? -1 : 0}
               aria-pressed={selectedKey === turnKey(turn)}
@@ -321,7 +322,7 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
               <span
                 className="speaking-dialogue-card__handle"
                 data-speaking-drag-handle="true"
-                style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none", cursor: "grab" }}
+                style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none" }}
                 {...draggableProps(turn)}
               >
                 {role}
@@ -396,7 +397,7 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
         }}
       >
         {selectedTurn ? (
-          <div className="speaking-dialogue-board__selected">
+          <div className={`speaking-dialogue-board__selected speaking-dialogue-board__selected--${speakingRoleKind(selectedTurn.role)}`}>
             <div>
               <span>{selectedTurn.role || "TN1"}</span>
               <p>{selectedTurn.text}</p>
@@ -413,7 +414,7 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
           {value.map((turn, index) => (
             <div key={turnKey(turn)} className="speaking-dialogue-board__item">
               <article
-                className={`speaking-dialogue-card speaking-dialogue-card--${String(turn.role || "TN1").toLowerCase()} speaking-dialogue-card--placed${draggedKey === turnKey(turn) ? " is-dragging" : ""}`}
+                className={`speaking-dialogue-card speaking-dialogue-card--${speakingRoleKind(turn.role)} speaking-dialogue-card--placed${draggedKey === turnKey(turn) ? " is-dragging" : ""}`}
                 data-speaking-board-item-index={index}
                 onDragOver={(event) => {
                   if (checked) return;
@@ -436,7 +437,7 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
                   <span
                     className="speaking-dialogue-card__handle"
                     data-speaking-drag-handle="true"
-                    style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none", cursor: "grab" }}
+                    style={{ touchAction: "none", userSelect: "none", WebkitUserSelect: "none" }}
                     {...draggableProps(turn)}
                   >
                     {turn.role || "TN1"}

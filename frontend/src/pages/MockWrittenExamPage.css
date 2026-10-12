@@ -138,8 +138,8 @@
 .mock-cloze-matching-pool__heading strong { color: #244f42; }
 .mock-cloze-matching-pool__heading span, .mock-cloze-matching-pool__empty { color: #64766f; font-size: 0.8rem; }
 .mock-cloze-matching-pool__options { display: flex; flex-wrap: wrap; gap: 0.55rem; }
-.mock-cloze-matching-pool__option { min-height: 2.4rem; padding: 0.45rem 0.75rem; border: 1px solid #efd0b1; border-radius: 0.75rem; background: #fff3e8; color: #9a4210; cursor: text; font: inherit; font-weight: 750; text-align: left; touch-action: auto; user-select: text; -webkit-user-select: text; }
-.mock-cloze-matching-pool__handle { display: inline-block; margin-right: 0.45rem; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.mock-cloze-matching-pool__option { min-height: 2.4rem; padding: 0.45rem 0.75rem; border: 1px solid #efd0b1; border-radius: 0.75rem; background: #fff3e8; color: #9a4210; cursor: grab; font: inherit; font-weight: 750; text-align: left; touch-action: none; user-select: none; -webkit-user-select: none; }
+.mock-cloze-matching-pool__option:active { cursor: grabbing; }
 .mock-cloze-matching-pool__option.is-selected { border-color: #d67c3d; box-shadow: 0 0 0 3px rgba(214, 124, 61, 0.14); }
 .mock-cloze-matching-text { line-height: 1.9; }
 .mock-cloze-matching-blank { display: inline-flex; flex-direction: column; gap: 0.22rem; margin: 0.22rem 0.3rem; vertical-align: middle; }
@@ -148,6 +148,8 @@
 .mock-cloze-matching-slot.is-correct { border-color: #23865a; background: #dff4e7; }
 .mock-cloze-matching-slot.is-wrong { border-color: #b83d35; background: #f9dfdc; }
 .mock-cloze-matching-slot__chip { width: 100%; min-height: 2.35rem; padding: 0.4rem 0.7rem; border-radius: 0.8rem; background: #fff3e8; color: #9a4210; text-align: center; }
+.mock-cloze-matching-slot__chip.is-draggable { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.mock-cloze-matching-slot__chip.is-draggable:active { cursor: grabbing; }
 .mock-cloze-matching-touch-preview { position: fixed; z-index: 30; pointer-events: none; transform: translate(-50%, -50%); padding: 0.45rem 0.7rem; border-radius: 0.7rem; background: #fff3e8; color: #9a4210; font-weight: 750; }
 .mock-cloze-matching-blank small { color: #a43d34; font-size: 0.76rem; font-weight: 750; }
 .mock-cloze-matching-blank .exercise-favorite-button { align-self: flex-end; }

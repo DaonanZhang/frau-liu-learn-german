@@ -121,12 +121,7 @@ function ClozeChoiceSlotTrigger({
         ? expanded
           ? (selectedOption?.option_text || selectedKey)
           : (
-          <AnnotatableTextRegion
-            as="span"
-            regionId={`option:${blank.id}:${selectedOption?.id || selectedKey}`}
-          >
-            {selectedOption?.option_text || selectedKey}
-          </AnnotatableTextRegion>
+          <span>{selectedOption?.option_text || selectedKey}</span>
           )
         : <span className="cloze-drop-slot__placeholder">{blank?.blank_number || ""}</span>}
     </button>
@@ -329,6 +324,7 @@ export default function ClozeChoicePage() {
                         key={`${paragraphIndex}-${part}-${index}`}
                         as="span"
                         regionId={`source:${paragraphIndex}:${index}`}
+                        flowId={`cloze-choice:paragraph:${paragraphIndex}`}
                       >
                         {part}
                       </AnnotatableTextRegion>
@@ -381,12 +377,7 @@ export default function ClozeChoicePage() {
                           label: option.option_text,
                         })) || []}
                         renderOptionLabel={(option) => (
-                          <AnnotatableTextRegion
-                            as="span"
-                            regionId={`option:${blank.id}:${option.id || option.value}`}
-                          >
-                            {option.label}
-                          </AnnotatableTextRegion>
+                          <span>{option.label}</span>
                         )}
                         onClose={() => {
                           setActiveBlankKey("");
@@ -441,13 +432,13 @@ export default function ClozeChoicePage() {
                             {hasScopedExplanation(blank.explanation, blank.options || []) ? (
                               <span className="cloze-choice-inline-explanation">
                                 Erklärung:{" "}
-                                <AnnotatableTextRegion as="span" regionId={`explanation:${blank.id}`}>
+                                <span>
                                   <ScopedExplanation
                                     explanation={blank.explanation}
                                     explanationScope={blank.explanation_scope}
                                     options={blank.options || []}
                                   />
-                                </AnnotatableTextRegion>
+                                </span>
                               </span>
                             ) : null}
                           </span>
@@ -455,7 +446,11 @@ export default function ClozeChoicePage() {
                       ) : null}
                     </span>
                     {followingText ? (
-                      <AnnotatableTextRegion as="span" regionId={`blank-context:${blank.id}`}>
+                      <AnnotatableTextRegion
+                        as="span"
+                        regionId={`blank-context:${blank.id}`}
+                        flowId={`cloze-choice:paragraph:${paragraphIndex}`}
+                      >
                         {followingText}
                       </AnnotatableTextRegion>
                     ) : null}

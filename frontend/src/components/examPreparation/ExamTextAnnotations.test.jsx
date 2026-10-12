@@ -11,9 +11,9 @@ function FakeHighlight(...ranges) {
   this.ranges = ranges;
 }
 
-function SelectableRegion({ id = "passage", as = "span", children = "The passage" }) {
+function SelectableRegion({ id = "passage", as = "span", flowId, children = "The passage" }) {
   return (
-    <AnnotatableTextRegion regionId={id} as={as}>
+    <AnnotatableTextRegion regionId={id} as={as} flowId={flowId}>
       {children}
     </AnnotatableTextRegion>
   );
@@ -69,6 +69,14 @@ describe("exam text annotation controller", () => {
     expect(region).toHaveAttribute("data-exam-annotation-region", "question:42");
   });
 
+  it("renders an optional flow id without changing the semantic element", () => {
+    mount(<SelectableRegion id="source" flowId="part-1" as="p">Source text</SelectableRegion>);
+
+    const region = screen.getByText("Source text");
+    expect(region.tagName).toBe("P");
+    expect(region).toHaveAttribute("data-exam-annotation-flow", "part-1");
+  });
+
   it("opens a toolbar for a valid single-region selection", async () => {
     mount(<SelectableRegion />);
     const region = screen.getByText("The passage");
@@ -78,6 +86,162 @@ describe("exam text annotation controller", () => {
     expect(await screen.findByRole("button", { name: "高亮" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "下划线" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "清除" })).toBeInTheDocument();
+  });
+
+  it("opens one toolbar for a selection spanning registered roots in one flow", async () => {
+    mount(
+      <>
+        <SelectableRegion id="first" flowId="part-1">before</SelectableRegion>
+        <SelectableRegion id="option" as="button">choice</SelectableRegion>
+        <SelectableRegion id="second" flowId="part-1">after</SelectableRegion>
+      </>,
+    );
+    const first = screen.getByText("before");
+    const second = screen.getByText("after");
+    const range = document.createRange();
+    range.setStart(first.firstChild, 2);
+    range.setEnd(second.firstChild, 3);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+
+    expect(await screen.findByRole("button", { name: "高亮" })).toBeInTheDocument();
+  });
+
+  it("applies a mixed style to every selected source root in one state commit", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    mount(
+      <>
+        <SelectableRegion id="first" flowId="part-1">before</SelectableRegion>
+        <SelectableRegion id="option" as="button">choice</SelectableRegion>
+        <SelectableRegion id="second" flowId="part-1">after</SelectableRegion>
+      </>,
+    );
+    const first = screen.getByText("before");
+    const second = screen.getByText("after");
+    selectText(first, 0, 2);
+    document.dispatchEvent(new Event("selectionchange"));
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+
+    const range = document.createRange();
+    range.setStart(first.firstChild, 0);
+    range.setEnd(second.firstChild, 3);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    const highlight = await screen.findByRole("button", { name: "高亮" });
+    expect(highlight).toHaveAttribute("aria-pressed", "mixed");
+
+    setItem.mockClear();
+    fireEvent.click(highlight);
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(sessionStorage.getItem("exam-annotations:v1:exercise:READING:1")).regions)
+      .toEqual({
+        first: [{ start: 0, end: 6, highlight: true, underline: false }],
+        second: [{ start: 0, end: 3, highlight: true, underline: false }],
+      });
+    setItem.mockRestore();
+  });
+
+  it("removes and clears styles across every selected source root", async () => {
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    mount(
+      <>
+        <SelectableRegion id="first" flowId="part-1">before</SelectableRegion>
+        <SelectableRegion id="option" as="button">choice</SelectableRegion>
+        <SelectableRegion id="second" flowId="part-1">after</SelectableRegion>
+      </>,
+    );
+    const first = screen.getByText("before");
+    const second = screen.getByText("after");
+    const selectFlow = () => {
+      const range = document.createRange();
+      range.setStart(first.firstChild, 0);
+      range.setEnd(second.firstChild, 5);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+    };
+
+    selectFlow();
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    setItem.mockClear();
+    selectFlow();
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(sessionStorage.getItem("exam-annotations:v1:exercise:READING:1")).regions)
+      .toEqual({ first: [], second: [] });
+
+    selectFlow();
+    fireEvent.click(await screen.findByRole("button", { name: "下划线" }));
+    setItem.mockClear();
+    selectFlow();
+    fireEvent.click(await screen.findByRole("button", { name: "清除" }));
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(sessionStorage.getItem("exam-annotations:v1:exercise:READING:1")).regions)
+      .toEqual({ first: [], second: [] });
+    setItem.mockRestore();
+  });
+
+  it("suppresses one generated option click when selection starts in a sibling source root", async () => {
+    const clicked = vi.fn();
+    mount(
+      <>
+        <SelectableRegion id="first" flowId="part-1">before</SelectableRegion>
+        <button type="button" data-testid="option" onClick={clicked}>choice</button>
+        <SelectableRegion id="second" flowId="part-1">after</SelectableRegion>
+      </>,
+    );
+    const first = screen.getByText("before");
+    const second = screen.getByText("after");
+    const option = screen.getByTestId("option");
+    fireEvent.pointerDown(first, { pointerId: 41 });
+    const range = document.createRange();
+    range.setStart(first.firstChild, 1);
+    range.setEnd(second.firstChild, 4);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    fireEvent.pointerUp(option, { pointerId: 41 });
+    await screen.findByRole("button", { name: "高亮" });
+
+    fireEvent.click(option);
+    expect(clicked).not.toHaveBeenCalled();
+    fireEvent.click(option);
+    expect(clicked).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps generated-click suppression bound to a cross-flow selection signature", async () => {
+    const clicked = vi.fn();
+    mount(
+      <button type="button" data-testid="option" onClick={clicked}>
+        <SelectableRegion id="first" flowId="part-1">before</SelectableRegion>
+        <SelectableRegion id="choice">choice</SelectableRegion>
+        <SelectableRegion id="second" flowId="part-1">after</SelectableRegion>
+      </button>,
+    );
+    const option = screen.getByTestId("option");
+    const first = screen.getByText("before");
+    const second = screen.getByText("after");
+    fireEvent.pointerDown(option, { pointerId: 31 });
+    const range = document.createRange();
+    range.setStart(first.firstChild, 1);
+    range.setEnd(second.firstChild, 4);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+    fireEvent.pointerUp(option, { pointerId: 31 });
+    await screen.findByRole("button", { name: "高亮" });
+
+    fireEvent.click(option);
+    expect(clicked).not.toHaveBeenCalled();
+    fireEvent.click(option);
+    expect(clicked).toHaveBeenCalledTimes(1);
   });
 
   it("does not open for collapsed, outside, or cross-region selections", () => {

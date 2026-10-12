@@ -523,12 +523,15 @@
   }
 }
 
-.cloze-drag-handle {
+.cloze-draggable-chip {
   cursor: grab;
-  flex: 0 0 auto;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
+}
+
+.cloze-draggable-chip:active {
+  cursor: grabbing;
 }
 
 .cloze-pool-chip > [data-exam-annotation-region],

@@ -272,26 +272,140 @@ function closestAnnotationRegion(node) {
   return element?.closest?.("[data-exam-annotation-region]") || null;
 }
 
-export function selectionToAnnotationRange(selection) {
+function annotationFlowId(root) {
+  const flowId = root?.dataset?.examAnnotationFlow;
+  return typeof flowId === "string" ? flowId.trim() : "";
+}
+
+function intersectsRange(range, root) {
+  try {
+    return range.intersectsNode(root);
+  } catch {
+    return false;
+  }
+}
+
+function compareDocumentOrder(left, right) {
+  if (left === right) return 0;
+  const position = left.compareDocumentPosition(right);
+  if (position & 4) return -1;
+  if (position & 2) return 1;
+  return 0;
+}
+
+function crossesNestedAnnotationRegion(root, range) {
+  return [...root.querySelectorAll("[data-exam-annotation-region]")]
+    .some((candidate) => candidate !== root
+      && candidate.textContent
+      && intersectsRange(range, candidate));
+}
+
+function hasForeignAnnotationAncestor(root) {
+  let ancestor = root.parentElement;
+  while (ancestor) {
+    if (ancestor.matches?.("[data-exam-annotation-region]") && !annotationFlowId(ancestor)) {
+      return true;
+    }
+    ancestor = ancestor.parentElement;
+  }
+  return false;
+}
+
+function rangeForRoot(nativeRange, root, isFirst, isLast) {
+  const start = isFirst
+    ? domPointToTextOffset(root, nativeRange.startContainer, nativeRange.startOffset)
+    : 0;
+  const end = isLast
+    ? domPointToTextOffset(root, nativeRange.endContainer, nativeRange.endOffset)
+    : (root.textContent || "").length;
+  if (start === null || end === null || end <= start) return null;
+  const startPoint = textOffsetToDomPoint(root, start);
+  const endPoint = textOffsetToDomPoint(root, end);
+  if (!startPoint || !endPoint) return null;
+  const range = root.ownerDocument.createRange();
+  try {
+    range.setStart(startPoint.node, startPoint.offset);
+    range.setEnd(endPoint.node, endPoint.offset);
+  } catch {
+    return null;
+  }
+  const regionId = root.dataset.examAnnotationRegion;
+  return { regionId, root, start, end, text: range.toString() };
+}
+
+export function selectionToAnnotationRanges(selection, registeredRegions = null) {
   if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
-  const range = selection.getRangeAt(0);
-  const startRoot = closestAnnotationRegion(range.startContainer);
-  const endRoot = closestAnnotationRegion(range.endContainer);
-  if (!startRoot || startRoot !== endRoot) return null;
-  const crossesNestedRegion = [...startRoot.querySelectorAll("[data-exam-annotation-region]")]
-    .some((candidate) => candidate !== startRoot && candidate.textContent && range.intersectsNode(candidate));
-  if (crossesNestedRegion) return null;
-  const start = domPointToTextOffset(startRoot, range.startContainer, range.startOffset);
-  const end = domPointToTextOffset(startRoot, range.endContainer, range.endOffset);
-  const text = range.toString();
-  if (start === null || end === null || end <= start || !text) return null;
-  return {
-    regionId: startRoot.dataset.examAnnotationRegion,
-    root: startRoot,
-    start,
-    end,
-    text,
-  };
+  const nativeRange = selection.getRangeAt(0);
+  const startRoot = closestAnnotationRegion(nativeRange.startContainer);
+  const endRoot = closestAnnotationRegion(nativeRange.endContainer);
+  if (!startRoot || !endRoot) return null;
+  if (hasForeignAnnotationAncestor(startRoot) || hasForeignAnnotationAncestor(endRoot)) return null;
+
+  if (startRoot === endRoot) {
+    if (registeredRegions && registeredRegions.get(startRoot.dataset.examAnnotationRegion) !== startRoot) {
+      return null;
+    }
+    if (crossesNestedAnnotationRegion(startRoot, nativeRange)) return null;
+    const logicalRange = rangeForRoot(nativeRange, startRoot, true, true);
+    if (!logicalRange || !logicalRange.text) return null;
+    return { ranges: [logicalRange], text: logicalRange.text };
+  }
+
+  if (!registeredRegions) return null;
+  const startFlowId = annotationFlowId(startRoot);
+  const endFlowId = annotationFlowId(endRoot);
+  if (!startFlowId || startFlowId !== endFlowId) return null;
+
+  const entries = [...registeredRegions.entries()]
+    .filter(([, root]) => root && root.nodeType === 1 && intersectsRange(nativeRange, root));
+  if (registeredRegions.get(startRoot.dataset.examAnnotationRegion) !== startRoot
+    || registeredRegions.get(endRoot.dataset.examAnnotationRegion) !== endRoot) {
+    return null;
+  }
+
+  const allAnnotationRoots = [...nativeRange.commonAncestorContainer.ownerDocument
+    .querySelectorAll("[data-exam-annotation-region]")]
+    .filter((root) => intersectsRange(nativeRange, root));
+  if (allAnnotationRoots.some((root) => {
+    const flowId = annotationFlowId(root);
+    return flowId && flowId !== startFlowId;
+  })) return null;
+  if (allAnnotationRoots.some((root) => {
+    const flowId = annotationFlowId(root);
+    return flowId === startFlowId
+      && registeredRegions.get(root.dataset.examAnnotationRegion) !== root;
+  })) return null;
+
+  const ordered = entries
+    .filter(([, root]) => annotationFlowId(root) === startFlowId)
+    .sort(([, left], [, right]) => compareDocumentOrder(left, right))
+    .map(([, root]) => root);
+  if (!ordered.length || ordered[0] !== startRoot || ordered[ordered.length - 1] !== endRoot) {
+    return null;
+  }
+  if (ordered.some((root) => hasForeignAnnotationAncestor(root))) return null;
+  if (ordered.some((root) => crossesNestedAnnotationRegion(root, nativeRange))) return null;
+
+  const ranges = ordered
+    .map((root, index) => rangeForRoot(
+      nativeRange,
+      root,
+      index === 0,
+      index === ordered.length - 1,
+    ))
+    .filter(Boolean);
+  if (!ranges.length || ranges[0].root !== startRoot || ranges[ranges.length - 1].root !== endRoot) {
+    return null;
+  }
+  const text = ranges.map((logicalRange) => logicalRange.text).join("");
+  if (!text) return null;
+  return { ranges, text };
+}
+
+export function selectionToAnnotationRange(selection) {
+  const logicalSelection = selectionToAnnotationRanges(selection);
+  if (!logicalSelection || logicalSelection.ranges.length !== 1) return null;
+  return logicalSelection.ranges[0];
 }
 
 export function getAnnotationToolbarPosition(selectionRect, toolbarRect, viewport, gutter = 8) {

@@ -222,6 +222,42 @@ function textBlocks(text) {
   ));
 }
 
+const MOCK_CLOZE_PART_PATTERN = /(\{\{blank_\d+\}\})/g;
+const MOCK_CLOZE_SOURCE_BREAK_PATTERN = /(\r?\n+|<br\s*\/?>)/gi;
+
+function splitMockClozeParts(content, partKey) {
+  let flowIndex = 0;
+  return String(content || "")
+    .split(MOCK_CLOZE_PART_PATTERN)
+    .filter(Boolean)
+    .flatMap((part) => {
+      if (/^\{\{blank_\d+\}\}$/.test(part)) {
+        return [{ kind: "blank", value: part }];
+      }
+      return String(part).split(MOCK_CLOZE_SOURCE_BREAK_PATTERN).filter(Boolean).map((value) => {
+        if (/^(?:\r?\n+|<br\s*\/?>)$/i.test(value)) {
+          const breakCount = (value.match(/\r?\n/g) || []).length
+            + (value.match(/<br\s*\/?>/gi) || []).length;
+          flowIndex += Math.max(1, breakCount);
+          return { kind: "break", value };
+        }
+        return {
+          kind: "source",
+          value,
+          flowId: `${partKey}:source:${flowIndex}`,
+        };
+      });
+    });
+}
+
+function renderMockClozeBreak(value, keyPrefix) {
+  const breakCount = (String(value).match(/\r?\n/g) || []).length
+    + (String(value).match(/<br\s*\/?>/gi) || []).length;
+  return Array.from({ length: Math.max(1, breakCount) }, (_, index) => (
+    <br key={`${keyPrefix}-break-${index}`} />
+  ));
+}
+
 function MockTextRegion({ regionId, as = "span", children, ...props }) {
   return <AnnotatableTextRegion as={as} regionId={regionId} {...props}>{children}</AnnotatableTextRegion>;
 }
@@ -346,6 +382,7 @@ function MatchingSelect({
   const stateClass = review ? (isCorrect ? " is-correct" : " is-wrong") : "";
   const displayedValue = value;
   const selected = options.find((option) => option.option_key === displayedValue);
+  const annotateOptions = variant !== "cloze";
   const buttonClass = variant === "title"
     ? `reading-title-select reading-title-select-trigger${value && !review ? " reading-title-select--selected" : ""}${review && isCorrect ? " reading-title-select--correct" : ""}${review && !isCorrect ? " reading-title-select--wrong" : ""}`
     : `cloze-choice-slot-trigger${displayedValue ? " cloze-drop-slot__chip" : " cloze-choice-slot-trigger--empty"}${review && isCorrect ? " cloze-drop-slot__chip--correct" : ""}${review && !isCorrect ? " cloze-drop-slot__chip--wrong" : ""}`;
@@ -365,9 +402,11 @@ function MatchingSelect({
           </>
         ) : selected ? (
           open ? selected.option_text : (
-            <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:option:${annotationId}:${selected.option_key}`}>
-              {selected.option_text}
-            </MockTextRegion>
+            annotateOptions
+              ? <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:option:${annotationId}:${selected.option_key}`}>
+                {selected.option_text}
+              </MockTextRegion>
+              : <span>{selected.option_text}</span>
           )
         ) : (variant === "title" ? "Überschrift auswählen" : placeholder)}
       </button>
@@ -375,9 +414,11 @@ function MatchingSelect({
         options={options.map((option) => ({ value: option.option_key, label: option.option_text, meta: option.option_key }))}
         metaPlacement={variant === "title" ? "before" : "after"}
         renderOptionLabel={(option) => (
-          <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:option:${annotationId}:${option.value}`}>
-            {option.label}
-          </MockTextRegion>
+          annotateOptions
+            ? <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:option:${annotationId}:${option.value}`}>
+              {option.label}
+            </MockTextRegion>
+            : <span>{option.label}</span>
         )}
         onClose={() => setOpen(false)} onSelect={onChange} />
       {review && variant !== "title" ? (
@@ -390,13 +431,13 @@ function MatchingSelect({
           </span>
           {hasScopedExplanation(explanation, options) ? (
             <span className="cloze-choice-inline-explanation">
-              Erklärung: <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:explanation:${annotationId}`}>
+              Erklärung: <span>
                 <ScopedExplanation
                   explanation={explanation}
                   explanationScope={explanationScope}
                   options={options}
                 />
-              </MockTextRegion>
+              </span>
             </span>
           ) : null}
         </span>
@@ -407,17 +448,17 @@ function MatchingSelect({
 
 function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, setAnswer, disabled, review, favoriteFor, questionNumbers }) {
   const blankMap = Object.fromEntries(blanks.map((blank) => [blank.blank_key, blank]));
-  return String(content || "")
-    .split(/(\{\{blank_\d+\}\})/g)
-    .filter(Boolean)
-    .map((part, index) => {
-      if (!/^\{\{blank_\d+\}\}$/.test(part)) {
-        return <MockTextRegion key={`${index}-${part}`} as="span" regionId={`${partKey}:source:${index}`}>
-          {textBlocks(part)}
+  return splitMockClozeParts(content, partKey).map((part, index) => {
+      if (part.kind === "break") {
+        return renderMockClozeBreak(part.value, `${partKey}-${index}`);
+      }
+      if (part.kind === "source") {
+        return <MockTextRegion key={`${index}-${part.value}`} as="span" regionId={`${partKey}:source:${index}`} flowId={part.flowId}>
+          {textBlocks(part.value)}
         </MockTextRegion>;
       }
-      const blank = blankMap[part.replace(/[{}]/g, "")];
-      if (!blank) return <span key={part}>{part}</span>;
+      const blank = blankMap[part.value.replace(/[{}]/g, "")];
+      if (!blank) return <span key={part.value}>{part.value}</span>;
       const key = answerKey(partKey, blank.id);
       const displayNumber = displayQuestionNumber(questionNumbers, partKey, blank.id, blank.blank_number || blank.blank_key || "");
       return (
@@ -463,10 +504,10 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
     setSelectedOptionKey("");
   }
 
-  function handleTouchDragStart(event, optionKey) {
+  function handleTouchDragStart(event, optionKey, sourceKey = "") {
     if (disabled || !["touch", "pen"].includes(event.pointerType)) return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    setTouchDrag({ optionKey, x: event.clientX, y: event.clientY });
+    setTouchDrag({ optionKey, sourceKey, x: event.clientX, y: event.clientY });
   }
 
   function handleTouchDragMove(event) {
@@ -476,10 +517,17 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
 
   function handleTouchDragEnd(event) {
     if (!touchDrag) return;
+    const pointTarget = document.elementFromPoint?.(event.clientX, event.clientY);
     const target = event.target?.closest?.("[data-mock-cloze-blank]")
-      || document.elementFromPoint?.(event.clientX, event.clientY)?.closest?.("[data-mock-cloze-blank]");
+      || pointTarget?.closest?.("[data-mock-cloze-blank]");
     const blank = target ? blankMap[target.dataset.mockClozeBlank] : null;
     if (blank) assignOption(blank, touchDrag.optionKey);
+    else if (touchDrag.sourceKey && (
+      event.target?.closest?.(".mock-cloze-matching-pool")
+      || pointTarget?.closest?.(".mock-cloze-matching-pool")
+    )) {
+      setAnswers((previous) => ({ ...previous, [touchDrag.sourceKey]: "" }));
+    }
     setTouchDrag(null);
   }
 
@@ -492,6 +540,15 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
     <>
       {!review ? (
         <section className="mock-cloze-matching-pool mock-cloze-matching-pool--sticky" aria-label="选项区"
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault();
+            const sourceKey = event.dataTransfer.getData("application/x-mock-cloze-source");
+            if (sourceKey) {
+              setAnswers((previous) => ({ ...previous, [sourceKey]: "" }));
+            }
+            clearDragState();
+          }}
           onPointerMove={handleTouchDragMove} onPointerUp={handleTouchDragEnd} onPointerCancel={clearDragState}>
           <div className="mock-cloze-matching-pool__heading"><strong>选项区</strong><span>拖动或选择一个选项后点击对应空格</span></div>
           <div className="mock-cloze-matching-pool__options">
@@ -500,25 +557,20 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
                 key={option.option_key}
                 type="button"
                 className={`mock-cloze-matching-pool__option${selectedOptionKey === option.option_key ? " is-selected" : ""}`}
+                draggable={!disabled}
                 onClick={() => setSelectedOptionKey((previous) => previous === option.option_key ? "" : option.option_key)}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData("text/plain", option.option_key);
+                  event.dataTransfer.setData("application/x-mock-cloze-source", "");
+                  setSelectedOptionKey(option.option_key);
+                }}
+                onDragEnd={clearDragState}
+                onPointerDown={(event) => handleTouchDragStart(event, option.option_key)}
+                onPointerMove={handleTouchDragMove}
+                onPointerUp={handleTouchDragEnd}
+                onPointerCancel={clearDragState}
               >
-                <span
-                  className="mock-cloze-matching-pool__handle"
-                  draggable={!disabled}
-                  aria-label={`拖动${option.option_text}`}
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData("text/plain", option.option_key);
-                    setSelectedOptionKey(option.option_key);
-                  }}
-                  onDragEnd={clearDragState}
-                  onPointerDown={(event) => handleTouchDragStart(event, option.option_key)}
-                  onPointerMove={handleTouchDragMove}
-                  onPointerUp={handleTouchDragEnd}
-                  onPointerCancel={clearDragState}
-                >⋮⋮</span>
-                <MockTextRegion as="span" regionId={`${partKey}:option:${option.id || option.option_key}`}>
-                {option.option_text}
-                </MockTextRegion>
+                <span>{option.option_text}</span>
               </button>
             ))}
             {!poolOptions.length ? <span className="mock-cloze-matching-pool__empty">所有选项均已填入空格。</span> : null}
@@ -526,17 +578,17 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
         </section>
       ) : null}
       <div className="mock-exam-source-text mock-cloze-matching-text mock-cloze-matching-text--compact">
-        {String(exercise.content_with_placeholders || "")
-          .split(/(\{\{blank_\d+\}\})/g)
-          .filter(Boolean)
-          .map((part, index) => {
-            if (!/^\{\{blank_\d+\}\}$/.test(part)) {
-              return <MockTextRegion key={`${index}-${part}`} as="span" regionId={`${partKey}:source:${index}`}>
-                {textBlocks(part)}
+        {splitMockClozeParts(exercise.content_with_placeholders, partKey).map((part, index) => {
+            if (part.kind === "break") {
+              return renderMockClozeBreak(part.value, `${partKey}-${index}`);
+            }
+            if (part.kind === "source") {
+              return <MockTextRegion key={`${index}-${part.value}`} as="span" regionId={`${partKey}:source:${index}`} flowId={part.flowId}>
+                {textBlocks(part.value)}
               </MockTextRegion>;
             }
-            const blank = blankMap[part.replace(/[{}]/g, "")];
-            if (!blank) return <span key={part}>{part}</span>;
+            const blank = blankMap[part.value.replace(/[{}]/g, "")];
+            if (!blank) return <span key={part.value}>{part.value}</span>;
             const key = answerKey(partKey, blank.id);
             const selectedKey = answers[key] || "";
             const correctKey = blank.correct_option?.option_key || "";
@@ -560,10 +612,23 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
                   }}
                 >
                   {selectedKey ? (
-                    <span className="mock-cloze-matching-slot__chip">
-                      <MockTextRegion as="span" regionId={`${partKey}:option:${optionMap[selectedKey]?.id || selectedKey}`}>
+                    <span
+                      className={`mock-cloze-matching-slot__chip${!disabled ? " is-draggable" : ""}`}
+                      draggable={!disabled}
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData("text/plain", selectedKey);
+                        event.dataTransfer.setData("application/x-mock-cloze-source", key);
+                        setSelectedOptionKey(selectedKey);
+                      }}
+                      onDragEnd={clearDragState}
+                      onPointerDown={(event) => handleTouchDragStart(event, selectedKey, key)}
+                      onPointerMove={handleTouchDragMove}
+                      onPointerUp={handleTouchDragEnd}
+                      onPointerCancel={clearDragState}
+                    >
+                      <span>
                         {optionMap[selectedKey]?.option_text || selectedKey}
-                      </MockTextRegion>
+                      </span>
                     </span>
                   ) : <span>{displayNumber}</span>}
                 </span>
@@ -593,7 +658,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
                 <p>Ihre Antwort: {selectedOption?.option_text || "-"}</p>
                 <p>Richtige Antwort: {correctOption?.option_text || correctOption?.option_key || "-"}</p>
                 {String(blank.explanation || "").trim() ? (
-                  <p>Erklärung: <MockTextRegion as="span" regionId={`${partKey}:explanation:${blank.id}`}><FormattedExplanation text={blank.explanation} /></MockTextRegion></p>
+                  <p>Erklärung: <span><FormattedExplanation text={blank.explanation} /></span></p>
                 ) : null}
               </article>
             );

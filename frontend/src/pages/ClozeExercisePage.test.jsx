@@ -41,6 +41,15 @@ function selectText(element, start, end) {
   selection.addRange(range);
 }
 
+function selectAcrossText(startElement, startOffset, endElement, endOffset) {
+  const range = document.createRange();
+  range.setStart(startElement.firstChild, startOffset);
+  range.setEnd(endElement.firstChild, endOffset);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
 function AnnotationLayoutHarness({ isChecked, intrinsicWidth }) {
   const blanks = [{ blank_key: "blank_1" }];
   const {
@@ -422,13 +431,71 @@ describe("Cloze exercise layout", () => {
     expect(screen.getByRole("button", { name: "Prüfen" })).not.toHaveAttribute("data-exam-annotation-region");
 
     fireEvent.click(screen.getByRole("button", { name: /1/ }));
-    expect(screen.getByText("Antwort A", { selector: '[data-exam-annotation-region="option:101:11"]' }))
-      .toBeInTheDocument();
-    expect(screen.getByText("Antwort B", { selector: '[data-exam-annotation-region="option:101:12"]' }))
-      .toBeInTheDocument();
+    expect(screen.getByText("Antwort A")).toBeInTheDocument();
+    expect(screen.getByText("Antwort A").closest("[data-exam-annotation-region]")).toBeNull();
+    expect(screen.getByText("Antwort B")).toBeInTheDocument();
+    expect(screen.getByText("Antwort B").closest("[data-exam-annotation-region]")).toBeNull();
     expect(screen.getByRole("dialog").closest("[data-exam-annotation-region]")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Antwort B/ }));
     expect(screen.getByRole("button", { name: /Antwort B/ })).toBeInTheDocument();
+  });
+
+  it("keeps one paragraph flow across multiple blanks while excluding cloze surfaces", async () => {
+    sessionStorage.clear();
+    window.Highlight = class FakeHighlight {
+      constructor(...ranges) {
+        this.ranges = ranges;
+      }
+    };
+    window.CSS = { highlights: new Map() };
+    fetchClozeChoiceBlankStates.mockResolvedValue({ results: [] });
+    fetchClozeChoiceExerciseDetail.mockResolvedValue({
+      id: 19,
+      exercise_base: { title: "Flow", external_id: "19", level: "B1", exercise_type: "CLOZE_CHOICE" },
+      content_with_placeholders: "Vor {{blank_1}} nach {{blank_2}} Ende.\n\nAndere {{blank_3}}.",
+      blanks: [
+        { id: 101, blank_key: "blank_1", blank_number: 1, explanation: "Erklärung 1", options: [{ id: 11, option_key: "A", option_text: "eins", is_correct: true }] },
+        { id: 102, blank_key: "blank_2", blank_number: 2, explanation: "Erklärung 2", options: [{ id: 12, option_key: "B", option_text: "zwei", is_correct: true }] },
+        { id: 103, blank_key: "blank_3", blank_number: 3, explanation: "Erklärung 3", options: [{ id: 13, option_key: "C", option_text: "drei", is_correct: true }] },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/exercise/19"]}>
+        <Routes>
+          <Route path="/exercise/:exerciseId" element={<ClozeChoicePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("Vor", { selector: '[data-exam-annotation-region="source:0:0"]' });
+    const firstFlow = [...document.querySelectorAll('[data-exam-annotation-flow="cloze-choice:paragraph:0"]')];
+    expect(firstFlow.map((node) => node.dataset.examAnnotationRegion)).toEqual([
+      "source:0:0", "blank-context:101", "blank-context:102",
+    ]);
+    expect(document.querySelector('[data-exam-annotation-flow="cloze-choice:paragraph:1"]'))
+      .toHaveAttribute("data-exam-annotation-region", "source:1:0");
+    expect(document.querySelector('[data-exam-annotation-region="task"]'))
+      .not.toHaveAttribute("data-exam-annotation-flow");
+
+    fireEvent.click(screen.getByRole("button", { name: /1/ }));
+    expect(document.querySelector('[data-exam-annotation-region^="option:"]')).toBeNull();
+    expect(screen.getByRole("dialog").querySelector("[data-exam-annotation-region]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "eins" }));
+    fireEvent.click(document.querySelectorAll(".cloze-choice-slot-trigger")[1]);
+    fireEvent.click(screen.getByRole("button", { name: "zwei" }));
+    fireEvent.click(document.querySelectorAll(".cloze-choice-slot-trigger")[2]);
+    fireEvent.click(screen.getByRole("button", { name: "drei" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(document.querySelector('[data-exam-annotation-region^="explanation:"]')).toBeNull();
+
+    const sourceStart = document.querySelector('[data-exam-annotation-region="source:0:0"]');
+    const sourceEnd = document.querySelector('[data-exam-annotation-region="blank-context:102"]');
+    selectAcrossText(sourceStart, 0, sourceEnd, sourceEnd.textContent.length);
+    document.dispatchEvent(new Event("selectionchange"));
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    const stored = JSON.parse(sessionStorage.getItem(exerciseAnnotationScope("CLOZE_CHOICE", 19)));
+    expect(Object.keys(stored.regions).sort()).toEqual(["blank-context:101", "blank-context:102", "source:0:0"]);
   });
 
   it("keeps choice checking and clears only the current annotation scope on Wiederholen", async () => {
@@ -512,38 +579,50 @@ describe("Cloze exercise layout", () => {
       .toEqual([{ start: 1, end: 5, highlight: true, underline: false }]);
 
     fireEvent.click(screen.getByRole("button", { name: /1/ }));
-    const optionText = screen.getByText("Antwort A", { selector: '[data-exam-annotation-region="option:101:11"]' });
+    const optionText = screen.getByText("Antwort A");
     window.getSelection().removeAllRanges();
     fireEvent.pointerDown(optionText, { pointerId: 31 });
     selectText(optionText, 0, 4);
     document.dispatchEvent(new Event("selectionchange"));
     fireEvent.pointerUp(optionText, { pointerId: 31 });
     fireEvent.click(optionText);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-
-    window.getSelection().removeAllRanges();
-    fireEvent.pointerDown(optionText, { pointerId: 32 });
-    fireEvent.pointerUp(optionText, { pointerId: 32 });
-    fireEvent.click(optionText);
     expect(screen.getByRole("button", { name: /Antwort A/ })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
     await screen.findByRole("button", { name: "Wiederholen" });
     expect(sessionStorage.getItem(scope)).toContain("blank-context:101");
+    fireEvent.click(screen.getByRole("button", { name: /Antwort A/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Antwort B" }));
+    expect(JSON.parse(sessionStorage.getItem(scope)).regions["blank-context:101"])
+      .toEqual([{ start: 1, end: 5, highlight: true, underline: false }]);
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
     fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
     await waitFor(() => expect(sessionStorage.getItem(scope)).toBeNull());
     expect(sessionStorage.getItem(unrelatedScope)).not.toBeNull();
   });
 
-  it("keeps matching drag and drop operational with annotatable option labels", async () => {
+  it("keeps Teil 2 cross-blank marks while checking and replacing drag assignments", async () => {
     fetchClozeMatchingExerciseDetail.mockResolvedValue({
       id: 18,
       exercise_base: { title: "Matching", external_id: "18", level: "B1", exercise_type: "CLOZE_MATCHING" },
-      content_with_placeholders: "Vor {{blank_1}} nach.",
-      options: [{ id: 21, option_key: "A", option_text: "Lange Antwort" }],
-      blank_answers: [{ id: 201, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" }, explanation: "Erklärung" }],
+      content_with_placeholders: "Vor {{blank_1}} nach {{blank_2}} Ende.",
+      options: [
+        { id: 21, option_key: "A", option_text: "Lange Antwort" },
+        { id: 22, option_key: "B", option_text: "Kurze Antwort" },
+      ],
+      blank_answers: [
+        { id: 201, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" }, explanation: "Erklärung 1" },
+        { id: 202, blank_key: "blank_2", blank_number: 2, correct_option: { option_key: "B" }, explanation: "Erklärung 2" },
+      ],
     });
     fetchClozeMatchingBlankStates.mockResolvedValue({ results: [] });
+    window.Highlight = class FakeHighlight {
+      constructor(...ranges) {
+        this.ranges = ranges;
+      }
+    };
+    window.CSS = { highlights: new Map() };
+    sessionStorage.clear();
 
     const { container } = render(
       <MemoryRouter initialEntries={["/matching/18"]}>
@@ -559,16 +638,49 @@ describe("Cloze exercise layout", () => {
       "task",
     );
     expect(screen.getByText(/Vor/).closest('[data-exam-annotation-region="source:0:0"]')).toBeInTheDocument();
-    expect(screen.getByText(/nach\./).closest('[data-exam-annotation-region="blank-context:201"]')).toBeInTheDocument();
-    expect(screen.getByText("Lange Antwort", { selector: '[data-exam-annotation-region="option:pool:21"]' }))
-      .toBeInTheDocument();
+    expect(screen.getByText(/nach/).closest('[data-exam-annotation-region="blank-context:201"]')).toBeInTheDocument();
+    expect(screen.getByText("Lange Antwort")).toBeInTheDocument();
+    expect(screen.getByText("Lange Antwort").closest("[data-exam-annotation-region]")).toBeNull();
     expect(option.closest("[data-exam-annotation-region]")).toBeNull();
+
+    const sourceStart = document.querySelector('[data-exam-annotation-region="source:0:0"]');
+    const sourceEnd = document.querySelector('[data-exam-annotation-region="blank-context:202"]');
+    selectAcrossText(sourceStart, 0, sourceEnd, sourceEnd.textContent.length);
+    document.dispatchEvent(new Event("selectionchange"));
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    const scope = exerciseAnnotationScope("CLOZE_MATCHING", 18);
+    const marked = JSON.parse(sessionStorage.getItem(scope));
+    expect(Object.keys(marked.regions).sort()).toEqual(["blank-context:201", "blank-context:202", "source:0:0"]);
+
     const slot = container.querySelector('[data-cloze-blank-key="blank_1"]');
-    fireEvent.dragStart(option.querySelector(".cloze-drag-handle"));
+    expect(option).toHaveAttribute("draggable", "true");
+    expect(option.querySelector(".cloze-drag-handle")).toBeNull();
+    fireEvent.dragStart(option);
     fireEvent.dragOver(slot);
     fireEvent.drop(slot);
-    expect(screen.getByRole("button", { name: "Lange Antwort" })).toHaveClass("cloze-drop-slot__chip");
-    expect(screen.getByText("Lange Antwort", { selector: '[data-exam-annotation-region="option:201:21"]' }))
-      .toBeInTheDocument();
+    const selectedOption = screen.getByRole("button", { name: "Lange Antwort" });
+    expect(selectedOption).toHaveClass("cloze-drop-slot__chip");
+    expect(selectedOption).toHaveAttribute("draggable", "true");
+    expect(selectedOption.querySelector(".cloze-drag-handle")).toBeNull();
+    const secondOption = screen.getByRole("button", { name: "Kurze Antwort" });
+    const secondSlot = container.querySelector('[data-cloze-blank-key="blank_2"]');
+    fireEvent.dragStart(secondOption);
+    fireEvent.dragOver(secondSlot);
+    fireEvent.drop(secondSlot);
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    await screen.findByText("Erklärung 1");
+    expect(document.querySelector('[data-exam-annotation-region^="option:"]')).toBeNull();
+    expect(document.querySelector('[data-exam-annotation-region^="explanation:"]')).toBeNull();
+    expect(JSON.parse(sessionStorage.getItem(scope)).regions).toEqual(marked.regions);
+
+    const pool = container.querySelector("[data-cloze-pool]");
+    fireEvent.dragStart(selectedOption);
+    fireEvent.drop(pool);
+    const restoredOption = screen.getByRole("button", { name: "Lange Antwort" });
+    expect(restoredOption).toHaveAttribute("draggable", "true");
+    fireEvent.dragStart(restoredOption);
+    fireEvent.dragOver(slot);
+    fireEvent.drop(slot);
+    expect(JSON.parse(sessionStorage.getItem(scope)).regions).toEqual(marked.regions);
   });
 });

@@ -23,7 +23,7 @@ import {
   loadAnnotationState,
   removeAnnotationStyle,
   saveAnnotationState,
-  selectionToAnnotationRange,
+  selectionToAnnotationRanges,
   textOffsetToDomPoint,
 } from "../../utils/examTextAnnotations.js";
 
@@ -58,19 +58,36 @@ function sameScope(left, right) {
 function selectionSignature(selection) {
   if (!selection) return null;
   return {
-    regionId: selection.regionId,
-    root: selection.root,
-    start: selection.start,
-    end: selection.end,
+    ranges: selection.ranges.map((range) => ({
+      regionId: range.regionId,
+      root: range.root,
+      start: range.start,
+      end: range.end,
+    })),
   };
 }
 
 function sameSelectionSignature(left, right) {
   return Boolean(left && right)
-    && left.regionId === right.regionId
-    && left.root === right.root
-    && left.start === right.start
-    && left.end === right.end;
+    && left.ranges.length === right.ranges.length
+    && left.ranges.every((range, index) => {
+      const other = right.ranges[index];
+      return range.regionId === other.regionId
+        && range.root === other.root
+        && range.start === other.start
+        && range.end === other.end;
+    });
+}
+
+function aggregateStyleState(ranges, state, style) {
+  const states = ranges.map((range) => getAnnotationStyleState(
+    state.regions[range.regionId] || [],
+    range,
+    style,
+  ));
+  if (states.some((value) => value === "mixed")
+    || (states.includes("active") && states.includes("inactive"))) return "mixed";
+  return states.every((value) => value === "active") ? "active" : "inactive";
 }
 
 function pointerIdOf(event) {
@@ -276,6 +293,7 @@ export function useExamTextAnnotations() {
 export const AnnotatableTextRegion = forwardRef(function AnnotatableTextRegion({
   regionId,
   as: elementType = "span",
+  flowId,
   children,
   ...props
 }, forwardedRef) {
@@ -299,6 +317,7 @@ export const AnnotatableTextRegion = forwardRef(function AnnotatableTextRegion({
       {...props}
       ref={elementRef}
       data-exam-annotation-region={regionId}
+      data-exam-annotation-flow={flowId || undefined}
     >
       {children}
     </RegionElement>
@@ -355,12 +374,16 @@ function activateExistingMark(event, regions, annotationState, onActivate) {
   const selectedRange = region.root.ownerDocument.createRange();
   selectedRange.setStart(start.node, start.offset);
   selectedRange.setEnd(end.node, end.offset);
+  const text = selectedRange.toString();
   onActivate({
-    regionId: region.regionId,
-    root: region.root,
-    start: segment.start,
-    end: segment.end,
-    text: selectedRange.toString(),
+    ranges: [{
+      regionId: region.regionId,
+      root: region.root,
+      start: segment.start,
+      end: segment.end,
+      text,
+    }],
+    text,
     rect: rangeRect(selectedRange, region.root),
   });
   return true;
@@ -374,19 +397,26 @@ function ExamTextAnnotationToolbar({ active, onAction, onDismiss }) {
     if (!active) return;
     const rect = toolbarRef.current?.getBoundingClientRect?.() || { width: 0, height: 0 };
     let selectionRect = active.rect;
-    if (active.root) {
-      const start = textOffsetToDomPoint(active.root, active.start);
-      const end = textOffsetToDomPoint(active.root, active.end);
-      if (start && end) {
-        const range = active.root.ownerDocument.createRange();
-        try {
-          range.setStart(start.node, start.offset);
-          range.setEnd(end.node, end.offset);
-          selectionRect = rangeRect(range, active.root);
-        } catch {
-          // Keep the last known rectangle when the region is being replaced.
-        }
+    const rangeRects = active.ranges.map((logicalRange) => {
+      const start = textOffsetToDomPoint(logicalRange.root, logicalRange.start);
+      const end = textOffsetToDomPoint(logicalRange.root, logicalRange.end);
+      if (!start || !end) return null;
+      const range = logicalRange.root.ownerDocument.createRange();
+      try {
+        range.setStart(start.node, start.offset);
+        range.setEnd(end.node, end.offset);
+        return rangeRect(range, logicalRange.root);
+      } catch {
+        return null;
       }
+    }).filter(Boolean);
+    if (rangeRects.length) {
+      selectionRect = {
+        left: Math.min(...rangeRects.map((range) => range.left)),
+        right: Math.max(...rangeRects.map((range) => range.right)),
+        top: Math.min(...rangeRects.map((range) => range.top)),
+        bottom: Math.max(...rangeRects.map((range) => range.bottom)),
+      };
     }
     setPosition(getAnnotationToolbarPosition(
       selectionRect,
@@ -459,25 +489,24 @@ function AnnotationController({ children }) {
     if (!supported) return undefined;
     const openSelection = () => {
       if (pointerMovingRef.current) return;
-      const selected = selectionToAnnotationRange(window.getSelection());
-      if (!selected || regionsRef.current.get(selected.regionId) !== selected.root) {
+      const selected = selectionToAnnotationRanges(window.getSelection(), regionsRef.current);
+      if (!selected) {
         setActive(null);
         return;
       }
-      const regionSegments = state.regions[selected.regionId] || [];
       setActive({
         ...selected,
-        rect: rangeRect(window.getSelection().getRangeAt(0), selected.root),
+        rect: rangeRect(window.getSelection().getRangeAt(0), selected.ranges[0].root),
         styleState: {
-          highlight: getAnnotationStyleState(regionSegments, selected, "highlight"),
-          underline: getAnnotationStyleState(regionSegments, selected, "underline"),
+          highlight: aggregateStyleState(selected.ranges, state, "highlight"),
+          underline: aggregateStyleState(selected.ranges, state, "underline"),
         },
       });
     };
     const onSelectionSignal = () => {
       const gesture = pointerGestureRef.current;
       if (pointerMovingRef.current && gesture && !gesture.selectionChanged) {
-        const selected = selectionToAnnotationRange(window.getSelection());
+        const selected = selectionToAnnotationRanges(window.getSelection(), regionsRef.current);
         if (!selected || !sameSelectionSignature(gesture.selection, selectionSignature(selected))) {
           gesture.selectionChanged = true;
         }
@@ -494,7 +523,9 @@ function AnnotationController({ children }) {
       pointerGestureRef.current = {
         interactive: closestInteractive(event.target),
         pointerId: pointerIdOf(event),
-        selection: selectionSignature(selectionToAnnotationRange(window.getSelection())),
+        selection: selectionSignature(
+          selectionToAnnotationRanges(window.getSelection(), regionsRef.current),
+        ),
         selectionChanged: false,
         dismissesSelection: !findRegisteredRegion(event.target, regionsRef.current),
       };
@@ -503,18 +534,19 @@ function AnnotationController({ children }) {
     const onPointerUp = (event) => {
       pointerMovingRef.current = false;
       if (event.target.closest?.(".exam-text-annotation-toolbar")) return;
-      const selected = selectionToAnnotationRange(window.getSelection());
+      const selected = selectionToAnnotationRanges(window.getSelection(), regionsRef.current);
       const gesture = pointerGestureRef.current;
       const selectionDismissed = gesture?.dismissesSelection
         && sameSelectionSignature(gesture.selection, selectionSignature(selected));
       if (!selectionDismissed) openSelection();
       const interactive = closestInteractive(event.target);
       const pointerMatches = samePointerGesture(gesture, event);
-      const targetMatches = gesture && gesture.interactive && gesture.interactive === interactive;
-      const rootMatches = selected && gesture?.interactive?.contains(selected.root);
-      const selectionChanged = selected
-        && (gesture?.selectionChanged || !sameSelectionSignature(gesture?.selection, selectionSignature(selected)));
-      if (selected && pointerMatches && targetMatches && rootMatches && selectionChanged) {
+      const targetMatches = gesture?.interactive && gesture.interactive === interactive;
+      const selectionChanged = Boolean(selected
+        && (gesture?.selectionChanged
+          || !sameSelectionSignature(gesture?.selection, selectionSignature(selected))));
+      const sameInteractiveTarget = !gesture?.interactive || targetMatches;
+      if (selected && pointerMatches && interactive && sameInteractiveTarget && selectionChanged) {
         suppressClickRef.current = { target: interactive };
       } else {
         suppressClickRef.current = null;
@@ -523,12 +555,11 @@ function AnnotationController({ children }) {
       const currentSelection = window.getSelection();
       if (!selected && (!currentSelection || currentSelection.rangeCount === 0 || currentSelection.isCollapsed)) {
         activateExistingMark(event, regionsRef.current, state, (next) => {
-          const regionSegments = state.regions[next.regionId] || [];
           setActive({
             ...next,
             styleState: {
-              highlight: getAnnotationStyleState(regionSegments, next, "highlight"),
-              underline: getAnnotationStyleState(regionSegments, next, "underline"),
+              highlight: aggregateStyleState(next.ranges, state, "highlight"),
+              underline: aggregateStyleState(next.ranges, state, "underline"),
             },
           });
         });
@@ -578,20 +609,21 @@ function AnnotationController({ children }) {
   const handleAction = useCallback((action) => {
     const selection = activeRef.current;
     if (!selection) return;
-    const segments = state.regions[selection.regionId] || [];
-    let nextSegments;
-    if (action === "clear") {
-      nextSegments = clearAnnotationStyles(segments, selection);
-    } else {
-      const style = action;
-      const isActive = getAnnotationStyleState(segments, selection, style) === "active";
-      nextSegments = isActive
-        ? removeAnnotationStyle(segments, selection, style)
-        : applyAnnotationStyle(segments, selection, style);
-    }
+    const nextRegions = { ...state.regions };
+    const style = action === "clear" ? null : action;
+    const isActive = style && selection.styleState[style] === "active";
+    selection.ranges.forEach((range) => {
+      const segments = nextRegions[range.regionId] || [];
+      const nextSegments = action === "clear"
+        ? clearAnnotationStyles(segments, range)
+        : isActive
+          ? removeAnnotationStyle(segments, range, style)
+          : applyAnnotationStyle(segments, range, style);
+      nextRegions[range.regionId] = nextSegments;
+    });
     const nextState = {
       version: 1,
-      regions: { ...state.regions, [selection.regionId]: nextSegments },
+      regions: nextRegions,
     };
     context.commitState(nextState);
     setActive(null);

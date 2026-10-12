@@ -223,6 +223,25 @@ function selectText(element, start, end) {
   document.dispatchEvent(new Event("selectionchange"));
 }
 
+function selectAcrossText(startElement, startOffset, endElement, endOffset) {
+  const textNode = (element, last = false) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const first = walker.nextNode();
+    if (!last) return first;
+    let result = first;
+    let node;
+    while ((node = walker.nextNode())) result = node;
+    return result;
+  };
+  const range = document.createRange();
+  range.setStart(textNode(startElement), startOffset);
+  range.setEnd(textNode(endElement, true), endOffset);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+}
+
 afterEach(() => {
   delete window.Highlight;
   delete window.CSS;
@@ -1663,6 +1682,7 @@ describe("mock exam answer review", () => {
 
     const explanation = await screen.findByText("这里需要使用正确的动词形式。");
     expect(explanation.closest(".cloze-choice-inline-explanation")).toBeInTheDocument();
+    expect(explanation.closest("[data-exam-annotation-region]")).toBeNull();
   });
 
   it("shows the cloze-matching explanation card for an unanswered blank", async () => {
@@ -1694,6 +1714,7 @@ describe("mock exam answer review", () => {
     const explanation = await screen.findByText("匹配空格的解析。");
     const feedbackCard = explanation.closest(".cloze-feedback-card");
     expect(feedbackCard).toBeInTheDocument();
+    expect(explanation.closest("[data-exam-annotation-region]")).toBeNull();
     expect(feedbackCard).toContainElement(screen.getByRole("button", { name: "收藏这道题" }));
   });
 });
@@ -1813,7 +1834,202 @@ describe("mock exam annotations", () => {
     expect(document.querySelectorAll('[data-exam-annotation-region="reading_title_matching:option:title:1:A"]')).toHaveLength(1);
   });
 
-  it("uses a desktop drag handle and touch drag without suppressing text pointerdown", async () => {
+  it("keeps cloze source text in a part flow and excludes both cloze option surfaces", async () => {
+    const exam = {
+      parts: {
+        cloze_choice: {
+          exercise_base: { title: "Sprachbausteine 1", exam_type: "telc" },
+          content_with_placeholders: "Vor {{blank_1}} nach {{blank_2}}.",
+          blanks: [
+            { id: 1, blank_key: "blank_1", blank_number: 1, options: [{ option_key: "A", option_text: "eins", is_correct: true }] },
+            { id: 2, blank_key: "blank_2", blank_number: 2, options: [{ option_key: "B", option_text: "zwei", is_correct: true }] },
+          ],
+        },
+        cloze_matching: {
+          exercise_base: { title: "Sprachbausteine 2", exam_type: "telc" },
+          content_with_placeholders: "Ich {{blank_1}}.",
+          options: [{ id: 3, option_key: "A", option_text: "lerne" }],
+          blank_answers: [{ id: 4, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" } }],
+        },
+      },
+    };
+    saveState(exam, { activePart: "cloze_choice" });
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    await screen.findByRole("heading", { name: "Sprachbausteine 1" });
+    const choiceFlows = [...document.querySelectorAll('[data-exam-annotation-flow^="cloze_choice:"]')];
+    expect(new Set(choiceFlows.map((node) => node.dataset.examAnnotationFlow))).toEqual(new Set(["cloze_choice:source:0"]));
+    expect(choiceFlows.map((node) => node.dataset.examAnnotationRegion)).toEqual([
+      "cloze_choice:source:0", "cloze_choice:source:2", "cloze_choice:source:4",
+    ]);
+    fireEvent.click(document.querySelector(".mock-exam-inline-answer button"));
+    expect(document.querySelector('[data-exam-annotation-region^="cloze_choice:option:"]')).toBeNull();
+    expect(screen.getByRole("dialog").querySelector("[data-exam-annotation-region]")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /eins/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Sprachbausteine · Teil 2" }));
+    await screen.findByRole("heading", { name: "Sprachbausteine 2" });
+    expect(new Set([...document.querySelectorAll('[data-exam-annotation-flow^="cloze_matching:"]')]
+      .map((node) => node.dataset.examAnnotationFlow))).toEqual(new Set(["cloze_matching:source:0"]));
+    expect(document.querySelector('[data-exam-annotation-region^="cloze_matching:option:"]')).toBeNull();
+  });
+
+  it("splits Mock cloze flows at paragraph and source-block boundaries", async () => {
+    window.Highlight = FakeHighlight;
+    window.CSS = { highlights: new Map() };
+    const exam = {
+      parts: {
+        cloze_matching: {
+          exercise_base: { title: "Sprachbausteine 2", exam_type: "telc" },
+          content_with_placeholders: "Erster {{blank_1}} Satz.\n\nZweiter {{blank_2}} Ende.<br/>Dritter {{blank_3}}?",
+          options: [{ id: 1, option_key: "A", option_text: "lerne" }],
+          blank_answers: [
+            { id: 11, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" } },
+            { id: 12, blank_key: "blank_2", blank_number: 2, correct_option: { option_key: "A" } },
+            { id: 13, blank_key: "blank_3", blank_number: 3, correct_option: { option_key: "A" } },
+          ],
+        },
+      },
+    };
+    saveState(exam, { activePart: "cloze_matching" });
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    await screen.findByRole("heading", { name: "Sprachbausteine 2" });
+    const roots = [...document.querySelectorAll('[data-exam-annotation-flow^="cloze_matching:"]')];
+    const firstParagraph = roots.filter((root) => /Erster|Satz/.test(root.textContent));
+    const secondParagraph = roots.filter((root) => /Zweiter|Ende/.test(root.textContent));
+    const thirdParagraph = roots.filter((root) => /Dritter|\?/.test(root.textContent));
+    expect(new Set(firstParagraph.map((root) => root.dataset.examAnnotationFlow)).size).toBe(1);
+    expect(new Set(secondParagraph.map((root) => root.dataset.examAnnotationFlow)).size).toBe(1);
+    expect(new Set(thirdParagraph.map((root) => root.dataset.examAnnotationFlow)).size).toBe(1);
+    expect(new Set(roots.map((root) => root.dataset.examAnnotationFlow)).size).toBe(3);
+
+    const start = firstParagraph[0];
+    const end = secondParagraph[secondParagraph.length - 1];
+    selectAcrossText(start, 0, end, end.textContent.length);
+    expect(screen.queryByRole("button", { name: "高亮" })).not.toBeInTheDocument();
+    expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
+  });
+
+  it("persists Mock cloze-choice source marks through answer changes and part navigation", async () => {
+    window.Highlight = FakeHighlight;
+    window.CSS = { highlights: new Map() };
+    const exam = {
+      parts: {
+        cloze_choice: {
+          exercise_base: { title: "Sprachbausteine 1", exam_type: "telc" },
+          content_with_placeholders: "Vor {{blank_1}} nach {{blank_2}} Ende.",
+          blanks: [
+            {
+              id: 21,
+              blank_key: "blank_1",
+              blank_number: 1,
+              explanation: "Erklärung 1",
+              options: [{ id: 211, option_key: "A", option_text: "eins", is_correct: true }, { id: 212, option_key: "B", option_text: "anders", is_correct: false }],
+            },
+            {
+              id: 22,
+              blank_key: "blank_2",
+              blank_number: 2,
+              explanation: "Erklärung 2",
+              options: [{ id: 221, option_key: "B", option_text: "zwei", is_correct: true }],
+            },
+          ],
+        },
+        cloze_matching: {
+          exercise_base: { title: "Sprachbausteine 2", exam_type: "telc" },
+          content_with_placeholders: "Ich {{blank_1}}.",
+          options: [{ id: 3, option_key: "A", option_text: "lerne" }],
+          blank_answers: [{ id: 4, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" } }],
+        },
+      },
+    };
+    saveState(exam, { activePart: "cloze_choice" });
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    await screen.findByRole("heading", { name: "Sprachbausteine 1" });
+    const roots = [...document.querySelectorAll('[data-exam-annotation-flow="cloze_choice:source:0"]')];
+    selectAcrossText(roots[0], 0, roots[roots.length - 1], roots[roots.length - 1].textContent.length);
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    const scope = mockAnnotationScope(31);
+    const marked = JSON.parse(sessionStorage.getItem(scope));
+    expect(Object.keys(marked.regions).sort()).toEqual([
+      "cloze_choice:source:0", "cloze_choice:source:2", "cloze_choice:source:4",
+    ]);
+
+    fireEvent.click(document.querySelector(".mock-exam-inline-answer button"));
+    expect(screen.getByRole("dialog").querySelector("[data-exam-annotation-region]")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "einsA" }));
+    expect(document.querySelector('[data-exam-annotation-region^="cloze_choice:option:"]')).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /eins/ }));
+    fireEvent.click(screen.getByRole("button", { name: "andersB" }));
+    expect(JSON.parse(sessionStorage.getItem(scope)).regions).toEqual(marked.regions);
+
+    fireEvent.click(screen.getByRole("button", { name: "Sprachbausteine · Teil 2" }));
+    await screen.findByRole("heading", { name: "Sprachbausteine 2" });
+    fireEvent.click(screen.getByRole("button", { name: "Sprachbausteine · Teil 1" }));
+    await screen.findByRole("heading", { name: "Sprachbausteine 1" });
+    expect(JSON.parse(sessionStorage.getItem(scope)).regions).toEqual(marked.regions);
+    expect(new Set([...document.querySelectorAll('[data-exam-annotation-flow^="cloze_choice:"]')]
+      .map((node) => node.dataset.examAnnotationFlow))).toEqual(new Set(["cloze_choice:source:0"]));
+  });
+
+  it("keeps Mock cloze-matching marks scoped through replacement and part navigation", async () => {
+    const exam = {
+      parts: {
+        cloze_matching: {
+          exercise_base: { title: "Sprachbausteine 2", exam_type: "telc" },
+          content_with_placeholders: "Vor {{blank_1}} nach {{blank_2}} Ende.",
+          options: [
+            { id: 31, option_key: "A", option_text: "eins" },
+            { id: 32, option_key: "B", option_text: "anders" },
+          ],
+          blank_answers: [
+            { id: 41, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" }, explanation: "解析 1" },
+            { id: 42, blank_key: "blank_2", blank_number: 2, correct_option: { option_key: "B" }, explanation: "解析 2" },
+          ],
+        },
+        cloze_choice: {
+          exercise_base: { title: "Sprachbausteine 1", exam_type: "telc" },
+          content_with_placeholders: "Ich {{blank_1}}.",
+          blanks: [{ id: 51, blank_key: "blank_1", blank_number: 1, options: [{ option_key: "A", option_text: "lerne", is_correct: true }] }],
+        },
+      },
+    };
+    saveState(exam, { activePart: "cloze_matching" });
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    await screen.findByRole("heading", { name: "Sprachbausteine 2" });
+    const roots = [...document.querySelectorAll('[data-exam-annotation-flow="cloze_matching:source:0"]')];
+    selectAcrossText(roots[0], 0, roots[roots.length - 1], roots[roots.length - 1].textContent.length);
+    fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
+    const scope = mockAnnotationScope(31);
+    const marked = JSON.parse(sessionStorage.getItem(scope));
+    expect(Object.keys(marked.regions).sort()).toEqual([
+      "cloze_matching:source:0", "cloze_matching:source:2", "cloze_matching:source:4",
+    ]);
+
+    const firstSlot = document.querySelector('[data-mock-cloze-blank="blank_1"]');
+    fireEvent.click(screen.getByRole("button", { name: "eins" }));
+    fireEvent.click(firstSlot);
+    expect(firstSlot).toHaveTextContent("eins");
+    fireEvent.click(screen.getByRole("button", { name: "anders" }));
+    fireEvent.click(firstSlot);
+    expect(firstSlot).toHaveTextContent("anders");
+    expect(JSON.parse(sessionStorage.getItem(scope)).regions).toEqual(marked.regions);
+    expect(document.querySelector('[data-exam-annotation-region^="cloze_matching:option:"]')).toBeNull();
+    expect(document.querySelector('[data-exam-annotation-region^="cloze_matching:explanation:"]')).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sprachbausteine · Teil 1" }));
+    await screen.findByRole("heading", { name: "Sprachbausteine 1" });
+    fireEvent.click(screen.getByRole("button", { name: "Sprachbausteine · Teil 2" }));
+    await screen.findByRole("heading", { name: "Sprachbausteine 2" });
+    expect(JSON.parse(sessionStorage.getItem(scope)).regions).toEqual(marked.regions);
+    expect(new Set([...document.querySelectorAll('[data-exam-annotation-flow^="cloze_matching:"]')]
+      .map((node) => node.dataset.examAnnotationFlow))).toEqual(new Set(["cloze_matching:source:0"]));
+  });
+
+  it("drags the whole matching card without a handle before and after placement", async () => {
     saveState({
       parts: {
         cloze_matching: {
@@ -1826,18 +2042,30 @@ describe("mock exam annotations", () => {
     }, { activePart: "cloze_matching" });
     render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
     await screen.findByRole("heading", { name: "Sprachbausteine 2" });
-    const poolText = document.querySelector('[data-exam-annotation-region="cloze_matching:option:1"]');
-    const handle = screen.getByRole("button", { name: /拖动lerne/ }).querySelector(".mock-cloze-matching-pool__handle");
+    const poolText = screen.getByRole("button", { name: "lerne" });
     const slot = document.querySelector(".mock-cloze-matching-slot");
-    const dataTransfer = { setData: vi.fn(), getData: vi.fn(() => "A") };
+    const pool = document.querySelector(".mock-cloze-matching-pool");
+    const transferValues = {};
+    const dataTransfer = {
+      setData: vi.fn((type, value) => { transferValues[type] = value; }),
+      getData: vi.fn((type) => transferValues[type] || ""),
+    };
     const pointerDown = new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse" });
     poolText.dispatchEvent(pointerDown);
     expect(pointerDown.defaultPrevented).toBe(false);
-    fireEvent.dragStart(handle, { dataTransfer });
+    expect(poolText).toHaveAttribute("draggable", "true");
+    expect(document.querySelector(".mock-cloze-matching-pool__handle")).toBeNull();
+    fireEvent.dragStart(poolText, { dataTransfer });
     fireEvent.dragOver(slot);
     fireEvent.drop(slot, { dataTransfer });
     await waitFor(() => expect(slot).toHaveTextContent("lerne"));
-    expect(handle).toHaveAttribute("draggable", "true");
+    const placedCard = slot.querySelector(".mock-cloze-matching-slot__chip");
+    expect(placedCard).toHaveAttribute("draggable", "true");
+    expect(placedCard.querySelector(".mock-cloze-matching-pool__handle")).toBeNull();
+    fireEvent.dragStart(placedCard, { dataTransfer });
+    fireEvent.dragOver(pool);
+    fireEvent.drop(pool, { dataTransfer });
+    await waitFor(() => expect(screen.getByRole("button", { name: "lerne" })).toBeInTheDocument());
   });
 
   it("moves a matching option through touch pointer events and clears the preview", async () => {
@@ -1853,11 +2081,12 @@ describe("mock exam annotations", () => {
     }, { activePart: "cloze_matching" });
     render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
     await screen.findByRole("heading", { name: "Sprachbausteine 2" });
-    const handle = screen.getByRole("button", { name: /拖动lerne/ }).querySelector(".mock-cloze-matching-pool__handle");
+    const option = screen.getByRole("button", { name: "lerne" });
     const slot = document.querySelector(".mock-cloze-matching-slot");
-    fireEvent.pointerDown(handle, { pointerType: "touch", pointerId: 1, clientX: 1, clientY: 1 });
+    expect(document.querySelector(".mock-cloze-matching-pool__handle")).toBeNull();
+    fireEvent.pointerDown(option, { pointerType: "touch", pointerId: 1, clientX: 1, clientY: 1 });
     expect(document.querySelector(".mock-cloze-matching-touch-preview")).toBeInTheDocument();
-    fireEvent.pointerMove(handle, { pointerType: "touch", pointerId: 1, clientX: 2, clientY: 2 });
+    fireEvent.pointerMove(option, { pointerType: "touch", pointerId: 1, clientX: 2, clientY: 2 });
     fireEvent.pointerUp(slot, { pointerType: "touch", pointerId: 1, clientX: 2, clientY: 2 });
     await waitFor(() => expect(slot).toHaveTextContent("lerne"));
     expect(document.querySelector(".mock-cloze-matching-touch-preview")).not.toBeInTheDocument();

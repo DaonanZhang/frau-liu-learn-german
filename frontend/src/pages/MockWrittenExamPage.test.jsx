@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
@@ -13,6 +13,20 @@ import {
   submitSavedMockExam,
   updateSavedMockExam,
 } from "../api/exam_preparation/mockExams.js";
+
+const originalCreateObjectURL = URL.createObjectURL;
+const originalRevokeObjectURL = URL.revokeObjectURL;
+
+function successfulAudioResponse(url) {
+  const blob = new Blob(["audio"]);
+  Object.defineProperty(blob, "sourceUrl", { value: url });
+  return { ok: true, status: 200, blob: async () => blob };
+}
+
+beforeAll(() => {
+  URL.createObjectURL = (blob) => `blob:${blob.sourceUrl}`;
+  URL.revokeObjectURL = vi.fn();
+});
 
 const mockExamStyleSource = readFileSync(resolve("src/pages/MockWrittenExamPage.css"), "utf8");
 const clozeExerciseStyleSource = readFileSync(resolve("src/pages/ClozeExercisePage.css"), "utf8");
@@ -245,6 +259,15 @@ function selectAcrossText(startElement, startOffset, endElement, endOffset) {
 afterEach(() => {
   delete window.Highlight;
   delete window.CSS;
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+afterAll(() => {
+  if (originalCreateObjectURL) URL.createObjectURL = originalCreateObjectURL;
+  else delete URL.createObjectURL;
+  if (originalRevokeObjectURL) URL.revokeObjectURL = originalRevokeObjectURL;
+  else delete URL.revokeObjectURL;
 });
 
 describe("mock exam answer sheet", () => {
@@ -499,6 +522,7 @@ describe("mock exam exercise layout", () => {
   let clozeStyleElement;
   let playSpy;
   let pauseSpy;
+  let loadSpy;
 
   beforeAll(() => {
     clozeStyleElement = document.createElement("style");
@@ -509,6 +533,7 @@ describe("mock exam exercise layout", () => {
     document.head.append(styleElement);
     playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     pauseSpy = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
+    loadSpy = vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
   });
 
   afterAll(() => {
@@ -516,11 +541,15 @@ describe("mock exam exercise layout", () => {
     styleElement.remove();
     playSpy.mockRestore();
     pauseSpy.mockRestore();
+    loadSpy.mockRestore();
   });
 
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+    playSpy.mockReset().mockResolvedValue(undefined);
+    loadSpy.mockClear();
+    vi.stubGlobal("fetch", vi.fn(async (url) => successfulAudioResponse(url)));
   });
 
   it("uses one attempt annotation scope and exposes prefixed learning-text regions", async () => {
@@ -746,8 +775,10 @@ describe("mock exam exercise layout", () => {
     expect(next).toBeEnabled();
   });
 
-  it("keeps part arrows available when listening autoplay is rejected", async () => {
-    playSpy.mockRejectedValueOnce(new Error("autoplay blocked"));
+  it("keeps the countdown running and asks for a click when autoplay is blocked", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
+    playSpy.mockRejectedValue(new DOMException("autoplay blocked", "NotAllowedError"));
     const exam = listeningRangeExam();
     exam.parts.listening_teil2.audio_file_url = "/teil2.m4a";
     sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
@@ -765,11 +796,372 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+    fireEvent.canPlay(container.querySelector("audio"));
+    await act(async () => { await Promise.resolve(); });
 
-    expect(await screen.findByRole("button", { name: "点击继续播放录音" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "点击继续播放录音" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "上一部分" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "下一部分" })).toBeEnabled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(screen.getByText("00:59")).toBeInTheDocument();
+    expect(playSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("continues the countdown when a preloaded recording starts after a break", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    exam.parts.listening_teil2.audio_file_url = "/teil2.m4a";
+    exam.parts.listening_teil3.audio_file_url = "/teil3.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 1,
+      audioStepStartedAt: Date.now() - 60_000,
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(20); });
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByText("正在播放 · Hören · Teil 2")).toBeInTheDocument();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(screen.getByText("00:59")).toBeInTheDocument();
+  });
+
+  it("starts the original stream while the backup Blob is still downloading", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(container.querySelector("audio")).toHaveAttribute("src", "/teil1.m4a");
+    fireEvent.canPlay(container.querySelector("audio"));
+    await act(async () => { await Promise.resolve(); });
+    expect(playSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("reloads the original stream once, then waits for the backup Blob with the countdown frozen", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    playSpy.mockRejectedValue(new Error("stream failed"));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+    fireEvent.canPlay(container.querySelector("audio"));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(playSpy).toHaveBeenCalledTimes(2);
+    expect(loadSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("正在切换备用音频…")).toBeInTheDocument();
+    expect(screen.getByText("01:00")).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(screen.getByText("01:00")).toBeInTheDocument();
+  });
+
+  it("continues the backup Blob from the interrupted position and resumes the countdown", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
+    let finishDownload;
+    vi.stubGlobal("fetch", vi.fn((url) => url === "/teil1.m4a"
+      ? new Promise((resolve) => { finishDownload = resolve; })
+      : Promise.resolve(successfulAudioResponse(url))));
+    playSpy
+      .mockRejectedValueOnce(new Error("stream failed"))
+      .mockRejectedValueOnce(new Error("stream failed again"))
+      .mockResolvedValue(undefined);
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+    const audio = container.querySelector("audio");
+    expect(audio).toHaveAttribute("src", "/teil1.m4a");
+    audio.currentTime = 23;
+    fireEvent.canPlay(audio);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByText("正在切换备用音频…")).toBeInTheDocument();
+    expect(screen.getByText("01:00")).toBeInTheDocument();
+
+    await act(async () => {
+      finishDownload(successfulAudioResponse("/teil1.m4a"));
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+    expect(audio).toHaveAttribute("src", "blob:/teil1.m4a");
+    expect(audio.currentTime).toBe(23);
+    expect(playSpy).toHaveBeenCalledTimes(3);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    expect(screen.getByText("00:59")).toBeInTheDocument();
+  });
+
+  it("cancels delayed playback retries after entering writing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
+    playSpy.mockRejectedValue(new Error("playback failed"));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+    fireEvent.canPlay(container.querySelector("audio"));
+    await act(async () => { await Promise.resolve(); });
+    expect(playSpy).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "完成本部分，进入写作" }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("heading", { name: "Schreiben" })).toBeInTheDocument();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(7_000); });
+    expect(playSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not restore the listening countdown when an old play request resolves in writing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
+    let finishPlay;
+    playSpy.mockImplementation(() => new Promise((resolve) => { finishPlay = resolve; }));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+    fireEvent.canPlay(container.querySelector("audio"));
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: "完成本部分，进入写作" }));
+    await act(async () => { await Promise.resolve(); });
+
+    finishPlay();
+    await act(async () => { await Promise.resolve(); await vi.advanceTimersByTimeAsync(1_000); });
+
+    expect(screen.getByRole("heading", { name: "Schreiben" })).toBeInTheDocument();
+    expect(screen.getByText("29:59")).toBeInTheDocument();
+  });
+
+  it("resumes the frozen countdown only after autoplay succeeds", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
+    let resolvePlay;
+    playSpy.mockImplementation(() => new Promise((resolve) => { resolvePlay = resolve; }));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+    fireEvent.canPlay(container.querySelector("audio"));
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(screen.getByText("01:00")).toBeInTheDocument();
+
+    await act(async () => { resolvePlay(); await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+
+    expect(screen.getByText("00:59")).toBeInTheDocument();
+  });
+
+  it("does not block streaming autoplay while the backup audio downloads", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    await waitFor(() => expect(container.querySelector("audio")).toHaveAttribute("src", "/teil1.m4a"));
+    fireEvent.canPlay(container.querySelector("audio"));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByText("正在加载听力音频…")).not.toBeInTheDocument();
+    expect(screen.getByText("正在播放 · Hören · Teil 1")).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it("preloads all three listening recordings when the exam starts", async () => {
+    const exam = continuousNumberingExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    exam.parts.listening_teil2 = { exercise_base: { title: "Hören 2" }, audio_file_url: "/teil2.m4a", questions: [] };
+    exam.parts.listening_teil3 = { exercise_base: { title: "Hören 3" }, audio_file_url: "/teil3.m4a", questions: [] };
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "reading",
+      deadline: Date.now() + 60_000,
+      activePart: "reading_title_matching",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: 0,
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+    expect(fetch).toHaveBeenCalledWith("/teil1.m4a", expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith("/teil2.m4a", expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith("/teil3.m4a", expect.any(Object));
+  });
+
+  it("does not preload listening recordings while reviewing completed results", async () => {
+    const exam = continuousNumberingExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    exam.parts.listening_teil2 = { exercise_base: { title: "Hören 2" }, audio_file_url: "/teil2.m4a", questions: [] };
+    exam.parts.listening_teil3 = { exercise_base: { title: "Hören 3" }, audio_file_url: "/teil3.m4a", questions: [] };
+    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+      exam,
+      phase: "results",
+      deadline: 0,
+      activePart: "reading_title_matching",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 5,
+      audioStepStartedAt: 0,
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    });
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("enables available part arrows after listening audio has finished", async () => {
@@ -994,8 +1386,10 @@ describe("mock exam exercise layout", () => {
   });
 
   it("renders the current listening part status with larger type", async () => {
+    const exam = continuousNumberingExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
     sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam: continuousNumberingExam(),
+      exam,
       phase: "listening",
       deadline: Date.now() + 60_000,
       activePart: "listening_teil1",
@@ -1013,7 +1407,7 @@ describe("mock exam exercise layout", () => {
 
     const statusTitle = await screen.findByText("正在播放 · Hören · Teil 1");
     expect(statusTitle).toHaveClass("mock-exam-audio-status__title");
-    expect(getComputedStyle(statusTitle).fontSize).toBe("1.05rem");
+    expect(mockExamStyleSource).toMatch(/\.mock-exam-audio-status \.mock-exam-audio-status__title \{[^}]*font-size: 1\.05rem;/);
   });
 
   it.each([
@@ -1490,12 +1884,12 @@ describe("mock exam exercise layout", () => {
       expect(element).toHaveAttribute("src", "/teil2.m4a");
       return element;
     });
-    expect(screen.getByText("zweimal")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("zweimal")).toBeInTheDocument());
     expect(screen.queryByText("第 2 / 2 遍")).not.toBeInTheDocument();
 
     fireEvent.ended(audio);
 
-    expect(screen.getByText("zweimal")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("zweimal")).toBeInTheDocument());
     expect(screen.queryByText("接下来：Hören · Teil 3")).not.toBeInTheDocument();
 
     fireEvent.ended(audio);
@@ -1527,7 +1921,7 @@ describe("mock exam exercise layout", () => {
     const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
 
     await waitFor(() => expect(container.querySelector("audio")).toHaveAttribute("src", "/teil3.m4a"));
-    expect(screen.getByText("einmal")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("einmal")).toBeInTheDocument());
   });
 });
 

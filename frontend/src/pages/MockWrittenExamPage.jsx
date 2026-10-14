@@ -41,6 +41,7 @@ import {
   saveWritingExerciseState,
 } from "../api/exam_preparation/userExerciseStates.js";
 import { clearAnnotationScope, mockAnnotationScope } from "../utils/examTextAnnotations.js";
+import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../hooks/useReliableAudioSources.js";
 import "./MockWrittenExamPage.css";
 import "./ReadingAdMatchingPage.css";
 
@@ -48,7 +49,6 @@ const READING_SECONDS = 90 * 60;
 const LISTENING_SECONDS = 30 * 60;
 const WRITING_SECONDS = 30 * 60;
 const COLLECTION_SECONDS = 60;
-
 const PARTS = {
   reading_title_matching: { section: "reading", short: "L 1", title: "Lesen · Teil 1" },
   reading_understanding: { section: "reading", short: "L 2", title: "Lesen · Teil 2" },
@@ -900,6 +900,13 @@ export default function MockWrittenExamPage() {
   const teil2CompletedPlaysRef = useRef(0);
   const createRequestIdRef = useRef(createRequestId());
   const submissionStartedRef = useRef(false);
+  const playRequestRef = useRef(false);
+  const playRetryTokenRef = useRef(0);
+  const hasStartedCurrentAudioRef = useRef(false);
+  const awaitingAudioGestureRef = useRef(false);
+  const streamRetriedRef = useRef(false);
+  const recoveryPositionRef = useRef(0);
+  const pausedListeningRemainingRef = useRef(null);
   const [exam, setExam] = useState(null);
   const [phase, setPhase] = useState("loading");
   const [deadline, setDeadline] = useState(0);
@@ -911,6 +918,9 @@ export default function MockWrittenExamPage() {
   const [audioStep, setAudioStep] = useState(0);
   const [audioStepStartedAt, setAudioStepStartedAt] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioPlaybackState, setAudioPlaybackState] = useState("idle");
+  const [audioMode, setAudioMode] = useState("stream");
+  const [listeningRemainingMs, setListeningRemainingMs] = useState(null);
   const [needsAudioGesture, setNeedsAudioGesture] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [loadKey, setLoadKey] = useState(0);
@@ -923,15 +933,25 @@ export default function MockWrittenExamPage() {
   const [questionFavoritePending, setQuestionFavoritePending] = useState({});
   const [resultModalOpen, setResultModalOpen] = useState(false);
   const [wasEarlySubmitted, setWasEarlySubmitted] = useState(false);
+  const currentAudioAction = AUDIO_SEQUENCE[audioStep] || null;
+  const currentAudioExercise = currentAudioAction?.kind === "audio" ? exam?.parts?.[currentAudioAction.partKey] : null;
+  const currentAudioUrl = currentAudioExercise?.audio_file_url || "";
+  const listeningAudioUrls = useMemo(() => ["reading", "collection", "listening"].includes(phase)
+    ? LISTENING_PART_KEYS.map((partKey) => exam?.parts?.[partKey]?.audio_file_url).filter(Boolean)
+    : [], [exam, phase]);
+  const { sources: audioSources, statuses: audioStatuses } = useReliableAudioSources(listeningAudioUrls);
+  const currentBackupAudioSource = audioSources[currentAudioUrl] || "";
+  const currentBackupAudioStatus = currentAudioUrl ? (audioStatuses[currentAudioUrl] || "loading") : "error";
+  const currentAudioSource = audioMode === "blob" ? currentBackupAudioSource : currentAudioUrl;
 
   const persist = useCallback((next = {}) => {
-    const snapshot = { exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, wasEarlySubmitted, ...next };
+    const snapshot = { exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, listeningRemainingMs, attemptId, isFavorite, wasEarlySubmitted, ...next };
     if (snapshot.exam) {
       const serialized = JSON.stringify(snapshot);
       try { sessionStorage.setItem(sessionKey, serialized); } catch { /* best effort */ }
       try { localStorage.setItem(sessionKey, serialized); } catch { /* best effort */ }
     }
-  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, wasEarlySubmitted, sessionKey]);
+  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, listeningRemainingMs, attemptId, isFavorite, wasEarlySubmitted, sessionKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -967,6 +987,7 @@ export default function MockWrittenExamPage() {
           setPhase(progress.phase || "reading"); setDeadline(Number(progress.deadline) || Date.now());
           setActivePart(progress.active_part || READING_PART_KEYS[0]); setAudioStep(Number(progress.audio_step) || 0);
           setAudioStepStartedAt(Number(progress.audio_step_started_at) || Date.now()); setNow(Date.now());
+          setListeningRemainingMs(Number(progress.listening_remaining_ms) || null);
           setWasEarlySubmitted(!!progress.early_submitted);
           setIsSavedReview(false); localStorage.setItem(activeAttemptKey, String(saved.id));
           return;
@@ -989,6 +1010,7 @@ export default function MockWrittenExamPage() {
             setWritingText(restored.writingText || "");
             setWritingAssessment(normalizeWritingAssessment(restored.writingAssessment, restored.writingGrade));
             setAudioStep(restored.audioStep || 0); setAudioStepStartedAt(restored.audioStepStartedAt || Date.now());
+            setListeningRemainingMs(Number(restored.listeningRemainingMs) || null);
             setWasEarlySubmitted(!!restored.wasEarlySubmitted);
             setAttemptId(restored.attemptId || restored.savedExamId || null); setIsFavorite(!!restored.isFavorite); setIsSavedReview(false);
             return;
@@ -1010,6 +1032,7 @@ export default function MockWrittenExamPage() {
           setPhase(progress.phase || "reading"); setDeadline(Number(progress.deadline) || Date.now());
           setActivePart(progress.active_part || READING_PART_KEYS[0]); setAudioStep(Number(progress.audio_step) || 0);
           setAudioStepStartedAt(Number(progress.audio_step_started_at) || Date.now()); setNow(Date.now());
+          setListeningRemainingMs(Number(progress.listening_remaining_ms) || null);
           setWasEarlySubmitted(!!progress.early_submitted); setIsSavedReview(false);
           return;
         } catch {
@@ -1026,13 +1049,14 @@ export default function MockWrittenExamPage() {
         setExam(data); setPhase("reading"); setDeadline(nextDeadline); setActivePart(READING_PART_KEYS[0]);
         setAnswers({}); setWritingText(""); setWritingAssessment({ ...EMPTY_WRITING_ASSESSMENT });
         setAudioStep(0); setAudioStepStartedAt(0); setWasEarlySubmitted(false);
+        setListeningRemainingMs(null);
         setAttemptId(data.attempt_id); setIsFavorite(false); setIsSavedReview(false); setFavoriteMessage("");
         clearAnnotationScope(mockAnnotationScope(data.attempt_id));
         localStorage.setItem(activeAttemptKey, String(data.attempt_id));
         const initialSnapshot = JSON.stringify({ exam: data, phase: "reading", deadline: nextDeadline,
           activePart: READING_PART_KEYS[0], answers: {}, writingText: "",
           writingAssessment: { ...EMPTY_WRITING_ASSESSMENT }, audioStep: 0,
-          audioStepStartedAt: 0, attemptId: data.attempt_id, isFavorite: false, wasEarlySubmitted: false });
+          audioStepStartedAt: 0, listeningRemainingMs: null, attemptId: data.attempt_id, isFavorite: false, wasEarlySubmitted: false });
         sessionStorage.setItem(sessionKey, initialSnapshot);
         localStorage.setItem(sessionKey, initialSnapshot);
       } catch (error) {
@@ -1055,7 +1079,7 @@ export default function MockWrittenExamPage() {
   useEffect(() => {
     if (!exam || isSavedReview) return;
     persist();
-  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, attemptId, isFavorite, wasEarlySubmitted, isSavedReview, persist]);
+  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, listeningRemainingMs, attemptId, isFavorite, wasEarlySubmitted, isSavedReview, persist]);
 
   useEffect(() => {
     if (!attemptId || isSavedReview || submissionStartedRef.current) return undefined;
@@ -1066,7 +1090,7 @@ export default function MockWrittenExamPage() {
           writing_text: writingText,
           writing_assessment: writingAssessment,
           is_favorite: isFavorite,
-          progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, early_submitted: wasEarlySubmitted },
+          progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, listening_remaining_ms: listeningRemainingMs, early_submitted: wasEarlySubmitted },
         });
       } catch {
         if (!submissionStartedRef.current) {
@@ -1075,7 +1099,7 @@ export default function MockWrittenExamPage() {
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [attemptId, isSavedReview, answers, writingText, writingAssessment, phase, deadline, activePart, audioStep, audioStepStartedAt, isFavorite, wasEarlySubmitted]);
+  }, [attemptId, isSavedReview, answers, writingText, writingAssessment, phase, deadline, activePart, audioStep, audioStepStartedAt, listeningRemainingMs, isFavorite, wasEarlySubmitted]);
 
   useEffect(() => {
     if (phase !== "results" || !exam?.parts) return undefined;
@@ -1102,17 +1126,16 @@ export default function MockWrittenExamPage() {
   }, [phase]);
 
   const enterListening = useCallback(() => {
-    const nextDeadline = Date.now() + LISTENING_SECONDS * 1000;
     const startedAt = Date.now();
     teil2CompletedPlaysRef.current = 0;
-    setPhase("listening"); setDeadline(nextDeadline); setActivePart(LISTENING_PART_KEYS[0]);
+    setPhase("listening"); setDeadline(0); setListeningRemainingMs(LISTENING_SECONDS * 1000); setActivePart(LISTENING_PART_KEYS[0]);
     setAudioStep(0); setAudioStepStartedAt(startedAt); setNeedsAudioGesture(false);
-    persist({ phase: "listening", deadline: nextDeadline, activePart: LISTENING_PART_KEYS[0], audioStep: 0, audioStepStartedAt: startedAt });
+    persist({ phase: "listening", deadline: 0, listeningRemainingMs: LISTENING_SECONDS * 1000, activePart: LISTENING_PART_KEYS[0], audioStep: 0, audioStepStartedAt: startedAt });
   }, [persist]);
 
   const enterWriting = useCallback(() => {
     const nextDeadline = Date.now() + WRITING_SECONDS * 1000;
-    setPhase("writing"); setDeadline(nextDeadline); setActivePart("writing");
+    setPhase("writing"); setDeadline(nextDeadline); setListeningRemainingMs(null); setActivePart("writing");
     audioRef.current?.pause();
     persist({ phase: "writing", deadline: nextDeadline, activePart: "writing" });
   }, [persist]);
@@ -1133,15 +1156,145 @@ export default function MockWrittenExamPage() {
     return () => window.clearTimeout(timer);
   }, [deadline, phase, enterListening, enterWriting]);
 
-  const currentAudioAction = AUDIO_SEQUENCE[audioStep] || null;
-  const currentAudioExercise = currentAudioAction?.kind === "audio" ? exam?.parts?.[currentAudioAction.partKey] : null;
+  const pauseListeningCountdown = useCallback(() => {
+    if (phase !== "listening") return null;
+    const remaining = listeningRemainingMs ?? (deadline > 0
+      ? Math.max(0, deadline - Date.now())
+      : LISTENING_SECONDS * 1000);
+    if (deadline > 0) {
+      setDeadline(0);
+      setListeningRemainingMs(remaining);
+      persist({ deadline: 0, listeningRemainingMs: remaining });
+    }
+    return remaining;
+  }, [phase, listeningRemainingMs, deadline, persist]);
 
-  const playCurrentAudio = useCallback(async () => {
+  const resumeListeningCountdown = useCallback((remainingOverride) => {
+    if (phase !== "listening" || (remainingOverride == null && deadline > 0)) return;
+    const remaining = remainingOverride ?? listeningRemainingMs ?? LISTENING_SECONDS * 1000;
+    const nextDeadline = Date.now() + remaining;
+    setListeningRemainingMs(null);
+    setDeadline(nextDeadline);
+    persist({ deadline: nextDeadline, listeningRemainingMs: null });
+  }, [phase, deadline, listeningRemainingMs, persist]);
+
+  const recoverCurrentAudio = useCallback(async (error, pausedRemaining) => {
     const element = audioRef.current;
-    if (!element || !currentAudioExercise?.audio_file_url) return;
-    try { await element.play(); setNeedsAudioGesture(false); }
-    catch { setAudioPlaying(false); setNeedsAudioGesture(true); }
-  }, [currentAudioExercise]);
+    if (!element || error?.name === "NotAllowedError") return;
+    const token = playRetryTokenRef.current;
+    pausedListeningRemainingRef.current = pausedRemaining ?? pauseListeningCountdown();
+    recoveryPositionRef.current = Number.isFinite(element.currentTime) ? element.currentTime : 0;
+    hasStartedCurrentAudioRef.current = false;
+    setAudioPlaying(false);
+    if (audioMode === "stream" && !streamRetriedRef.current) {
+      streamRetriedRef.current = true;
+      setAudioPlaybackState("recovering");
+      element.load();
+      try { element.currentTime = recoveryPositionRef.current; } catch { /* restore on canplay */ }
+      try {
+        await element.play();
+        if (token !== playRetryTokenRef.current) return;
+        awaitingAudioGestureRef.current = false;
+        setNeedsAudioGesture(false);
+        setAudioPlaybackState("playing");
+        hasStartedCurrentAudioRef.current = true;
+        resumeListeningCountdown(pausedListeningRemainingRef.current);
+        pausedListeningRemainingRef.current = null;
+        return;
+      } catch (retryError) {
+        if (token !== playRetryTokenRef.current) return;
+        if (retryError?.name === "NotAllowedError") {
+          awaitingAudioGestureRef.current = true;
+          setNeedsAudioGesture(true);
+          setAudioPlaybackState("gesture");
+          resumeListeningCountdown(pausedListeningRemainingRef.current);
+          pausedListeningRemainingRef.current = null;
+          return;
+        }
+      }
+    }
+    if (audioMode === "blob") {
+      setAudioPlaybackState("error");
+      return;
+    }
+    setAudioPlaybackState(currentBackupAudioStatus === "error" ? "error" : "switching");
+    if (currentBackupAudioStatus === "ready") setAudioMode("blob");
+  }, [audioMode, currentBackupAudioStatus, pauseListeningCountdown, resumeListeningCountdown]);
+
+  const playCurrentAudio = useCallback(async (manual = false) => {
+    const element = audioRef.current;
+    if (!element || !currentAudioSource || playRequestRef.current || hasStartedCurrentAudioRef.current
+      || (awaitingAudioGestureRef.current && !manual)) return;
+    const token = ++playRetryTokenRef.current;
+    const pausedRemaining = pauseListeningCountdown();
+    pausedListeningRemainingRef.current = pausedRemaining;
+    playRequestRef.current = true;
+    setAudioPlaybackState("starting");
+    try {
+      if (audioMode === "blob" && audioPlaybackState === "switching") {
+        try { element.currentTime = recoveryPositionRef.current; } catch { /* restore on canplay */ }
+      }
+      await element.play();
+      if (token !== playRetryTokenRef.current) return;
+      awaitingAudioGestureRef.current = false;
+      setNeedsAudioGesture(false);
+      setAudioPlaybackState("playing");
+      hasStartedCurrentAudioRef.current = true;
+      resumeListeningCountdown(pausedRemaining);
+      pausedListeningRemainingRef.current = null;
+    } catch (error) {
+      setAudioPlaying(false);
+      if (error?.name === "NotAllowedError") {
+        awaitingAudioGestureRef.current = true;
+        setNeedsAudioGesture(true);
+        setAudioPlaybackState("gesture");
+        resumeListeningCountdown(pausedRemaining);
+        pausedListeningRemainingRef.current = null;
+        return;
+      }
+      await recoverCurrentAudio(error, pausedRemaining);
+    } finally {
+      if (token === playRetryTokenRef.current) playRequestRef.current = false;
+    }
+  }, [audioMode, audioPlaybackState, currentAudioSource, pauseListeningCountdown, recoverCurrentAudio, resumeListeningCountdown]);
+
+  useEffect(() => {
+    playRetryTokenRef.current += 1;
+    playRequestRef.current = false;
+    hasStartedCurrentAudioRef.current = false;
+    awaitingAudioGestureRef.current = false;
+    streamRetriedRef.current = false;
+    recoveryPositionRef.current = 0;
+    pausedListeningRemainingRef.current = null;
+    setAudioMode("stream");
+    setNeedsAudioGesture(false);
+    setAudioPlaybackState(currentAudioUrl ? "starting" : "idle");
+    return () => {
+      playRetryTokenRef.current += 1;
+      playRequestRef.current = false;
+    };
+  }, [currentAudioUrl]);
+
+  useEffect(() => {
+    if (phase === "listening") return;
+    playRetryTokenRef.current += 1;
+    playRequestRef.current = false;
+    awaitingAudioGestureRef.current = false;
+  }, [phase]);
+
+  useEffect(() => {
+    if (audioPlaybackState === "switching" && currentBackupAudioStatus === "ready") {
+      setAudioMode("blob");
+    } else if (audioPlaybackState === "switching" && currentBackupAudioStatus === "error") {
+      setAudioPlaybackState("error");
+    }
+  }, [audioPlaybackState, currentBackupAudioStatus]);
+
+  useEffect(() => {
+    if (audioMode !== "blob" || audioPlaybackState !== "switching" || !audioRef.current) return;
+    try { audioRef.current.currentTime = recoveryPositionRef.current; } catch { /* restore on canplay */ }
+    playCurrentAudio();
+  }, [audioMode, audioPlaybackState, playCurrentAudio]);
 
   const advanceAudioStep = useCallback(() => {
     const nextStep = audioStep + 1;
@@ -1155,28 +1308,24 @@ export default function MockWrittenExamPage() {
         writing_text: writingText,
         writing_assessment: writingAssessment,
         is_favorite: isFavorite,
-        progress: { phase, deadline, active_part: activePart, audio_step: nextStep, audio_step_started_at: startedAt },
+        progress: { phase, deadline, active_part: activePart, audio_step: nextStep, audio_step_started_at: startedAt, listening_remaining_ms: listeningRemainingMs },
       }).catch(() => setFavoriteMessage("听力播放进度保存失败，请检查网络"));
     }
-  }, [audioStep, persist, attemptId, isSavedReview, answers, writingText, writingAssessment, isFavorite, phase, deadline, activePart]);
+  }, [audioStep, persist, attemptId, isSavedReview, answers, writingText, writingAssessment, isFavorite, phase, deadline, activePart, listeningRemainingMs]);
 
   const handleAudioEnded = useCallback(async (event) => {
     setAudioPlaying(false);
     if (currentAudioAction?.partKey === "listening_teil2" && teil2CompletedPlaysRef.current === 0) {
       teil2CompletedPlaysRef.current = 1;
       event.currentTarget.currentTime = 0;
-      try {
-        await event.currentTarget.play();
-        setNeedsAudioGesture(false);
-      } catch {
-        setNeedsAudioGesture(true);
-      }
+      hasStartedCurrentAudioRef.current = false;
+      await playCurrentAudio();
       return;
     }
 
     teil2CompletedPlaysRef.current = 0;
     advanceAudioStep();
-  }, [currentAudioAction, advanceAudioStep]);
+  }, [currentAudioAction, advanceAudioStep, playCurrentAudio]);
 
   useEffect(() => {
     if (phase !== "listening" || !currentAudioAction) return undefined;
@@ -1286,7 +1435,7 @@ export default function MockWrittenExamPage() {
         writing_assessment: writingAssessment,
         is_completed: phase === "results",
         is_favorite: true,
-        progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, early_submitted: wasEarlySubmitted },
+        progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, listening_remaining_ms: listeningRemainingMs, early_submitted: wasEarlySubmitted },
       });
       setAttemptId(saved.id); setIsFavorite(true);
       localStorage.setItem(activeAttemptKey, String(saved.id));
@@ -1337,7 +1486,9 @@ export default function MockWrittenExamPage() {
     };
   }
 
-  const remainingSeconds = Math.max(0, Math.ceil((deadline - now) / 1000));
+  const remainingSeconds = Math.max(0, Math.ceil((phase === "listening" && deadline === 0 && listeningRemainingMs != null
+    ? listeningRemainingMs
+    : deadline - now) / 1000));
   const scores = useMemo(() => {
     if (!exam) return null;
     const readingCorrect = correctCount(exam.parts, answers, READING_PART_KEYS.slice(0, 3));
@@ -1434,6 +1585,10 @@ export default function MockWrittenExamPage() {
     : answerSheetRows.filter((row) => row.group === phase);
   const visiblePartKeys = isResults ? ALL_REVIEW_PART_KEYS : phase === "reading" ? READING_PART_KEYS : phase === "listening" ? LISTENING_PART_KEYS : ["writing"];
   const audioLocked = phase === "listening" && audioPlaying;
+  const audioLoading = currentAudioAction?.kind === "audio" && (
+    audioPlaybackState === "starting" || audioPlaybackState === "recovering" || audioPlaybackState === "switching"
+  );
+  const audioFailed = currentAudioAction?.kind === "audio" && audioPlaybackState === "error";
   const partNavigationKeys = activePart === "writing"
     ? []
     : isResults
@@ -1495,11 +1650,17 @@ export default function MockWrittenExamPage() {
       ) : null}
 
       {phase === "listening" ? (
-        <section className="mock-exam-audio-status" aria-live="polite">
-          {currentAudioAction?.kind === "audio" ? <><span className="mock-exam-audio-status__title">正在播放 · {PARTS[currentAudioAction.partKey].title}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></>}
-          {needsAudioGesture ? <button onClick={playCurrentAudio}>点击继续播放录音</button> : null}
-          <audio ref={audioRef} src={currentAudioExercise?.audio_file_url || undefined} onCanPlay={playCurrentAudio}
-            onPlay={() => setAudioPlaying(true)} onPause={() => setAudioPlaying(false)}
+        <section className={`mock-exam-audio-status${audioLoading ? " is-loading" : audioFailed ? " is-error" : ""}`} aria-live="polite">
+          {audioLoading ? <><span className="mock-exam-audio-spinner" aria-hidden="true" /><span className="mock-exam-audio-status__title">{audioPlaybackState === "switching" ? "正在切换备用音频…" : audioPlaybackState === "recovering" ? "正在恢复听力播放…" : "正在加载听力音频…"}</span></> : null}
+          {audioFailed ? <span className="mock-exam-audio-status__error" role="alert">{AUDIO_LOAD_ERROR}</span> : null}
+          {currentAudioAction?.kind === "audio" && !audioLoading && !audioFailed ? <><span className="mock-exam-audio-status__title">{needsAudioGesture ? "听力音频已就绪" : `正在播放 · ${PARTS[currentAudioAction.partKey].title}`}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : currentAudioAction?.kind !== "audio" ? <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></> : null}
+          {needsAudioGesture ? <button onClick={() => playCurrentAudio(true)}>点击继续播放录音</button> : null}
+          <audio ref={audioRef} src={currentAudioSource || undefined} onCanPlay={(event) => {
+            if (audioMode === "blob" && audioPlaybackState === "switching") event.currentTarget.currentTime = recoveryPositionRef.current;
+            playCurrentAudio();
+          }}
+            onPlay={() => { setAudioPlaying(true); setAudioPlaybackState("playing"); }} onPause={() => setAudioPlaying(false)}
+            onError={(event) => { recoverCurrentAudio(event.currentTarget.error, pausedListeningRemainingRef.current); }}
             onEnded={handleAudioEnded} preload="auto" />
         </section>
       ) : null}

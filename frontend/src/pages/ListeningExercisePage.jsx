@@ -18,6 +18,7 @@ import ListeningTranscript from "../components/examPreparation/ListeningTranscri
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
+import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../hooks/useReliableAudioSources.js";
 import "./ListeningExercisePage.css";
 
 const INSTRUCTION_BY_TYPE = {
@@ -67,6 +68,9 @@ export default function ListeningExercisePage({
   const { exerciseId } = useParams();
   const audioRef = useRef(null);
   const teil2CompletedPlaysRef = useRef(0);
+  const streamRetriedRef = useRef(false);
+  const recoveryPositionRef = useRef(0);
+  const playIntentRef = useRef(false);
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -80,6 +84,18 @@ export default function ListeningExercisePage({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const isTeil2 = listeningType === "short_text_true_false_once";
+  const audioUrls = useMemo(() => [exercise?.audio_file_url].filter(Boolean), [exercise?.audio_file_url]);
+  const { sources: audioSources, statuses: audioStatuses } = useReliableAudioSources(audioUrls);
+  const audioUrl = exercise?.audio_file_url || "";
+  const backupAudioSource = audioSources[audioUrl] || "";
+  const backupAudioStatus = audioUrl ? (audioStatuses[audioUrl] || "loading") : "error";
+  const [audioMode, setAudioMode] = useState("stream");
+  const [audioRecoveryState, setAudioRecoveryState] = useState("idle");
+  const audioSource = audioMode === "blob" ? backupAudioSource : audioUrl;
+  const audioFailed = audioRecoveryState === "error"
+    || (audioRecoveryState === "switching" && backupAudioStatus === "error");
+  const audioLoading = audioRecoveryState === "recovering"
+    || (audioRecoveryState === "switching" && backupAudioStatus === "loading");
 
   useEffect(() => {
     let aborted = false;
@@ -145,7 +161,22 @@ export default function ListeningExercisePage({
     audioElement.playbackRate = playbackRate;
     audioElement.loop = !isTeil2 && repeatEnabled;
     return undefined;
-  }, [exercise?.audio_file_url, isTeil2, playbackRate, repeatEnabled]);
+  }, [audioSource, isTeil2, playbackRate, repeatEnabled]);
+
+  useEffect(() => {
+    streamRetriedRef.current = false;
+    recoveryPositionRef.current = 0;
+    playIntentRef.current = false;
+    setAudioMode("stream");
+    setAudioRecoveryState("idle");
+    resetAudioProgress();
+  }, [audioUrl]);
+
+  useEffect(() => {
+    if (audioRecoveryState === "switching" && backupAudioStatus === "ready") {
+      setAudioMode("blob");
+    }
+  }, [audioRecoveryState, backupAudioStatus]);
 
   function syncAudioProgress(audioElement) {
     setCurrentTime(Number.isFinite(audioElement.currentTime) ? audioElement.currentTime : 0);
@@ -181,15 +212,65 @@ export default function ListeningExercisePage({
     }
 
     if (audioElement.paused) {
+      playIntentRef.current = true;
       try {
         await audioElement.play();
       } catch (error) {
-        setErrorText(error?.message || "Audio playback failed.");
+        await recoverAudioPlayback(error);
       }
       return;
     }
 
+    playIntentRef.current = false;
     audioElement.pause();
+  }
+
+  async function recoverAudioPlayback(error, shouldPlay = true) {
+    const audioElement = audioRef.current;
+    if (!audioElement || error?.name === "NotAllowedError") {
+      setErrorText(error?.message || "Audio playback failed.");
+      return;
+    }
+    recoveryPositionRef.current = Number.isFinite(audioElement.currentTime) ? audioElement.currentTime : 0;
+    setIsPlaying(false);
+    if (audioMode === "stream" && !streamRetriedRef.current) {
+      streamRetriedRef.current = true;
+      setAudioRecoveryState("recovering");
+      audioElement.load();
+      try { audioElement.currentTime = recoveryPositionRef.current; } catch { /* restore after media is ready */ }
+      if (!shouldPlay) {
+        setAudioRecoveryState("idle");
+        return;
+      }
+      try {
+        await audioElement.play();
+        setAudioRecoveryState("idle");
+        return;
+      } catch (retryError) {
+        if (retryError?.name === "NotAllowedError") {
+          setAudioRecoveryState("idle");
+          setErrorText(retryError.message || "Audio playback failed.");
+          return;
+        }
+      }
+    }
+    if (audioMode === "blob") {
+      setAudioRecoveryState("error");
+      return;
+    }
+    setAudioRecoveryState(backupAudioStatus === "error" ? "error" : "switching");
+    if (backupAudioStatus === "ready") setAudioMode("blob");
+  }
+
+  async function resumeBackupPlayback(event) {
+    if (audioMode !== "blob" || audioRecoveryState !== "switching") return;
+    event.currentTarget.currentTime = recoveryPositionRef.current;
+    try {
+      await event.currentTarget.play();
+      setAudioRecoveryState("idle");
+    } catch (error) {
+      await recoverAudioPlayback(error);
+    }
   }
 
   function restartAudio() {
@@ -198,10 +279,11 @@ export default function ListeningExercisePage({
       return;
     }
     teil2CompletedPlaysRef.current = 0;
+    playIntentRef.current = true;
     audioElement.currentTime = 0;
     setCurrentTime(0);
     audioElement.play().catch((error) => {
-      setErrorText(error?.message || "Audio playback failed.");
+      recoverAudioPlayback(error);
     });
   }
 
@@ -214,12 +296,13 @@ export default function ListeningExercisePage({
       try {
         await audioElement.play();
       } catch (error) {
-        setErrorText(error?.message || "Audio playback failed.");
+        await recoverAudioPlayback(error);
       }
       return;
     }
 
     teil2CompletedPlaysRef.current = 0;
+    playIntentRef.current = false;
     setIsPlaying(false);
     syncAudioProgress(audioElement);
   }
@@ -361,20 +444,20 @@ export default function ListeningExercisePage({
               <h2 className="listening-exercise-audio-panel__title">Hören und steuern</h2>
             </div>
             <span className="listening-exercise-audio-panel__status">
-              {isPlaying ? "Wird abgespielt" : "Bereit"}
+              {audioLoading ? "Wird geladen" : isPlaying ? "Wird abgespielt" : audioFailed ? "Fehler" : "Bereit"}
             </span>
           </div>
 
           <div className="listening-exercise-audio-player">
             <audio
-              key={exercise?.audio_file_url || "no-audio"}
+              key={audioSource || "no-audio"}
               ref={audioRef}
-              src={exercise?.audio_file_url || undefined}
+              src={audioSource || undefined}
               preload="metadata"
-              onLoadStart={resetAudioProgress}
               onLoadedMetadata={(event) => {
                 syncAudioProgress(event.currentTarget);
               }}
+              onCanPlay={resumeBackupPlayback}
               onDurationChange={(event) => {
                 syncAudioProgress(event.currentTarget);
               }}
@@ -391,7 +474,7 @@ export default function ListeningExercisePage({
                 setIsPlaying(false);
               }}
               onEnded={handleAudioEnded}
-              onEmptied={resetAudioProgress}
+              onError={(event) => { recoverAudioPlayback(event.currentTarget.error, playIntentRef.current); }}
               onContextMenu={(event) => {
                 event.preventDefault();
               }}
@@ -405,6 +488,7 @@ export default function ListeningExercisePage({
               onClick={togglePlayback}
               aria-label={isPlaying ? "Audio pausieren" : "Audio abspielen"}
               title={isPlaying ? "Pause" : "Abspielen"}
+              disabled={!audioSource || audioLoading || audioFailed}
             >
               <span
                 className={isPlaying ? "" : "listening-exercise-timeline__play-icon"}
@@ -433,6 +517,15 @@ export default function ListeningExercisePage({
                 }}
               />
             </label>
+            {audioLoading ? (
+              <div className="listening-exercise-audio-message is-loading" role="status">
+                <span className="listening-exercise-audio-spinner" aria-hidden="true" />
+                {audioRecoveryState === "switching" ? "正在切换备用音频…" : "正在恢复音频播放…"}
+              </div>
+            ) : null}
+            {audioFailed ? (
+              <div className="listening-exercise-audio-message is-error" role="alert">{AUDIO_LOAD_ERROR}</div>
+            ) : null}
           </div>
 
           <div className="listening-exercise-controls" aria-label="Audiosteuerung">
@@ -440,6 +533,7 @@ export default function ListeningExercisePage({
               type="button"
               className="listening-exercise-control-btn listening-exercise-control-btn--secondary"
               onClick={restartAudio}
+              disabled={!audioSource || audioLoading || audioFailed}
             >
               Wieder abspielen
             </button>

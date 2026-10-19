@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from apps.accounts.feature_flags import user_has_release_access
@@ -96,3 +98,28 @@ class UserMeWriteSerializer(serializers.ModelSerializer):
             "email",
             "has_seen_schreiben_guide",
         )
+
+
+class PromotionCodeBatchSerializer(serializers.Serializer):
+    partner_name = serializers.CharField(max_length=128, trim_whitespace=True)
+    operator_name = serializers.CharField(max_length=128, trim_whitespace=True)
+    count = serializers.IntegerField(min_value=1, max_value=10000)
+    discount_amount = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        required=False,
+        default=Decimal("5.00"),
+    )
+
+
+class PromotionCodeHistoryQuerySerializer(serializers.Serializer):
+    generation_batch_id = serializers.UUIDField(required=False)
+    search = serializers.CharField(
+        max_length=128,
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+        default="",
+    )
+    page = serializers.IntegerField(min_value=1, required=False, default=1)

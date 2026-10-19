@@ -1,4 +1,4 @@
-import { Navigate, createBrowserRouter, RouterProvider } from "react-router-dom";
+import { Navigate, createBrowserRouter, RouterProvider, useLocation, useParams } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout.jsx";
 import Home from "./pages/Home.jsx";
 import VideoStudyPage from "./pages/VideoStudy/VideoStudyPage.jsx";
@@ -21,6 +21,7 @@ import ExamPreparationReadingPage from "./pages/ExamPreparationReadingPage.jsx";
 import {
   LISTENING_TYPES,
   READING_TYPES,
+  examPreparationTypeDescription,
   SPEAKING_TYPES,
   SPRACHBAUSTEINE_TYPES,
 } from "./pages/examPreparationTypeContent.js";
@@ -28,7 +29,7 @@ import ClozeChoicePage from "./pages/ClozeChoicePage.jsx";
 import ClozeMatchingPage from "./pages/ClozeMatchingPage.jsx";
 import ExamPreparationWritingPage from "./pages/ExamPreparationWritingPage.jsx";
 import ExamPreparationWritingDetailPage from "./pages/ExamPreparationWritingDetailPage.jsx";
-import MockWrittenExamPage from "./pages/MockWrittenExamPage.jsx";
+import MockExamPage from "./pages/mockExam/MockExamPage.jsx";
 import MockExamRecordsPage from "./pages/MockExamRecordsPage.jsx";
 import ExerciseSelectionPage from "./pages/ExerciseSelectionPage.jsx";
 import ListeningExercisePage from "./pages/ListeningExercisePage.jsx";
@@ -58,6 +59,20 @@ import { fetchSpeakingTeilExercises } from "./api/exam_preparation/speakingExerc
 import { AuthProvider } from "./api/auth";
 import { useAuth } from "./api/auth/useAuth.js";
 import ModuleAccessGate from "./components/ModuleAccessGate.jsx";
+import { examPreparationScope } from "./utils/examPreparationScope.js";
+
+export function examPreparationLevelHomeRoutes() {
+  return [
+    { path: "/modules/exam-preparation", element: <ExamPreparationModulePage /> },
+    { path: "/modules/exam-preparation/b1", element: <ExamPreparationModulePage level="b1" /> },
+    { path: "/modules/exam-preparation/b2", element: <ExamPreparationModulePage level="b2" /> },
+  ];
+}
+
+function ExamPreparationLevelGate({ children }) {
+  const { level } = useParams();
+  return examPreparationScope(level) ? children : <Navigate to="/modules/exam-preparation" replace />;
+}
 
 function FallbackRedirect() {
   const { loading, isAuthenticated } = useAuth();
@@ -67,6 +82,36 @@ function FallbackRedirect() {
   }
 
   return <Navigate to={isAuthenticated ? "/" : "/login"} replace />;
+}
+
+function LegacyExamPreparationRedirect({ to }) {
+  const location = useLocation();
+  const params = useParams();
+  const target = to.replace(/:([A-Za-z0-9_]+)/g, (_, key) => params[key] || "");
+  return <Navigate to={`${target}${location.search}${location.hash}`} replace />;
+}
+
+function InvalidExamPreparationRoute() {
+  return <Navigate to="/modules/exam-preparation" replace />;
+}
+
+export function addExamPreparationLevelRoutes(routes) {
+  return routes.flatMap((route) => {
+    const prefix = "/modules/exam-preparation";
+    if ([`${prefix}/b1`, `${prefix}/b2`, `${prefix}/*`].includes(route.path)) {
+      return [route];
+    }
+    if (!route.path?.startsWith(`${prefix}/`)) return [route];
+    if (route.path.includes(":examType")) {
+      return [{ ...route, element: <ExamPreparationLevelGate>{route.element}</ExamPreparationLevelGate> }];
+    }
+    const suffix = route.path.slice(prefix.length);
+    const canonicalPath = `${prefix}/:level${suffix}`;
+    return [
+      { ...route, path: canonicalPath, element: <ExamPreparationLevelGate>{route.element}</ExamPreparationLevelGate> },
+      { path: route.path, element: <LegacyExamPreparationRedirect to={canonicalPath.replace(":level", "b1")} /> },
+    ];
+  });
 }
 
 function protectExamPreparationRoutes(routes) {
@@ -94,13 +139,13 @@ const router = createBrowserRouter([
   { path: "/payments/alipay/return", element: <AlipayReturnPage /> },
   {
     element: <AppLayout />,
-    children: protectExamPreparationRoutes([
+    children: protectExamPreparationRoutes(addExamPreparationLevelRoutes([
       { path: "/", element: <Home /> },
       { path: "/modules/science-season", element: <ModulePage /> },
       { path: "/modules/vlog-season", element: <VlogModulePage /> },
-      { path: "/modules/exam-preparation", element: <ExamPreparationModulePage /> },
-      { path: "/modules/exam-preparation/mock-exam", element: <MockWrittenExamPage /> },
-      { path: "/modules/exam-preparation/mock-exams", element: <MockExamRecordsPage /> },
+      ...examPreparationLevelHomeRoutes(),
+      { path: "/modules/exam-preparation/:examType/:level/mock-exam", element: <MockExamPage /> },
+      { path: "/modules/exam-preparation/:examType/:level/mock-exams", element: <MockExamRecordsPage /> },
       { path: "/modules/exam-preparation/hoeren", element: <ExamPreparationListeningPage /> },
       { path: "/modules/exam-preparation/sprechen", element: <ExamPreparationSpeakingPage /> },
       { path: "/modules/exam-preparation/sprachbausteine", element: <ExamPreparationSprachbausteinePage /> },
@@ -110,13 +155,13 @@ const router = createBrowserRouter([
         path: "/modules/exam-preparation/sprachbausteine/cloze-choice",
         element: (
           <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/sprachbausteine"
+            backTo={(_scope) => `/modules/exam-preparation/${_scope.levelPath}/sprachbausteine`}
             backLabel="← Zurück zu Sprachbausteine"
             eyebrow="Sprachbausteine"
             title="Teil 1"
             description={SPRACHBAUSTEINE_TYPES[0].description}
             fetchExercises={fetchClozeChoiceExercises}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/sprachbausteine/cloze-choice/${exercise.id}`}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/sprachbausteine/cloze-choice/${exercise.id}`}
             cardDescription="Öffne diese Aufgabe und bearbeite die Lücken Schritt für Schritt mit den vorgegebenen Optionen."
           />
         ),
@@ -129,13 +174,13 @@ const router = createBrowserRouter([
         path: "/modules/exam-preparation/sprachbausteine/cloze-matching",
         element: (
           <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/sprachbausteine"
+            backTo={(_scope) => `/modules/exam-preparation/${_scope.levelPath}/sprachbausteine`}
             backLabel="← Zurück zu Sprachbausteine"
             eyebrow="Sprachbausteine"
             title="Teil 2"
             description={SPRACHBAUSTEINE_TYPES[1].description}
             fetchExercises={fetchClozeMatchingExercises}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/sprachbausteine/cloze-matching/${exercise.id}`}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/sprachbausteine/cloze-matching/${exercise.id}`}
             cardDescription="Öffne diese Aufgabe und ordne die verfügbaren Ausdrücke den passenden Lücken zu."
           />
         ),
@@ -148,13 +193,13 @@ const router = createBrowserRouter([
         path: "/modules/exam-preparation/hoeren/short-text-prep",
         element: (
           <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/hoeren"
+            backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/hoeren`}
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
             title="Teil 1"
             description={LISTENING_TYPES[0].description}
-            fetchExercises={() => fetchListeningExercises("short_text_true_false_with_prep")}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/hoeren/short-text-prep/${exercise.id}`}
+            fetchExercises={(scope) => fetchListeningExercises("short_text_true_false_with_prep", scope)}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/hoeren/short-text-prep/${exercise.id}`}
             cardDescription="Öffne diese Hörübung und bearbeite die Aussagen nach einer kurzen Vorbereitungszeit."
           />
         ),
@@ -164,7 +209,7 @@ const router = createBrowserRouter([
         element: (
           <ListeningExercisePage
             listeningType="short_text_true_false_with_prep"
-            backTo="/modules/exam-preparation/hoeren/short-text-prep"
+            backTo={(_scope) => `/modules/exam-preparation/${_scope.levelPath}/hoeren/short-text-prep`}
           />
         ),
       },
@@ -172,13 +217,13 @@ const router = createBrowserRouter([
         path: "/modules/exam-preparation/hoeren/short-text-once",
         element: (
           <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/hoeren"
+            backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/hoeren`}
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
             title="Teil 2"
             description={LISTENING_TYPES[1].description}
-            fetchExercises={() => fetchListeningExercises("short_text_true_false_once")}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/hoeren/short-text-once/${exercise.id}`}
+            fetchExercises={(scope) => fetchListeningExercises("short_text_true_false_once", scope)}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/hoeren/short-text-once/${exercise.id}`}
             cardDescription="Öffne diese Hörübung und entscheide nach zweimaligem Hören des Gesprächs, welche Aussagen richtig oder falsch sind."
           />
         ),
@@ -188,7 +233,7 @@ const router = createBrowserRouter([
         element: (
           <ListeningExercisePage
             listeningType="short_text_true_false_once"
-            backTo="/modules/exam-preparation/hoeren/short-text-once"
+            backTo={(_scope) => `/modules/exam-preparation/${_scope.levelPath}/hoeren/short-text-once`}
           />
         ),
       },
@@ -196,13 +241,13 @@ const router = createBrowserRouter([
         path: "/modules/exam-preparation/hoeren/dialog-twice",
         element: (
           <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/hoeren"
+            backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/hoeren`}
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
             title="Teil 3"
             description={LISTENING_TYPES[2].description}
-            fetchExercises={() => fetchListeningExercises("dialog_true_false_twice")}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/hoeren/dialog-twice/${exercise.id}`}
+            fetchExercises={(scope) => fetchListeningExercises("dialog_true_false_twice", scope)}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/hoeren/dialog-twice/${exercise.id}`}
             cardDescription="Öffne diese Hörübung und entscheide beim einmaligen Hören der kurzen Texte, welche Aussagen richtig oder falsch sind."
           />
         ),
@@ -212,7 +257,7 @@ const router = createBrowserRouter([
         element: (
           <ListeningExercisePage
             listeningType="dialog_true_false_twice"
-            backTo="/modules/exam-preparation/hoeren/dialog-twice"
+            backTo={(_scope) => `/modules/exam-preparation/${_scope.levelPath}/hoeren/dialog-twice`}
           />
         ),
       },
@@ -221,13 +266,13 @@ const router = createBrowserRouter([
         path: "/modules/exam-preparation/lesen/title-matching",
         element: (
           <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/lesen"
+            backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/lesen`}
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
             title="Teil 1"
             description={READING_TYPES[0].description}
             fetchExercises={fetchReadingTitleMatchingExercises}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/lesen/title-matching/${exercise.id}`}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/lesen/title-matching/${exercise.id}`}
             buildCardTitle={(exercise, index) =>
               `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
             }
@@ -240,13 +285,13 @@ const router = createBrowserRouter([
         path: "/modules/exam-preparation/lesen/understanding",
         element: (
           <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/lesen"
+            backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/lesen`}
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
             title="Teil 2"
             description={READING_TYPES[1].description}
             fetchExercises={fetchReadingUnderstandingExercises}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/lesen/understanding/${exercise.id}`}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/lesen/understanding/${exercise.id}`}
             cardDescription="Öffne diese Aufgabe und beantworte die Fragen zum Lesetext Schritt für Schritt."
           />
         ),
@@ -256,13 +301,13 @@ const router = createBrowserRouter([
         path: "/modules/exam-preparation/lesen/ad-matching",
         element: (
           <ExerciseSelectionPage
-            backTo="/modules/exam-preparation/lesen"
+            backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/lesen`}
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
             title="Teil 3"
             description={READING_TYPES[2].description}
             fetchExercises={fetchReadingAdMatchingExercises}
-            buildExerciseHref={(exercise) => `/modules/exam-preparation/lesen/ad-matching/${exercise.id}`}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/lesen/ad-matching/${exercise.id}`}
             buildCardTitle={(exercise, index) =>
               `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
             }
@@ -276,13 +321,13 @@ const router = createBrowserRouter([
           path: `/modules/exam-preparation/sprechen/teil-${teil}`,
           element: (
             <ExerciseSelectionPage
-              backTo="/modules/exam-preparation/sprechen"
+              backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/sprechen`}
               backLabel="← Zurück zu Sprechen"
               eyebrow="Sprechen"
               title={`Teil ${teil}`}
-              description={SPEAKING_TYPES[teil - 1].description}
-              fetchExercises={() => fetchSpeakingTeilExercises(teil)}
-              buildExerciseHref={(exercise) => `/modules/exam-preparation/sprechen/teil-${teil}/${exercise.id}`}
+              description={(scope) => examPreparationTypeDescription(SPEAKING_TYPES[teil - 1], scope.level)}
+              fetchExercises={(scope) => fetchSpeakingTeilExercises(teil, scope)}
+              buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/sprechen/teil-${teil}/${exercise.id}`}
               buildCardTitle={teil === 1
                 ? (exercise, index) => `${exercise?.exercise_base?.title?.trim() || "Einander kennenlernen"} Beispiel ${index + 1}`
                 : undefined}
@@ -294,6 +339,7 @@ const router = createBrowserRouter([
       ]),
       { path: "/modules/:moduleId/preview", element: <ModulePurchasePage /> },
       { path: "/modules/:moduleId/purchase", element: <ModuleCheckoutPage /> },
+      { path: "/modules/exam-preparation/*", element: <InvalidExamPreparationRoute /> },
       { path: "/manual", element: <ManualPage /> },
       { path: "/videos/:videoId", element: <VideoStudyPage /> },
       { path: "/lexicon", element: <LexiconPage /> },
@@ -301,7 +347,7 @@ const router = createBrowserRouter([
       { path: "/learning-records", element: <LearningRecordPage /> },
       { path: "/profile", element: <ProfilePage /> },
       { path: "/redeem-code", element: <ActivateEntitlementPage /> },
-    ]),
+    ])),
   },
   { path: "*", element: <FallbackRedirect /> },
 ]);

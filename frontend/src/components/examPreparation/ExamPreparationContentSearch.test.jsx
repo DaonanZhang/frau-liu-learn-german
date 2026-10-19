@@ -28,17 +28,17 @@ function result(overrides = {}) {
     skill_label: "Lesen",
     teil: 2,
     exercise_type: "READING_UNDERSTANDING",
-    href: "/modules/exam-preparation/lesen/understanding/41",
+    href: "/modules/exam-preparation/b1/lesen/understanding/41",
     match_count: 1,
     matches: [{ label: "阅读文章", excerpt: "Eine Wohnung in Berlin." }],
     ...overrides,
   };
 }
 
-function renderSearch() {
+function renderSearch(scope = { examType: "TELC", level: "B1", levelPath: "b1" }) {
   return render(
     <MemoryRouter>
-      <ExamPreparationContentSearch />
+      <ExamPreparationContentSearch scope={scope} />
     </MemoryRouter>,
   );
 }
@@ -64,6 +64,7 @@ describe("ExamPreparationContentSearch", () => {
 
     await waitFor(() => expect(fetchExamPreparationContentSearch).toHaveBeenCalledWith({
       query: "Berlin Wohnung",
+      scope: { examType: "TELC", level: "B1" },
       skill: "reading",
       teil: "2",
       page: 1,
@@ -110,7 +111,7 @@ describe("ExamPreparationContentSearch", () => {
     expect(within(card).getByText("Lesen · Teil 2")).toBeInTheDocument();
     expect(within(card).getByRole("link", { name: "打开题目" })).toHaveAttribute(
       "href",
-      "/modules/exam-preparation/lesen/understanding/41",
+      "/modules/exam-preparation/b1/lesen/understanding/41",
     );
     expect(within(card).getAllByText("C++")).not.toHaveLength(0);
     expect(within(card).getAllByText("a.b")).not.toHaveLength(0);
@@ -131,7 +132,7 @@ describe("ExamPreparationContentSearch", () => {
     expect(await screen.findByText("没有找到相关题库内容。" )).toBeInTheDocument();
 
     fetchExamPreparationContentSearch.mockRejectedValueOnce(new Error("network"));
-    rerender(<MemoryRouter><ExamPreparationContentSearch /></MemoryRouter>);
+    rerender(<MemoryRouter><ExamPreparationContentSearch scope={{ examType: "TELC", level: "B1", levelPath: "b1" }} /></MemoryRouter>);
     fireEvent.change(screen.getByLabelText("搜索内容"), { target: { value: "错误测试" } });
     fireEvent.click(screen.getByRole("button", { name: "搜索" }));
     expect(await screen.findByText("搜索失败，请稍后重试。" )).toBeInTheDocument();
@@ -161,6 +162,7 @@ describe("ExamPreparationContentSearch", () => {
 
     await waitFor(() => expect(fetchExamPreparationContentSearch).toHaveBeenNthCalledWith(2, {
       query: "Berlin",
+      scope: { examType: "TELC", level: "B1" },
       skill: "",
       teil: "",
       page: 2,
@@ -171,9 +173,47 @@ describe("ExamPreparationContentSearch", () => {
     fireEvent.click(screen.getByRole("button", { name: "搜索" }));
     await waitFor(() => expect(fetchExamPreparationContentSearch).toHaveBeenNthCalledWith(3, {
       query: "Hamburg",
+      scope: { examType: "TELC", level: "B1" },
       skill: "",
       teil: "",
       page: 1,
     }));
+  });
+
+  it("uses each updated scope and clears results from the previous scope", async () => {
+    let resolveB2Request;
+    fetchExamPreparationContentSearch
+      .mockResolvedValueOnce(response({ results: [result()] }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveB2Request = resolve; }));
+    const { rerender } = renderSearch({ examType: "TELC", level: "B1", levelPath: "b1" });
+    fireEvent.change(screen.getByLabelText("搜索内容"), { target: { value: "Berlin" } });
+    fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+    await screen.findByText("Berliner Wohnung");
+
+    rerender(<MemoryRouter><ExamPreparationContentSearch scope={{ examType: "TELC", level: "B2", levelPath: "b2" }} /></MemoryRouter>);
+    await waitFor(() => expect(fetchExamPreparationContentSearch).toHaveBeenLastCalledWith({
+      query: "Berlin", skill: "", teil: "", page: 1,
+      scope: { examType: "TELC", level: "B2" },
+    }));
+    expect(screen.queryByText("Berliner Wohnung")).not.toBeInTheDocument();
+    resolveB2Request(response({ results: [result({
+      href: "/modules/exam-preparation/b2/lesen/understanding/42",
+    })] }));
+    expect(await screen.findByRole("link", { name: "打开题目" })).toHaveAttribute(
+      "href", "/modules/exam-preparation/b2/lesen/understanding/42",
+    );
+  });
+
+  it("does not refetch when scope rerenders as an equivalent object", async () => {
+    fetchExamPreparationContentSearch.mockResolvedValue(response());
+    const { rerender } = renderSearch({ examType: "TELC", level: "B1", levelPath: "b1" });
+    fireEvent.change(screen.getByLabelText("搜索内容"), { target: { value: "Berlin" } });
+    fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+    await screen.findByText("没有找到相关题库内容。");
+    expect(fetchExamPreparationContentSearch).toHaveBeenCalledTimes(1);
+
+    rerender(<MemoryRouter><ExamPreparationContentSearch scope={{ examType: "TELC", level: "B1", levelPath: "b1" }} /></MemoryRouter>);
+
+    expect(fetchExamPreparationContentSearch).toHaveBeenCalledTimes(1);
   });
 });

@@ -220,6 +220,7 @@
 
 .cloze-text__paragraph {
   margin: 0;
+  white-space: pre-line;
 }
 
 .cloze-text__paragraph + .cloze-text__paragraph {

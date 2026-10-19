@@ -11,20 +11,36 @@ from apps.accounts.models import Entitlement, Module
 
 from apps.exam_preparation.models import (
     ClozeChoiceExercise,
+    ClozeChoiceBlank,
     ClozeMatchingExercise,
+    ClozeMatchingOption,
+    ClozeMatchingBlankAnswer,
     ExerciseBase,
     ListeningExercise,
     ListeningQuestion,
     MockExamPaper,
     MockExamShare,
     ReadingAdMatchingExercise,
+    ReadingAdMatchingAd,
+    ReadingAdMatchingItem,
     ReadingTitleMatchingExercise,
+    ReadingTitleMatchingOption,
+    ReadingTitleMatchingItem,
     ReadingUnderstandingExercise,
+    ReadingUnderstandingQuestion,
     SavedMockExam,
     WritingExampleText,
     WritingExercise,
     SpeakingTeilExercise,
     UserListeningQuestionState,
+    UserReadingUnderstandingQuestionState,
+    UserReadingTitleMatchingItemState,
+    UserReadingAdMatchingItemState,
+    UserClozeChoiceBlankState,
+    UserClozeMatchingBlankState,
+    UserWritingExerciseState,
+    UserWritingExampleTextState,
+    UserSpeakingTurnState,
 )
 from apps.exam_preparation.serializers import (
     ClozeChoiceBlankDetailSerializer,
@@ -69,7 +85,7 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
                 status=Entitlement.Status.ACTIVE,
             )
         self.exercise_base = ExerciseBase.objects.create(
-            exam_type="telc B1",
+            exam_type="TELC",
             level=ExerciseBase.Level.B1,
             skill=ExerciseBase.Skill.WRITING,
             exercise_type=ExerciseBase.ExerciseType.WRITING_PROMPT,
@@ -179,6 +195,39 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
         states = response.data.get("results", []) if isinstance(response.data, dict) else response.data
         self.assertEqual(states[0]["time_spent_seconds"], 325)
 
+    def test_favorite_scope_filters_are_independent_and_links_include_level(self):
+        self.client.force_authenticate(self.user)
+        b2_base = ExerciseBase.objects.create(
+            exam_type="GOETHE", level="B2", skill=ExerciseBase.Skill.WRITING,
+            exercise_type=ExerciseBase.ExerciseType.WRITING_PROMPT,
+            external_id="GOETHE-WRITE-B2", title="B2 writing",
+        )
+        b2_exercise = WritingExercise.objects.create(exercise_base=b2_base)
+        b2_example = WritingExampleText.objects.create(
+            writing_exercise=b2_exercise, label="B2 example", example_text="Text"
+        )
+        for example in (self.example_one, b2_example):
+            response = self.client.post(
+                self.state_url,
+                {"example_text": example.pk, "is_favorited": True},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        all_items = self.client.get(self.favorite_questions_url).data["results"]
+        telc_items = self.client.get(self.favorite_questions_url, {"exam_type": "telc"}).data["results"]
+        b2_items = self.client.get(self.favorite_questions_url, {"level": "b2"}).data["results"]
+        combined = self.client.get(
+            self.favorite_questions_url, {"exam_type": "GOETHE", "level": "B2"}
+        ).data["results"]
+        self.assertEqual({item["exam_type"] for item in all_items}, {"TELC", "GOETHE"})
+        self.assertEqual({item["target_id"] for item in telc_items}, {self.example_one.pk})
+        self.assertEqual({item["target_id"] for item in b2_items}, {b2_example.pk})
+        self.assertEqual(len(combined), 1)
+        self.assertEqual(combined[0]["href"], f"/modules/exam-preparation/b2/schreiben/{b2_exercise.pk}")
+        b1_item = next(item for item in all_items if item["target_id"] == self.example_one.pk)
+        self.assertEqual(b1_item["href"], f"/modules/exam-preparation/b1/schreiben/{self.exercise.pk}")
+
 
 class SpeakingTurnFavoriteApiTests(APITestCase):
     def setUp(self):
@@ -244,6 +293,93 @@ class SpeakingTurnFavoriteApiTests(APITestCase):
         self.assertEqual(order_state["answer_payload"]["ordered_turn_keys"], [])
         self.assertFalse(order_state["answer_payload"]["is_checked"])
         self.assertIsNone(order_state["is_correct"])
+
+
+class FavoriteQuestionScopedHrefTests(APITestCase):
+    def test_every_favorite_state_type_returns_uppercase_family_and_level_href(self):
+        user = get_user_model().objects.create_user(telephone="13800139100", password="test")
+        module, _ = Module.objects.get_or_create(key="exam_preparation", defaults={"name": "备考季", "is_active": True})
+        Entitlement.objects.create(user=user, module=module, plan=Entitlement.Plan.MONTH_1, status=Entitlement.Status.ACTIVE)
+        self.client.force_authenticate(user)
+
+        def base(external_id, skill, exercise_type):
+            return ExerciseBase.objects.create(
+                exam_type="GOETHE", level="B2", skill=skill, exercise_type=exercise_type,
+                external_id=external_id, title=external_id,
+            )
+
+        listening = ListeningExercise.objects.create(
+            exercise_base=base("FAV-L", ExerciseBase.Skill.LISTENING, ExerciseBase.ExerciseType.LISTENING_TEIL1)
+        )
+        listening_q = ListeningQuestion.objects.create(
+            listening_exercise=listening, question_number=1,
+            question_type=ListeningQuestion.QuestionType.SINGLE_CHOICE, question_text="Question",
+        )
+        UserListeningQuestionState.objects.create(user=user, question=listening_q, is_favorited=True)
+
+        ru = ReadingUnderstandingExercise.objects.create(
+            exercise_base=base("FAV-RU", ExerciseBase.Skill.READING, ExerciseBase.ExerciseType.READING_UNDERSTANDING), text_markdown="Text"
+        )
+        ru_q = ReadingUnderstandingQuestion.objects.create(exercise=ru, question_number=1, question_text="Question")
+        UserReadingUnderstandingQuestionState.objects.create(user=user, question=ru_q, is_favorited=True)
+
+        title = ReadingTitleMatchingExercise.objects.create(
+            exercise_base=base("FAV-RT", ExerciseBase.Skill.READING, ExerciseBase.ExerciseType.READING_TITLE_MATCHING)
+        )
+        title_option = ReadingTitleMatchingOption.objects.create(exercise=title, option_key="a", option_text="Title")
+        title_item = ReadingTitleMatchingItem.objects.create(
+            exercise=title, item_number=1, text="Text", correct_option=title_option
+        )
+        UserReadingTitleMatchingItemState.objects.create(user=user, item=title_item, is_favorited=True)
+
+        ad_exercise = ReadingAdMatchingExercise.objects.create(
+            exercise_base=base("FAV-RA", ExerciseBase.Skill.READING, ExerciseBase.ExerciseType.READING_AD_MATCHING)
+        )
+        ad = ReadingAdMatchingAd.objects.create(exercise=ad_exercise, ad_key="a", ad_text_markdown="Ad")
+        ad_item = ReadingAdMatchingItem.objects.create(exercise=ad_exercise, item_number=1, item_text="Need", correct_ad=ad)
+        UserReadingAdMatchingItemState.objects.create(user=user, item=ad_item, is_favorited=True)
+
+        choice = ClozeChoiceExercise.objects.create(
+            exercise_base=base("FAV-CC", ExerciseBase.Skill.SPRACHBAUSTEIN, ExerciseBase.ExerciseType.CLOZE_CHOICE),
+            content_with_placeholders="{{x}}",
+        )
+        choice_blank = ClozeChoiceBlank.objects.create(exercise=choice, blank_key="x", blank_number=1)
+        UserClozeChoiceBlankState.objects.create(user=user, blank=choice_blank, is_favorited=True)
+
+        matching = ClozeMatchingExercise.objects.create(
+            exercise_base=base("FAV-CM", ExerciseBase.Skill.SPRACHBAUSTEIN, ExerciseBase.ExerciseType.CLOZE_MATCHING),
+            content_with_placeholders="{{x}}",
+        )
+        matching_option = ClozeMatchingOption.objects.create(exercise=matching, option_key="a", option_text="am")
+        matching_blank = ClozeMatchingBlankAnswer.objects.create(
+            exercise=matching, blank_key="x", blank_number=1, correct_option=matching_option
+        )
+        UserClozeMatchingBlankState.objects.create(user=user, blank=matching_blank, is_favorited=True)
+
+        writing = WritingExercise.objects.create(
+            exercise_base=base("FAV-W", ExerciseBase.Skill.WRITING, ExerciseBase.ExerciseType.WRITING_PROMPT),
+            task_text="Task",
+        )
+        UserWritingExerciseState.objects.create(user=user, exercise=writing, is_favorited=True)
+        example = WritingExampleText.objects.create(writing_exercise=writing, label="Example", example_text="Text")
+        UserWritingExampleTextState.objects.create(user=user, example_text=example, is_favorited=True)
+
+        speaking = SpeakingTeilExercise.objects.create(
+            exercise_base=base("FAV-S", ExerciseBase.Skill.SPEAKING, ExerciseBase.ExerciseType.SPEAKING_TEIL1),
+            content={"teil": "1", "dialogue": [{"sequence": 1, "role": "TN1", "text": "Hallo"}]},
+        )
+        UserSpeakingTurnState.objects.create(user=user, exercise=speaking, turn_key="turn:1", is_favorited=True)
+
+        response = self.client.get(reverse("exam-prep-favorite-questions-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item["state_type"] for item in response.data["results"]},
+            {"listening_question", "reading_understanding_question", "reading_title_matching_item",
+             "reading_ad_matching_item", "cloze_choice_blank", "cloze_matching_blank",
+             "writing_exercise", "writing_example_text", "speaking_turn"},
+        )
+        self.assertTrue(all(item["exam_type"] == "GOETHE" for item in response.data["results"]))
+        self.assertTrue(all("/b2/" in item["href"] for item in response.data["results"]))
 
 
 class ExamPreparationPermissionTests(APITestCase):
@@ -347,7 +483,7 @@ class ExamPreparationFreeTrialTests(APITestCase):
         self.exercises = []
         for index in range(1, 5):
             exercise_base = ExerciseBase.objects.create(
-                exam_type="telc B1",
+                exam_type="TELC",
                 level=ExerciseBase.Level.B1,
                 skill=ExerciseBase.Skill.WRITING,
                 exercise_type=ExerciseBase.ExerciseType.WRITING_PROMPT,
@@ -678,9 +814,9 @@ class MockExamApiTests(APITestCase):
             },
         )
         self.assertEqual(response.data["durations"]["reading_and_cloze"], 90 * 60)
-        self.assertEqual(response.data["exam_type"], "telc")
+        self.assertEqual(response.data["exam_type"], "TELC")
         self.assertEqual(response.data["level"], "B1")
-        self.assertEqual(response.data["exam_label"], "telc B1")
+        self.assertEqual(response.data["exam_label"], "TELC B1")
         self.assertRegex(response.data["paper_code"], r"^ME-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$")
         attempt = SavedMockExam.objects.get(pk=response.data["attempt_id"])
         self.assertEqual(attempt.paper.code, response.data["paper_code"])
@@ -698,7 +834,7 @@ class MockExamApiTests(APITestCase):
             ))
         )
 
-    def test_exam_family_and_level_select_an_independent_question_bank(self):
+    def test_mock_creation_rejects_exam_families_without_exam_rules(self):
         Entitlement.objects.create(
             user=self.user,
             module=self.module,
@@ -719,12 +855,26 @@ class MockExamApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["exam_type"], "TestDaF")
-        self.assertEqual(response.data["level"], "B2")
-        self.assertTrue(
-            all(part["exercise_base"]["level"] == "B2" for part in response.data["parts"].values())
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["message"], "该考试类型暂不支持模拟考试。")
+
+    def test_mock_creation_rejects_levels_without_exam_rules(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
         )
+
+        response = self.client.post(
+            self.url,
+            {"exam_type": "TELC", "level": "C1"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["message"], "该考试类型或等级暂不支持模拟考试。")
 
     def test_repeated_create_request_is_idempotent(self):
         Entitlement.objects.create(
@@ -747,6 +897,37 @@ class MockExamApiTests(APITestCase):
         self.assertEqual(first.data["selection"], second.data["selection"])
         self.assertEqual(SavedMockExam.objects.count(), 1)
         self.assertEqual(MockExamPaper.objects.count(), 1)
+
+    def test_same_request_id_is_independent_per_exam_level(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.create_question_bank()
+        self.create_question_bank(level=ExerciseBase.Level.B2, id_prefix="MOCK-B2")
+        request_id = "mock-start-shared"
+
+        b1 = self.client.post(
+            self.url,
+            {"exam_type": "TELC", "level": "B1", "request_id": request_id},
+            format="json",
+        )
+        b2 = self.client.post(
+            self.url,
+            {"exam_type": "TELC", "level": "B2", "request_id": request_id},
+            format="json",
+        )
+
+        self.assertEqual(b1.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(b2.status_code, status.HTTP_201_CREATED)
+        self.assertNotEqual(b1.data["attempt_id"], b2.data["attempt_id"])
+        self.assertEqual(b1.data["level"], "B1")
+        self.assertEqual(b2.data["level"], "B2")
+        self.assertEqual(SavedMockExam.objects.count(), 2)
+        self.assertEqual(MockExamPaper.objects.count(), 2)
 
     def test_separately_generated_papers_get_different_codes_even_with_the_same_questions(self):
         Entitlement.objects.create(
@@ -805,12 +986,14 @@ class MockExamApiTests(APITestCase):
 
         retaken = self.client.post(
             reverse("exam-prep-saved-mock-exams-retake", args=[attempt_id]),
-            {},
+            {"exam_type": "GOETHE", "level": "B2"},
             format="json",
         )
         self.assertEqual(retaken.status_code, status.HTTP_201_CREATED)
         self.assertNotEqual(retaken.data["id"], attempt_id)
         self.assertEqual(retaken.data["paper_code"], generated.data["paper_code"])
+        self.assertEqual(retaken.data["exam_type"], "TELC")
+        self.assertEqual(retaken.data["level"], "B1")
         self.assertEqual(retaken.data["exercise_selection"], generated.data["selection"])
         self.assertEqual(retaken.data["answers"], {})
         self.assertFalse(retaken.data["is_completed"])
@@ -841,8 +1024,9 @@ class MockExamApiTests(APITestCase):
         self.assertEqual(created.status_code, status.HTTP_201_CREATED)
         stored = SavedMockExam.objects.get(pk=created.data["id"])
         self.assertEqual(stored.exercise_selection, generated.data["selection"])
-        self.assertEqual(stored.exam_type, "telc")
+        self.assertEqual(stored.exam_type, "TELC")
         self.assertEqual(stored.level, "B1")
+
         self.assertNotIn("parts", stored.exercise_selection)
         detail = self.client.get(reverse("exam-prep-saved-mock-exams-detail", args=[stored.pk]))
         self.assertEqual(detail.status_code, status.HTTP_200_OK)
@@ -889,6 +1073,33 @@ class MockExamApiTests(APITestCase):
             self.assertEqual(result["score_percentage"], 12.0)
             self.assertFalse(result["is_passed"])
 
+    def test_saved_exam_rejects_questions_from_another_level(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.create_question_bank()
+        self.create_question_bank(level=ExerciseBase.Level.B2, id_prefix="MIXED-B2")
+        b1 = self.client.post(self.url, {"level": "B1"}, format="json")
+        b2 = self.client.post(self.url, {"level": "B2"}, format="json")
+        mixed_selection = {
+            **b1.data["selection"],
+            "listening_teil1": b2.data["selection"]["listening_teil1"],
+        }
+
+        response = self.client.post(
+            reverse("exam-prep-saved-mock-exams-list"),
+            {"exam_type": "TELC", "level": "B1", "exercise_selection": mixed_selection},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["message"], "试卷题目 ID 无效。")
+        self.assertEqual(response.data["missing_parts"], ["listening_teil1"])
+
     def test_completed_exam_requires_a_complete_writing_assessment(self):
         Entitlement.objects.create(
             user=self.user,
@@ -934,6 +1145,13 @@ class MockExamApiTests(APITestCase):
         self.create_question_bank()
         generated = self.client.post(self.url, {}, format="json")
         attempt_id = generated.data["attempt_id"]
+        resumed = self.client.get(
+            reverse("exam-prep-saved-mock-exams-detail", args=[attempt_id]),
+            {"exam_type": "GOETHE", "level": "B2"},
+        )
+        self.assertEqual(resumed.status_code, status.HTTP_200_OK)
+        self.assertEqual(resumed.data["exam_type"], "TELC")
+        self.assertEqual(resumed.data["level"], "B1")
         self.client.patch(
             reverse("exam-prep-saved-mock-exams-detail", args=[attempt_id]),
             {"answers": {"reading_understanding:1": "a"}},
@@ -954,13 +1172,15 @@ class MockExamApiTests(APITestCase):
         self.assertNotIn("shared_attempt", detail.data)
         started = self.client.post(
             reverse("exam-prep-mock-exam-shares-start", args=[shared.data["share_code"]]),
-            {},
+            {"exam_type": "GOETHE", "level": "B2"},
             format="json",
         )
         self.assertEqual(started.status_code, status.HTTP_201_CREATED)
         new_attempt = SavedMockExam.objects.get(pk=started.data["attempt_id"])
         self.assertEqual(new_attempt.user, other_user)
         self.assertEqual(new_attempt.paper_id, SavedMockExam.objects.get(pk=attempt_id).paper_id)
+        self.assertEqual(new_attempt.paper.exam_type, "TELC")
+        self.assertEqual(new_attempt.paper.level, "B1")
         self.assertEqual(new_attempt.answers, {})
 
     def test_completed_attempt_can_be_shared_with_answers(self):
@@ -1087,3 +1307,42 @@ class MockExamApiTests(APITestCase):
         self.assertIsNone(second_page.data["next"])
         self.assertEqual(active_preview.data["count"], 12)
         self.assertEqual(len(active_preview.data["results"]), 3)
+
+    def test_saved_mock_filters_follow_persisted_paper_scope(self):
+        Entitlement.objects.create(
+            user=self.user, module=self.module, season=None,
+            plan=Entitlement.Plan.MONTH_1, status=Entitlement.Status.ACTIVE,
+        )
+        b1_paper = MockExamPaper.objects.create(
+            created_by=self.user, exam_type="TELC", level="B1", exercise_selection={}
+        )
+        b2_paper = MockExamPaper.objects.create(
+            created_by=self.user, exam_type="TELC", level="B2", exercise_selection={}
+        )
+        goethe_paper = MockExamPaper.objects.create(
+            created_by=self.user, exam_type="GOETHE", level="B2", exercise_selection={}
+        )
+        attempts = [
+            SavedMockExam.objects.create(
+                user=self.user, paper=paper, fingerprint=f"scope-filter-{index}",
+                exam_type="CLIENT_CONFLICT", level="B1", exercise_selection={},
+                is_completed=True, is_favorite=True,
+            )
+            for index, paper in enumerate((b1_paper, b2_paper, goethe_paper))
+        ]
+        url = reverse("exam-prep-saved-mock-exams-list")
+
+        expected = (
+            ({"scope": "all", "exam_type": "telc"}, {attempts[0].pk, attempts[1].pk}),
+            ({"scope": "all", "level": "B2"}, {attempts[1].pk, attempts[2].pk}),
+            ({"scope": "all", "exam_type": "TELC", "level": "B2"}, {attempts[1].pk}),
+            ({"scope": "favorites", "exam_type": "GOETHE"}, {attempts[2].pk}),
+            ({"scope": "active", "level": "B2"}, set()),
+            ({"scope": "history", "level": "B1"}, {attempts[0].pk}),
+        )
+        for params, expected_ids in expected:
+            with self.subTest(params=params):
+                response = self.client.get(url, params)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual({item["id"] for item in response.data["results"]}, expected_ids)
+                self.assertTrue(all(item["exam_type"] == item["exam_type"].upper() for item in response.data["results"]))

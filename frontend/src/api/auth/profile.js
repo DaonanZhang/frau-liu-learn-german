@@ -39,3 +39,27 @@ export function updateMyProfile(payload) {
     body: payload,
   });
 }
+
+export function createPromotionCodes(payload) {
+  return apiFetch("/accounts/users/promotion-codes/", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function fetchPromotionCodeHistory({ search = "", page = 1 } = {}) {
+  const params = new URLSearchParams();
+  const normalizedSearch = String(search).trim();
+  if (normalizedSearch) {
+    params.set("search", normalizedSearch);
+  }
+  params.set("page", String(Math.max(1, Math.floor(Number(page)) || 1)));
+  return apiFetch(`/accounts/users/promotion-codes/?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export function fetchPromotionCodeDetails(generationBatchId) {
+  const params = new URLSearchParams({ generation_batch_id: generationBatchId });
+  return apiFetch(`/accounts/users/promotion-codes/?${params.toString()}`, { method: "GET" });
+}

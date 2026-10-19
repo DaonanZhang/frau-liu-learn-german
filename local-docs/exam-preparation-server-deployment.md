@@ -81,10 +81,16 @@ apps/exam_preparation/data/imports/
 
 frontend/public/resources/ExamPreparation/
 └── exam_preparation_audio/
-    └── telc_b1_speaking/
+    ├── telc_b1_speaking/
         ├── teil1/
         ├── teil2/
         └── teil3/
+    ├── telc_b2_speaking/
+        ├── teil1/
+        ├── teil2/
+        └── teil3/
+    ├── telc_b1_teil1/                  # Listening also has teil2/teil3 per scope
+    └── telc_b2_teil1/
 ```
 
 The Speaking generator creates these three subdirectories when needed. Each
@@ -139,9 +145,9 @@ Before first server use of `exam_preparation`:
 3. Run Django migrations.
 4. Create the import directories listed above.
 5. Create `frontend/public/resources/ExamPreparation/exam_preparation_audio/` for
-   runtime audio assets. The importer creates the listening directories and the
-   Speaking generator creates `telc_b1_speaking/teil1`, `telc_b1_speaking/teil2`, and
-   `telc_b1_speaking/teil3`.
+   runtime audio assets. The importer and Speaking generator create scope-specific
+   directories such as `telc_b1_teil1`, `telc_b2_teil1`, and
+   `telc_b2_speaking/teil1` through `teil3`.
 6. Verify the account migrations created the `exam_preparation` module and the
    30/60/90-day Alipay offers at CNY 29.90/49.90/69.90.
 7. Confirm `ALIPAY_NOTIFY_URL` is configured and
@@ -181,6 +187,16 @@ Do not open the new module to users until all of these are true:
 7. Listening audio exists locally and in both COS regions.
 8. Backend, frontend, payment recovery, nginx API routing, SPA fallback, and
    `/resources/` routing have all been verified.
+
+For scoped Speaking audio on the server, first inspect the computed source and
+both regional targets with a dry run, for example:
+
+```bash
+EXAM_TYPE=TELC LEVEL=B2 scripts/sync_exam_preparation_speaking_audio_to_both_cos.sh --dry-run
+```
+
+The database/API path remains `/resources/ExamPreparation/...`; each COS object
+key mirrors it with the leading `resources/` prefix.
 
 ### Migration risks that require a database backup
 
@@ -317,8 +333,10 @@ scripts/sync_exam_preparation_speaking_audio_to_both_cos.sh --dry-run
 scripts/sync_exam_preparation_speaking_audio_to_both_cos.sh
 ```
 
-This uploads the existing `telc_b1_speaking` files only; it does not call
-Azure and does not change database rows or MP3 contents.
+By default this uploads `telc_b1_speaking`; set `EXAM_TYPE=TELC LEVEL=B2`
+to target `telc_b2_speaking`. The source directory and `resources/...` object
+prefix follow that scope. It does not call Azure or change database rows or MP3
+contents.
 
 The sync scripts read the project `.env` directly and support the existing
 `COS_SH_BUCKET` / `COS_SH_REGION` / `COS_SH_DOMAIN` and
@@ -410,7 +428,7 @@ Before a real import, follow:
 - `local-docs/exam-preparation-xlsx-contract.md`
 
 The static preflight must report zero issues. In particular, check batch-wide
-uniqueness of `(level, exercise_type, numerically normalized filename ID)`.
+uniqueness of `(exam_type, level, exercise_type, numerically normalized external_id)`.
 Place all matching listening audio before running the listening importer.
 
 Run only importers whose `raw/` folders contain approved files:

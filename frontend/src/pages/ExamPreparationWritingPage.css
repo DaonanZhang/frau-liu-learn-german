@@ -186,6 +186,7 @@
   color: #5b6472;
   font-size: 0.94rem;
   line-height: 1.72;
+  white-space: pre-line;
 }
 
 .writing-entry-card__lock {

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ModuleCheckoutPage from "./ModuleCheckoutPage.jsx";
@@ -24,11 +24,17 @@ vi.mock("../api/coupons.js", () => ({ fetchCouponChoices: mocks.fetchCouponChoic
 vi.mock("../api/auth/useAuth.js", () => ({ useAuth: mocks.useAuth }));
 vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
 
-function renderCheckout(moduleId) {
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname}{location.search}</div>;
+}
+
+function renderCheckout(moduleId, search = "") {
   return render(
-    <MemoryRouter initialEntries={[`/modules/${moduleId}/purchase`]}>
+    <MemoryRouter initialEntries={[`/modules/${moduleId}/purchase${search}`]}>
       <Routes>
-        <Route path="/modules/:moduleId/purchase" element={<ModuleCheckoutPage />} />
+        <Route path="/modules/:moduleId/purchase" element={<><ModuleCheckoutPage /><LocationProbe /></>} />
+        <Route path="*" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -142,6 +148,33 @@ describe("ModuleCheckoutPage", () => {
     expect(debug).toHaveTextContent("Database constraint failed");
     expect(debug).toHaveTextContent("debug-123");
     expect(screen.getByRole("button", { name: "去支付宝支付" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["/modules/exam-preparation/b1", "/modules/exam-preparation/b1"],
+    ["/modules/exam-preparation/b2", "/modules/exam-preparation/b2"],
+  ])("returns free trial to the supported exam level home", async (returnTo, expectedPath) => {
+    mocks.fetchPurchaseOffers.mockResolvedValue([]);
+    renderCheckout("exam-preparation", `?return_to=${encodeURIComponent(returnTo)}`);
+
+    fireEvent.click(await screen.findByRole("button", { name: "免费试用" }));
+    expect(screen.getByTestId("location")).toHaveTextContent(expectedPath);
+  });
+
+  it("rejects an unsafe exam return path and falls back to the module route", async () => {
+    mocks.fetchPurchaseOffers.mockResolvedValue([]);
+    renderCheckout("exam-preparation", "?return_to=https%3A%2F%2Fevil.example%2F");
+
+    fireEvent.click(await screen.findByRole("button", { name: "免费试用" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation");
+  });
+
+  it("keeps non-exam free trial behavior unchanged", async () => {
+    mocks.fetchPurchaseOffers.mockResolvedValue([]);
+    renderCheckout(SCIENCE_SEASON_MODULE.id);
+
+    fireEvent.click(await screen.findByRole("button", { name: "立刻试用" }));
+    expect(screen.getByTestId("location")).toHaveTextContent(SCIENCE_SEASON_MODULE.route);
   });
 
 });

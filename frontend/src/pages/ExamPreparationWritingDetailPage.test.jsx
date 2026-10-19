@@ -119,6 +119,25 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(screen.getByRole("button", { name: "Prüfen" }).closest("[data-exam-annotation-region]")).toBeNull();
   });
 
+  it("renders stored br variants as line breaks while keeping other tags as text", async () => {
+    fetchWritingExerciseDetail.mockResolvedValueOnce({
+      id: 41,
+      exercise_base: { level: "B1", exam_type: "telc", exercise_type: "WRITING" },
+      request_text: "Erste<br>Zeile<BR/>Dritte<br /><strong>fett</strong>",
+      task_text: "Aufgabe<br >weiter",
+      example_texts: [],
+    });
+
+    renderPage();
+
+    const task = await screen.findByText((_, element) => (
+      element?.getAttribute("data-exam-annotation-region") === "task"
+    ));
+    expect(task).toHaveTextContent("ErsteZeileDritte<strong>fett</strong>");
+    expect(task.querySelectorAll("br")).toHaveLength(3);
+    expect(task.querySelector("strong")).toBeNull();
+  });
+
   it("accepts draft input, preserves marks after Prüfen, and clears only this scope on Wiederholen", async () => {
     const unrelatedScope = exerciseAnnotationScope("READING", 9);
     sessionStorage.setItem(unrelatedScope, JSON.stringify({

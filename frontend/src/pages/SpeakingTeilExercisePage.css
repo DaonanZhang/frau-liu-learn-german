@@ -34,7 +34,9 @@
 .speaking-detail-turn--tn2 { align-self: flex-end; border-radius: 1rem 1rem 0.25rem 1rem; background: #eef6f4; }
 .speaking-detail-turn--examiner { align-self: center; width: min(90%, 50rem); border-color: #eadbc8; border-radius: 1rem; background: #f8f4ee; }
 .speaking-detail-turn__role { color: #2f6f5e; font-size: 0.75rem; font-weight: 800; }
+.speaking-detail-turn__topic { color: #344054; font-size: 0.9rem; font-weight: 800; }
 .speaking-detail-turn__heading, .speaking-detail-turn__practice, .speaking-detail-actions { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.speaking-detail-turn__heading--with-topic { align-items: flex-start; flex-direction: column; gap: 0.15rem; }
 .speaking-detail-carousel-header { display: flex; align-items: center; justify-content: space-between; gap: 1.1rem; padding-bottom: 0.9rem; }
 .speaking-detail-carousel-title { display: flex; align-items: baseline; gap: 0.65rem; flex-wrap: wrap; }
 .speaking-detail-carousel-title span { color: #6b7280; font-size: 0.88rem; font-weight: 800; }

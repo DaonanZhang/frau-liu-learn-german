@@ -252,6 +252,39 @@ describe("Cloze exercise layout", () => {
     expect(clozeStyles).toMatch(/\.cloze-drop-slot--selected \.cloze-drop-slot__chip\s*\{[^}]*width:\s*auto/);
   });
 
+  it("opens only the selected slot when one B2 question has two placeholder positions", async () => {
+    fetchClozeChoiceExerciseDetail.mockResolvedValue({
+      id: 17,
+      exercise_base: { title: "Cloze", external_id: "17", level: "B2", exercise_type: "CLOZE_CHOICE" },
+      content_with_placeholders: "Sowohl {{blank_1}} als auch {{blank_1}}.",
+      blanks: [{
+        id: 101,
+        blank_key: "blank_1",
+        blank_number: 1,
+        options: [{ option_key: "A", option_text: "sowohl … als auch", is_correct: true }],
+      }],
+    });
+    fetchClozeChoiceBlankStates.mockResolvedValue({ results: [] });
+
+    render(
+      <MemoryRouter initialEntries={["/exercise/17"]}>
+        <Routes>
+          <Route path="/exercise/:exerciseId" element={<ClozeChoicePage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const slots = await screen.findAllByRole("button", { name: "1" });
+    expect(slots).toHaveLength(2);
+    fireEvent.click(slots[0]);
+    expect(screen.getAllByRole("dialog", { name: "1" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "sowohl … als auch" }));
+    expect(slots[0]).toHaveTextContent("sowohl");
+    expect(slots[0]).not.toHaveTextContent("als auch");
+    expect(slots[1]).toHaveTextContent("als auch");
+    expect(slots[1]).not.toHaveTextContent("sowohl");
+  });
+
   it("keeps Teil 2 unanswered slots compact and selected slots fitted to their text", async () => {
     fetchClozeMatchingExerciseDetail.mockResolvedValue({
       id: 18,

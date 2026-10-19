@@ -58,12 +58,19 @@ class TrialAwareExerciseSerializerMixin:
             return False
 
         exercise_type = exercise.exercise_base.exercise_type
-        cache_key = (type(exercise), exercise_type)
+        cache_key = (
+            type(exercise),
+            exercise.exercise_base.exam_type,
+            exercise.exercise_base.level,
+            exercise_type,
+        )
         free_ids_by_type = self.context.setdefault("free_trial_exercise_ids", {})
         if cache_key not in free_ids_by_type:
             free_ids_by_type[cache_key] = set(
                 type(exercise).objects.filter(
                     exercise_base__exercise_type=exercise_type,
+                    exercise_base__exam_type=exercise.exercise_base.exam_type,
+                    exercise_base__level=exercise.exercise_base.level,
                 )
                 .order_by("id")
                 .values_list("id", flat=True)[:FREE_EXERCISES_PER_TYPE]
@@ -88,6 +95,25 @@ class TrialAwareExerciseSerializerMixin:
 
 
 class ExerciseBaseSerializer(serializers.ModelSerializer):
+    exam_type = serializers.CharField(required=False, default="TELC")
+    level = serializers.CharField()
+
+    def validate_exam_type(self, value):
+        from apps.exam_preparation.scope import normalize_exam_type
+
+        try:
+            return normalize_exam_type(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+    def validate_level(self, value):
+        from apps.exam_preparation.scope import normalize_exam_level
+
+        try:
+            return normalize_exam_level(value)
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
     class Meta:
         model = ExerciseBase
         fields = "__all__"

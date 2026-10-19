@@ -4,7 +4,7 @@ from django.db import models
 
 
 class SpeakingTeilExercise(models.Model):
-    """The three real telc B1 speaking tasks share metadata but have different payloads."""
+    """TELC speaking tasks share metadata but have different payloads by Teil."""
 
     exercise_base = models.OneToOneField(
         "exam_preparation.ExerciseBase",

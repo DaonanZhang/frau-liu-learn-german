@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -25,6 +27,8 @@ class PromotionCodeRecord(models.Model):
         )
 
     code = models.CharField(max_length=32, unique=True)
+    generation_batch_id = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
+    operator_name = models.CharField(max_length=128, default="daonan")
     campaign_name = models.CharField(max_length=128)
     organization_name = models.CharField(max_length=128, blank=True, default="")
     remark = models.CharField(max_length=255, blank=True, default="")

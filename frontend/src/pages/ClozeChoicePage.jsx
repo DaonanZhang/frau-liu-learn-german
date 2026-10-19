@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { examPreparationScope } from "../utils/examPreparationScope.js";
 import {
   fetchClozeChoiceExerciseDetail,
 } from "../api/exam_preparation/clozeExercises.js";
@@ -22,6 +23,7 @@ import {
   exerciseAnnotationScope,
   findAnnotationSegmentAtOffset,
 } from "../utils/examTextAnnotations.js";
+import { clozeOptionTextForOccurrence } from "../utils/clozePlaceholderText.js";
 import { useClozeAnnotationLayout } from "./clozeAnnotationLayout.js";
 import "./ClozeExercisePage.css";
 
@@ -88,12 +90,19 @@ function ClozeChoiceSlotTrigger({
   selectedKey,
   isChecked,
   isCorrect,
+  occurrenceIndex,
+  occurrenceCount,
   expanded,
   onOpen,
 }) {
   const { state } = useExamTextAnnotations();
   const suppressChoiceClickRef = useRef(false);
   const selectedOption = (blank?.options || []).find((option) => option.option_key === selectedKey);
+  const selectedOptionText = clozeOptionTextForOccurrence(
+    selectedOption?.option_text || selectedKey,
+    occurrenceIndex,
+    occurrenceCount,
+  );
 
   return (
     <button
@@ -121,7 +130,7 @@ function ClozeChoiceSlotTrigger({
         ? expanded
           ? (selectedOption?.option_text || selectedKey)
           : (
-          <span>{selectedOption?.option_text || selectedKey}</span>
+          <span>{selectedOptionText}</span>
           )
         : <span className="cloze-drop-slot__placeholder">{blank?.blank_number || ""}</span>}
     </button>
@@ -130,6 +139,7 @@ function ClozeChoiceSlotTrigger({
 
 export default function ClozeChoicePage() {
   const { exerciseId } = useParams();
+  const scope = examPreparationScope(useParams().level);
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -137,7 +147,7 @@ export default function ClozeChoicePage() {
   const [isChecked, setIsChecked] = useState(false);
   const [favoritedByBlankId, setFavoritedByBlankId] = useState({});
   const [favoritePendingByBlankId, setFavoritePendingByBlankId] = useState({});
-  const [activeBlankKey, setActiveBlankKey] = useState("");
+  const [activeBlankSlotKey, setActiveBlankSlotKey] = useState("");
 
   useEffect(() => {
     let aborted = false;
@@ -149,7 +159,7 @@ export default function ClozeChoicePage() {
         if (!exerciseId) {
           throw new Error("No cloze choice exercise selected.");
         }
-        const detail = await fetchClozeChoiceExerciseDetail(exerciseId);
+        const detail = await fetchClozeChoiceExerciseDetail(exerciseId, scope);
         if (!aborted) {
           setExercise(detail || null);
           const stateData = await fetchClozeChoiceBlankStates(exerciseId);
@@ -276,22 +286,22 @@ export default function ClozeChoicePage() {
       <div className="cloze-page">
         <div className="cloze-shell">
         <div className="cloze-topbar">
-          <Link to="/modules/exam-preparation/sprachbausteine/cloze-choice" className="cloze-topbar__back">
+          <Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/sprachbausteine/cloze-choice`} className="cloze-topbar__back">
             ← Zurück zu Sprachbausteine
           </Link>
           <span className="cloze-topbar__meta">
-            {exercise?.exercise_base?.level || "B1"} · {exercise?.exercise_base?.external_id || "001"}
+            {exercise?.exercise_base?.level || scope?.level} · {exercise?.exercise_base?.external_id || "001"}
           </span>
         </div>
 
         <section className="cloze-hero">
           <h1 className="cloze-hero__title">{heroTitle}</h1>
-          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="cloze-hero__badges">
               {exercise?.exercise_base?.exam_type ? <span className="cloze-hero__badge cloze-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
-              {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
+              {exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="cloze-hero__badge">
-                  难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
+                  难度：{exercise.exercise_base.level || scope?.level || exercise.exercise_base.difficulty}
                 </span>
               ) : null}
               {exercise?.exercise_base?.is_real_exam ? (
@@ -336,12 +346,16 @@ export default function ClozeChoicePage() {
                   const selectedKey = answers[blankKey] || "";
                   const isCorrect = !!correctOption && selectedKey === correctOption.option_key;
                   const annotationPosition = annotationLayout[blankKey];
+                  const blankSlotKey = `${blankKey}:${paragraphIndex}:${index}`;
+                  const previousParts = paragraphs.slice(0, paragraphIndex).flat().concat(parts.slice(0, index));
+                  const occurrenceIndex = previousParts.filter((candidate) => candidate === part).length;
+                  const occurrenceCount = paragraphs.flat().filter((candidate) => candidate === part).length;
                   const followingText = parts[index + 1] && !/^\{\{blank_\d+\}\}$/.test(parts[index + 1])
                     ? parts[index + 1]
                     : "";
 
                   return (
-                    <Fragment key={blankKey}>
+                    <Fragment key={blankSlotKey}>
                     <span
                       ref={(node) => {
                         blankRefs.current[blankKey] = node;
@@ -360,14 +374,16 @@ export default function ClozeChoicePage() {
                           selectedKey={selectedKey}
                           isChecked={isChecked}
                           isCorrect={isCorrect}
-                          expanded={activeBlankKey === blankKey}
+                          occurrenceIndex={occurrenceIndex}
+                          occurrenceCount={occurrenceCount}
+                          expanded={activeBlankSlotKey === blankSlotKey}
                           onOpen={() => {
-                            setActiveBlankKey(blankKey);
+                            setActiveBlankSlotKey(blankSlotKey);
                           }}
                         />
                       </span>
                       <ExerciseOptionSheet
-                        open={activeBlankKey === blankKey}
+                        open={activeBlankSlotKey === blankSlotKey}
                         title={`${blank?.blank_number || ""}`}
                         subtitle="请选择当前空格的答案。"
                         selectedValue={selectedKey}
@@ -380,7 +396,7 @@ export default function ClozeChoicePage() {
                           <span>{option.label}</span>
                         )}
                         onClose={() => {
-                          setActiveBlankKey("");
+                          setActiveBlankSlotKey("");
                         }}
                         onSelect={(nextValue) => {
                           if (isChecked) {

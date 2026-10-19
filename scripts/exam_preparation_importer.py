@@ -14,6 +14,7 @@ import pandas as pd
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+IMPORTS_ROOT = REPO_ROOT / "apps/exam_preparation/data/imports"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -28,6 +29,7 @@ from django.utils import timezone  # noqa: E402
 
 from apps.exam_preparation.explanations import resolve_explanations  # noqa: E402
 from apps.exam_preparation.speaking_audio import ensure_speaking_turn_audio  # noqa: E402
+from apps.exam_preparation.scope import ExamScope  # noqa: E402
 from apps.exam_preparation.models import (  # noqa: E402
     ClozeChoiceBlank,
     ClozeChoiceExercise,
@@ -67,6 +69,7 @@ LISTENING_AUDIO_SUBFOLDERS = {
     ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE: "telc_b1_teil2",
     ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE: "telc_b1_teil3",
 }
+LISTENING_AUDIO_SUBFOLDERS_BY_TEIL = {"1": "teil1", "2": "teil2", "3": "teil3"}
 LISTENING_AUDIO_FILE_PREFIXES = {
     ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP: "Teil1",
     ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE: "Teil2",
@@ -201,9 +204,11 @@ def resolve_listening_audio(
     xlsx_path: Path,
     listening_type: str,
     audio_file_id: str,
+    exam_type: str = "TELC",
+    level: str = "B1",
 ) -> tuple[str, Path]:
-    subfolder = LISTENING_AUDIO_SUBFOLDERS.get(listening_type)
-    if not subfolder:
+    teil = next((key for key, value in LISTENING_TYPE_BY_TEIL.items() if value == listening_type), None)
+    if not teil:
         raise ImportErrorWithContext(
             f"{xlsx_path.name}: unsupported listening_type={listening_type!r}; "
             f"expected one of {sorted(LISTENING_AUDIO_SUBFOLDERS)}"
@@ -215,6 +220,8 @@ def resolve_listening_audio(
             f"{xlsx_path.name}: missing 音频文件_ID required for local audio lookup"
         )
 
+    scope = ExamScope.from_values(exam_type, level)
+    subfolder = f"{scope.exam_type.lower()}_{scope.level.lower()}_{LISTENING_AUDIO_SUBFOLDERS_BY_TEIL[teil]}"
     audio_dir = LISTENING_AUDIO_ROOT / subfolder
     audio_dir.mkdir(parents=True, exist_ok=True)
 
@@ -325,13 +332,19 @@ def upsert_base(
 ) -> ExerciseBase:
     if not external_id:
         raise ImportErrorWithContext("Missing external exercise ID.")
-    exam_type = clean_text(exam_type)
+    try:
+        scope = ExamScope.from_values(exam_type, level)
+    except ValueError as exc:
+        raise ImportErrorWithContext(str(exc)) from exc
+    external_id = normalize_link_id(external_id)
+    exam_type, level = scope.exam_type, scope.level
     if not exam_type:
         raise ImportErrorWithContext(
             f"Missing exam type for exercise {external_id!r}; "
             "the XLSX field '考试类型' is required."
         )
     base, _ = ExerciseBase.objects.update_or_create(
+        exam_type=exam_type,
         level=level,
         exercise_type=exercise_type,
         external_id=external_id,
@@ -404,6 +417,8 @@ def import_listening(xlsx_path: Path) -> int:
             xlsx_path=xlsx_path,
             listening_type=listening_type,
             audio_file_id=meta.get("音频文件_ID"),
+            exam_type=base.exam_type,
+            level=base.level,
         )
         exercise, _ = ListeningExercise.objects.update_or_create(
             exercise_base=base,
@@ -928,11 +943,24 @@ def parse_speaking_einander_kennenlernen_workbook(xlsx_path: Path) -> dict[str, 
         if role in {"TN1", "TN2"} and role not in participants:
             participants.append(role)
 
+    if "考试类型" in dialogue_df.columns and any(not clean_text(row.get("考试类型")) for row in rows):
+        raise ImportErrorWithContext(f"{xlsx_path.name}: missing required exam type in '考试类型'")
+    exam_types = {clean_text(row.get("考试类型")) for row in rows if clean_text(row.get("考试类型"))}
+    if len(exam_types) > 1:
+        raise ImportErrorWithContext(
+            f"{xlsx_path.name}: inconsistent values for '考试类型': {sorted(exam_types)}"
+        )
+
+    level = (
+        "B1"
+        if xlsx_path.name.lower().startswith("kennenlernen_")
+        else infer_level_from_filename(xlsx_path)
+    )
     return {
         "external_id": external_id_from_filename(xlsx_path, workbook_id),
-        "level": ExerciseBase.Level.B1,
+        "level": level,
         "title": SPEAKING_TEIL_CONFIG["1"]["title"],
-        "exam_type": "telc",
+        "exam_type": next(iter(exam_types), "TELC").upper(),
         "is_real_exam": False,
         "instruction": SPEAKING_TEIL_CONFIG["1"]["instruction"],
         "content": {
@@ -1120,6 +1148,7 @@ def save_speaking_exercise(
             for turn in dialogue:
                 audio_url = ensure_speaking_turn_audio(
                     exercise_type=exercise_type,
+                    exam_type=parsed["exam_type"],
                     level=parsed["level"],
                     external_id=parsed["external_id"],
                     sequence=turn["sequence"],
@@ -1280,14 +1309,29 @@ def import_kind(
     no_move: bool = False,
     retry_failed: bool = False,
     generate_speaking_audio: bool = True,
+    exam_type: str = "TELC",
+    level: str = "B1",
+    importer_override: ImporterFn | None = None,
 ) -> int:
-    if kind not in TYPE_CONFIG:
+    if kind not in TYPE_CONFIG and importer_override is None:
         raise SystemExit(f"Unsupported importer kind: {kind}")
-    config = TYPE_CONFIG[kind]
-    raw_dir = config["raw_dir"]
-    processed_dir = config["processed_dir"]
-    failed_dir = config["failed_dir"]
-    importer: ImporterFn = config["importer"]  # type: ignore[assignment]
+    config = TYPE_CONFIG.get(kind)
+    scope = ExamScope.from_values(exam_type, level)
+    if scope.exam_type == "TELC" and scope.level == "B1":
+        if config is None:
+            raise SystemExit(f"Unsupported TELC B1 importer kind: {kind}")
+        raw_dir = config["raw_dir"]
+        processed_dir = config["processed_dir"]
+        failed_dir = config["failed_dir"]
+    else:
+        scoped_root = IMPORTS_ROOT / scope.exam_type.lower() / scope.level.lower() / kind
+        raw_dir = scoped_root / "raw"
+        processed_dir = scoped_root / "processed"
+        failed_dir = scoped_root / "failed"
+    importer: ImporterFn = importer_override or config["importer"]  # type: ignore[index,assignment]
+
+    for directory in (raw_dir, processed_dir, failed_dir):
+        directory.mkdir(parents=True, exist_ok=True)
 
     if kind == "listening":
         for teil in ("Teil1", "Teil2", "Teil3"):
@@ -1345,6 +1389,16 @@ def build_parser(kind: str | None = None) -> argparse.ArgumentParser:
         help="Importer type. Omit only in wrapper scripts that fix the type.",
     )
     parser.add_argument(
+        "--exam-type",
+        default="TELC",
+        help="Exam family used to select an isolated import directory (default: TELC).",
+    )
+    parser.add_argument(
+        "--level",
+        default="B1",
+        help="Exam level used to select an isolated import directory (default: B1).",
+    )
+    parser.add_argument(
         "--file",
         default="",
         help="Optional single xlsx/xlsm filename or full path. If omitted, scans the kind raw directory.",
@@ -1381,6 +1435,8 @@ def main(kind: str | None = None) -> int:
         no_move=args.no_move,
         retry_failed=args.retry_failed,
         generate_speaking_audio=not args.skip_speaking_audio,
+        exam_type=args.exam_type,
+        level=args.level,
     )
 
 

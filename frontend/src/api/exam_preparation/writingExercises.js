@@ -1,4 +1,5 @@
-import { apiFetch } from "../client";
+import { examPreparationScopeQuery } from "../../utils/examPreparationScope.js";
+import { fetchExamPreparationContent } from "./contentText.js";
 
 const BASE = "/exam_preparation";
 
@@ -12,11 +13,15 @@ function normalizeList(data) {
   return { results: [], count: 0 };
 }
 
-export async function fetchWritingExercises() {
-  const data = await apiFetch(`${BASE}/writing-exercises/`);
+export async function fetchWritingExercises(scope) {
+  const query = examPreparationScopeQuery(scope);
+  if (!query) return { results: [], count: 0 };
+  const data = await fetchExamPreparationContent(`${BASE}/writing-exercises/?${query}`);
   return normalizeList(data);
 }
 
-export function fetchWritingExerciseDetail(exerciseId) {
-  return apiFetch(`${BASE}/writing-exercises/${exerciseId}/`);
+export function fetchWritingExerciseDetail(exerciseId, scope) {
+  const query = examPreparationScopeQuery(scope);
+  if (!query) return Promise.reject(new Error("Invalid exam preparation scope"));
+  return fetchExamPreparationContent(`${BASE}/writing-exercises/${exerciseId}/?${query}`);
 }

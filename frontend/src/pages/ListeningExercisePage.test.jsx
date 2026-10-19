@@ -36,12 +36,12 @@ afterAll(() => {
   else delete URL.revokeObjectURL;
 });
 
-function renderExercise(listeningType) {
+function renderExercise(listeningType, level = "b1") {
   return render(
-    <MemoryRouter initialEntries={["/exercise/17"]}>
+    <MemoryRouter initialEntries={[`/exercise/${level}/17`]}>
       <Routes>
         <Route
-          path="/exercise/:exerciseId"
+          path="/exercise/:level/:exerciseId"
           element={<ListeningExercisePage listeningType={listeningType} />}
         />
       </Routes>
@@ -240,6 +240,19 @@ describe("listening exercise playback count", () => {
     fireEvent.ended(audio);
     expect(playSpy).not.toHaveBeenCalled();
     expect(screen.getByText("Repeat aktivieren")).toBeInTheDocument();
+  });
+
+  it("uses the active B2 route level when exercise metadata omits its level", async () => {
+    renderExercise("short_text_true_false_once", "b2");
+    expect(await screen.findByText(/B2 · 17/)).toBeInTheDocument();
+  });
+
+  it("shows the TELC B2 Teil 1 Anleitung as one continuous paragraph", async () => {
+    renderExercise("short_text_true_false_with_prep", "b2");
+
+    expect(await screen.findByText(
+      "Sie hören nun eine Nachrichtensendung. Dazu sollen Sie fünf Aufgaben lösen. Sie hören die Nachrichtensendung nur einmal. Entscheiden Sie beim Hören, ob die Aussagen 1–5 richtig oder falsch sind. Markieren Sie Ihre Lösungen auf dem Antwortbogen bei den Aufgaben 1–5. Markieren Sie PLUS (+) gleich richtig und MINUS (–) gleich falsch auf dem Antwortbogen. Lesen Sie jetzt die Aufgaben 1–5. Sie haben dazu 30 Sekunden Zeit.",
+    )).toBeInTheDocument();
   });
 });
 

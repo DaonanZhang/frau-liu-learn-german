@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.exam_preparation.models import SpeakingTeilExercise
+from apps.exam_preparation.scope import ExamScope
 from apps.exam_preparation.speaking_audio import (
     DEFAULT_VOICE,
     MANIFEST_PATH,
@@ -26,34 +27,44 @@ from apps.exam_preparation.speaking_audio import (
 
 
 LEGACY_SPEAKING_AUDIO_PUBLIC_PREFIX = "/resources/ExamPreparation/exam_preparation_audio/speaking"
-LEGACY_SPEAKING_AUDIO_ROOT = SPEAKING_AUDIO_ROOT.parent / "speaking"
+LEGACY_SPEAKING_AUDIO_ROOT = SPEAKING_AUDIO_ROOT / "speaking"
 LEGACY_MANIFEST_PATH = LEGACY_SPEAKING_AUDIO_ROOT / "manifest.json"
 
 
 def _target_path(root: Path, exercise, turn) -> Path:
     base = exercise.exercise_base
-    return root / speaking_teil_folder(base.exercise_type) / speaking_turn_filename(
+    return root / f"{base.exam_type.lower()}_{base.level.lower()}_speaking" / speaking_teil_folder(base.exercise_type) / speaking_turn_filename(
         level=base.level, external_id=base.external_id, sequence=turn["sequence"]
     )
 
 
-def _path_from_url(root: Path, url: object) -> Path | None:
+def _path_from_url(root: Path, url: object, *, exam_type: str, level: str) -> Path | None:
     if not isinstance(url, str):
         return None
-    path = urlsplit(url).path
-    prefixes = (
-        (f"{SPEAKING_AUDIO_PUBLIC_PREFIX}/", root),
-        (f"{LEGACY_SPEAKING_AUDIO_PUBLIC_PREFIX}/", LEGACY_SPEAKING_AUDIO_ROOT),
-    )
-    for prefix, source_root in prefixes:
-        if path.startswith(prefix):
-            relative = Path(path[len(prefix):])
-            break
-    else:
+    try:
+        scope = ExamScope.from_values(exam_type, level)
+    except ValueError:
         return None
+    path = urlsplit(url).path
+    legacy_prefix = f"{LEGACY_SPEAKING_AUDIO_PUBLIC_PREFIX}/"
+    if path.startswith(legacy_prefix):
+        if (scope.exam_type, scope.level) != ("TELC", "B1"):
+            return None
+        source_root = LEGACY_SPEAKING_AUDIO_ROOT
+        relative = Path(path[len(legacy_prefix):])
+    else:
+        scoped_prefix = f"{SPEAKING_AUDIO_PUBLIC_PREFIX}/{scope.exam_type.lower()}_{scope.level.lower()}_speaking/"
+        if not path.startswith(scoped_prefix):
+            return None
+        source_root = root / f"{scope.exam_type.lower()}_{scope.level.lower()}_speaking"
+        relative = Path(path[len(scoped_prefix):])
     if not relative.parts or any(part in {"", ".", ".."} for part in relative.parts):
         return None
     return source_root.joinpath(*relative.parts)
+
+
+def _allows_legacy_audio(exam_type: str, level: str) -> bool:
+    return ExamScope.from_values(exam_type, level) == ExamScope("TELC", "B1")
 
 
 def _load_manifest(path: Path) -> dict:
@@ -186,12 +197,18 @@ class Command(BaseCommand):
                     continue
                 seen.add(operation_key)
                 target = _target_path(root, exercise, turn)
-                turn_key = f"{base.exercise_type}|{base.level}|{base.external_id}|{turn['sequence']}"
+                turn_key = f"{base.exam_type.upper()}|{base.level.upper()}|{base.exercise_type}|{base.external_id}|{turn['sequence']}"
                 entry = manifest.get(turn_key) if isinstance(manifest, dict) else None
-                source = _path_from_url(root, turn.get("audio_url"))
+                source = _path_from_url(
+                    root, turn.get("audio_url"), exam_type=base.exam_type, level=base.level
+                )
                 if not source or not source.is_file():
-                    source = _path_from_url(root, entry.get("url")) if isinstance(entry, dict) else None
-                if not source or not source.is_file():
+                    source = _path_from_url(
+                        root, entry.get("url"), exam_type=base.exam_type, level=base.level
+                    ) if isinstance(entry, dict) else None
+                if (not source or not source.is_file()) and _allows_legacy_audio(
+                    base.exam_type, base.level
+                ):
                     fingerprint_name = f"{audio_fingerprint(voice, text)}.mp3"
                     source = next(
                         (
@@ -210,6 +227,7 @@ class Command(BaseCommand):
                     missing.append(turn_key)
                 new_url = speaking_turn_audio_url(
                     exercise_type=base.exercise_type,
+                    exam_type=base.exam_type,
                     level=base.level,
                     external_id=base.external_id,
                     sequence=turn["sequence"],
@@ -250,6 +268,7 @@ class Command(BaseCommand):
                 base = operation["exercise"].exercise_base
                 operation["url"] = ensure_speaking_turn_audio(
                     exercise_type=base.exercise_type,
+                    exam_type=base.exam_type,
                     level=base.level,
                     external_id=base.external_id,
                     sequence=operation["turn"]["sequence"],

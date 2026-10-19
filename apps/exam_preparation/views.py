@@ -4,16 +4,13 @@ import hashlib
 import json
 import re
 import uuid
-from datetime import timedelta
-from decimal import Decimal, ROUND_HALF_UP
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
-from django.db.models import Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -26,6 +23,11 @@ from apps.accounts.permissions import (
     IsAdminOrReadOnly,
 )
 from apps.exam_preparation.access import get_parent_exercise, user_can_access_exercise
+from apps.exam_preparation.mock_exam.registry import (
+    get_mock_exam_rules,
+    is_mock_exam_family_supported,
+)
+from apps.exam_preparation.scope import ExamScope
 from apps.exam_preparation.speaking_audio import get_speaking_turn_audio_url
 
 from apps.exam_preparation.models import (
@@ -119,6 +121,31 @@ class BaseExamPreparationViewSet(ModelViewSet):
     ordering = ["id"]
     trial_access_enabled = False
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not self.trial_access_enabled or self.action not in {"list", "retrieve"}:
+            return queryset
+        if self.action == "retrieve" and not (
+            {"exam_type", "level"} & set(self.request.query_params)
+        ):
+            return queryset
+        try:
+            scope = ExamScope.from_values(
+                **(
+                    {"exam_type": self.request.query_params["exam_type"]}
+                    if "exam_type" in self.request.query_params else {}
+                ),
+                **(
+                    {"level": self.request.query_params["level"]}
+                    if "level" in self.request.query_params else {}
+                ),
+            )
+        except ValueError as exc:
+            raise ValidationError({"scope": str(exc)}) from exc
+        if queryset.model is ExerciseBase:
+            return queryset.filter(exam_type=scope.exam_type, level=scope.level)
+        return queryset.filter(exercise_base__exam_type=scope.exam_type, exercise_base__level=scope.level)
+
     def get_permissions(self):
         if self.trial_access_enabled and self.action in {"list", "retrieve"}:
             return [
@@ -201,275 +228,72 @@ class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):
         serializer.save(**validated_data)
 
 
-def _mock_exam_definitions(*, exam_type="telc", level=ExerciseBase.Level.B1):
-    definitions = (
-        (
-            "reading_title_matching",
-            ReadingTitleMatchingExercise.objects.select_related("exercise_base").prefetch_related(
-                "options", "items__correct_option"
-            ),
-            ReadingTitleMatchingExerciseDetailSerializer,
-        ),
-        (
-            "reading_understanding",
-            ReadingUnderstandingExercise.objects.select_related("exercise_base").prefetch_related(
-                "questions__answer_options"
-            ),
-            ReadingUnderstandingExerciseDetailSerializer,
-        ),
-        (
-            "reading_ad_matching",
-            ReadingAdMatchingExercise.objects.select_related("exercise_base").prefetch_related(
-                "ads", "items__correct_ad"
-            ),
-            ReadingAdMatchingExerciseDetailSerializer,
-        ),
-        (
-            "cloze_choice",
-            ClozeChoiceExercise.objects.select_related("exercise_base").prefetch_related("blanks__options"),
-            ClozeChoiceExerciseDetailSerializer,
-        ),
-        (
-            "cloze_matching",
-            ClozeMatchingExercise.objects.select_related("exercise_base").prefetch_related(
-                "options", "blank_answers__correct_option"
-            ),
-            ClozeMatchingExerciseDetailSerializer,
-        ),
-        (
-            "listening_teil1",
-            ListeningExercise.objects.filter(
-                listening_type=ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP
-            ).select_related("exercise_base").prefetch_related("questions__answer_options"),
-            ListeningExerciseDetailSerializer,
-        ),
-        (
-            "listening_teil2",
-            ListeningExercise.objects.filter(
-                listening_type=ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE
-            ).select_related("exercise_base").prefetch_related("questions__answer_options"),
-            ListeningExerciseDetailSerializer,
-        ),
-        (
-            "listening_teil3",
-            ListeningExercise.objects.filter(
-                listening_type=ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE
-            ).select_related("exercise_base").prefetch_related("questions__answer_options"),
-            ListeningExerciseDetailSerializer,
-        ),
-        (
-            "writing",
-            WritingExercise.objects.select_related("exercise_base").prefetch_related("example_texts"),
-            WritingExerciseDetailSerializer,
-        ),
+def _mock_exam_definitions(*, exam_type, level):
+    rules = get_mock_exam_rules(exam_type, level)
+    return rules.definitions(exam_type=exam_type, level=level) if rules else ()
+
+
+def _mock_exam_payload(request, selection=None, *, exam_type, level, show_listening_scripts=False):
+    rules = get_mock_exam_rules(exam_type, level)
+    if rules is None:
+        return None, None, []
+    return rules.build_payload(
+        request,
+        selection,
+        exam_type=exam_type,
+        level=level,
+        show_listening_scripts=show_listening_scripts,
     )
-
-    # `exam_type` is the exam family and `level` is the CEFR level. The second
-    # condition keeps older rows labelled as e.g. "telc B1" usable while new
-    # imports continue to store the canonical family-only value "telc".
-    exam_filter = Q(exercise_base__exam_type__iexact=exam_type) | Q(
-        exercise_base__exam_type__iexact=f"{exam_type} {level}"
-    )
-    return tuple(
-        (key, queryset.filter(exercise_base__level=level).filter(exam_filter), serializer_class)
-        for key, queryset, serializer_class in definitions
-    )
-
-
-def _mock_exam_payload(
-    request,
-    selection=None,
-    *,
-    exam_type="telc",
-    level=ExerciseBase.Level.B1,
-    show_listening_scripts=False,
-):
-    parts = {}
-    selected_ids = {}
-    missing_parts = []
-    for key, queryset, serializer_class in _mock_exam_definitions(exam_type=exam_type, level=level):
-        exercise = queryset.filter(pk=selection[key]).first() if selection else queryset.order_by("?").first()
-        if exercise is None:
-            missing_parts.append(key)
-            continue
-        selected_ids[key] = exercise.pk
-        parts[key] = serializer_class(
-            exercise,
-            context={
-                "request": request,
-                "show_listening_script": show_listening_scripts,
-            },
-        ).data
-
-    if missing_parts:
-        return None, None, missing_parts
-    return {
-        "exam_type": exam_type,
-        "level": level,
-        "exam_label": f"{exam_type} {level}",
-        "durations": {
-            "reading_and_cloze": 90 * 60,
-            "collection_pause": 60,
-            "listening": 30 * 60,
-            "writing": 30 * 60,
-        },
-        "parts": parts,
-    }, selected_ids, []
 
 
 def _mock_exam_scope(data):
-    level = str(data.get("level", ExerciseBase.Level.B1)).strip().upper()
-    exam_type = str(data.get("exam_type", "telc")).strip()
-    legacy_suffix = f" {level}"
-    if exam_type.upper().endswith(legacy_suffix):
-        exam_type = exam_type[:-len(legacy_suffix)].strip()
-    if not exam_type or level not in ExerciseBase.Level.values:
-        return None
-    return exam_type, level
-
-
-def _new_mock_exam_progress():
-    started_at = timezone.now()
-    return {
-        "phase": "reading",
-        "deadline": int((started_at + timedelta(minutes=90)).timestamp() * 1000),
-        "active_part": "reading_title_matching",
-        "audio_step": 0,
-        "audio_step_started_at": 0,
-    }
-
-
-WRITING_ASSESSMENT_DIMENSIONS = (
-    "task_completion",
-    "communicative_design",
-    "formal_accuracy",
-)
-WRITING_GRADE_POINTS = {"A": 5, "B": 3, "C": 1, "D": 0}
-
-
-def _normalize_writing_assessment(value):
-    if not isinstance(value, dict):
-        return None
-    allowed_keys = {"topic_relevant", *WRITING_ASSESSMENT_DIMENSIONS}
-    if set(value) - allowed_keys:
-        return None
-    topic_relevant = value.get("topic_relevant")
-    if topic_relevant is not None and not isinstance(topic_relevant, bool):
-        return None
-    normalized = {"topic_relevant": topic_relevant}
-    for key in WRITING_ASSESSMENT_DIMENSIONS:
-        grade = value.get(key, "")
-        if grade not in {"", *WRITING_GRADE_POINTS}:
-            return None
-        normalized[key] = grade
-    return normalized
-
-
-def _legacy_writing_assessment(grade):
-    if grade not in WRITING_GRADE_POINTS:
-        return {}
-    return {
-        "topic_relevant": True,
-        **{key: grade for key in WRITING_ASSESSMENT_DIMENSIONS},
-    }
-
-
-def _writing_assessment_is_complete(assessment):
-    if assessment.get("topic_relevant") is False:
-        return True
-    return assessment.get("topic_relevant") is True and all(
-        assessment.get(key) in WRITING_GRADE_POINTS for key in WRITING_ASSESSMENT_DIMENSIONS
-    )
-
-
-def _writing_assessment_score(assessment):
-    if assessment.get("topic_relevant") is not True:
-        return 0
-    return sum(WRITING_GRADE_POINTS.get(assessment.get(key), 0) for key in WRITING_ASSESSMENT_DIMENSIONS) * 3
-
-
-def _mock_exam_correct_counts(instance):
-    selection = instance.paper.exercise_selection
-    answers = instance.answers
-
-    def selected(part_key, item_id):
-        return answers.get(f"{part_key}:{item_id}")
-
-    reading_correct = sum(
-        selected("reading_title_matching", item_id) == option_key
-        for item_id, option_key in ReadingTitleMatchingItem.objects.filter(
-            exercise_id=selection.get("reading_title_matching")
-        ).values_list("id", "correct_option__option_key")
-    )
-    reading_correct += sum(
-        selected("reading_understanding", question_id) == option_key
-        for question_id, option_key in ReadingUnderstandingAnswerOption.objects.filter(
-            question__exercise_id=selection.get("reading_understanding"),
-            is_correct=True,
-        ).values_list("question_id", "option_key")
-    )
-    reading_correct += sum(
-        selected("reading_ad_matching", item_id) == ad_key
-        for item_id, ad_key in ReadingAdMatchingItem.objects.filter(
-            exercise_id=selection.get("reading_ad_matching")
-        ).values_list("id", "correct_ad__ad_key")
-    )
-    cloze_correct = sum(
-        selected("cloze_choice", blank_id) == option_key
-        for blank_id, option_key in ClozeChoiceOption.objects.filter(
-            blank__exercise_id=selection.get("cloze_choice"),
-            is_correct=True,
-        ).values_list("blank_id", "option_key")
-    )
-    cloze_correct += sum(
-        selected("cloze_matching", blank_id) == option_key
-        for blank_id, option_key in ClozeMatchingBlankAnswer.objects.filter(
-            exercise_id=selection.get("cloze_matching")
-        ).values_list("id", "correct_option__option_key")
-    )
-    listening_correct = 0
-    for part_key in ("listening_teil1", "listening_teil2", "listening_teil3"):
-        listening_correct += sum(
-            selected(part_key, question_id) == option_key
-            for question_id, option_key in ListeningAnswerOption.objects.filter(
-                question__listening_exercise_id=selection.get(part_key),
-                is_correct=True,
-            ).values_list("question_id", "option_key")
+    try:
+        scope = ExamScope.from_values(
+            **({"exam_type": data["exam_type"]} if "exam_type" in data else {}),
+            **({"level": data["level"]} if "level" in data else {}),
         )
-    return reading_correct, cloze_correct, listening_correct
+    except ValueError:
+        return None
+    return scope.exam_type, scope.level
+
+
+def _optional_scope_filters(query_params):
+    values = {}
+    if "exam_type" in query_params:
+        try:
+            values["exam_type"] = ExamScope.from_values(query_params.get("exam_type"), "B1").exam_type
+        except ValueError as exc:
+            raise ValidationError({"exam_type": str(exc)}) from exc
+    if "level" in query_params:
+        try:
+            values["level"] = ExamScope.from_values("TELC", query_params.get("level")).level
+        except ValueError as exc:
+            raise ValidationError({"level": str(exc)}) from exc
+    return values
+
+
+def _new_mock_exam_progress(*, exam_type, level):
+    rules = get_mock_exam_rules(exam_type, level)
+    return rules.new_progress() if rules else {}
 
 
 def _calculate_mock_exam_result(instance):
-    reading_correct, cloze_correct, listening_correct = _mock_exam_correct_counts(instance)
-    writing_score = Decimal(str(_writing_assessment_score(
-        instance.writing_assessment or _legacy_writing_assessment(instance.writing_grade)
-    )))
-    reading_score = Decimal(reading_correct) * Decimal("3.75")
-    cloze_score = Decimal(cloze_correct) * Decimal("1.5")
-    listening_score = Decimal(listening_correct) * Decimal("3.75")
-    total_score = reading_score + cloze_score + listening_score + writing_score
-    percentage = ((total_score / Decimal("225")) * 100).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
-    return {
-        "score_breakdown": {
-            "reading_correct": reading_correct,
-            "reading_score": float(reading_score),
-            "cloze_correct": cloze_correct,
-            "cloze_score": float(cloze_score),
-            "listening_correct": listening_correct,
-            "listening_score": float(listening_score),
-            "writing_score": float(writing_score),
-        },
-        "total_score": total_score,
-        "score_percentage": percentage,
-        "is_passed": total_score >= Decimal("135"),
-    }
+    rules = get_mock_exam_rules(instance.paper.exam_type, instance.paper.level)
+    return rules.scoring.calculate_result(instance)
 
 
 def _apply_mock_exam_result(instance):
-    result = _calculate_mock_exam_result(instance)
-    for field, value in result.items():
-        setattr(instance, field, value)
-    return result
+    rules = get_mock_exam_rules(instance.paper.exam_type, instance.paper.level)
+    return rules.scoring.apply_result(instance)
+
+
+def _unsupported_mock_exam_response(exam_type):
+    message = (
+        "该考试类型或等级暂不支持模拟考试。"
+        if is_mock_exam_family_supported(exam_type)
+        else "该考试类型暂不支持模拟考试。"
+    )
+    return Response({"message": message}, status=status.HTTP_400_BAD_REQUEST)
 
 
 def _create_mock_exam_paper(*, user, exam_type, level, selection, creation_method=MockExamPaper.CreationMethod.RANDOM):
@@ -505,6 +329,8 @@ class MockExamViewSet(ViewSet):
         if scope is None:
             return Response({"message": "考试类型或等级无效。"}, status=status.HTTP_400_BAD_REQUEST)
         exam_type, level = scope
+        if get_mock_exam_rules(exam_type, level) is None:
+            return _unsupported_mock_exam_response(exam_type)
         payload, selection, missing_parts = _mock_exam_payload(request, exam_type=exam_type, level=level)
         if missing_parts:
             return Response(
@@ -515,9 +341,11 @@ class MockExamViewSet(ViewSet):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        progress = _new_mock_exam_progress()
+        progress = _new_mock_exam_progress(exam_type=exam_type, level=level)
         fingerprint = (
-            hashlib.sha256(f"mock-create:{request_id}".encode("utf-8")).hexdigest()
+            hashlib.sha256(
+                f"mock-create:{exam_type}:{level}:{request_id}".encode("utf-8")
+            ).hexdigest()
             if request_id
             else uuid.uuid4().hex
         )
@@ -574,12 +402,15 @@ class SavedMockExamViewSet(ViewSet):
 
     @staticmethod
     def _summary(instance):
-        writing_assessment = instance.writing_assessment or _legacy_writing_assessment(instance.writing_grade)
+        rules = get_mock_exam_rules(instance.paper.exam_type, instance.paper.level)
+        writing_assessment = instance.writing_assessment or (
+            rules.scoring.legacy_writing_assessment(instance.writing_grade) if rules else {}
+        )
         result = None
         if instance.is_completed:
-            if instance.total_score is None:
+            if instance.total_score is None and rules:
                 result = _calculate_mock_exam_result(instance)
-            else:
+            elif instance.total_score is not None:
                 result = {
                     "score_breakdown": instance.score_breakdown,
                     "total_score": instance.total_score,
@@ -596,7 +427,10 @@ class SavedMockExamViewSet(ViewSet):
             "writing_text": instance.writing_text,
             "writing_grade": instance.writing_grade,
             "writing_assessment": writing_assessment,
-            "writing_score": _writing_assessment_score(writing_assessment),
+            "writing_score": (
+                rules.scoring.writing_assessment_score(writing_assessment)
+                if rules else (instance.score_breakdown or {}).get("writing_score", 0)
+            ),
             "score_breakdown": result["score_breakdown"] if result else None,
             "total_score": float(result["total_score"]) if result else None,
             "score_percentage": float(result["score_percentage"]) if result else None,
@@ -619,6 +453,11 @@ class SavedMockExamViewSet(ViewSet):
             pass
         elif scope != "all":
             return Response({"message": "记录类型无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        filters = _optional_scope_filters(request.query_params)
+        if "exam_type" in filters:
+            queryset = queryset.filter(paper__exam_type=filters["exam_type"])
+        if "level" in filters:
+            queryset = queryset.filter(paper__level=filters["level"])
         paginator = SavedMockExamPagination()
         page = paginator.paginate_queryset(queryset, request, view=self)
         return paginator.get_paginated_response([self._summary(item) for item in page])
@@ -647,6 +486,9 @@ class SavedMockExamViewSet(ViewSet):
         if scope is None:
             return Response({"message": "考试类型或等级无效。"}, status=status.HTTP_400_BAD_REQUEST)
         exam_type, level = scope
+        rules = get_mock_exam_rules(exam_type, level)
+        if rules is None:
+            return _unsupported_mock_exam_response(exam_type)
         expected_keys = {item[0] for item in _mock_exam_definitions(exam_type=exam_type, level=level)}
         if not isinstance(selection, dict) or set(selection) != expected_keys:
             return Response({"message": "试卷题目 ID 不完整。"}, status=status.HTTP_400_BAD_REQUEST)
@@ -673,9 +515,9 @@ class SavedMockExamViewSet(ViewSet):
             return Response({"message": "写作等级无效。"}, status=status.HTTP_400_BAD_REQUEST)
         assessment_value = request.data.get("writing_assessment")
         if assessment_value is None:
-            writing_assessment = _legacy_writing_assessment(writing_grade)
+            writing_assessment = rules.scoring.legacy_writing_assessment(writing_grade)
         else:
-            writing_assessment = _normalize_writing_assessment(assessment_value)
+            writing_assessment = rules.scoring.normalize_writing_assessment(assessment_value)
             if writing_assessment is None:
                 return Response({"message": "写作自评格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
         fingerprint_source = {"exam_type": exam_type.lower(), "level": level, "selection": selection}
@@ -683,7 +525,7 @@ class SavedMockExamViewSet(ViewSet):
             json.dumps(fingerprint_source, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
         is_completed = bool(request.data.get("is_completed", False))
-        if is_completed and not _writing_assessment_is_complete(writing_assessment):
+        if is_completed and not rules.scoring.writing_assessment_is_complete(writing_assessment):
             return Response({"message": "请完成写作自评。"}, status=status.HTTP_400_BAD_REQUEST)
         defaults = {
             "exercise_selection": selection,
@@ -724,23 +566,30 @@ class SavedMockExamViewSet(ViewSet):
     @transaction.atomic
     def partial_update(self, request, pk=None):
         instance = get_object_or_404(
-            SavedMockExam.objects.select_for_update(),
+            SavedMockExam.objects.select_for_update().select_related("paper"),
             pk=pk,
             user=request.user,
         )
+        rules = get_mock_exam_rules(instance.paper.exam_type, instance.paper.level)
         completion_fields = {"answers", "writing_text", "writing_grade", "writing_assessment", "is_completed", "progress"}
         if instance.is_completed and completion_fields.intersection(request.data):
             return Response({"message": "已完成的考试不能再次修改。"}, status=status.HTTP_409_CONFLICT)
         if "is_completed" in request.data:
             return Response({"message": "请使用交卷接口完成考试。"}, status=status.HTTP_400_BAD_REQUEST)
         update_fields = []
-        next_writing_assessment = instance.writing_assessment or _legacy_writing_assessment(instance.writing_grade)
+        next_writing_assessment = instance.writing_assessment or rules.scoring.legacy_writing_assessment(
+            instance.writing_grade
+        )
         if "writing_assessment" in request.data:
-            next_writing_assessment = _normalize_writing_assessment(request.data["writing_assessment"])
+            next_writing_assessment = rules.scoring.normalize_writing_assessment(
+                request.data["writing_assessment"]
+            )
             if next_writing_assessment is None:
                 return Response({"message": "写作自评格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
         elif "writing_grade" in request.data:
-            next_writing_assessment = _legacy_writing_assessment(str(request.data["writing_grade"]))
+            next_writing_assessment = rules.scoring.legacy_writing_assessment(
+                str(request.data["writing_grade"])
+            )
         if "answers" in request.data:
             if not isinstance(request.data["answers"], dict):
                 return Response({"message": "答案格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
@@ -784,14 +633,16 @@ class SavedMockExamViewSet(ViewSet):
             if instance.is_completed:
                 return Response({"message": "该考试已经交卷。"}, status=status.HTTP_409_CONFLICT)
 
+            rules = get_mock_exam_rules(instance.paper.exam_type, instance.paper.level)
+
             answers = request.data.get("answers", instance.answers)
             if not isinstance(answers, dict):
                 return Response({"message": "答案格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
             assessment_value = request.data.get("writing_assessment", instance.writing_assessment)
-            writing_assessment = _normalize_writing_assessment(assessment_value)
+            writing_assessment = rules.scoring.normalize_writing_assessment(assessment_value)
             if writing_assessment is None:
                 return Response({"message": "写作自评格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
-            if not _writing_assessment_is_complete(writing_assessment):
+            if not rules.scoring.writing_assessment_is_complete(writing_assessment):
                 return Response({"message": "请完成写作自评。"}, status=status.HTTP_400_BAD_REQUEST)
             progress = request.data.get("progress", instance.progress)
             if not isinstance(progress, dict):
@@ -868,7 +719,10 @@ class SavedMockExamViewSet(ViewSet):
             exam_type=source.paper.exam_type,
             level=source.paper.level,
             exercise_selection=source.paper.exercise_selection,
-            progress=_new_mock_exam_progress(),
+            progress=_new_mock_exam_progress(
+                exam_type=source.paper.exam_type,
+                level=source.paper.level,
+            ),
         )
         return Response(self._summary(attempt), status=status.HTTP_201_CREATED)
 
@@ -952,7 +806,10 @@ class MockExamShareViewSet(ViewSet):
                 {"message": "分享试卷中的部分题目已不存在。", "missing_parts": missing_parts},
                 status=status.HTTP_409_CONFLICT,
             )
-        progress = _new_mock_exam_progress()
+        progress = _new_mock_exam_progress(
+            exam_type=shared.paper.exam_type,
+            level=shared.paper.level,
+        )
         attempt = SavedMockExam.objects.create(
             user=request.user,
             paper=shared.paper,
@@ -1322,6 +1179,10 @@ class FavoriteQuestionViewSet(ViewSet):
 
     @staticmethod
     def _base_payload(state, exercise_base, *, state_type, target_field, target_id, exercise_id, href):
+        try:
+            exam_type = ExamScope.from_values(exercise_base.exam_type, exercise_base.level).exam_type
+        except ValueError:
+            exam_type = str(exercise_base.exam_type).strip().upper()
         return {
             "id": f"{state_type}:{state.pk}",
             "state_type": state_type,
@@ -1333,7 +1194,7 @@ class FavoriteQuestionViewSet(ViewSet):
             "exercise_type": exercise_base.exercise_type,
             "skill": exercise_base.skill,
             "level": exercise_base.level,
-            "exam_type": exercise_base.exam_type,
+            "exam_type": exam_type,
             "external_id": exercise_base.external_id,
             "title": exercise_base.title,
             "is_real_exam": exercise_base.is_real_exam,
@@ -1345,6 +1206,7 @@ class FavoriteQuestionViewSet(ViewSet):
     def list(self, request):
         user = request.user
         items = []
+        scope_filters = _optional_scope_filters(request.query_params)
 
         listening_states = UserListeningQuestionState.objects.filter(
             user=user,
@@ -1369,7 +1231,7 @@ class FavoriteQuestionViewSet(ViewSet):
                 target_field="question",
                 target_id=question.pk,
                 exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/hoeren/{route}/{exercise.pk}",
+                href=f"/modules/exam-preparation/{exercise_base.level.lower()}/hoeren/{route}/{exercise.pk}",
             )
             payload.update(
                 question_label=f"听力选择 · 第 {question.question_number} 题",
@@ -1394,7 +1256,7 @@ class FavoriteQuestionViewSet(ViewSet):
                 target_field="question",
                 target_id=question.pk,
                 exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/lesen/understanding/{exercise.pk}",
+                href=f"/modules/exam-preparation/{exercise.exercise_base.level.lower()}/lesen/understanding/{exercise.pk}",
             )
             payload.update(
                 question_label=f"阅读理解 · 第 {question.question_number} 题",
@@ -1417,7 +1279,7 @@ class FavoriteQuestionViewSet(ViewSet):
                 target_field="item",
                 target_id=item.pk,
                 exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/lesen/title-matching/{exercise.pk}",
+                href=f"/modules/exam-preparation/{exercise.exercise_base.level.lower()}/lesen/title-matching/{exercise.pk}",
             )
             payload.update(
                 question_label=f"标题匹配 · 第 {item.item_number} 段",
@@ -1440,7 +1302,7 @@ class FavoriteQuestionViewSet(ViewSet):
                 target_field="item",
                 target_id=item.pk,
                 exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/lesen/ad-matching/{exercise.pk}",
+                href=f"/modules/exam-preparation/{exercise.exercise_base.level.lower()}/lesen/ad-matching/{exercise.pk}",
             )
             payload.update(
                 question_label=f"广告匹配 · 情境 {item.item_number}",
@@ -1465,7 +1327,7 @@ class FavoriteQuestionViewSet(ViewSet):
                 target_field="blank",
                 target_id=blank.pk,
                 exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/sprachbausteine/cloze-choice/{exercise.pk}",
+                href=f"/modules/exam-preparation/{exercise.exercise_base.level.lower()}/sprachbausteine/cloze-choice/{exercise.pk}",
             )
             payload.update(
                 question_label=f"单选完形 · 第 {blank.blank_number} 空",
@@ -1494,7 +1356,7 @@ class FavoriteQuestionViewSet(ViewSet):
                 target_field="blank",
                 target_id=blank.pk,
                 exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/sprachbausteine/cloze-matching/{exercise.pk}",
+                href=f"/modules/exam-preparation/{exercise.exercise_base.level.lower()}/sprachbausteine/cloze-matching/{exercise.pk}",
             )
             payload.update(
                 question_label=f"选项池完形 · 第 {blank.blank_number} 空",
@@ -1520,7 +1382,7 @@ class FavoriteQuestionViewSet(ViewSet):
                 target_field="exercise",
                 target_id=exercise.pk,
                 exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/schreiben/{exercise.pk}",
+                href=f"/modules/exam-preparation/{exercise.exercise_base.level.lower()}/schreiben/{exercise.pk}",
             )
             payload.update(
                 question_label="写作题",
@@ -1545,7 +1407,7 @@ class FavoriteQuestionViewSet(ViewSet):
                 target_field="example_text",
                 target_id=example.pk,
                 exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/schreiben/{exercise.pk}",
+                href=f"/modules/exam-preparation/{exercise.exercise_base.level.lower()}/schreiben/{exercise.pk}",
             )
             payload.update(
                 question_label=example.label or f"Beispieltext {example.sort_order + 1}",
@@ -1578,7 +1440,7 @@ class FavoriteQuestionViewSet(ViewSet):
                 target_field="exercise",
                 target_id=exercise.pk,
                 exercise_id=exercise.pk,
-                href=f"/modules/exam-preparation/sprechen/teil-{teil}/{exercise.pk}",
+                href=f"/modules/exam-preparation/{exercise_base.level.lower()}/sprechen/teil-{teil}/{exercise.pk}",
             )
             payload["turn_key"] = state.turn_key
             payload.update(
@@ -1588,6 +1450,10 @@ class FavoriteQuestionViewSet(ViewSet):
             )
             items.append(payload)
 
+        if "exam_type" in scope_filters:
+            items = [item for item in items if item["exam_type"] == scope_filters["exam_type"]]
+        if "level" in scope_filters:
+            items = [item for item in items if item["level"] == scope_filters["level"]]
         items.sort(key=lambda item: item["updated_at"], reverse=True)
         return Response({"count": len(items), "results": items})
 

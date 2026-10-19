@@ -18,9 +18,17 @@ when the filename and example disagree.
 | `b1_cloze_question_` | `imports/cloze_choice/raw/` | `b1_cloze_question_example.xlsx` |
 | `b1_cloze_matching_` | `imports/cloze_matching/raw/` | `b1_cloze_matching_example.xlsx` |
 | `b1_writing_` | `imports/writing/raw/` | `b1_writing_example.xlsx` |
-| `Kennenlernen_` | `imports/speaking_einander_kennenlernen/raw/` | Einander kennenlernen |
+| `Kennenlernen_` (legacy TELC/B1) | `imports/speaking_einander_kennenlernen/raw/` | Einander kennenlernen |
 | `b1_speaking_segmented_` | `imports/speaking_ueber_ein_thema_sprechen/raw/` | Über ein Thema sprechen |
 | `b1_speaking_planen_` | `imports/speaking_gemeinsam_etwas_planen/raw/` | Gemeinsam etwas planen |
+
+TELC B2 candidates must not be placed in the existing B1 trees. Route their
+normalized `b2_..._<ID>.xlsx` names to
+`imports/telc/b2/<kind>/raw/`. The B2 kinds are the six existing written kinds
+plus `speaking_praesentation`, `speaking_diskussion`, and
+`speaking_problemloesung`. The dedicated importer creates missing work
+directories automatically. A missing workbook ID falls back to the numeric
+filename suffix. If both values exist, they must match; mismatches are rejected.
 
 All paths in the table are relative to
 `apps/exam_preparation/data/`.

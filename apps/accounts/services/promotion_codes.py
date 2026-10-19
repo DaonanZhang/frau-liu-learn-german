@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 import string
+import uuid
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
@@ -68,6 +69,7 @@ def create_promotion_code_batch(
     applicable_offer,
     coupon_valid_days: int | None,
     expires_at,
+    operator_name: str = "daonan",
 ) -> list[str]:
     """Create one atomic batch and return the plaintext codes to the operator."""
 
@@ -80,12 +82,18 @@ def create_promotion_code_batch(
     campaign_name = str(campaign_name or "").strip()
     if not campaign_name:
         raise ValueError("campaign_name cannot be empty")
+    operator_name = str(operator_name or "").strip()
+    if not operator_name:
+        raise ValueError("operator_name cannot be empty")
 
+    generation_batch_id = uuid.uuid4()
     codes = []
     for _ in range(count):
         code = generate_promotion_code(length=length)
         store_promotion_code(
             code=code,
+            generation_batch_id=generation_batch_id,
+            operator_name=operator_name,
             campaign_name=campaign_name,
             organization_name=str(organization_name or "").strip(),
             remark=str(remark or "").strip(),

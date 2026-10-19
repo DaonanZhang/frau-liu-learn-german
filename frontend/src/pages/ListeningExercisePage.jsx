@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { examPreparationScope } from "../utils/examPreparationScope.js";
 import {
   fetchListeningExerciseDetail,
 } from "../api/exam_preparation/listeningExercises.js";
@@ -29,6 +30,8 @@ const INSTRUCTION_BY_TYPE = {
   dialog_true_false_twice:
     "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Sie hören diese Texte nur einmal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
 };
+
+const TELC_B2_TEIL1_INSTRUCTION = "Sie hören nun eine Nachrichtensendung. Dazu sollen Sie fünf Aufgaben lösen. Sie hören die Nachrichtensendung nur einmal. Entscheiden Sie beim Hören, ob die Aussagen 1–5 richtig oder falsch sind. Markieren Sie Ihre Lösungen auf dem Antwortbogen bei den Aufgaben 1–5. Markieren Sie PLUS (+) gleich richtig und MINUS (–) gleich falsch auf dem Antwortbogen. Lesen Sie jetzt die Aufgaben 1–5. Sie haben dazu 30 Sekunden Zeit.";
 
 const EYEBROW_BY_TYPE = {
   short_text_true_false_with_prep: "Hören · Teil 1",
@@ -66,6 +69,7 @@ export default function ListeningExercisePage({
   backTo = "/modules/exam-preparation/hoeren",
 }) {
   const { exerciseId } = useParams();
+  const scope = examPreparationScope(useParams().level);
   const audioRef = useRef(null);
   const teil2CompletedPlaysRef = useRef(0);
   const streamRetriedRef = useRef(false);
@@ -109,7 +113,7 @@ export default function ListeningExercisePage({
           throw new Error("No listening exercise selected.");
         }
 
-        const detail = await fetchListeningExerciseDetail(exerciseId);
+        const detail = await fetchListeningExerciseDetail(exerciseId, scope);
         if (!aborted) {
           setExercise(detail || null);
           const stateData = await fetchListeningQuestionStates(exerciseId);
@@ -193,6 +197,11 @@ export default function ListeningExercisePage({
   const questions = useMemo(() => {
     return Array.isArray(exercise?.questions) ? exercise.questions : [];
   }, [exercise]);
+  const instruction = scope?.examType === "TELC"
+    && scope.level === "B2"
+    && listeningType === "short_text_true_false_with_prep"
+    ? TELC_B2_TEIL1_INSTRUCTION
+    : INSTRUCTION_BY_TYPE[listeningType] || INSTRUCTION_BY_TYPE.short_text_true_false_once;
   const heroTitle = useMemo(() => {
     const title = exercise?.exercise_base?.title?.trim();
     if (title) {
@@ -362,7 +371,7 @@ export default function ListeningExercisePage({
           });
         })
       );
-      const completedExercise = await fetchListeningExerciseDetail(exerciseId);
+      const completedExercise = await fetchListeningExerciseDetail(exerciseId, scope);
       setExercise(completedExercise || exercise);
     } catch (error) {
       setErrorText(error?.message || "Antworten konnten nicht gespeichert werden.");
@@ -396,11 +405,11 @@ export default function ListeningExercisePage({
       <div className="listening-exercise-page">
       <div className="listening-exercise-shell">
         <div className="listening-exercise-topbar">
-          <Link to={backTo} className="listening-exercise-topbar__back">
+          <Link to={typeof backTo === "function" ? backTo(scope) : backTo} className="listening-exercise-topbar__back">
             ← Zurück zu Hören
           </Link>
           <span className="listening-exercise-topbar__meta">
-            {exercise?.exercise_base?.level || "B1"} · {exercise?.exercise_base?.external_id || "001"}
+            {exercise?.exercise_base?.level || scope?.level} · {exercise?.exercise_base?.external_id || "001"}
           </span>
         </div>
 
@@ -411,12 +420,12 @@ export default function ListeningExercisePage({
             </p>
             <h1 className="listening-exercise-hero__title">{heroTitle}</h1>
           </div>
-          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="listening-exercise-hero__badges">
               {exercise?.exercise_base?.exam_type ? <span className="listening-exercise-hero__badge listening-exercise-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
-              {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
+              {exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="listening-exercise-hero__badge">
-                  难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
+                  难度：{exercise.exercise_base.level || scope?.level || exercise.exercise_base.difficulty}
                 </span>
               ) : null}
               {exercise?.exercise_base?.is_real_exam ? (
@@ -433,7 +442,7 @@ export default function ListeningExercisePage({
             <span className="listening-exercise-instruction__label">Anleitung</span>
           </div>
           <AnnotatableTextRegion regionId="task" as="p">
-            {INSTRUCTION_BY_TYPE[listeningType] || INSTRUCTION_BY_TYPE.short_text_true_false_once}
+            {instruction}
           </AnnotatableTextRegion>
         </section>
 

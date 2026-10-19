@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { confirmMockExamAction } from "../utils/confirmMockExamAction.js";
-import { moveClozeMatchingOption } from "../utils/moveClozeMatchingOption.js";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { confirmMockExamAction } from "../../../utils/confirmMockExamAction.js";
+import { moveClozeMatchingOption } from "../../../utils/moveClozeMatchingOption.js";
 import {
   createMockExam,
   fetchSavedMockExam,
@@ -10,20 +10,22 @@ import {
   saveMockExam,
   submitSavedMockExam,
   updateSavedMockExam,
-} from "../api/exam_preparation/mockExams.js";
-import { useAuth } from "../api/auth/useAuth.js";
-import MockExamAnswerSheet from "../components/examPreparation/MockExamAnswerSheet.jsx";
-import ExerciseOptionSheet from "../components/examPreparation/ExerciseOptionSheet.jsx";
-import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
-import FormattedExplanation from "../components/examPreparation/FormattedExplanation.jsx";
-import ListeningTranscript from "../components/examPreparation/ListeningTranscript.jsx";
-import ReadingAdMatchingWorkspace from "../components/examPreparation/ReadingAdMatchingWorkspace.jsx";
+} from "../../../api/exam_preparation/mockExams.js";
+import { normalizeExamPreparationContent } from "../../../api/exam_preparation/contentText.js";
+import { useAuth } from "../../../api/auth/useAuth.js";
+import TelcMockExamAnswerSheet from "./TelcMockExamAnswerSheet.jsx";
+import ExerciseOptionSheet from "../../../components/examPreparation/ExerciseOptionSheet.jsx";
+import ExerciseFavoriteButton from "../../../components/examPreparation/ExerciseFavoriteButton.jsx";
+import FormattedExplanation from "../../../components/examPreparation/FormattedExplanation.jsx";
+import ListeningTranscript from "../../../components/examPreparation/ListeningTranscript.jsx";
+import ReadingAdMatchingWorkspace from "../../../components/examPreparation/ReadingAdMatchingWorkspace.jsx";
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
-} from "../components/examPreparation/ExamTextAnnotations.jsx";
-import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
-import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
+} from "../../../components/examPreparation/ExamTextAnnotations.jsx";
+import ScopedExplanation from "../../../components/examPreparation/ScopedExplanation.jsx";
+import { hasScopedExplanation } from "../../../components/examPreparation/explanationVisibility.js";
+import { examPreparationPurchasePath, examPreparationScope } from "../../../utils/examPreparationScope.js";
 import {
   fetchClozeChoiceBlankStates,
   fetchClozeMatchingBlankStates,
@@ -39,96 +41,29 @@ import {
   saveReadingTitleMatchingItemState,
   saveReadingUnderstandingQuestionState,
   saveWritingExerciseState,
-} from "../api/exam_preparation/userExerciseStates.js";
-import { clearAnnotationScope, mockAnnotationScope } from "../utils/examTextAnnotations.js";
-import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../hooks/useReliableAudioSources.js";
-import "./MockWrittenExamPage.css";
-import "./ReadingAdMatchingPage.css";
-
-const READING_SECONDS = 90 * 60;
-const LISTENING_SECONDS = 30 * 60;
-const WRITING_SECONDS = 30 * 60;
-const COLLECTION_SECONDS = 60;
-const PARTS = {
-  reading_title_matching: { section: "reading", short: "L 1", title: "Lesen · Teil 1" },
-  reading_understanding: { section: "reading", short: "L 2", title: "Lesen · Teil 2" },
-  reading_ad_matching: { section: "reading", short: "L 3", title: "Lesen · Teil 3" },
-  cloze_choice: { section: "reading", short: "SB 1", title: "Sprachbausteine · Teil 1" },
-  cloze_matching: { section: "reading", short: "SB 2", title: "Sprachbausteine · Teil 2" },
-  listening_teil1: { section: "listening", short: "H 1", title: "Hören · Teil 1" },
-  listening_teil2: { section: "listening", short: "H 2", title: "Hören · Teil 2" },
-  listening_teil3: { section: "listening", short: "H 3", title: "Hören · Teil 3" },
-  writing: { section: "writing", short: "Schr.", title: "Schreiben" },
-};
-
-const INTRODUCTION_BY_PART = {
-  reading_title_matching: "Lesen Sie die Überschriften und die Texte. Finden Sie für jeden Text die passende Überschrift. Sie können jede Überschrift nur einmal benutzen.",
-  reading_understanding: "Lesen Sie den Text und die Aufgaben. Welche Lösung (a, b oder c) ist jeweils richtig?",
-  reading_ad_matching: "Lesen sie die Situationen 1-10 und die Anzeigen a-l. Finden sie für jede die passende Anzeige. Sie können jede Anzeige nur einmal benutzen. Markieren sie Ihre Lösungen für die Aufgaben 1–10 auf dem Antwortbogen. Wenn Sie zu einer Situation keine Anzeige finden, markieren Sie x.",
-  cloze_choice: "Lesen Sie den Text und schließen Sie die Lücken. Welche Lösung ist jeweils richtig?",
-  cloze_matching: "Lesen Sie den folgenden Text. Welcher Ausdruck passt am besten in die Lücken?",
-  listening_teil1: "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Sie hören diese Texte nur einmal. Entscheiden Sie beim Hören, ob die Aussagen 1 - 5 richtig oder falsch sind. Lesen Sie jetzt die Aufgaben 1 - 5. Sie haben dazu 30 Sekunden Zeit.",
-  listening_teil2: "Sie hören nun ein Gespräch. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch zweimal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
-  listening_teil3: "Sie hören nun fünf kurze Texte. Dazu sollen Sie fünf Aufgaben lösen. Sie hören diese Texte nur einmal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
-};
-
-const READING_PART_KEYS = Object.keys(PARTS).filter((key) => PARTS[key].section === "reading");
-const LISTENING_PART_KEYS = Object.keys(PARTS).filter((key) => PARTS[key].section === "listening");
-const ALL_REVIEW_PART_KEYS = [...READING_PART_KEYS, ...LISTENING_PART_KEYS, "writing"];
-const REVIEW_NAVIGATION_PART_KEYS = [...READING_PART_KEYS, ...LISTENING_PART_KEYS];
-const AUDIO_SEQUENCE = [
-  { kind: "audio", partKey: "listening_teil1", playbackLabel: "einmal" },
-  { kind: "break", next: "Hören · Teil 2" },
-  { kind: "audio", partKey: "listening_teil2", playbackLabel: "zweimal" },
-  { kind: "break", next: "Hören · Teil 3" },
-  { kind: "audio", partKey: "listening_teil3", playbackLabel: "einmal" },
-];
-
-const WRITING_GRADE_POINTS = { A: 5, B: 3, C: 1, D: 0 };
-const EMPTY_WRITING_ASSESSMENT = {
-  topic_relevant: null,
-  task_completion: "",
-  communicative_design: "",
-  formal_accuracy: "",
-};
-const EARLY_SUBMISSION_WRITING_ASSESSMENT = {
-  topic_relevant: true,
-  task_completion: "D",
-  communicative_design: "D",
-  formal_accuracy: "D",
-};
-const WRITING_CRITERIA = [
-  {
-    key: "task_completion",
-    title: "I · Aufgabenbewältigung（任务完成度）",
-    options: {
-      A: "4 个要点均得到合理且充分的处理。",
-      B: "3 个要点得到合理处理。",
-      C: "2 个要点得到合理处理。",
-      D: "仅处理了 1 个要点，或没有处理任何要点。",
-    },
-  },
-  {
-    key: "communicative_design",
-    title: "II · Kommunikative Gestaltung（交际构思与语篇表达）",
-    options: {
-      A: "词汇充足，能够表达较复杂的内容，并使用多种连接方式组织句子。",
-      B: "能够围绕熟悉话题连贯表达，并使用基础连接词组织段落。",
-      C: "主要使用简单词汇和短句，连接方式较单一。",
-      D: "主要由套话、零散单词或短语组成，无法形成连贯表达。",
-    },
-  },
-  {
-    key: "formal_accuracy",
-    title: "III · Formale Richtigkeit（形式正确性）",
-    options: {
-      A: "有少量错误，但不影响理解；拼写和标点基本准确。",
-      B: "有较明显的语法错误，但全文仍容易理解。",
-      C: "基础错误较多，理解部分内容时需要推测。",
-      D: "语法结构混乱，全文大部分内容无法理解。",
-    },
-  },
-];
+} from "../../../api/exam_preparation/userExerciseStates.js";
+import { clearAnnotationScope, mockAnnotationScope } from "../../../utils/examTextAnnotations.js";
+import { clozeOptionTextForOccurrence } from "../../../utils/clozePlaceholderText.js";
+import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../../../hooks/useReliableAudioSources.js";
+import {
+  ALL_REVIEW_PART_KEYS,
+  AUDIO_SEQUENCE,
+  COLLECTION_SECONDS,
+  EARLY_SUBMISSION_WRITING_ASSESSMENT,
+  EMPTY_WRITING_ASSESSMENT,
+  INTRODUCTION_BY_PART,
+  LISTENING_PART_KEYS,
+  LISTENING_SECONDS,
+  PARTS,
+  READING_PART_KEYS,
+  READING_SECONDS,
+  REVIEW_NAVIGATION_PART_KEYS,
+  WRITING_CRITERIA,
+  WRITING_GRADE_POINTS,
+  WRITING_SECONDS,
+} from "./telcMockExamRules.js";
+import "./TelcMockExamPage.css";
+import "../../ReadingAdMatchingPage.css";
 
 const PART_FAVORITE_CONFIG = {
   reading_title_matching: { fetch: fetchReadingTitleMatchingItemStates, save: saveReadingTitleMatchingItemState, target: "item", items: (exercise) => exercise.items || [] },
@@ -227,7 +162,7 @@ const MOCK_CLOZE_SOURCE_BREAK_PATTERN = /(\r?\n+|<br\s*\/?>)/gi;
 
 function splitMockClozeParts(content, partKey) {
   let flowIndex = 0;
-  return String(content || "")
+  return String(normalizeExamPreparationContent(content) || "")
     .split(MOCK_CLOZE_PART_PATTERN)
     .filter(Boolean)
     .flatMap((part) => {
@@ -291,7 +226,7 @@ function ChoiceField({
   const correctOption = options.find((option) => (option.option_key ?? option.ad_key) === correctKey);
   const correctText = correctOption?.option_text ?? correctOption?.ad_text_markdown ?? "";
   return (
-    <article className={`${prefix}-question-card mock-exam-choice-field${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}>
+    <article className={`${prefix}-question-card telc-mock-exam-choice-field${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}>
       {label ? <div className={`${prefix}-question-card__header`}><h3>
         {questionNumber ? <><span>{questionNumber}.</span>{" "}</> : null}
         {annotationRegionPrefix && annotationQuestionId
@@ -376,6 +311,7 @@ function MatchingSelect({
   favorite,
   annotationRegionPrefix = "",
   annotationId = "",
+  selectedText = "",
 }) {
   const [open, setOpen] = useState(false);
   const isCorrect = Boolean(value) && value === correctKey;
@@ -387,7 +323,7 @@ function MatchingSelect({
     ? `reading-title-select reading-title-select-trigger${value && !review ? " reading-title-select--selected" : ""}${review && isCorrect ? " reading-title-select--correct" : ""}${review && !isCorrect ? " reading-title-select--wrong" : ""}`
     : `cloze-choice-slot-trigger${displayedValue ? " cloze-drop-slot__chip" : " cloze-choice-slot-trigger--empty"}${review && isCorrect ? " cloze-drop-slot__chip--correct" : ""}${review && !isCorrect ? " cloze-drop-slot__chip--wrong" : ""}`;
   return (
-    <span className={`mock-exam-inline-answer${stateClass}`}>
+    <span className={`telc-mock-exam-inline-answer${stateClass}`}>
       <button type="button" className={buttonClass} disabled={disabled} onClick={() => setOpen(true)}
         aria-haspopup="dialog" aria-expanded={open}>
         {selected && variant === "title" ? (
@@ -404,9 +340,9 @@ function MatchingSelect({
           open ? selected.option_text : (
             annotateOptions
               ? <MockTextRegion as="span" regionId={`${annotationRegionPrefix}:option:${annotationId}:${selected.option_key}`}>
-                {selected.option_text}
+                {selectedText || selected.option_text}
               </MockTextRegion>
-              : <span>{selected.option_text}</span>
+              : <span>{selectedText || selected.option_text}</span>
           )
         ) : (variant === "title" ? "Überschrift auswählen" : placeholder)}
       </button>
@@ -448,7 +384,8 @@ function MatchingSelect({
 
 function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, setAnswer, disabled, review, favoriteFor, questionNumbers }) {
   const blankMap = Object.fromEntries(blanks.map((blank) => [blank.blank_key, blank]));
-  return splitMockClozeParts(content, partKey).map((part, index) => {
+  const parts = splitMockClozeParts(content, partKey);
+  return parts.map((part, index) => {
       if (part.kind === "break") {
         return renderMockClozeBreak(part.value, `${partKey}-${index}`);
       }
@@ -461,9 +398,12 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
       if (!blank) return <span key={part.value}>{part.value}</span>;
       const key = answerKey(partKey, blank.id);
       const displayNumber = displayQuestionNumber(questionNumbers, partKey, blank.id, blank.blank_number || blank.blank_key || "");
+      const occurrenceIndex = parts.slice(0, index).filter((candidate) => candidate.kind === "blank" && candidate.value === part.value).length;
+      const occurrenceCount = parts.filter((candidate) => candidate.kind === "blank" && candidate.value === part.value).length;
+      const selectedOption = optionsForBlank(blank).find((option) => option.option_key === answers[key]);
       return (
         <MatchingSelect
-          key={key}
+          key={`${key}:${index}`}
           value={answers[key]}
           options={optionsForBlank(blank)}
           correctKey={blank.correct_option?.option_key || blank.options?.find((option) => option.is_correct)?.option_key}
@@ -477,6 +417,7 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
           favorite={review ? favoriteFor(blank.id) : null}
           annotationRegionPrefix={partKey}
           annotationId={blank.id}
+          selectedText={clozeOptionTextForOccurrence(selectedOption?.option_text, occurrenceIndex, occurrenceCount)}
         />
       );
     });
@@ -518,13 +459,13 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
   function handleTouchDragEnd(event) {
     if (!touchDrag) return;
     const pointTarget = document.elementFromPoint?.(event.clientX, event.clientY);
-    const target = event.target?.closest?.("[data-mock-cloze-blank]")
-      || pointTarget?.closest?.("[data-mock-cloze-blank]");
-    const blank = target ? blankMap[target.dataset.mockClozeBlank] : null;
+    const target = event.target?.closest?.("[data-telc-mock-cloze-blank]")
+      || pointTarget?.closest?.("[data-telc-mock-cloze-blank]");
+    const blank = target ? blankMap[target.dataset.telcMockClozeBlank] : null;
     if (blank) assignOption(blank, touchDrag.optionKey);
     else if (touchDrag.sourceKey && (
-      event.target?.closest?.(".mock-cloze-matching-pool")
-      || pointTarget?.closest?.(".mock-cloze-matching-pool")
+      event.target?.closest?.(".telc-mock-cloze-matching-pool")
+      || pointTarget?.closest?.(".telc-mock-cloze-matching-pool")
     )) {
       setAnswers((previous) => ({ ...previous, [touchDrag.sourceKey]: "" }));
     }
@@ -539,29 +480,29 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
   return (
     <>
       {!review ? (
-        <section className="mock-cloze-matching-pool mock-cloze-matching-pool--sticky" aria-label="选项区"
+        <section className="telc-mock-cloze-matching-pool telc-mock-cloze-matching-pool--sticky" aria-label="选项区"
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
-            const sourceKey = event.dataTransfer.getData("application/x-mock-cloze-source");
+            const sourceKey = event.dataTransfer.getData("application/x-telc-mock-cloze-source");
             if (sourceKey) {
               setAnswers((previous) => ({ ...previous, [sourceKey]: "" }));
             }
             clearDragState();
           }}
           onPointerMove={handleTouchDragMove} onPointerUp={handleTouchDragEnd} onPointerCancel={clearDragState}>
-          <div className="mock-cloze-matching-pool__heading"><strong>选项区</strong><span>拖动或选择一个选项后点击对应空格</span></div>
-          <div className="mock-cloze-matching-pool__options">
+          <div className="telc-mock-cloze-matching-pool__heading"><strong>选项区</strong><span>拖动或选择一个选项后点击对应空格</span></div>
+          <div className="telc-mock-cloze-matching-pool__options">
             {poolOptions.map((option) => (
               <button
                 key={option.option_key}
                 type="button"
-                className={`mock-cloze-matching-pool__option${selectedOptionKey === option.option_key ? " is-selected" : ""}`}
+                className={`telc-mock-cloze-matching-pool__option${selectedOptionKey === option.option_key ? " is-selected" : ""}`}
                 draggable={!disabled}
                 onClick={() => setSelectedOptionKey((previous) => previous === option.option_key ? "" : option.option_key)}
                 onDragStart={(event) => {
                   event.dataTransfer.setData("text/plain", option.option_key);
-                  event.dataTransfer.setData("application/x-mock-cloze-source", "");
+                  event.dataTransfer.setData("application/x-telc-mock-cloze-source", "");
                   setSelectedOptionKey(option.option_key);
                 }}
                 onDragEnd={clearDragState}
@@ -573,11 +514,11 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
                 <span>{option.option_text}</span>
               </button>
             ))}
-            {!poolOptions.length ? <span className="mock-cloze-matching-pool__empty">所有选项均已填入空格。</span> : null}
+            {!poolOptions.length ? <span className="telc-mock-cloze-matching-pool__empty">所有选项均已填入空格。</span> : null}
           </div>
         </section>
       ) : null}
-      <div className="mock-exam-source-text mock-cloze-matching-text mock-cloze-matching-text--compact">
+      <div className="telc-mock-exam-source-text telc-mock-cloze-matching-text telc-mock-cloze-matching-text--compact">
         {splitMockClozeParts(exercise.content_with_placeholders, partKey).map((part, index) => {
             if (part.kind === "break") {
               return renderMockClozeBreak(part.value, `${partKey}-${index}`);
@@ -596,10 +537,10 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
             const isCorrect = review && selectedKey === correctKey;
             const isWrong = review && selectedKey !== correctKey;
             return (
-              <span key={key} className="mock-cloze-matching-blank">
+              <span key={`${key}:${index}`} className="telc-mock-cloze-matching-blank">
                 <span
-                  data-mock-cloze-blank={blank.blank_key}
-                  className={`mock-cloze-matching-slot${selectedOptionKey ? " is-ready" : ""}${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}
+                  data-telc-mock-cloze-blank={blank.blank_key}
+                  className={`telc-mock-cloze-matching-slot${selectedOptionKey ? " is-ready" : ""}${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}
                   onClick={() => {
                     if (selectedOptionKey) assignOption(blank, selectedOptionKey);
                     else if (selectedKey) assignOption(blank, "");
@@ -613,11 +554,11 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
                 >
                   {selectedKey ? (
                     <span
-                      className={`mock-cloze-matching-slot__chip${!disabled ? " is-draggable" : ""}`}
+                      className={`telc-mock-cloze-matching-slot__chip${!disabled ? " is-draggable" : ""}`}
                       draggable={!disabled}
                       onDragStart={(event) => {
                         event.dataTransfer.setData("text/plain", selectedKey);
-                        event.dataTransfer.setData("application/x-mock-cloze-source", key);
+                        event.dataTransfer.setData("application/x-telc-mock-cloze-source", key);
                         setSelectedOptionKey(selectedKey);
                       }}
                       onDragEnd={clearDragState}
@@ -637,7 +578,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
             );
           })}
       </div>
-      {touchDrag ? <span className="mock-cloze-matching-touch-preview" style={{ left: touchDrag.x, top: touchDrag.y }}>{optionMap[touchDrag.optionKey]?.option_text || touchDrag.optionKey}</span> : null}
+      {touchDrag ? <span className="telc-mock-cloze-matching-touch-preview" style={{ left: touchDrag.x, top: touchDrag.y }}>{optionMap[touchDrag.optionKey]?.option_text || touchDrag.optionKey}</span> : null}
       {review ? (
         <section className="cloze-feedback-list">
           {blanks.map((blank) => {
@@ -669,7 +610,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
   );
 }
 
-function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor, questionNumbers, sectionRef }) {
+function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor, questionNumbers, sectionRef, examLabel }) {
   if (!exercise) return <p>该部分题目加载失败。</p>;
   const heading = exercise.exercise_base?.title || PARTS[partKey].title;
   const baseIntroduction = String(exercise.instruction || INTRODUCTION_BY_PART[partKey] || "").trim();
@@ -716,7 +657,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
   } else if (partKey === "reading_understanding") {
     body = (
       <>
-        <MockTextRegion as="div" className="mock-exam-source-text" regionId={`${partKey}:passage`}>{textBlocks(exercise.text_markdown)}</MockTextRegion>
+        <MockTextRegion as="div" className="telc-mock-exam-source-text" regionId={`${partKey}:passage`}>{textBlocks(exercise.text_markdown)}</MockTextRegion>
         {(exercise.questions || []).map((question) => {
           const key = answerKey(partKey, question.id);
           const displayNumber = displayQuestionNumber(questionNumbers, partKey, question.id, question.question_number);
@@ -756,7 +697,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
       />
     </>;
   } else if (partKey === "cloze_choice") {
-    body = <div className="mock-exam-source-text"><ClozeChoiceText content={exercise.content_with_placeholders}
+    body = <div className="telc-mock-exam-source-text"><ClozeChoiceText content={exercise.content_with_placeholders}
       blanks={exercise.blanks || []} optionsForBlank={(blank) => blank.options || []} partKey={partKey}
       answers={answers} setAnswer={setAnswer} disabled={disabled} review={review}
       favoriteFor={(id) => favoriteFor(partKey, id)} questionNumbers={questionNumbers} /></div>;
@@ -778,14 +719,14 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
     });
   } else if (partKey === "writing") {
     body = (
-      <div className="mock-exam-writing-grid">
-        <div className="mock-exam-source-text">
+      <div className="telc-mock-exam-writing-grid">
+        <div className="telc-mock-exam-source-text">
           <h3>Anleitung</h3>
           <MockTextRegion as="p" regionId={`${partKey}:request`}>{textBlocks(exercise.request_text)}</MockTextRegion>
           <h3>Aufgabe</h3>
           <MockTextRegion as="p" regionId={`${partKey}:task`}>{textBlocks(exercise.task_text)}</MockTextRegion>
         </div>
-        <label className="mock-exam-writing-field">
+        <label className="telc-mock-exam-writing-field">
           <span>Meine Antwort {review ? <ExerciseFavoriteButton {...favoriteFor(partKey, exercise.id)} /> : null}</span>
           <textarea value={writingText} onChange={(event) => setWritingText(event.target.value)} disabled={disabled}
             placeholder="Schreiben Sie hier Ihre Antwort …" />
@@ -796,14 +737,14 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
   }
 
   return (
-    <section ref={sectionRef} className="mock-exam-paper">
-      <div className="mock-exam-paper__heading">
+    <section ref={sectionRef} className="telc-mock-exam-paper">
+      <div className="telc-mock-exam-paper__heading">
         <div><span>{PARTS[partKey].title}</span><h2>{heading}</h2></div>
-        <span className="mock-exam-paper__badge">{exercise.exercise_base?.exam_type || "telc B1"}</span>
+        <span className="telc-mock-exam-paper__badge">{examLabel}</span>
       </div>
       {introduction ? (
-        <section className="mock-exam-introduction">
-          <span className="mock-exam-introduction__label">Einleitung</span>
+        <section className="telc-mock-exam-introduction">
+          <span className="telc-mock-exam-introduction__label">Einleitung</span>
           <MockTextRegion as="p" regionId={`${partKey}:introduction`}>{textBlocks(introduction)}</MockTextRegion>
         </section>
       ) : null}
@@ -887,11 +828,27 @@ function buildAnswerSheetRows(parts) {
   return rows;
 }
 
-export default function MockWrittenExamPage() {
+function persistedExamScope(value, fallback) {
+  const candidate = value?.exam || value;
+  const level = candidate?.level || value?.level || fallback?.level;
+  const examType = String(candidate?.exam_type || value?.exam_type || fallback?.examType || "TELC").toUpperCase();
+  if (examType !== "TELC") return fallback || { examType: "TELC", level: "B1", levelPath: "b1" };
+  return examPreparationScope(level) || fallback || { examType: "TELC", level: "B1", levelPath: "b1" };
+}
+
+export default function TelcMockExamPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const sessionKey = mockExamSessionKey(user?.id);
-  const activeAttemptKey = activeMockExamKey(user?.id);
+  const { level: routeLevel } = useParams();
+  const routeScope = useMemo(() => examPreparationScope(routeLevel) || examPreparationScope("B1"), [routeLevel]);
+  const [persistedScope, setPersistedScope] = useState(null);
+  const currentScope = persistedScope || routeScope;
+  const sessionKey = mockExamSessionKey(user?.id, currentScope);
+  const activeAttemptKey = activeMockExamKey(user?.id, currentScope);
+  const routeSessionKey = mockExamSessionKey(user?.id, routeScope);
+  const routeActiveAttemptKey = activeMockExamKey(user?.id, routeScope);
+  const levelHomePath = `/modules/exam-preparation/${currentScope.levelPath}`;
+  const mockExamPath = `/modules/exam-preparation/telc/${currentScope.levelPath}/mock-exam`;
   const [searchParams] = useSearchParams();
   const savedExamParam = searchParams.get("saved") || "";
   const attemptParam = searchParams.get("attempt") || "";
@@ -918,8 +875,10 @@ export default function MockWrittenExamPage() {
   const [audioStep, setAudioStep] = useState(0);
   const [audioStepStartedAt, setAudioStepStartedAt] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioBuffering, setAudioBuffering] = useState(false);
   const [audioPlaybackState, setAudioPlaybackState] = useState("idle");
   const [audioMode, setAudioMode] = useState("stream");
+  const [audioProgress, setAudioProgress] = useState({ currentTime: 0, duration: 0 });
   const [listeningRemainingMs, setListeningRemainingMs] = useState(null);
   const [needsAudioGesture, setNeedsAudioGesture] = useState(false);
   const [errorText, setErrorText] = useState("");
@@ -961,6 +920,7 @@ export default function MockWrittenExamPage() {
           setPhase("loading"); setErrorText("");
           const saved = await fetchSavedMockExam(savedExamParam);
           if (cancelled) return;
+          setPersistedScope(persistedExamScope(saved, routeScope));
           setExam(saved.exam); setAnswers(saved.answers || {}); setWritingText(saved.writing_text || "");
           setWritingAssessment(normalizeWritingAssessment(saved.writing_assessment, saved.writing_grade));
           setAttemptId(saved.id); setIsFavorite(saved.is_favorite); setIsSavedReview(true);
@@ -980,6 +940,8 @@ export default function MockWrittenExamPage() {
           setPhase("loading"); setErrorText("");
           const saved = await fetchSavedMockExam(attemptParam);
           if (cancelled) return;
+          const savedScope = persistedExamScope(saved, routeScope);
+          setPersistedScope(savedScope);
           const progress = saved.progress || {};
           setExam(saved.exam); setAnswers(saved.answers || {}); setWritingText(saved.writing_text || "");
           setWritingAssessment(normalizeWritingAssessment(saved.writing_assessment, saved.writing_grade));
@@ -989,7 +951,7 @@ export default function MockWrittenExamPage() {
           setAudioStepStartedAt(Number(progress.audio_step_started_at) || Date.now()); setNow(Date.now());
           setListeningRemainingMs(Number(progress.listening_remaining_ms) || null);
           setWasEarlySubmitted(!!progress.early_submitted);
-          setIsSavedReview(false); localStorage.setItem(activeAttemptKey, String(saved.id));
+          setIsSavedReview(false); localStorage.setItem(activeMockExamKey(user?.id, savedScope), String(saved.id));
           return;
         } catch (error) {
           if (!cancelled) {
@@ -999,11 +961,12 @@ export default function MockWrittenExamPage() {
           return;
         }
       }
-      const stored = sessionStorage.getItem(sessionKey) || localStorage.getItem(sessionKey);
+      const stored = sessionStorage.getItem(routeSessionKey) || localStorage.getItem(routeSessionKey);
       if (stored && loadKey === 0) {
         try {
           const restored = JSON.parse(stored);
           if (restored?.exam && restored?.phase) {
+            setPersistedScope(persistedExamScope(restored.exam, routeScope));
             setExam(restored.exam); setPhase(restored.phase); setDeadline(restored.deadline || 0);
             setNow(Date.now());
             setActivePart(restored.activePart || READING_PART_KEYS[0]); setAnswers(restored.answers || {});
@@ -1016,15 +979,22 @@ export default function MockWrittenExamPage() {
             return;
           }
         } catch {
-          sessionStorage.removeItem(sessionKey);
-          localStorage.removeItem(sessionKey);
+          sessionStorage.removeItem(routeSessionKey);
+          localStorage.removeItem(routeSessionKey);
         }
       }
-      const activeAttemptId = localStorage.getItem(activeAttemptKey);
+      const activeAttemptId = localStorage.getItem(routeActiveAttemptKey);
       if (activeAttemptId && loadKey === 0) {
         try {
           const saved = await fetchSavedMockExam(activeAttemptId);
           if (cancelled) return;
+          const savedScope = persistedExamScope(saved, routeScope);
+          const savedActiveAttemptKey = activeMockExamKey(user?.id, savedScope);
+          if (routeActiveAttemptKey !== savedActiveAttemptKey) {
+            localStorage.removeItem(routeActiveAttemptKey);
+          }
+          localStorage.setItem(savedActiveAttemptKey, String(saved.id));
+          setPersistedScope(savedScope);
           const progress = saved.progress || {};
           setExam(saved.exam); setAnswers(saved.answers || {}); setWritingText(saved.writing_text || "");
           setWritingAssessment(normalizeWritingAssessment(saved.writing_assessment, saved.writing_grade));
@@ -1036,13 +1006,15 @@ export default function MockWrittenExamPage() {
           setWasEarlySubmitted(!!progress.early_submitted); setIsSavedReview(false);
           return;
         } catch {
-          localStorage.removeItem(activeAttemptKey);
+          localStorage.removeItem(routeActiveAttemptKey);
         }
       }
       try {
         setPhase("loading"); setErrorText("");
-        const data = await createMockExam(createRequestIdRef.current);
+        const data = await createMockExam(createRequestIdRef.current, routeScope);
         if (cancelled) return;
+        const createdScope = persistedExamScope(data, routeScope);
+        setPersistedScope(createdScope);
         const progress = data.progress || {};
         const nextDeadline = Number(progress.deadline) || Date.now() + READING_SECONDS * 1000;
         setNow(Date.now());
@@ -1052,13 +1024,14 @@ export default function MockWrittenExamPage() {
         setListeningRemainingMs(null);
         setAttemptId(data.attempt_id); setIsFavorite(false); setIsSavedReview(false); setFavoriteMessage("");
         clearAnnotationScope(mockAnnotationScope(data.attempt_id));
-        localStorage.setItem(activeAttemptKey, String(data.attempt_id));
+        localStorage.setItem(activeMockExamKey(user?.id, createdScope), String(data.attempt_id));
         const initialSnapshot = JSON.stringify({ exam: data, phase: "reading", deadline: nextDeadline,
           activePart: READING_PART_KEYS[0], answers: {}, writingText: "",
           writingAssessment: { ...EMPTY_WRITING_ASSESSMENT }, audioStep: 0,
           audioStepStartedAt: 0, listeningRemainingMs: null, attemptId: data.attempt_id, isFavorite: false, wasEarlySubmitted: false });
-        sessionStorage.setItem(sessionKey, initialSnapshot);
-        localStorage.setItem(sessionKey, initialSnapshot);
+        const createdSessionKey = mockExamSessionKey(user?.id, createdScope);
+        sessionStorage.setItem(createdSessionKey, initialSnapshot);
+        localStorage.setItem(createdSessionKey, initialSnapshot);
       } catch (error) {
         if (!cancelled) {
           setPhase("error");
@@ -1068,7 +1041,7 @@ export default function MockWrittenExamPage() {
     }
     load();
     return () => { cancelled = true; };
-  }, [loadKey, savedExamParam, attemptParam, sessionKey, activeAttemptKey]);
+  }, [loadKey, savedExamParam, attemptParam, routeSessionKey, routeActiveAttemptKey, routeScope, user?.id]);
 
   useEffect(() => {
     if (["loading", "error", "results"].includes(phase)) return undefined;
@@ -1267,6 +1240,8 @@ export default function MockWrittenExamPage() {
     recoveryPositionRef.current = 0;
     pausedListeningRemainingRef.current = null;
     setAudioMode("stream");
+    setAudioBuffering(false);
+    setAudioProgress({ currentTime: 0, duration: 0 });
     setNeedsAudioGesture(false);
     setAudioPlaybackState(currentAudioUrl ? "starting" : "idle");
     return () => {
@@ -1400,7 +1375,7 @@ export default function MockWrittenExamPage() {
     sessionStorage.removeItem(sessionKey); localStorage.removeItem(sessionKey); localStorage.removeItem(activeAttemptKey);
     setExam(null); setAttemptId(null); setIsFavorite(false); setIsSavedReview(false); setWasEarlySubmitted(false);
     createRequestIdRef.current = createRequestId();
-    if (savedExamParam || attemptParam) navigate("/modules/exam-preparation/mock-exam", { replace: true });
+    if (savedExamParam || attemptParam) navigate(mockExamPath, { replace: true });
     else setLoadKey((value) => value + 1);
   }
 
@@ -1414,21 +1389,21 @@ export default function MockWrittenExamPage() {
         setIsFavorite(nextFavorite);
         persist({ isFavorite: nextFavorite });
         setFavoriteMessage(nextFavorite ? "已收藏试卷" : "已取消收藏");
-        if (!nextFavorite && isSavedReview) navigate("/modules/exam-preparation", { replace: true });
+        if (!nextFavorite && isSavedReview) navigate(levelHomePath, { replace: true });
         return;
       }
       if (isFavorite) {
         setIsFavorite(false);
         setFavoriteMessage("已取消收藏");
-        if (isSavedReview) navigate("/modules/exam-preparation", { replace: true });
+        if (isSavedReview) navigate(levelHomePath, { replace: true });
         return;
       }
       const exerciseSelection = exam.selection || Object.fromEntries(
         Object.entries(exam.parts || {}).map(([key, exercise]) => [key, exercise.id])
       );
       const saved = await saveMockExam({
-        exam_type: exam.exam_type || "telc",
-        level: exam.level || "B1",
+        exam_type: currentScope.examType,
+        level: currentScope.level,
         exercise_selection: exerciseSelection,
         answers,
         writing_text: writingText,
@@ -1512,27 +1487,27 @@ export default function MockWrittenExamPage() {
     ? mockAnnotationScope(attemptId)
     : null;
 
-  if (phase === "loading") return <div className="mock-exam-state"><span className="mock-exam-spinner" /><h1>正在准备模拟考试…</h1></div>;
-  if (phase === "error") return <div className="mock-exam-state"><h1>暂时无法开始</h1><p>{errorText}</p><Link to="/modules/exam-preparation/purchase" className="mock-exam-primary">购买以解锁</Link><Link to="/modules/exam-preparation">返回备考季</Link></div>;
+  if (phase === "loading") return <div className="telc-mock-exam-state"><span className="telc-mock-exam-spinner" /><h1>正在准备模拟考试…</h1></div>;
+  if (phase === "error") return <div className="telc-mock-exam-state"><h1>暂时无法开始</h1><p>{errorText}</p><Link to={examPreparationPurchasePath(currentScope)} className="telc-mock-exam-primary">购买以解锁</Link><Link to={levelHomePath}>返回备考季</Link></div>;
   if (!exam) return null;
 
   let phaseContent;
   if (phase === "collection") {
-    phaseContent = <div className="mock-exam-state mock-exam-state--collection"><span className="mock-exam-kicker">第一部分已收卷</span><h1>答案已锁定</h1><p>听力考试将在倒计时结束后自动开始，请准备好耳机并保持页面开启。</p><div className="mock-exam-collection-timer"><strong className="mock-exam-big-time">{formatTime(remainingSeconds)}</strong><button className="mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div><button className="mock-exam-primary" onClick={enterListening}>立即进入听力</button></div>;
+    phaseContent = <div className="telc-mock-exam-state telc-mock-exam-state--collection"><span className="telc-mock-exam-kicker">第一部分已收卷</span><h1>答案已锁定</h1><p>听力考试将在倒计时结束后自动开始，请准备好耳机并保持页面开启。</p><div className="telc-mock-exam-collection-timer"><strong className="telc-mock-exam-big-time">{formatTime(remainingSeconds)}</strong><button className="telc-mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div><button className="telc-mock-exam-primary" onClick={enterListening}>立即进入听力</button></div>;
   } else if (phase === "writing_review") {
     const example = exam.parts.writing?.example_texts?.[0];
     const assessmentComplete = isWritingAssessmentComplete(writingAssessment);
     phaseContent = (
-      <div className="mock-exam-review-backdrop" role="dialog" aria-modal="true" aria-labelledby="writing-review-title">
-        <section className="mock-exam-writing-review">
-          <div className="mock-exam-writing-review__body">
-            <div className="mock-exam-writing-review__head"><div><span>Schreiben · 自评</span><h1 id="writing-review-title">对照范文评估你的写作</h1></div></div>
-            <div className="mock-exam-writing-review__compare">
+      <div className="telc-mock-exam-review-backdrop" role="dialog" aria-modal="true" aria-labelledby="writing-review-title">
+        <section className="telc-mock-exam-writing-review">
+          <div className="telc-mock-exam-writing-review__body">
+            <div className="telc-mock-exam-writing-review__head"><div><span>Schreiben · 自评</span><h1 id="writing-review-title">对照范文评估你的写作</h1></div></div>
+            <div className="telc-mock-exam-writing-review__compare">
               <article><h2>Meine Antwort</h2><div>{textBlocks(writingText || "（未作答）")}</div></article>
               <article><h2>Beispieltext</h2><MockTextRegion as="div" regionId="writing:example">{textBlocks(example?.example_text || "暂无范文")}</MockTextRegion></article>
             </div>
-            <div className="mock-exam-rubric"><h2>评分方法</h2><MockTextRegion as="p" regionId="writing:assessment:instructions">三个维度分别按 5、3、1、0 分计分，维度总分乘以 3，写作满分为 45 分。主题偏离时写作计 0 分。</MockTextRegion></div>
-            <fieldset className="mock-exam-topic-check">
+            <div className="telc-mock-exam-rubric"><h2>评分方法</h2><MockTextRegion as="p" regionId="writing:assessment:instructions">三个维度分别按 5、3、1、0 分计分，维度总分乘以 3，写作满分为 45 分。主题偏离时写作计 0 分。</MockTextRegion></div>
+            <fieldset className="telc-mock-exam-topic-check">
               <legend><MockTextRegion as="span" regionId="writing:assessment:topic">文章是否围绕题目要求和给定情境展开？</MockTextRegion></legend>
               <label className={writingAssessment.topic_relevant === true ? "is-selected" : ""}>
                 <input type="radio" name="writing-topic" checked={writingAssessment.topic_relevant === true}
@@ -1545,9 +1520,9 @@ export default function MockWrittenExamPage() {
                 <strong>否</strong><span>主题偏离，写作计 0 分</span>
               </label>
             </fieldset>
-            {writingAssessment.topic_relevant === true ? <div className="mock-exam-assessment-list">
+            {writingAssessment.topic_relevant === true ? <div className="telc-mock-exam-assessment-list">
               {WRITING_CRITERIA.map((criterion) => (
-                <fieldset className="mock-exam-grade-picker" key={criterion.key}>
+                <fieldset className="telc-mock-exam-grade-picker" key={criterion.key}>
                   <legend><MockTextRegion as="span" regionId={`writing:assessment:${criterion.key}:title`}>{criterion.title}</MockTextRegion></legend>
                   {Object.entries(criterion.options).map(([grade, description]) => (
                     <label key={grade} className={writingAssessment[criterion.key] === grade ? "is-selected" : ""}>
@@ -1561,9 +1536,9 @@ export default function MockWrittenExamPage() {
               ))}
             </div> : null}
           </div>
-          <div className="mock-exam-writing-review__actions mock-exam-writing-review__actions--sticky">
+          <div className="telc-mock-exam-writing-review__actions telc-mock-exam-writing-review__actions--sticky">
             <button
-              className="mock-exam-writing-review__submit"
+              className="telc-mock-exam-writing-review__submit"
               disabled={!assessmentComplete}
               onClick={finishSelfAssessment}
               style={{
@@ -1586,7 +1561,7 @@ export default function MockWrittenExamPage() {
   const visiblePartKeys = isResults ? ALL_REVIEW_PART_KEYS : phase === "reading" ? READING_PART_KEYS : phase === "listening" ? LISTENING_PART_KEYS : ["writing"];
   const audioLocked = phase === "listening" && audioPlaying;
   const audioLoading = currentAudioAction?.kind === "audio" && (
-    audioPlaybackState === "starting" || audioPlaybackState === "recovering" || audioPlaybackState === "switching"
+    audioBuffering || audioPlaybackState === "starting" || audioPlaybackState === "recovering" || audioPlaybackState === "switching"
   );
   const audioFailed = currentAudioAction?.kind === "audio" && audioPlaybackState === "error";
   const partNavigationKeys = activePart === "writing"
@@ -1610,20 +1585,20 @@ export default function MockWrittenExamPage() {
   }
 
   phaseContent = (
-    <div className={`mock-exam-page${isResults ? " is-results" : ""}`}>
-      <header className="mock-exam-header">
-        <div><button className="mock-exam-back" onClick={() => navigate("/modules/exam-preparation")}>← 退出模拟</button><span className="mock-exam-kicker">telc B1 · 笔试模拟</span><h1>{isResults ? "考试结果与答案回顾" : phase === "reading" ? "Lesen & Sprachbausteine" : phase === "listening" ? "Hören" : "Schreiben"}</h1></div>
-        <div className="mock-exam-header__actions">
-          {isResults ? <button className={`mock-exam-utility${isFavorite ? " is-favorite" : ""}`} disabled={favoritePending} onClick={toggleFavorite}>{isFavorite ? "★ 已收藏" : "☆ 收藏本卷"}</button> : null}
-          {!isResults ? <div className="mock-exam-timer-actions"><div className={`mock-exam-timer${remainingSeconds <= 300 ? " is-urgent" : ""}`}><span>剩余时间</span><strong>{formatTime(remainingSeconds)}</strong><small>{phase === "reading" ? "90 分钟" : "30 分钟"}</small></div><button className="mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div> : <button className="mock-exam-primary" onClick={newExam}>再考一套</button>}
+    <div className={`telc-mock-exam-page${isResults ? " is-results" : ""}`}>
+      <header className="telc-mock-exam-header">
+        <div><button className="telc-mock-exam-back" onClick={() => navigate(levelHomePath)}>← 退出模拟</button><span className="telc-mock-exam-kicker">{currentScope.examType} {currentScope.level} · 笔试模拟</span><h1>{isResults ? "考试结果与答案回顾" : phase === "reading" ? "Lesen & Sprachbausteine" : phase === "listening" ? "Hören" : "Schreiben"}</h1></div>
+        <div className="telc-mock-exam-header__actions">
+          {isResults ? <button className={`telc-mock-exam-utility${isFavorite ? " is-favorite" : ""}`} disabled={favoritePending} onClick={toggleFavorite}>{isFavorite ? "★ 已收藏" : "☆ 收藏本卷"}</button> : null}
+          {!isResults ? <div className="telc-mock-exam-timer-actions"><div className={`telc-mock-exam-timer${remainingSeconds <= 300 ? " is-urgent" : ""}`}><span>剩余时间</span><strong>{formatTime(remainingSeconds)}</strong><small>{phase === "reading" ? "90 分钟" : "30 分钟"}</small></div><button className="telc-mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div> : <button className="telc-mock-exam-primary" onClick={newExam}>再考一套</button>}
         </div>
       </header>
-      {favoriteMessage ? <p className="mock-exam-save-message" aria-live="polite">{favoriteMessage}</p> : null}
+      {favoriteMessage ? <p className="telc-mock-exam-save-message" aria-live="polite">{favoriteMessage}</p> : null}
 
       {isResults && resultModalOpen ? (
-        <div className="mock-exam-result-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="mock-result-title">
-          <section className={`mock-exam-result-modal${scores.passed ? " is-passed" : " is-failed"}`}>
-            <div className="mock-exam-result-celebration" aria-hidden="true">
+        <div className="telc-mock-exam-result-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="mock-result-title">
+          <section className={`telc-mock-exam-result-modal${scores.passed ? " is-passed" : " is-failed"}`}>
+            <div className="telc-mock-exam-result-celebration" aria-hidden="true">
               {scores.passed ? <><i /><i /><i /></> : null}
               <span>{scores.passed ? "✓" : "↻"}</span>
               {scores.passed ? <><i /><i /><i /></> : null}
@@ -1632,15 +1607,15 @@ export default function MockWrittenExamPage() {
             <strong>{formatScore(scores.raw)}<small> / 225 分</small></strong>
             <p>正确率 {scores.percentage.toFixed(1)}%</p>
             <p>{scores.passed ? "已达到笔试 135 分通过线。" : "本次尚未达到笔试 135 分通过线。"}</p>
-            <button type="button" className="mock-exam-primary" onClick={() => setResultModalOpen(false)}>查看答题详情</button>
+            <button type="button" className="telc-mock-exam-primary" onClick={() => setResultModalOpen(false)}>查看答题详情</button>
           </section>
         </div>
       ) : null}
 
       {isResults ? (
-        <section className="mock-exam-results">
-          <div className="mock-exam-result-main"><span>笔试成绩</span><strong>{formatScore(scores.raw)}<small> / 225</small></strong><b>{scores.passed ? "通过" : "未通过"}</b><p>正确率 {scores.percentage.toFixed(1)}%，通过线为 135 分。</p></div>
-          <div className="mock-exam-result-grid">
+        <section className="telc-mock-exam-results">
+          <div className="telc-mock-exam-result-main"><span>笔试成绩</span><strong>{formatScore(scores.raw)}<small> / 225</small></strong><b>{scores.passed ? "通过" : "未通过"}</b><p>正确率 {scores.percentage.toFixed(1)}%，通过线为 135 分。</p></div>
+          <div className="telc-mock-exam-result-grid">
             <article><span>Lesen</span><strong>{scores.reading.toFixed(2)} / 75</strong><small>{scores.readingCorrect} / 20 题</small></article>
             <article><span>Sprachbausteine</span><strong>{scores.cloze.toFixed(2)} / 30</strong><small>{scores.clozeCorrect} / 20 题</small></article>
             <article><span>Hören</span><strong>{scores.listening.toFixed(2)} / 75</strong><small>{scores.listeningCorrect} / 20 题</small></article>
@@ -1650,35 +1625,53 @@ export default function MockWrittenExamPage() {
       ) : null}
 
       {phase === "listening" ? (
-        <section className={`mock-exam-audio-status${audioLoading ? " is-loading" : audioFailed ? " is-error" : ""}`} aria-live="polite">
-          {audioLoading ? <><span className="mock-exam-audio-spinner" aria-hidden="true" /><span className="mock-exam-audio-status__title">{audioPlaybackState === "switching" ? "正在切换备用音频…" : audioPlaybackState === "recovering" ? "正在恢复听力播放…" : "正在加载听力音频…"}</span></> : null}
-          {audioFailed ? <span className="mock-exam-audio-status__error" role="alert">{AUDIO_LOAD_ERROR}</span> : null}
-          {currentAudioAction?.kind === "audio" && !audioLoading && !audioFailed ? <><span className="mock-exam-audio-status__title">{needsAudioGesture ? "听力音频已就绪" : `正在播放 · ${PARTS[currentAudioAction.partKey].title}`}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : currentAudioAction?.kind !== "audio" ? <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></> : null}
+        <section className={`telc-mock-exam-audio-status${audioLoading ? " is-loading" : audioFailed ? " is-error" : ""}`} aria-live="polite">
+          {audioLoading ? <><span className="telc-mock-exam-audio-spinner" aria-hidden="true" /><span className="telc-mock-exam-audio-status__title">{audioPlaybackState === "switching" ? "正在切换备用音频…" : audioPlaybackState === "recovering" ? "正在恢复听力播放…" : "正在加载听力音频…"}</span></> : null}
+          {audioFailed ? <span className="telc-mock-exam-audio-status__error" role="alert">{AUDIO_LOAD_ERROR}</span> : null}
+          {currentAudioAction?.kind === "audio" && !audioLoading && !audioFailed ? <><span className="telc-mock-exam-audio-status__title">{needsAudioGesture ? "听力音频已就绪" : `正在播放 · ${PARTS[currentAudioAction.partKey].title}`}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : currentAudioAction?.kind !== "audio" ? <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></> : null}
           {needsAudioGesture ? <button onClick={() => playCurrentAudio(true)}>点击继续播放录音</button> : null}
+          {currentAudioAction?.kind === "audio" ? (
+            <div
+              className="telc-mock-exam-audio-timeline"
+              aria-live="off"
+              style={{ "--telc-audio-progress": `${audioProgress.duration ? (Math.min(audioProgress.currentTime, audioProgress.duration) / audioProgress.duration) * 100 : 0}%` }}
+            >
+              <progress max={audioProgress.duration || 1} value={audioProgress.duration ? Math.min(audioProgress.currentTime, audioProgress.duration) : 0} aria-label="听力播放进度" />
+              <div className="telc-mock-exam-audio-timeline__meta" aria-hidden="true">
+                <span>{formatTime(audioProgress.currentTime)}</span>
+                <span>{formatTime(audioProgress.duration)}</span>
+              </div>
+            </div>
+          ) : null}
           <audio ref={audioRef} src={currentAudioSource || undefined} onCanPlay={(event) => {
             if (audioMode === "blob" && audioPlaybackState === "switching") event.currentTarget.currentTime = recoveryPositionRef.current;
             playCurrentAudio();
           }}
-            onPlay={() => { setAudioPlaying(true); setAudioPlaybackState("playing"); }} onPause={() => setAudioPlaying(false)}
-            onError={(event) => { recoverCurrentAudio(event.currentTarget.error, pausedListeningRemainingRef.current); }}
-            onEnded={handleAudioEnded} preload="auto" />
+            onPlay={() => { setAudioPlaying(true); setAudioBuffering(false); setAudioPlaybackState("playing"); }} onPause={() => setAudioPlaying(false)}
+            onWaiting={() => setAudioBuffering(true)} onPlaying={() => setAudioBuffering(false)}
+            onError={(event) => { setAudioBuffering(false); recoverCurrentAudio(event.currentTarget.error, pausedListeningRemainingRef.current); }}
+            onLoadedMetadata={(event) => { const { currentTime, duration } = event.currentTarget; setAudioProgress({ currentTime: Number.isFinite(currentTime) ? currentTime : 0, duration: Number.isFinite(duration) ? duration : 0 }); }}
+            onDurationChange={(event) => { const duration = event.currentTarget.duration; setAudioProgress((previous) => ({ ...previous, duration: Number.isFinite(duration) ? duration : 0 })); }}
+            onTimeUpdate={(event) => { const currentTime = event.currentTarget.currentTime; setAudioProgress((previous) => ({ ...previous, currentTime: Number.isFinite(currentTime) ? currentTime : 0 })); }}
+            onLoadStart={() => { setAudioBuffering(false); setAudioProgress({ currentTime: 0, duration: 0 }); }}
+            onEnded={(event) => { setAudioBuffering(false); handleAudioEnded(event); }} preload="auto" />
         </section>
       ) : null}
 
-      <nav className="mock-exam-part-nav" aria-label="考试部分">
+      <nav className="telc-mock-exam-part-nav" aria-label="考试部分">
         {visiblePartKeys.map((key) => <button key={key} className={activePart === key ? "is-active" : ""}
           disabled={audioLocked && key !== activePart} onClick={() => setActivePart(key)} aria-label={PARTS[key].title}>
-          <span className="mock-exam-part-nav__full">{PARTS[key].title}</span>
-          <span className="mock-exam-part-nav__short" aria-hidden="true">{PARTS[key].short}</span>
+          <span className="telc-mock-exam-part-nav__full">{PARTS[key].title}</span>
+          <span className="telc-mock-exam-part-nav__short" aria-hidden="true">{PARTS[key].short}</span>
         </button>)}
       </nav>
 
       <ExercisePart partKey={activePart} exercise={exam.parts[activePart]} answers={answers} setAnswer={setAnswer} setAnswers={setAnswers}
         disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
-        favoriteFor={favoriteFor} questionNumbers={questionNumbers} sectionRef={exercisePartRef} />
+        favoriteFor={favoriteFor} questionNumbers={questionNumbers} sectionRef={exercisePartRef} examLabel={`${currentScope.examType} ${currentScope.level}`} />
 
       {activePartIndex >= 0 ? (
-        <nav className="mock-exam-bottom-nav" aria-label="前后部分导航">
+        <nav className="telc-mock-exam-bottom-nav" aria-label="前后部分导航">
           <button type="button" aria-label="上一部分" title="上一部分"
             disabled={audioLocked || activePartIndex === 0} onClick={() => moveToAdjacentPart(-1)}>←</button>
           <button type="button" aria-label="下一部分" title="下一部分"
@@ -1687,10 +1680,10 @@ export default function MockWrittenExamPage() {
       ) : null}
 
       {visibleAnswerSheetRows.length ? (
-        <MockExamAnswerSheet rows={visibleAnswerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults} />
+        <TelcMockExamAnswerSheet rows={visibleAnswerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults} />
       ) : null}
 
-      {!isResults ? <footer className="mock-exam-footer"><div><strong>上交答题卡</strong></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
+      {!isResults ? <footer className="telc-mock-exam-footer"><div><strong>上交答题卡</strong></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
     </div>
   );
   }

@@ -69,11 +69,10 @@ class ExerciseBase(models.Model):
     )
     exam_type = models.CharField(
         max_length=128,
-        blank=True,
-        default="",
+        default="TELC",
         db_index=True,
         verbose_name="exam type",
-        help_text="Exam family or certificate type, for example Goethe-Zertifikat B1 or telc B1.",
+        help_text="Exam family or certificate type, for example TELC or GOETHE.",
     )
     title = models.CharField(max_length=255, blank=True, default="", verbose_name="title")
     difficulty = models.CharField(max_length=32, blank=True, default="", verbose_name="difficulty")
@@ -103,16 +102,33 @@ class ExerciseBase(models.Model):
         ordering = ["level", "exercise_type", "external_id", "id"]
         constraints = [
             models.UniqueConstraint(
-                fields=["level", "exercise_type", "external_id"],
-                name="exam_prep_base_level_type_ext_uq",
+                fields=["exam_type", "level", "exercise_type", "external_id"],
+                name="exam_prep_base_scope_type_ext_uq",
             )
         ]
         indexes = [
             models.Index(fields=["skill", "level"], name="exam_prep_base_skill_lvl_idx"),
             models.Index(fields=["exercise_type", "level"], name="exam_prep_base_type_lvl_idx"),
             models.Index(fields=["exam_type"], name="exam_prep_base_exam_type_idx"),
+            models.Index(fields=["exam_type", "level", "skill"], name="exam_prep_base_scope_skill_idx"),
+            models.Index(fields=["exam_type", "level", "exercise_type"], name="exam_prep_base_scope_type_idx"),
             models.Index(fields=["creation_method"], name="exam_prep_base_create_idx"),
         ]
 
     def __str__(self) -> str:
         return f"{self.level}-{self.exercise_type}-{self.external_id}"
+
+    def save(self, *args, **kwargs):
+        from apps.exam_preparation.scope import ExamScope
+
+        scope = ExamScope.from_values(self.exam_type, self.level)
+        normalized_fields = set()
+        if self.exam_type != scope.exam_type:
+            normalized_fields.add("exam_type")
+        if self.level != scope.level:
+            normalized_fields.add("level")
+        self.exam_type = scope.exam_type
+        self.level = scope.level
+        if kwargs.get("update_fields") is not None and normalized_fields:
+            kwargs["update_fields"] = set(kwargs["update_fields"]) | normalized_fields
+        return super().save(*args, **kwargs)

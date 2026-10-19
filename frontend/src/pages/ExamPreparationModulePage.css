@@ -4,6 +4,134 @@
   gap: 1.25rem;
 }
 
+.exam-module-page__back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #d2ddd8;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  color: #49635b;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(39, 77, 66, 0.07);
+}
+
+.exam-module-page__back:hover {
+  border-color: #9eb9af;
+  background: #f4f8f6;
+  color: #245e4e;
+}
+
+.exam-module-page__back:focus-visible {
+  border-radius: 0.25rem;
+  outline: 3px solid rgba(47, 111, 94, 0.28);
+  outline-offset: 3px;
+}
+
+.exam-level-selection {
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.exam-level-selection h1 {
+  margin: 0 0 clamp(1.25rem, 3vw, 2rem);
+  color: #26342f;
+  font-size: clamp(1.55rem, 3vw, 2.1rem);
+  text-align: center;
+}
+
+.exam-level-selection__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 15.5rem));
+  justify-content: center;
+  gap: clamp(0.8rem, 2.5vw, 1.4rem);
+}
+
+.exam-level-selection__card {
+  position: relative;
+  display: flex;
+  aspect-ratio: 1.05 / 1;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: clamp(1rem, 3vw, 1.55rem);
+  border: 1px solid rgba(57, 102, 88, 0.2);
+  border-radius: clamp(1.05rem, 2.5vw, 1.45rem);
+  color: #21483d;
+  text-decoration: none;
+  box-shadow: 0 14px 30px rgba(39, 77, 66, 0.1);
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.exam-level-selection__card::after {
+  position: absolute;
+  right: -18%;
+  bottom: -30%;
+  width: 70%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.42);
+  content: "";
+}
+
+.exam-level-selection__card--b1 {
+  background: linear-gradient(145deg, #f8f3e8 0%, #dfede3 100%);
+}
+
+.exam-level-selection__card--b2 {
+  background: linear-gradient(145deg, #eef3f7 0%, #d9ebe5 100%);
+}
+
+.exam-level-selection__card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(43, 101, 83, 0.38);
+  box-shadow: 0 18px 36px rgba(39, 77, 66, 0.16);
+}
+
+.exam-level-selection__card:focus-visible {
+  outline: 3px solid rgba(47, 111, 94, 0.34);
+  outline-offset: 3px;
+}
+
+.exam-level-selection__title,
+.exam-level-selection__action {
+  position: relative;
+  z-index: 1;
+}
+
+.exam-level-selection__title {
+  font-size: clamp(1.55rem, 4.5vw, 2.65rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.exam-level-selection__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  font-size: clamp(0.78rem, 2vw, 0.95rem);
+  font-weight: 700;
+}
+
+@media (max-width: 430px) {
+  .exam-level-selection {
+    padding-inline: 0.75rem;
+  }
+
+  .exam-level-selection__grid {
+    gap: 0.7rem;
+  }
+
+  .exam-level-selection__card {
+    padding: 0.9rem;
+  }
+}
+
 .exam-module-hero {
   display: block;
 }

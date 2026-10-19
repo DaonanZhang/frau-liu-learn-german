@@ -33,6 +33,25 @@ grep -q -- '--target-name Shanghai' "$LOG_FILE"
 grep -q -- '--target-name Frankfurt' "$LOG_FILE"
 
 : > "$LOG_FILE"
+mkdir -p "$TMP_DIR/b2_audio/teil1"
+SYNC_TEST_LOG="$LOG_FILE" \
+COS_SYNC_HELPER="$FAKE_HELPER" \
+EXAM_TYPE=TELC LEVEL=B2 EXAM_SPEAKING_AUDIO_SOURCE_DIR="$TMP_DIR/b2_audio" \
+  "$ROOT_DIR/scripts/sync_exam_preparation_speaking_audio_to_both_cos.sh" --dry-run
+[[ "$(grep -c -- '--source-dir .*b2_audio --scan-all --object-prefix resources/ExamPreparation/exam_preparation_audio/telc_b2_speaking' "$LOG_FILE")" == "2" ]]
+
+if EXAM_TYPE=telc COS_SYNC_HELPER="$FAKE_HELPER" EXAM_SPEAKING_AUDIO_SOURCE_DIR="$TMP_DIR/audio" \
+  "$ROOT_DIR/scripts/sync_exam_preparation_speaking_audio_to_both_cos.sh" --dry-run 2>/dev/null; then
+  echo "lowercase exam family should be rejected" >&2
+  exit 1
+fi
+if LEVEL=Z9 COS_SYNC_HELPER="$FAKE_HELPER" EXAM_SPEAKING_AUDIO_SOURCE_DIR="$TMP_DIR/audio" \
+  "$ROOT_DIR/scripts/sync_exam_preparation_speaking_audio_to_both_cos.sh" --dry-run 2>/dev/null; then
+  echo "unsupported level should be rejected" >&2
+  exit 1
+fi
+
+: > "$LOG_FILE"
 set +e
 SYNC_TEST_LOG="$LOG_FILE" \
 FAIL_SHANGHAI=1 \

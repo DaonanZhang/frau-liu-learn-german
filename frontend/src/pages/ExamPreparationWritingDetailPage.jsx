@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { examPreparationScope } from "../utils/examPreparationScope.js";
 import { useAuth } from "../api/auth/index.js";
 import { updateMyProfile } from "../api/auth/profile.js";
 import {
@@ -21,7 +22,7 @@ import {
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import "./ExamPreparationWritingDetailPage.css";
 
-function renderStoredLineBreaks(text, fallback = "") {
+export function renderStoredLineBreaks(text, fallback = "") {
   return String(text || fallback).split(/<br\s*\/?>|\r\n?|\n/gi).map((part, index) => (
     <span key={`${index}-${part}`}>
       {index > 0 ? <br /> : null}{part}
@@ -79,6 +80,7 @@ function WritingResetAction({ onReset }) {
 
 export default function ExamPreparationWritingDetailPage() {
   const { exerciseId } = useParams();
+  const scope = examPreparationScope(useParams().level);
   const { user, reloadMe } = useAuth();
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -106,7 +108,7 @@ export default function ExamPreparationWritingDetailPage() {
       try {
         setLoading(true);
         setErrorText("");
-        const detail = await fetchWritingExerciseDetail(exerciseId);
+        const detail = await fetchWritingExerciseDetail(exerciseId, scope);
         if (!aborted) {
           setExercise(detail || null);
           const timeLimitSeconds = (detail?.time_limit_minutes || 30) * 60;
@@ -322,22 +324,22 @@ export default function ExamPreparationWritingDetailPage() {
       <div className="writing-detail-page">
       <div className="writing-detail-shell">
         <div className="writing-detail-topbar">
-          <Link to="/modules/exam-preparation/schreiben" className="writing-detail-topbar__back">
+          <Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/schreiben`} className="writing-detail-topbar__back">
             ← 返回写作模块
           </Link>
           <span className="writing-detail-topbar__meta">
-            {exercise?.exercise_base?.level || "B1"} · {exercise?.exercise_base?.external_id || exercise?.id}
+            {exercise?.exercise_base?.level || scope?.level} · {exercise?.exercise_base?.external_id || exercise?.id}
           </span>
         </div>
 
         <section className="writing-detail-hero">
           <h1 className="writing-detail-hero__title">{heroTitle}</h1>
-          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="writing-detail-hero__badges">
               {exercise?.exercise_base?.exam_type ? <span className="writing-detail-hero__badge writing-detail-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
-              {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
+              {exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="writing-detail-hero__badge">
-                  难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
+                  难度：{exercise.exercise_base.level || scope?.level || exercise.exercise_base.difficulty}
                 </span>
               ) : null}
               {exercise?.exercise_base?.is_real_exam ? (

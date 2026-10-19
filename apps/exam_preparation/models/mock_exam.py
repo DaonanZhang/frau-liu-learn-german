@@ -16,6 +16,21 @@ def generate_mock_exam_share_code():
     return "MS-" + "".join(secrets.choice(alphabet) for _ in range(12))
 
 
+def _normalize_scope_before_save(instance, kwargs):
+    from apps.exam_preparation.scope import ExamScope
+
+    scope = ExamScope.from_values(instance.exam_type, instance.level)
+    normalized_fields = set()
+    if instance.exam_type != scope.exam_type:
+        normalized_fields.add("exam_type")
+    if instance.level != scope.level:
+        normalized_fields.add("level")
+    instance.exam_type = scope.exam_type
+    instance.level = scope.level
+    if kwargs.get("update_fields") is not None and normalized_fields:
+        kwargs["update_fields"] = set(kwargs["update_fields"]) | normalized_fields
+
+
 class MockExamPaper(models.Model):
     """A reusable mock-exam question set, independent from any user's attempt."""
 
@@ -24,7 +39,7 @@ class MockExamPaper(models.Model):
         MANUAL = "manual", "Manual"
 
     code = models.CharField(max_length=11, unique=True, default=generate_mock_exam_code, editable=False)
-    exam_type = models.CharField(max_length=128, default="telc")
+    exam_type = models.CharField(max_length=128, default="TELC")
     level = models.CharField(max_length=8, default="B1")
     exercise_selection = models.JSONField(default=dict)
     creation_method = models.CharField(
@@ -49,6 +64,10 @@ class MockExamPaper(models.Model):
     def __str__(self) -> str:
         return f"MockExamPaper<{self.code} {self.exam_type} {self.level}>"
 
+    def save(self, *args, **kwargs):
+        _normalize_scope_before_save(self, kwargs)
+        return super().save(*args, **kwargs)
+
 
 class SavedMockExam(models.Model):
     """One user's answers and progress for a reusable mock-exam paper."""
@@ -64,7 +83,7 @@ class SavedMockExam(models.Model):
         related_name="attempts",
     )
     fingerprint = models.CharField(max_length=64)
-    exam_type = models.CharField(max_length=128, default="telc")
+    exam_type = models.CharField(max_length=128, default="TELC")
     level = models.CharField(max_length=8, default="B1")
     exercise_selection = models.JSONField(default=dict)
     answers = models.JSONField(default=dict, blank=True)
@@ -92,6 +111,10 @@ class SavedMockExam(models.Model):
 
     def __str__(self) -> str:
         return f"SavedMockExam<user={self.user_id} id={self.pk}>"
+
+    def save(self, *args, **kwargs):
+        _normalize_scope_before_save(self, kwargs)
+        return super().save(*args, **kwargs)
 
 
 class MockExamShare(models.Model):

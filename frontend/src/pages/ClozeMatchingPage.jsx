@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { examPreparationScope } from "../utils/examPreparationScope.js";
 import {
   fetchClozeMatchingExerciseDetail,
 } from "../api/exam_preparation/clozeExercises.js";
@@ -65,6 +66,7 @@ function ClozeMatchingResetAction({ onReset }) {
 
 export default function ClozeMatchingPage() {
   const { exerciseId } = useParams();
+  const scope = examPreparationScope(useParams().level);
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -91,7 +93,7 @@ export default function ClozeMatchingPage() {
         if (!exerciseId) {
           throw new Error("No cloze matching exercise selected.");
         }
-        const detail = await fetchClozeMatchingExerciseDetail(exerciseId);
+        const detail = await fetchClozeMatchingExerciseDetail(exerciseId, scope);
         if (!aborted) {
           setExercise(detail || null);
           const stateData = await fetchClozeMatchingBlankStates(exerciseId);
@@ -337,22 +339,22 @@ export default function ClozeMatchingPage() {
       <div className="cloze-page">
         <div className="cloze-shell">
         <div className="cloze-topbar">
-          <Link to="/modules/exam-preparation/sprachbausteine/cloze-matching" className="cloze-topbar__back">
+          <Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/sprachbausteine/cloze-matching`} className="cloze-topbar__back">
             ← Zurück zu Sprachbausteine
           </Link>
           <span className="cloze-topbar__meta">
-            {exercise?.exercise_base?.level || "B1"} · {exercise?.exercise_base?.external_id || "001"}
+            {exercise?.exercise_base?.level || scope?.level} · {exercise?.exercise_base?.external_id || "001"}
           </span>
         </div>
 
         <section className="cloze-hero">
           <h1 className="cloze-hero__title">{heroTitle}</h1>
-          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="cloze-hero__badges">
               {exercise?.exercise_base?.exam_type ? <span className="cloze-hero__badge cloze-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
-              {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
+              {exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="cloze-hero__badge">
-                  难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
+                  难度：{exercise.exercise_base.level || scope?.level || exercise.exercise_base.difficulty}
                 </span>
               ) : null}
               {exercise?.exercise_base?.is_real_exam ? (
@@ -463,7 +465,7 @@ export default function ClozeMatchingPage() {
                     : "";
 
                   return (
-                    <Fragment key={blankKey}>
+                    <Fragment key={`${blankKey}:${paragraphIndex}:${index}`}>
                     <span
                       ref={(node) => {
                         blankRefs.current[blankKey] = node;

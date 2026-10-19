@@ -39,6 +39,8 @@ def is_free_trial_exercise(exercise) -> bool:
     free_ids = list(
         type(exercise).objects.filter(
             exercise_base__exercise_type=exercise_base.exercise_type,
+            exercise_base__exam_type=exercise_base.exam_type,
+            exercise_base__level=exercise_base.level,
         )
         .order_by("id")
         .values_list("id", flat=True)[:FREE_EXERCISES_PER_TYPE]

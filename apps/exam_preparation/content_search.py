@@ -7,6 +7,7 @@ from typing import Any, Iterable
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 
 from apps.exam_preparation.models import ExerciseBase
+from apps.exam_preparation.scope import ExamScope
 
 
 MAX_QUERY_LENGTH = 200
@@ -19,6 +20,8 @@ class SearchQuery:
     terms: tuple[str, ...]
     skill: str | None
     teil: int | None
+    exam_type: str
+    level: str
 
 
 SKILLS = {
@@ -81,6 +84,8 @@ def parse_search_query(
     query: str,
     skill: str | None = None,
     teil: str | int | None = None,
+    exam_type: str | None = None,
+    level: str | None = None,
 ) -> SearchQuery:
     normalized_query = " ".join(str(query or "").split())
     if not normalized_query:
@@ -105,11 +110,20 @@ def parse_search_query(
         if normalized_teil not in valid_types:
             raise ValidationError({"teil": "该模块不支持这个 Teil。"})
 
+    try:
+        scope = ExamScope.from_values(
+            **({"exam_type": exam_type} if exam_type is not None else {}),
+            **({"level": level} if level is not None else {}),
+        )
+    except ValueError as exc:
+        raise ValidationError({"scope": str(exc)}) from exc
     return SearchQuery(
         query=normalized_query,
         terms=tuple(term.casefold() for term in normalized_query.split()),
         skill=normalized_skill,
         teil=normalized_teil,
+        exam_type=scope.exam_type,
+        level=scope.level,
     )
 
 
@@ -135,6 +149,7 @@ def _exercise_queryset(search_query: SearchQuery):
         "cloze_matching_exercise__blank_answers__correct_option",
         "writing_exercise__example_texts",
     )
+    queryset = queryset.filter(exam_type=search_query.exam_type, level=search_query.level)
     if search_query.skill:
         config = SKILLS[search_query.skill]
         queryset = queryset.filter(skill=config["model_value"])
@@ -322,19 +337,20 @@ def _exercise_object(base: ExerciseBase):
 
 
 def _href(base: ExerciseBase, exercise_id: int) -> str:
+    level_prefix = f"/modules/exam-preparation/{base.level.lower()}"
     routes = {
-        ExerciseBase.ExerciseType.LISTENING_TEIL1: "/modules/exam-preparation/hoeren/short-text-prep/{id}",
-        ExerciseBase.ExerciseType.LISTENING_TEIL2: "/modules/exam-preparation/hoeren/short-text-once/{id}",
-        ExerciseBase.ExerciseType.LISTENING_TEIL3: "/modules/exam-preparation/hoeren/dialog-twice/{id}",
-        ExerciseBase.ExerciseType.READING_TITLE_MATCHING: "/modules/exam-preparation/lesen/title-matching/{id}",
-        ExerciseBase.ExerciseType.READING_UNDERSTANDING: "/modules/exam-preparation/lesen/understanding/{id}",
-        ExerciseBase.ExerciseType.READING_AD_MATCHING: "/modules/exam-preparation/lesen/ad-matching/{id}",
-        ExerciseBase.ExerciseType.CLOZE_CHOICE: "/modules/exam-preparation/sprachbausteine/cloze-choice/{id}",
-        ExerciseBase.ExerciseType.CLOZE_MATCHING: "/modules/exam-preparation/sprachbausteine/cloze-matching/{id}",
-        ExerciseBase.ExerciseType.WRITING_PROMPT: "/modules/exam-preparation/schreiben/{id}",
-        ExerciseBase.ExerciseType.SPEAKING_TEIL1: "/modules/exam-preparation/sprechen/teil-1/{id}",
-        ExerciseBase.ExerciseType.SPEAKING_TEIL2: "/modules/exam-preparation/sprechen/teil-2/{id}",
-        ExerciseBase.ExerciseType.SPEAKING_TEIL3: "/modules/exam-preparation/sprechen/teil-3/{id}",
+        ExerciseBase.ExerciseType.LISTENING_TEIL1: f"{level_prefix}/hoeren/short-text-prep/{{id}}",
+        ExerciseBase.ExerciseType.LISTENING_TEIL2: f"{level_prefix}/hoeren/short-text-once/{{id}}",
+        ExerciseBase.ExerciseType.LISTENING_TEIL3: f"{level_prefix}/hoeren/dialog-twice/{{id}}",
+        ExerciseBase.ExerciseType.READING_TITLE_MATCHING: f"{level_prefix}/lesen/title-matching/{{id}}",
+        ExerciseBase.ExerciseType.READING_UNDERSTANDING: f"{level_prefix}/lesen/understanding/{{id}}",
+        ExerciseBase.ExerciseType.READING_AD_MATCHING: f"{level_prefix}/lesen/ad-matching/{{id}}",
+        ExerciseBase.ExerciseType.CLOZE_CHOICE: f"{level_prefix}/sprachbausteine/cloze-choice/{{id}}",
+        ExerciseBase.ExerciseType.CLOZE_MATCHING: f"{level_prefix}/sprachbausteine/cloze-matching/{{id}}",
+        ExerciseBase.ExerciseType.WRITING_PROMPT: f"{level_prefix}/schreiben/{{id}}",
+        ExerciseBase.ExerciseType.SPEAKING_TEIL1: f"{level_prefix}/sprechen/teil-1/{{id}}",
+        ExerciseBase.ExerciseType.SPEAKING_TEIL2: f"{level_prefix}/sprechen/teil-2/{{id}}",
+        ExerciseBase.ExerciseType.SPEAKING_TEIL3: f"{level_prefix}/sprechen/teil-3/{{id}}",
     }
     return routes[base.exercise_type].format(id=exercise_id)
 

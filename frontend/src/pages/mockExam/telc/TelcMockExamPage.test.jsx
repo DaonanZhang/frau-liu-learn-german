@@ -1,18 +1,19 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import MockWrittenExamPage from "./MockWrittenExamPage.jsx";
-import MockExamAnswerSheet from "../components/examPreparation/MockExamAnswerSheet.jsx";
-import { mockAnnotationScope } from "../utils/examTextAnnotations.js";
+import TelcMockExamPage from "./TelcMockExamPage.jsx";
+import TelcMockExamAnswerSheet from "./TelcMockExamAnswerSheet.jsx";
+import { mockAnnotationScope } from "../../../utils/examTextAnnotations.js";
 import {
+  activeMockExamKey,
   createMockExam,
   fetchSavedMockExam,
   submitSavedMockExam,
   updateSavedMockExam,
-} from "../api/exam_preparation/mockExams.js";
+} from "../../../api/exam_preparation/mockExams.js";
 
 const originalCreateObjectURL = URL.createObjectURL;
 const originalRevokeObjectURL = URL.revokeObjectURL;
@@ -28,20 +29,25 @@ beforeAll(() => {
   URL.revokeObjectURL = vi.fn();
 });
 
-const mockExamStyleSource = readFileSync(resolve("src/pages/MockWrittenExamPage.css"), "utf8");
+const mockExamStyleSource = readFileSync(resolve("src/pages/mockExam/telc/TelcMockExamPage.css"), "utf8");
 const clozeExerciseStyleSource = readFileSync(resolve("src/pages/ClozeExercisePage.css"), "utf8");
 const appLayoutStyleSource = readFileSync(resolve("src/layouts/AppLayout.css"), "utf8");
 const readingAdStyleSource = readFileSync(resolve("src/pages/ReadingAdMatchingPage.css"), "utf8");
 
-vi.mock("../api/auth/useAuth.js", () => ({
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{location.pathname}{location.search}</div>;
+}
+
+vi.mock("../../../api/auth/useAuth.js", () => ({
   useAuth: () => ({ user: { id: 7 } }),
 }));
 
-vi.mock("../utils/confirmMockExamAction.js", () => ({
+vi.mock("../../../utils/confirmMockExamAction.js", () => ({
   confirmMockExamAction: vi.fn().mockResolvedValue(true),
 }));
 
-vi.mock("../api/exam_preparation/mockExams.js", async (importOriginal) => {
+vi.mock("../../../api/exam_preparation/mockExams.js", async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
@@ -282,7 +288,7 @@ describe("mock exam answer sheet", () => {
   afterAll(() => styleElement.remove());
 
   it("can collapse and expand its answer controls", () => {
-    render(<MockExamAnswerSheet
+    render(<TelcMockExamAnswerSheet
       rows={[{
         answerKey: "reading_understanding:101",
         partLabel: "Lesen · Teil 2",
@@ -312,7 +318,7 @@ describe("mock exam answer sheet", () => {
   });
 
   it("gives Sprachbausteine Teil 2 a full row and spreads its options across the available width", () => {
-    render(<MockExamAnswerSheet
+    render(<TelcMockExamAnswerSheet
       rows={[
         {
           answerKey: "reading_understanding:101",
@@ -349,7 +355,7 @@ describe("mock exam answer sheet", () => {
 
   it("shows only the numeric suffix for Sprachbausteine Teil 2 option keys", () => {
     const onAnswer = vi.fn();
-    render(<MockExamAnswerSheet
+    render(<TelcMockExamAnswerSheet
       rows={[{
         answerKey: "cloze_matching:201",
         partKey: "cloze_matching",
@@ -373,7 +379,7 @@ describe("mock exam answer sheet", () => {
   });
 
   it("highlights only the selected Sprachbausteine Teil 2 answer bubble", () => {
-    render(<MockExamAnswerSheet
+    render(<TelcMockExamAnswerSheet
       rows={[{
         answerKey: "cloze_matching:201",
         partKey: "cloze_matching",
@@ -399,7 +405,7 @@ describe("mock exam answer sheet", () => {
 
   it("shows plus and minus for listening answers while preserving their answer keys", () => {
     const onAnswer = vi.fn();
-    render(<MockExamAnswerSheet
+    render(<TelcMockExamAnswerSheet
       rows={[{
         answerKey: "listening_teil1:301",
         partKey: "listening_teil1",
@@ -442,7 +448,7 @@ describe("writing self-assessment", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: { parts: { writing: { example_texts: [] } } },
       phase: "writing_review",
       deadline: 0,
@@ -464,18 +470,18 @@ describe("writing self-assessment", () => {
   });
 
   it("shows only an enabled yellow submit button after completing self-assessment", async () => {
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const submit = await waitFor(() => {
-      const button = container.querySelector(".mock-exam-writing-review__actions button");
+      const button = container.querySelector(".telc-mock-exam-writing-review__actions button");
       expect(button).toBeInTheDocument();
       return button;
     });
-    const review = submit.closest(".mock-exam-writing-review");
-    const scrollableContent = review.querySelector(".mock-exam-writing-review__body");
+    const review = submit.closest(".telc-mock-exam-writing-review");
+    const scrollableContent = review.querySelector(".telc-mock-exam-writing-review__body");
 
     expect(submit).toBeEnabled();
-    expect(submit.parentElement).toHaveClass("mock-exam-writing-review__actions--sticky");
+    expect(submit.parentElement).toHaveClass("telc-mock-exam-writing-review__actions--sticky");
     expect(scrollableContent).toBeInTheDocument();
     expect(scrollableContent).not.toContainElement(submit);
     expect(screen.queryByText("自评已完成，可以提交结算。")).not.toBeInTheDocument();
@@ -485,14 +491,14 @@ describe("writing self-assessment", () => {
   });
 
   it("shows a gray disabled submit button while self-assessment is incomplete", async () => {
-    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:7"));
+    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B1:7"));
     snapshot.writingAssessment.formal_accuracy = "";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(snapshot));
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(snapshot));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const submit = await waitFor(() => {
-      const button = container.querySelector(".mock-exam-writing-review__actions button");
+      const button = container.querySelector(".telc-mock-exam-writing-review__actions button");
       expect(button).toBeInTheDocument();
       return button;
     });
@@ -502,15 +508,15 @@ describe("writing self-assessment", () => {
   });
 
   it("labels the imported writing example consistently as Beispieltext", async () => {
-    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:7"));
+    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B1:7"));
     snapshot.exam.parts.writing.example_texts = [{
       id: 91,
       label: "example_text",
       example_text: "Sehr geehrte Damen und Herren",
     }];
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(snapshot));
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(snapshot));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     expect(await screen.findByRole("heading", { name: "Beispieltext" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "example_text" })).not.toBeInTheDocument();
@@ -563,12 +569,12 @@ describe("mock exam exercise layout", () => {
         answer_options: [{ id: 1, option_key: "A", option_text: "Ja", is_correct: true }],
       }],
     };
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       ...mockExamState("reading_understanding", exercise),
       attemptId: 31,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Lesen 2" });
     expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
@@ -587,11 +593,11 @@ describe("mock exam exercise layout", () => {
         answer_options: [{ id: 1, option_key: "A", option_text: "Ja", is_correct: true }],
       }],
     };
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(
       mockExamState("reading_understanding", exercise),
     ));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const heading = await screen.findByRole("heading", { name: "1. Lesefrage", level: 3 });
     expect(heading).toHaveTextContent(/^1\.\s+Lesefrage$/);
@@ -612,11 +618,11 @@ describe("mock exam exercise layout", () => {
         answer_options: [{ id: 1, option_key: "A", option_text: "Richtig", is_correct: true }],
       }],
     };
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(
       mockExamState("listening_teil1", exercise, "listening"),
     ));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const heading = await screen.findByRole("heading", { name: "1. Hörfrage", level: 3 });
     expect(heading).toHaveTextContent(/^1\.\s+Hörfrage$/);
@@ -666,22 +672,22 @@ describe("mock exam exercise layout", () => {
         }],
       },
       { "cloze_matching:51": "option_1" },
-      ".mock-cloze-matching-slot__chip",
+      ".telc-mock-cloze-matching-slot__chip",
     ],
-  ])("centers the selected answer in mock-exam Sprachbausteine %s", async (_label, partKey, exercise, answers, selector) => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+  ])("centers the selected answer in telc-mock-exam Sprachbausteine %s", async (_label, partKey, exercise, answers, selector) => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       ...mockExamState(partKey, exercise),
       answers,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await screen.findByRole("heading", { name: exercise.exercise_base.title });
     expect(getComputedStyle(container.querySelector(selector)).textAlign).toBe("center");
   });
 
   it("moves between reading and Sprachbausteine parts without entering Hören", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: continuousNumberingExam(),
       phase: "reading",
       deadline: Date.now() + 60_000,
@@ -696,7 +702,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const previous = await screen.findByRole("button", { name: "上一部分" });
     const next = screen.getByRole("button", { name: "下一部分" });
@@ -711,7 +717,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("places large part arrows between the exercise and answer sheet", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: continuousNumberingExam(),
       phase: "reading",
       deadline: Date.now() + 60_000,
@@ -726,9 +732,9 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
-    const exercise = container.querySelector(".mock-exam-paper");
+    const exercise = container.querySelector(".telc-mock-exam-paper");
     const navigation = await screen.findByRole("navigation", { name: "前后部分导航" });
     const answerSheet = screen.getByRole("region", { name: "答题卡" });
     const next = screen.getByRole("button", { name: "下一部分" });
@@ -742,7 +748,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("disables both part arrows while listening audio is playing", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: listeningRangeExam(),
       phase: "listening",
       deadline: Date.now() + 60_000,
@@ -757,7 +763,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const previous = await screen.findByRole("button", { name: "上一部分" });
     const next = screen.getByRole("button", { name: "下一部分" });
@@ -775,13 +781,10 @@ describe("mock exam exercise layout", () => {
     expect(next).toBeEnabled();
   });
 
-  it("keeps the countdown running and asks for a click when autoplay is blocked", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
-    playSpy.mockRejectedValue(new DOMException("autoplay blocked", "NotAllowedError"));
+  it("shows a read-only audio timeline with event-synced time", async () => {
     const exam = listeningRangeExam();
     exam.parts.listening_teil2.audio_file_url = "/teil2.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam,
       phase: "listening",
       deadline: Date.now() + 60_000,
@@ -796,128 +799,130 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    await act(async () => {
-      for (let index = 0; index < 10; index += 1) await Promise.resolve();
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+    const audio = await waitFor(() => {
+      const element = container.querySelector("audio");
+      expect(element).toBeInTheDocument();
+      return element;
     });
-    fireEvent.canPlay(container.querySelector("audio"));
-    await act(async () => { await Promise.resolve(); });
+    const progress = container.querySelector(".telc-mock-exam-audio-timeline progress");
+    expect(progress).toBeInTheDocument();
+    expect(audio).not.toHaveAttribute("controls");
+    expect(container.querySelector(".telc-mock-exam-audio-timeline input")).toBeNull();
 
-    expect(screen.getByRole("button", { name: "点击继续播放录音" })).toBeInTheDocument();
+    Object.defineProperty(audio, "duration", { configurable: true, value: 125 });
+    Object.defineProperty(audio, "currentTime", { configurable: true, writable: true, value: 65 });
+    fireEvent.loadedMetadata(audio);
+    fireEvent.timeUpdate(audio);
+
+    expect(progress).toHaveAttribute("value", "65");
+    expect(container.querySelector(".telc-mock-exam-audio-timeline")).toHaveStyle({ "--telc-audio-progress": "52%" });
+    expect(screen.getByText("01:05")).toBeInTheDocument();
+    expect(screen.getByText("02:05")).toBeInTheDocument();
+
+    fireEvent.loadStart(audio);
+    expect(progress).toHaveAttribute("value", "0");
+    expect(screen.getAllByText("00:00")).toHaveLength(2);
+  });
+
+  it("shows the existing spinner while audio playback is loading", async () => {
+    let finishPlay;
+    playSpy.mockImplementationOnce(() => new Promise((resolve) => { finishPlay = resolve; }));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+    const spinner = await waitFor(() => {
+      const element = container.querySelector(".telc-mock-exam-audio-spinner");
+      expect(element).toBeInTheDocument();
+      return element;
+    });
+    expect(screen.getByText("正在加载听力音频…")).toBeInTheDocument();
+    expect(spinner).toHaveClass("telc-mock-exam-audio-spinner");
+    expect(mockExamStyleSource).toContain("animation: telc-mock-exam-audio-spin 0.8s linear infinite");
+
+    fireEvent.canPlay(container.querySelector("audio"));
+    await waitFor(() => expect(finishPlay).toEqual(expect.any(Function)));
+    await act(async () => { finishPlay(); });
+    await waitFor(() => expect(container.querySelector(".telc-mock-exam-audio-spinner")).toBeNull());
+    expect(screen.getByText("正在播放 · Hören · Teil 1")).toBeInTheDocument();
+  });
+
+  it("shows and clears the spinner while audio buffers", async () => {
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+    const audio = await waitFor(() => {
+      const element = container.querySelector("audio");
+      expect(element).toBeInTheDocument();
+      return element;
+    });
+    await waitFor(() => expect(container.querySelector(".telc-mock-exam-audio-spinner")).toBeNull());
+
+    fireEvent.waiting(audio);
+    expect(container.querySelector(".telc-mock-exam-audio-spinner")).toBeInTheDocument();
+    fireEvent.playing(audio);
+    await waitFor(() => expect(container.querySelector(".telc-mock-exam-audio-spinner")).toBeNull());
+  });
+
+  it("keeps part arrows available when listening autoplay is rejected", async () => {
+    playSpy.mockRejectedValue(new DOMException("autoplay blocked", "NotAllowedError"));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil2.audio_file_url = "/teil2.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil2",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 2,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+
+    expect(await screen.findByRole("button", { name: "点击继续播放录音" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "上一部分" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "下一部分" })).toBeEnabled();
-    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
-    expect(screen.getByText("00:59")).toBeInTheDocument();
-    expect(playSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("continues the countdown when a preloaded recording starts after a break", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
-    const exam = listeningRangeExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    exam.parts.listening_teil2.audio_file_url = "/teil2.m4a";
-    exam.parts.listening_teil3.audio_file_url = "/teil3.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
-      phase: "listening",
-      deadline: Date.now() + 60_000,
-      activePart: "listening_teil1",
-      answers: {},
-      writingText: "",
-      writingAssessment: {},
-      audioStep: 1,
-      audioStepStartedAt: Date.now() - 60_000,
-      attemptId: null,
-      isFavorite: false,
-      wasEarlySubmitted: false,
-    }));
-
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    await act(async () => {
-      for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    });
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(20); });
-    await act(async () => { await Promise.resolve(); });
-    expect(screen.getByText("正在播放 · Hören · Teil 2")).toBeInTheDocument();
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
-    expect(screen.getByText("00:59")).toBeInTheDocument();
-  });
-
-  it("starts the original stream while the backup Blob is still downloading", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
-    const exam = listeningRangeExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
-      phase: "listening",
-      deadline: Date.now() + 60_000,
-      activePart: "listening_teil1",
-      answers: {},
-      writingText: "",
-      writingAssessment: {},
-      audioStep: 0,
-      audioStepStartedAt: Date.now(),
-      attemptId: null,
-      isFavorite: false,
-      wasEarlySubmitted: false,
-    }));
-
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    await act(async () => { await Promise.resolve(); });
-
-    expect(container.querySelector("audio")).toHaveAttribute("src", "/teil1.m4a");
-    fireEvent.canPlay(container.querySelector("audio"));
-    await act(async () => { await Promise.resolve(); });
-    expect(playSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("reloads the original stream once, then waits for the backup Blob with the countdown frozen", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
-    playSpy.mockRejectedValue(new Error("stream failed"));
-    const exam = listeningRangeExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
-      phase: "listening",
-      deadline: Date.now() + 60_000,
-      activePart: "listening_teil1",
-      answers: {},
-      writingText: "",
-      writingAssessment: {},
-      audioStep: 0,
-      audioStepStartedAt: Date.now(),
-      attemptId: null,
-      isFavorite: false,
-      wasEarlySubmitted: false,
-    }));
-
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    await act(async () => {
-      for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    });
-    fireEvent.canPlay(container.querySelector("audio"));
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-
-    expect(playSpy).toHaveBeenCalledTimes(2);
-    expect(loadSpy).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("正在切换备用音频…")).toBeInTheDocument();
-    expect(screen.getByText("01:00")).toBeInTheDocument();
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
-    expect(screen.getByText("01:00")).toBeInTheDocument();
-  });
-
-  it("continues the backup Blob from the interrupted position and resumes the countdown", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
+  it("uses the reliable backup audio flow for TELC B2", async () => {
     let finishDownload;
-    vi.stubGlobal("fetch", vi.fn((url) => url === "/teil1.m4a"
+    vi.stubGlobal("fetch", vi.fn((url) => url === "/b2-teil1.m4a"
       ? new Promise((resolve) => { finishDownload = resolve; })
       : Promise.resolve(successfulAudioResponse(url))));
     playSpy
@@ -925,8 +930,10 @@ describe("mock exam exercise layout", () => {
       .mockRejectedValueOnce(new Error("stream failed again"))
       .mockResolvedValue(undefined);
     const exam = listeningRangeExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    exam.exam_type = "TELC";
+    exam.level = "B2";
+    exam.parts.listening_teil1.audio_file_url = "/b2-teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B2:7", JSON.stringify({
       exam,
       phase: "listening",
       deadline: Date.now() + 60_000,
@@ -941,231 +948,34 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/telc/b2/mock-exam"]}>
+        <Routes>
+          <Route path="/modules/exam-preparation/:examType/:level/mock-exam" element={<TelcMockExamPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
     await act(async () => {
       for (let index = 0; index < 10; index += 1) await Promise.resolve();
     });
     const audio = container.querySelector("audio");
-    expect(audio).toHaveAttribute("src", "/teil1.m4a");
+    expect(audio).toHaveAttribute("src", "/b2-teil1.m4a");
     audio.currentTime = 23;
     fireEvent.canPlay(audio);
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
     expect(screen.getByText("正在切换备用音频…")).toBeInTheDocument();
-    expect(screen.getByText("01:00")).toBeInTheDocument();
 
     await act(async () => {
-      finishDownload(successfulAudioResponse("/teil1.m4a"));
+      finishDownload(successfulAudioResponse("/b2-teil1.m4a"));
       for (let index = 0; index < 10; index += 1) await Promise.resolve();
     });
-    expect(audio).toHaveAttribute("src", "blob:/teil1.m4a");
+    expect(audio).toHaveAttribute("src", "blob:/b2-teil1.m4a");
     expect(audio.currentTime).toBe(23);
     expect(playSpy).toHaveBeenCalledTimes(3);
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
-    expect(screen.getByText("00:59")).toBeInTheDocument();
-  });
-
-  it("cancels delayed playback retries after entering writing", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
-    playSpy.mockRejectedValue(new Error("playback failed"));
-    const exam = listeningRangeExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
-      phase: "listening",
-      deadline: Date.now() + 60_000,
-      activePart: "listening_teil1",
-      answers: {},
-      writingText: "",
-      writingAssessment: {},
-      audioStep: 0,
-      audioStepStartedAt: Date.now(),
-      attemptId: null,
-      isFavorite: false,
-      wasEarlySubmitted: false,
-    }));
-
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    await act(async () => {
-      for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    });
-    fireEvent.canPlay(container.querySelector("audio"));
-    await act(async () => { await Promise.resolve(); });
-    expect(playSpy).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "完成本部分，进入写作" }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    expect(screen.getByRole("heading", { name: "Schreiben" })).toBeInTheDocument();
-
-    await act(async () => { await vi.advanceTimersByTimeAsync(7_000); });
-    expect(playSpy).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not restore the listening countdown when an old play request resolves in writing", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
-    let finishPlay;
-    playSpy.mockImplementation(() => new Promise((resolve) => { finishPlay = resolve; }));
-    const exam = listeningRangeExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
-      phase: "listening",
-      deadline: Date.now() + 60_000,
-      activePart: "listening_teil1",
-      answers: {},
-      writingText: "",
-      writingAssessment: {},
-      audioStep: 0,
-      audioStepStartedAt: Date.now(),
-      attemptId: null,
-      isFavorite: false,
-      wasEarlySubmitted: false,
-    }));
-
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    await act(async () => {
-      for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    });
-    fireEvent.canPlay(container.querySelector("audio"));
-    await act(async () => { await Promise.resolve(); });
-    fireEvent.click(screen.getByRole("button", { name: "完成本部分，进入写作" }));
-    await act(async () => { await Promise.resolve(); });
-
-    finishPlay();
-    await act(async () => { await Promise.resolve(); await vi.advanceTimersByTimeAsync(1_000); });
-
-    expect(screen.getByRole("heading", { name: "Schreiben" })).toBeInTheDocument();
-    expect(screen.getByText("29:59")).toBeInTheDocument();
-  });
-
-  it("resumes the frozen countdown only after autoplay succeeds", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-10-14T10:00:00Z"));
-    let resolvePlay;
-    playSpy.mockImplementation(() => new Promise((resolve) => { resolvePlay = resolve; }));
-    const exam = listeningRangeExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
-      phase: "listening",
-      deadline: Date.now() + 60_000,
-      activePart: "listening_teil1",
-      answers: {},
-      writingText: "",
-      writingAssessment: {},
-      audioStep: 0,
-      audioStepStartedAt: Date.now(),
-      attemptId: null,
-      isFavorite: false,
-      wasEarlySubmitted: false,
-    }));
-
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    await act(async () => {
-      for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    });
-    fireEvent.canPlay(container.querySelector("audio"));
-    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
-    expect(screen.getByText("01:00")).toBeInTheDocument();
-
-    await act(async () => { resolvePlay(); await Promise.resolve(); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
-
-    expect(screen.getByText("00:59")).toBeInTheDocument();
-  });
-
-  it("does not block streaming autoplay while the backup audio downloads", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
-    const exam = listeningRangeExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
-      phase: "listening",
-      deadline: Date.now() + 60_000,
-      activePart: "listening_teil1",
-      answers: {},
-      writingText: "",
-      writingAssessment: {},
-      audioStep: 0,
-      audioStepStartedAt: Date.now(),
-      attemptId: null,
-      isFavorite: false,
-      wasEarlySubmitted: false,
-    }));
-
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-
-    await waitFor(() => expect(container.querySelector("audio")).toHaveAttribute("src", "/teil1.m4a"));
-    fireEvent.canPlay(container.querySelector("audio"));
-    await act(async () => { await Promise.resolve(); });
-    expect(screen.queryByText("正在加载听力音频…")).not.toBeInTheDocument();
-    expect(screen.getByText("正在播放 · Hören · Teil 1")).toBeInTheDocument();
-    vi.unstubAllGlobals();
-  });
-
-  it("preloads all three listening recordings when the exam starts", async () => {
-    const exam = continuousNumberingExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    exam.parts.listening_teil2 = { exercise_base: { title: "Hören 2" }, audio_file_url: "/teil2.m4a", questions: [] };
-    exam.parts.listening_teil3 = { exercise_base: { title: "Hören 3" }, audio_file_url: "/teil3.m4a", questions: [] };
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
-      phase: "reading",
-      deadline: Date.now() + 60_000,
-      activePart: "reading_title_matching",
-      answers: {},
-      writingText: "",
-      writingAssessment: {},
-      audioStep: 0,
-      audioStepStartedAt: 0,
-      attemptId: null,
-      isFavorite: false,
-      wasEarlySubmitted: false,
-    }));
-
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
-    expect(fetch).toHaveBeenCalledWith("/teil1.m4a", expect.any(Object));
-    expect(fetch).toHaveBeenCalledWith("/teil2.m4a", expect.any(Object));
-    expect(fetch).toHaveBeenCalledWith("/teil3.m4a", expect.any(Object));
-  });
-
-  it("does not preload listening recordings while reviewing completed results", async () => {
-    const exam = continuousNumberingExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    exam.parts.listening_teil2 = { exercise_base: { title: "Hören 2" }, audio_file_url: "/teil2.m4a", questions: [] };
-    exam.parts.listening_teil3 = { exercise_base: { title: "Hören 3" }, audio_file_url: "/teil3.m4a", questions: [] };
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
-      phase: "results",
-      deadline: 0,
-      activePart: "reading_title_matching",
-      answers: {},
-      writingText: "",
-      writingAssessment: {},
-      audioStep: 5,
-      audioStepStartedAt: 0,
-      attemptId: null,
-      isFavorite: false,
-      wasEarlySubmitted: false,
-    }));
-
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    await act(async () => {
-      for (let index = 0; index < 10; index += 1) await Promise.resolve();
-    });
-
-    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("enables available part arrows after listening audio has finished", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: listeningRangeExam(),
       phase: "listening",
       deadline: Date.now() + 60_000,
@@ -1180,14 +990,14 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     expect(await screen.findByRole("button", { name: "上一部分" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "下一部分" })).toBeEnabled();
   });
 
   it("crosses from Sprachbausteine to Hören with arrows in the completed review", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: continuousNumberingExam(),
       phase: "results",
       deadline: 0,
@@ -1202,14 +1012,14 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: "下一部分" }));
     expect(screen.getByRole("heading", { name: "7. Hörfrage" })).toBeInTheDocument();
   });
 
   it("does not show part arrows in Schreiben", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           writing: {
@@ -1232,7 +1042,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     expect(await screen.findByRole("button", { name: "提交写作并自评" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "上一部分" })).not.toBeInTheDocument();
@@ -1240,7 +1050,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("does not show part arrows for Schreiben in the completed review", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           writing: {
@@ -1263,7 +1073,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     expect(await screen.findByRole("heading", { name: "考试结果与答案回顾" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "上一部分" })).not.toBeInTheDocument();
@@ -1271,7 +1081,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("shows only reading rows in the answer sheet during the reading phase", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: answerSheetExam(),
       phase: "reading",
       deadline: Date.now() + 60_000,
@@ -1286,10 +1096,10 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const answerSheet = await screen.findByRole("region", { name: "答题卡" });
-    const paper = container.querySelector(".mock-exam-paper");
+    const paper = container.querySelector(".telc-mock-exam-paper");
     expect(within(answerSheet).getByRole("heading", { name: "Lesen & Sprachbausteine" })).toBeInTheDocument();
     expect(within(answerSheet).queryByRole("heading", { name: "Hören" })).not.toBeInTheDocument();
     expect(paper.compareDocumentPosition(answerSheet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1297,7 +1107,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("continues question numbers across all reading and Sprachbausteine parts", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: continuousNumberingExam(),
       phase: "reading",
       deadline: Date.now() + 60_000,
@@ -1312,8 +1122,8 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    const paper = () => within(container.querySelector(".mock-exam-paper"));
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+    const paper = () => within(container.querySelector(".telc-mock-exam-paper"));
 
     expect(await paper().findByText("Text 1")).toBeInTheDocument();
     expect(paper().getByText("Text 2")).toBeInTheDocument();
@@ -1332,7 +1142,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("continues numbering from Sprachbausteine into Hören", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: continuousNumberingExam(),
       phase: "listening",
       deadline: Date.now() + 60_000,
@@ -1347,14 +1157,14 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    const paper = within(container.querySelector(".mock-exam-paper"));
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+    const paper = within(container.querySelector(".telc-mock-exam-paper"));
 
     expect(await paper.findByRole("heading", { name: "7. Hörfrage" })).toBeInTheDocument();
   });
 
-  it("uses the global mock-exam ranges in every listening introduction", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+  it("uses the global telc-mock-exam ranges in every listening introduction", async () => {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: listeningRangeExam(),
       phase: "listening",
       deadline: Date.now() + 60_000,
@@ -1369,8 +1179,8 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
-    const introduction = () => container.querySelector(".mock-exam-introduction");
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+    const introduction = () => container.querySelector(".telc-mock-exam-introduction");
 
     expect(await screen.findByRole("heading", { name: "41. Hörfrage 1" })).toBeInTheDocument();
     expect(introduction()).toHaveTextContent("Aufgaben 41–45");
@@ -1386,10 +1196,8 @@ describe("mock exam exercise layout", () => {
   });
 
   it("renders the current listening part status with larger type", async () => {
-    const exam = continuousNumberingExam();
-    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
-      exam,
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
+      exam: continuousNumberingExam(),
       phase: "listening",
       deadline: Date.now() + 60_000,
       activePart: "listening_teil1",
@@ -1403,11 +1211,11 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const statusTitle = await screen.findByText("正在播放 · Hören · Teil 1");
-    expect(statusTitle).toHaveClass("mock-exam-audio-status__title");
-    expect(mockExamStyleSource).toMatch(/\.mock-exam-audio-status \.mock-exam-audio-status__title \{[^}]*font-size: 1\.05rem;/);
+    expect(statusTitle).toHaveClass("telc-mock-exam-audio-status__title");
+    expect(getComputedStyle(statusTitle).fontSize).toBe("1.05rem");
   });
 
   it.each([
@@ -1496,22 +1304,22 @@ describe("mock exam exercise layout", () => {
     ],
   ])("shows the matching Einleitung above %s", async (partKey, exercise, phase, expectedText) => {
     sessionStorage.setItem(
-      "exam-preparation-written-mock-v1:7",
+      "exam-preparation-written-mock-v1:TELC:B1:7",
       JSON.stringify(mockExamState(partKey, exercise, phase)),
     );
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const introductionText = await screen.findByText(expectedText);
-    const introduction = introductionText.closest(".mock-exam-introduction");
-    const heading = container.querySelector(".mock-exam-paper__heading");
+    const introduction = introductionText.closest(".telc-mock-exam-introduction");
+    const heading = container.querySelector(".telc-mock-exam-paper__heading");
     expect(screen.getByText("Einleitung")).toBeInTheDocument();
     expect(introduction).toBeInTheDocument();
     expect(heading.nextElementSibling).toBe(introduction);
   });
 
   it("keeps answer-sheet option geometry stable when an answer is selected", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: answerSheetExam(),
       phase: "reading",
       deadline: Date.now() + 60_000,
@@ -1526,7 +1334,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const answerSheet = await screen.findByRole("region", { name: "答题卡" });
     const option = within(answerSheet).getByRole("button", { name: "第 1 题，答案 A" });
@@ -1549,7 +1357,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("shows only listening rows in the answer sheet during the listening phase", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: answerSheetExam(),
       phase: "listening",
       deadline: Date.now() + 60_000,
@@ -1564,7 +1372,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const answerSheet = await screen.findByRole("region", { name: "答题卡" });
     expect(within(answerSheet).getByRole("heading", { name: "Hören" })).toBeInTheDocument();
@@ -1572,7 +1380,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("shows reading and listening rows together in the completed exam review", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: answerSheetExam(),
       phase: "results",
       deadline: 0,
@@ -1587,7 +1395,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const answerSheet = await screen.findByRole("region", { name: "答题卡" });
     expect(within(answerSheet).getByRole("heading", { name: "Lesen & Sprachbausteine" })).toBeInTheDocument();
@@ -1595,7 +1403,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("uses the regular reading-ad carousel and one-question-at-a-time layout", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           reading_ad_matching: {
@@ -1625,7 +1433,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     expect(await screen.findByText("Situation eins")).toBeInTheDocument();
     expect(screen.queryByText("Situation zwei")).not.toBeInTheDocument();
@@ -1634,7 +1442,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("hides question favorites in Lesen Teil 1 until answers are shown", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           reading_title_matching: {
@@ -1662,14 +1470,14 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     expect(await screen.findByText("Text eins")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "收藏这道题" })).not.toBeInTheDocument();
   });
 
   it("shows each Lesen Teil 1 option letter before its title", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           reading_title_matching: {
@@ -1700,7 +1508,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: "Überschrift auswählen" }));
     const firstOption = await screen.findByRole("button", { name: "A Erster Titel" });
@@ -1713,7 +1521,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("keeps the Sprachbausteine 2 option pool visible with compact text spacing", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           cloze_matching: {
@@ -1737,16 +1545,16 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const pool = await screen.findByRole("region", { name: "选项区" });
-    const text = container.querySelector(".mock-cloze-matching-text");
-    expect(pool).toHaveClass("mock-cloze-matching-pool--sticky");
-    expect(text).toHaveClass("mock-cloze-matching-text--compact");
+    const text = container.querySelector(".telc-mock-cloze-matching-text");
+    expect(pool).toHaveClass("telc-mock-cloze-matching-pool--sticky");
+    expect(text).toHaveClass("telc-mock-cloze-matching-text--compact");
   });
 
   it("hides question favorites in Sprachbausteine Teil 2 until answers are shown", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           cloze_matching: {
@@ -1775,7 +1583,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     expect(await screen.findByRole("region", { name: "选项区" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "收藏这道题" })).not.toBeInTheDocument();
@@ -1783,13 +1591,13 @@ describe("mock exam exercise layout", () => {
 
   it("keeps embedded mobile ad cards from competing with the sticky exam header", () => {
     expect(mockExamStyleSource).toMatch(
-      /@media \(max-width: 700px\)[\s\S]*?\.mock-exam-page \.reading-ad-sticky-stack\s*\{[^}]*position:\s*static/
+      /@media \(max-width: 700px\)[\s\S]*?\.telc-mock-exam-page \.reading-ad-sticky-stack\s*\{[^}]*position:\s*static/
     );
   });
 
   it("limits the sticky Sprachbausteine option pool to the available viewport height", () => {
     expect(mockExamStyleSource).toMatch(
-      /\.mock-cloze-matching-pool\s*\{[^}]*max-height:\s*calc\(100dvh - [^)]+\)[^}]*overflow-y:\s*auto/
+      /\.telc-mock-cloze-matching-pool\s*\{[^}]*max-height:\s*calc\(100dvh - [^)]+\)[^}]*overflow-y:\s*auto/
     );
   });
 
@@ -1798,17 +1606,17 @@ describe("mock exam exercise layout", () => {
       <>
         <style>{`${appLayoutStyleSource}\n${mockExamStyleSource}`}</style>
         <div className="app-layout">
-          <main className="mock-exam-page">
-            <header className="mock-exam-header" />
-            <section className="mock-cloze-matching-pool" />
+          <main className="telc-mock-exam-page">
+            <header className="telc-mock-exam-header" />
+            <section className="telc-mock-cloze-matching-pool" />
           </main>
         </div>
       </>
     );
 
     const layout = container.querySelector(".app-layout");
-    const header = container.querySelector(".mock-exam-header");
-    const pool = container.querySelector(".mock-cloze-matching-pool");
+    const header = container.querySelector(".telc-mock-exam-header");
+    const pool = container.querySelector(".telc-mock-cloze-matching-pool");
 
     expect(getComputedStyle(layout).overflowX).toBe("clip");
     expect(getComputedStyle(header).position).toBe("static");
@@ -1823,7 +1631,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("keeps the one-minute transition between Teil 1 and Teil 2", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           listening_teil1: { exercise_base: { title: "Teil 1" }, audio_file_url: "/teil1.m4a", questions: [] },
@@ -1843,7 +1651,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     const audio = await waitFor(() => {
       const element = container.querySelector("audio");
       expect(element).toHaveAttribute("src", "/teil1.m4a");
@@ -1857,7 +1665,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("plays the Teil 2 audio twice back-to-back before moving toward Teil 3", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           listening_teil1: { exercise_base: { title: "Teil 1" }, audio_file_url: "/teil1.m4a", questions: [] },
@@ -1878,7 +1686,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     const audio = await waitFor(() => {
       const element = container.querySelector("audio");
       expect(element).toHaveAttribute("src", "/teil2.m4a");
@@ -1899,7 +1707,7 @@ describe("mock exam exercise layout", () => {
   });
 
   it("labels the single Teil 3 audio-file playback as einmal", async () => {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           listening_teil3: { exercise_base: { title: "Teil 3" }, audio_file_url: "/teil3.m4a", questions: [] },
@@ -1918,7 +1726,7 @@ describe("mock exam exercise layout", () => {
       wasEarlySubmitted: false,
     }));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await waitFor(() => expect(container.querySelector("audio")).toHaveAttribute("src", "/teil3.m4a"));
     await waitFor(() => expect(screen.getByText("einmal")).toBeInTheDocument());
@@ -1929,7 +1737,7 @@ describe("mock exam answer review", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {
         parts: {
           reading_understanding: {
@@ -1971,7 +1779,7 @@ describe("mock exam answer review", () => {
   });
 
   it("shows the correct answer and explanation for an unanswered question using the regular feedback card", async () => {
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const feedback = await screen.findByText("未作答");
     const feedbackCard = feedback.closest(".reading-understanding-feedback");
@@ -1979,19 +1787,19 @@ describe("mock exam answer review", () => {
     expect(feedbackCard).toHaveClass("reading-understanding-feedback--wrong");
     expect(feedbackCard).toHaveTextContent("Richtige Antwort: B - 正确选项");
     expect(feedbackCard).toHaveTextContent("Erklärung: 这是未作答时仍应展示的解析。");
-    expect(container.querySelector(".mock-exam-feedback")).not.toBeInTheDocument();
+    expect(container.querySelector(".telc-mock-exam-feedback")).not.toBeInTheDocument();
   });
 
   it("keeps a wrong selected option visible and renders option-level explanations", async () => {
-    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:7"));
+    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B1:7"));
     snapshot.answers = { "reading_understanding:101": "A" };
     snapshot.exam.parts.reading_understanding.questions[0].explanation = "";
     snapshot.exam.parts.reading_understanding.questions[0].explanation_scope = "option";
     snapshot.exam.parts.reading_understanding.questions[0].answer_options[0].explanation = "A 选项的解析。";
     snapshot.exam.parts.reading_understanding.questions[0].answer_options[1].explanation = "B 选项的解析。";
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(snapshot));
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(snapshot));
 
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const feedback = await screen.findByText("Falsch");
     const feedbackCard = feedback.closest(".reading-understanding-feedback");
@@ -2003,11 +1811,11 @@ describe("mock exam answer review", () => {
   });
 
   it("marks both the wrong selection and the correct answer in the review answer sheet", async () => {
-    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:7"));
+    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B1:7"));
     snapshot.answers = { "reading_understanding:101": "A" };
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(snapshot));
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(snapshot));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const wrongBubble = await screen.findByRole("button", { name: "第 1 题，答案 A" });
     const correctBubble = screen.getByRole("button", { name: "第 1 题，答案 B" });
@@ -2016,7 +1824,7 @@ describe("mock exam answer review", () => {
   });
 
   it("shows the regular title-matching feedback card and explanation when unanswered", async () => {
-    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:7"));
+    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B1:7"));
     snapshot.activePart = "reading_title_matching";
     snapshot.exam.parts = {
       reading_title_matching: {
@@ -2036,9 +1844,9 @@ describe("mock exam answer review", () => {
         ],
       },
     };
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(snapshot));
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(snapshot));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const feedback = await screen.findByText("未作答");
     const feedbackCard = feedback.closest(".reading-title-feedback");
@@ -2049,7 +1857,7 @@ describe("mock exam answer review", () => {
   });
 
   it("shows a cloze explanation for an unanswered Sprachbausteine blank", async () => {
-    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:7"));
+    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B1:7"));
     snapshot.activePart = "cloze_choice";
     snapshot.exam.parts = {
       cloze_choice: {
@@ -2070,9 +1878,9 @@ describe("mock exam answer review", () => {
         ],
       },
     };
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(snapshot));
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(snapshot));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const explanation = await screen.findByText("这里需要使用正确的动词形式。");
     expect(explanation.closest(".cloze-choice-inline-explanation")).toBeInTheDocument();
@@ -2080,7 +1888,7 @@ describe("mock exam answer review", () => {
   });
 
   it("shows the cloze-matching explanation card for an unanswered blank", async () => {
-    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:7"));
+    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B1:7"));
     snapshot.activePart = "cloze_matching";
     snapshot.exam.parts = {
       cloze_matching: {
@@ -2101,9 +1909,9 @@ describe("mock exam answer review", () => {
         ],
       },
     };
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(snapshot));
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(snapshot));
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const explanation = await screen.findByText("匹配空格的解析。");
     const feedbackCard = explanation.closest(".cloze-feedback-card");
@@ -2122,7 +1930,7 @@ describe("mock exam annotations", () => {
   });
 
   function saveState(exam, overrides = {}) {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify({
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       ...mockExamState("reading_understanding", exam.parts.reading_understanding, "reading"),
       exam,
       attemptId: 31,
@@ -2146,7 +1954,7 @@ describe("mock exam annotations", () => {
       },
     };
     saveState(exam);
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const passage = await screen.findByText("Passage for notes");
     selectText(passage, 0, 7);
@@ -2177,7 +1985,7 @@ describe("mock exam annotations", () => {
       },
     };
     saveState(exam);
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     const passage = await screen.findByText("Storage independent passage");
     selectText(passage, 0, 7);
     const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota"); });
@@ -2199,7 +2007,7 @@ describe("mock exam annotations", () => {
         },
       },
     });
-    const { container } = render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     await screen.findByRole("heading", { name: "Lesen 2" });
     const regions = [...container.querySelectorAll("[data-exam-annotation-region]")];
     expect(new Set(regions.map((region) => region.dataset.examAnnotationRegion)).size).toBe(regions.length);
@@ -2219,7 +2027,7 @@ describe("mock exam annotations", () => {
         },
       },
     }, { activePart: "reading_title_matching" });
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     await screen.findByRole("heading", { name: "Lesen 1" });
     const selector = screen.getByRole("button", { name: "Überschrift auswählen" });
     fireEvent.click(selector);
@@ -2233,7 +2041,7 @@ describe("mock exam annotations", () => {
       parts: {
         cloze_choice: {
           exercise_base: { title: "Sprachbausteine 1", exam_type: "telc" },
-          content_with_placeholders: "Vor {{blank_1}} nach {{blank_2}}.",
+          content_with_placeholders: "Vor {{blank 1}} nach {{blank2}}.",
           blanks: [
             { id: 1, blank_key: "blank_1", blank_number: 1, options: [{ option_key: "A", option_text: "eins", is_correct: true }] },
             { id: 2, blank_key: "blank_2", blank_number: 2, options: [{ option_key: "B", option_text: "zwei", is_correct: true }] },
@@ -2241,14 +2049,14 @@ describe("mock exam annotations", () => {
         },
         cloze_matching: {
           exercise_base: { title: "Sprachbausteine 2", exam_type: "telc" },
-          content_with_placeholders: "Ich {{blank_1}}.",
+          content_with_placeholders: "Ich {{blank 1}}.",
           options: [{ id: 3, option_key: "A", option_text: "lerne" }],
           blank_answers: [{ id: 4, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A" } }],
         },
       },
     };
     saveState(exam, { activePart: "cloze_choice" });
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Sprachbausteine 1" });
     const choiceFlows = [...document.querySelectorAll('[data-exam-annotation-flow^="cloze_choice:"]')];
@@ -2256,7 +2064,7 @@ describe("mock exam annotations", () => {
     expect(choiceFlows.map((node) => node.dataset.examAnnotationRegion)).toEqual([
       "cloze_choice:source:0", "cloze_choice:source:2", "cloze_choice:source:4",
     ]);
-    fireEvent.click(document.querySelector(".mock-exam-inline-answer button"));
+    fireEvent.click(document.querySelector(".telc-mock-exam-inline-answer button"));
     expect(document.querySelector('[data-exam-annotation-region^="cloze_choice:option:"]')).toBeNull();
     expect(screen.getByRole("dialog").querySelector("[data-exam-annotation-region]")).toBeNull();
 
@@ -2266,6 +2074,34 @@ describe("mock exam annotations", () => {
     expect(new Set([...document.querySelectorAll('[data-exam-annotation-flow^="cloze_matching:"]')]
       .map((node) => node.dataset.examAnnotationFlow))).toEqual(new Set(["cloze_matching:source:0"]));
     expect(document.querySelector('[data-exam-annotation-region^="cloze_matching:option:"]')).toBeNull();
+  });
+
+  it("splits a paired B2 cloze answer across repeated positions", async () => {
+    saveState({
+      parts: {
+        cloze_choice: {
+          exercise_base: { title: "Sprachbausteine 1", exam_type: "telc" },
+          content_with_placeholders: "{{blank 1}} in Nord- {{blank 1}} in Südeuropa",
+          blanks: [{
+            id: 1,
+            blank_key: "blank_1",
+            blank_number: 1,
+            options: [{ option_key: "A", option_text: "sowohl … als auch", is_correct: true }],
+          }],
+        },
+      },
+    }, { activePart: "cloze_choice" });
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+
+    await screen.findByRole("heading", { name: "Sprachbausteine 1" });
+    const slots = [...document.querySelectorAll(".telc-mock-exam-inline-answer > button")];
+    expect(slots).toHaveLength(2);
+    fireEvent.click(slots[0]);
+    fireEvent.click(screen.getByRole("button", { name: /sowohl … als auch/ }));
+    expect(slots[0]).toHaveTextContent("sowohl");
+    expect(slots[0]).not.toHaveTextContent("als auch");
+    expect(slots[1]).toHaveTextContent("als auch");
+    expect(slots[1]).not.toHaveTextContent("sowohl");
   });
 
   it("splits Mock cloze flows at paragraph and source-block boundaries", async () => {
@@ -2286,7 +2122,7 @@ describe("mock exam annotations", () => {
       },
     };
     saveState(exam, { activePart: "cloze_matching" });
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Sprachbausteine 2" });
     const roots = [...document.querySelectorAll('[data-exam-annotation-flow^="cloze_matching:"]')];
@@ -2339,7 +2175,7 @@ describe("mock exam annotations", () => {
       },
     };
     saveState(exam, { activePart: "cloze_choice" });
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Sprachbausteine 1" });
     const roots = [...document.querySelectorAll('[data-exam-annotation-flow="cloze_choice:source:0"]')];
@@ -2351,7 +2187,7 @@ describe("mock exam annotations", () => {
       "cloze_choice:source:0", "cloze_choice:source:2", "cloze_choice:source:4",
     ]);
 
-    fireEvent.click(document.querySelector(".mock-exam-inline-answer button"));
+    fireEvent.click(document.querySelector(".telc-mock-exam-inline-answer button"));
     expect(screen.getByRole("dialog").querySelector("[data-exam-annotation-region]")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "einsA" }));
     expect(document.querySelector('[data-exam-annotation-region^="cloze_choice:option:"]')).toBeNull();
@@ -2391,7 +2227,7 @@ describe("mock exam annotations", () => {
       },
     };
     saveState(exam, { activePart: "cloze_matching" });
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Sprachbausteine 2" });
     const roots = [...document.querySelectorAll('[data-exam-annotation-flow="cloze_matching:source:0"]')];
@@ -2403,7 +2239,7 @@ describe("mock exam annotations", () => {
       "cloze_matching:source:0", "cloze_matching:source:2", "cloze_matching:source:4",
     ]);
 
-    const firstSlot = document.querySelector('[data-mock-cloze-blank="blank_1"]');
+    const firstSlot = document.querySelector('[data-telc-mock-cloze-blank="blank_1"]');
     fireEvent.click(screen.getByRole("button", { name: "eins" }));
     fireEvent.click(firstSlot);
     expect(firstSlot).toHaveTextContent("eins");
@@ -2434,11 +2270,11 @@ describe("mock exam annotations", () => {
         },
       },
     }, { activePart: "cloze_matching" });
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     await screen.findByRole("heading", { name: "Sprachbausteine 2" });
     const poolText = screen.getByRole("button", { name: "lerne" });
-    const slot = document.querySelector(".mock-cloze-matching-slot");
-    const pool = document.querySelector(".mock-cloze-matching-pool");
+    const slot = document.querySelector(".telc-mock-cloze-matching-slot");
+    const pool = document.querySelector(".telc-mock-cloze-matching-pool");
     const transferValues = {};
     const dataTransfer = {
       setData: vi.fn((type, value) => { transferValues[type] = value; }),
@@ -2448,14 +2284,14 @@ describe("mock exam annotations", () => {
     poolText.dispatchEvent(pointerDown);
     expect(pointerDown.defaultPrevented).toBe(false);
     expect(poolText).toHaveAttribute("draggable", "true");
-    expect(document.querySelector(".mock-cloze-matching-pool__handle")).toBeNull();
+    expect(document.querySelector(".telc-mock-cloze-matching-pool__handle")).toBeNull();
     fireEvent.dragStart(poolText, { dataTransfer });
     fireEvent.dragOver(slot);
     fireEvent.drop(slot, { dataTransfer });
     await waitFor(() => expect(slot).toHaveTextContent("lerne"));
-    const placedCard = slot.querySelector(".mock-cloze-matching-slot__chip");
+    const placedCard = slot.querySelector(".telc-mock-cloze-matching-slot__chip");
     expect(placedCard).toHaveAttribute("draggable", "true");
-    expect(placedCard.querySelector(".mock-cloze-matching-pool__handle")).toBeNull();
+    expect(placedCard.querySelector(".telc-mock-cloze-matching-pool__handle")).toBeNull();
     fireEvent.dragStart(placedCard, { dataTransfer });
     fireEvent.dragOver(pool);
     fireEvent.drop(pool, { dataTransfer });
@@ -2473,17 +2309,17 @@ describe("mock exam annotations", () => {
         },
       },
     }, { activePart: "cloze_matching" });
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     await screen.findByRole("heading", { name: "Sprachbausteine 2" });
     const option = screen.getByRole("button", { name: "lerne" });
-    const slot = document.querySelector(".mock-cloze-matching-slot");
-    expect(document.querySelector(".mock-cloze-matching-pool__handle")).toBeNull();
+    const slot = document.querySelector(".telc-mock-cloze-matching-slot");
+    expect(document.querySelector(".telc-mock-cloze-matching-pool__handle")).toBeNull();
     fireEvent.pointerDown(option, { pointerType: "touch", pointerId: 1, clientX: 1, clientY: 1 });
-    expect(document.querySelector(".mock-cloze-matching-touch-preview")).toBeInTheDocument();
+    expect(document.querySelector(".telc-mock-cloze-matching-touch-preview")).toBeInTheDocument();
     fireEvent.pointerMove(option, { pointerType: "touch", pointerId: 1, clientX: 2, clientY: 2 });
     fireEvent.pointerUp(slot, { pointerType: "touch", pointerId: 1, clientX: 2, clientY: 2 });
     await waitFor(() => expect(slot).toHaveTextContent("lerne"));
-    expect(document.querySelector(".mock-cloze-matching-touch-preview")).not.toBeInTheDocument();
+    expect(document.querySelector(".telc-mock-cloze-matching-touch-preview")).not.toBeInTheDocument();
   });
 });
 
@@ -2529,7 +2365,7 @@ describe("mock exam annotation scope acceptance", () => {
   }
 
   function saveSnapshot(snapshot) {
-    sessionStorage.setItem("exam-preparation-written-mock-v1:7", JSON.stringify(snapshot));
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify(snapshot));
   }
 
   beforeEach(() => {
@@ -2550,7 +2386,7 @@ describe("mock exam annotation scope acceptance", () => {
     submitSavedMockExam.mockResolvedValueOnce({});
     fetchSavedMockExam.mockResolvedValueOnce({ is_completed: false });
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("radio", { name: /否/ }));
     fireEvent.click(await screen.findByRole("button", { name: "查看得分" }));
 
@@ -2574,7 +2410,7 @@ describe("mock exam annotation scope acceptance", () => {
     if (failures.fetch) fetchSavedMockExam.mockRejectedValueOnce(failures.fetch);
     else fetchSavedMockExam.mockResolvedValueOnce({ is_completed: false });
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("radio", { name: /否/ }));
     fireEvent.click(await screen.findByRole("button", { name: "查看得分" }));
 
@@ -2595,7 +2431,7 @@ describe("mock exam annotation scope acceptance", () => {
     submitSavedMockExam.mockResolvedValueOnce({});
     fetchSavedMockExam.mockResolvedValueOnce({ is_completed: false });
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "提前交卷" }));
 
     await waitFor(() => expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull());
@@ -2619,13 +2455,81 @@ describe("mock exam annotation scope acceptance", () => {
       progress: {},
     });
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "再考一套" }));
 
     await waitFor(() => expect(createMockExam).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByRole("heading", { name: "Lesen & Sprachbausteine" })).toBeInTheDocument());
     expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
     expect(sessionStorage.getItem(mockAnnotationScope(42))).toBeNull();
+  });
+
+  it("creates and labels a B2 paper from the route and exits to its level home", async () => {
+    createMockExam.mockResolvedValueOnce({
+      attempt_id: 42,
+      exam_type: "TELC",
+      level: "B2",
+      ...writingExam(),
+      progress: {},
+    });
+    render(<MemoryRouter initialEntries={["/modules/exam-preparation/telc/b2/mock-exam"]}><Routes>
+      <Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<><TelcMockExamPage /><LocationProbe /></>} />
+      <Route path="*" element={<LocationProbe />} />
+    </Routes></MemoryRouter>);
+
+    await screen.findByRole("heading", { name: "Lesen & Sprachbausteine" });
+    expect(createMockExam).toHaveBeenCalledWith(expect.any(String), { examType: "TELC", level: "B2", levelPath: "b2" });
+    expect(screen.getByText("TELC B2 · 笔试模拟")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "← 退出模拟" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/b2");
+  });
+
+  it("lets the persisted paper scope override a conflicting client route", async () => {
+    fetchSavedMockExam.mockResolvedValueOnce({
+      id: 77,
+      exam_type: "TELC",
+      level: "B1",
+      exam: { ...writingExam(), exam_type: "TELC", level: "B1" },
+      answers: {}, writing_text: "", writing_assessment: {}, is_favorite: false,
+      progress: { phase: "reading", deadline: Date.now() + 60_000, active_part: "reading_understanding" },
+    });
+    render(<MemoryRouter initialEntries={["/modules/exam-preparation/telc/b2/mock-exam?attempt=77"]}><Routes>
+      <Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<><TelcMockExamPage /><LocationProbe /></>} />
+      <Route path="*" element={<LocationProbe />} />
+    </Routes></MemoryRouter>);
+
+    await screen.findByRole("heading", { name: "Lesen & Sprachbausteine" });
+    expect(screen.getByText("TELC B1 · 笔试模拟")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "← 退出模拟" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/b1");
+  });
+
+  it("moves an auto-restored attempt pointer to its persisted level and prevents a cross-level restore", async () => {
+    const b2Key = activeMockExamKey(7, { examType: "TELC", level: "B2" });
+    const b1Key = activeMockExamKey(7, { examType: "TELC", level: "B1" });
+    localStorage.setItem(b2Key, "77");
+    fetchSavedMockExam.mockResolvedValueOnce({
+      id: 77,
+      exam_type: "TELC",
+      level: "B1",
+      exam: { ...writingExam(), exam_type: "TELC", level: "B1" },
+      answers: {}, writing_text: "", writing_assessment: {}, is_favorite: false,
+      progress: { phase: "reading", deadline: Date.now() + 60_000, active_part: "reading_understanding" },
+    });
+
+    const firstMount = render(<MemoryRouter initialEntries={["/modules/exam-preparation/telc/b2/mock-exam"]}><Routes>
+      <Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<TelcMockExamPage />} />
+    </Routes></MemoryRouter>);
+    await screen.findByRole("heading", { name: "Lesen & Sprachbausteine" });
+    expect(localStorage.getItem(b2Key)).toBeNull();
+    expect(localStorage.getItem(b1Key)).toBe("77");
+    firstMount.unmount();
+
+    render(<MemoryRouter initialEntries={["/modules/exam-preparation/telc/b2/mock-exam"]}><Routes>
+      <Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<TelcMockExamPage />} />
+    </Routes></MemoryRouter>);
+    await waitFor(() => expect(createMockExam).toHaveBeenCalled());
+    expect(fetchSavedMockExam).toHaveBeenCalledTimes(1);
   });
 
   it("preserves annotations when resuming an unfinished attempt", async () => {
@@ -2641,15 +2545,15 @@ describe("mock exam annotation scope acceptance", () => {
       progress: { phase: "reading", deadline: Date.now() + 60_000, active_part: "reading_understanding" },
     });
 
-    render(<MemoryRouter initialEntries={["/modules/exam-preparation/mock-exam?attempt=77"]}><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={["/modules/exam-preparation/telc/b1/mock-exam?attempt=77"]}><TelcMockExamPage /></MemoryRouter>);
     await screen.findByRole("heading", { name: "Lesen 2" });
 
     expect(sessionStorage.getItem(mockAnnotationScope(77))).toBe(value);
   });
 
   it.each([
-    ["saved", "/modules/exam-preparation/mock-exam?saved=88", { is_completed: true, id: 88 }],
-    ["results", "/modules/exam-preparation/mock-exam", null],
+    ["saved", "/modules/exam-preparation/telc/b1/mock-exam?saved=88", { is_completed: true, id: 88 }],
+    ["results", "/modules/exam-preparation/telc/b1/mock-exam", null],
   ])("keeps the pre-existing scope untouched in %s review", async (_label, route, savedMeta) => {
     const attemptId = savedMeta?.id || 31;
     const value = scopeValue("old");
@@ -2665,7 +2569,7 @@ describe("mock exam annotation scope acceptance", () => {
       saveSnapshot(writingReviewState({ phase: "results", deadline: 0, activePart: "reading_understanding" }));
     }
 
-    render(<MemoryRouter initialEntries={[route]}><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={[route]}><TelcMockExamPage /></MemoryRouter>);
     await screen.findByRole("heading", { name: "考试结果与答案回顾" });
 
     if (savedMeta) fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 2" }));
@@ -2684,7 +2588,7 @@ describe("mock exam annotation scope acceptance", () => {
     });
     updateSavedMockExam.mockResolvedValue({});
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     await waitFor(() => expect(updateSavedMockExam).toHaveBeenCalled(), { timeout: 1500 });
     const payload = updateSavedMockExam.mock.calls[0][1];
     expect(Object.keys(payload).sort()).toEqual([
@@ -2703,7 +2607,7 @@ describe("mock exam annotation scope acceptance", () => {
       attemptId: 31,
     });
 
-    render(<MemoryRouter><MockWrittenExamPage /></MemoryRouter>);
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "Überschrift auswählen" }));
     const option = await screen.findByRole("button", { name: "A Headline" });
     const optionRegion = document.querySelector('[data-exam-annotation-region="reading_title_matching:option:title:1:A"]');

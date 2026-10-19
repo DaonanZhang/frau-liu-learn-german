@@ -85,3 +85,48 @@ class SpeakingAudioApiTests(APITestCase):
             )
         self.assertEqual(detail.status_code, status.HTTP_200_OK)
         self.assertEqual(detail.data["content"]["dialogue"][0]["audio_url"], url)
+
+    def test_b2_turn_does_not_accept_a_b1_audio_url(self):
+        base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.B2,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL3,
+            external_id="TTS-B2", title="Planen",
+        )
+        exercise = SpeakingTeilExercise.objects.create(
+            exercise_base=base,
+            content={"teil": "3", "dialogue": [{
+                "sequence": 1, "role": "TN1", "text": "Hallo!",
+                "audio_url": "/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/teil3/B1_TTS-B2_1.mp3",
+            }]},
+        )
+        detail = self.client.get(
+            reverse("exam-prep-speaking-teil-exercises-detail", kwargs={"pk": exercise.pk})
+        )
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail.data["content"]["dialogue"][0]["audio_url"], "")
+
+    def test_exam_family_with_underscore_accepts_its_existing_audio_url(self):
+        base = ExerciseBase.objects.create(
+            exam_type="GOETHE_BERUF", level=ExerciseBase.Level.B2,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL3,
+            external_id="TTS-GOETHE", title="Planen",
+        )
+        url = (
+            "/resources/ExamPreparation/exam_preparation_audio/"
+            "goethe_beruf_b2_speaking/teil3/B2_TTS-GOETHE_1.mp3"
+        )
+        exercise = SpeakingTeilExercise.objects.create(
+            exercise_base=base,
+            content={"teil": "3", "dialogue": [{
+                "sequence": 1, "role": "TN1", "text": "Hallo!", "audio_url": url,
+            }]},
+        )
+
+        detail = self.client.get(
+            reverse("exam-prep-speaking-teil-exercises-detail", kwargs={"pk": exercise.pk})
+        )
+
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail.data["content"]["dialogue"][0]["audio_url"], url)

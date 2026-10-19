@@ -13,6 +13,7 @@ import {
 } from "../utils/moduleAccess.js";
 import PurchaseFeatureList from "../components/PurchaseFeatureList.jsx";
 import CheckoutCouponSelector from "../components/CheckoutCouponSelector.jsx";
+import { examPreparationReturnPath } from "../utils/examPreparationScope.js";
 
 import "./ModuleCheckoutPage.css";
 
@@ -125,6 +126,9 @@ export default function ModuleCheckoutPage() {
   const alreadyHasAccess = useMemo(() => hasModuleAccess(user, module), [user, module]);
   const currentModuleExpiry = useMemo(() => getCurrentModuleExpiry(user, module), [user, module]);
   const isExamPreparation = module?.id === "exam-preparation";
+  const trialReturnPath = isExamPreparation
+    ? examPreparationReturnPath(searchParams.get("return_to"), module?.route)
+    : module?.route;
   const expiredModuleExpiry = useMemo(
     () => (isExamPreparation && !alreadyHasAccess
       ? getLatestExpiredModuleExpiry(user, module)
@@ -573,8 +577,8 @@ export default function ModuleCheckoutPage() {
           className="module-checkout-page__trial"
           type="button"
           onClick={() => {
-            if (module?.route) {
-              navigate(module.route);
+            if (trialReturnPath) {
+              navigate(trialReturnPath);
             }
           }}
         >

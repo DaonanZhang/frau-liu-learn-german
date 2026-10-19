@@ -17,9 +17,9 @@ from django.conf import settings
 
 SPEAKING_AUDIO_ROOT = (
     settings.BASE_DIR / "frontend" / "public" / "resources" / "ExamPreparation"
-    / "exam_preparation_audio" / "telc_b1_speaking"
+    / "exam_preparation_audio"
 )
-SPEAKING_AUDIO_PUBLIC_PREFIX = "/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking"
+SPEAKING_AUDIO_PUBLIC_PREFIX = "/resources/ExamPreparation/exam_preparation_audio"
 MANIFEST_PATH = SPEAKING_AUDIO_ROOT / "manifest.json"
 # Kept for the one-time migration/audit command; runtime URL resolution never reads it.
 DEFAULT_VOICE = "de-DE-KatjaNeural"
@@ -41,15 +41,22 @@ def speaking_turn_filename(*, level: str, external_id: str, sequence: object) ->
     return f"{_safe_component(level)}_{_safe_component(external_id)}_{_safe_component(sequence)}.mp3"
 
 
-def speaking_turn_audio_path(*, exercise_type: str, level: str, external_id: str, sequence: object) -> Path:
-    return SPEAKING_AUDIO_ROOT / speaking_teil_folder(exercise_type) / speaking_turn_filename(
+def _speaking_scope_folder(exam_type: str, level: str) -> str:
+    from apps.exam_preparation.scope import ExamScope
+
+    scope = ExamScope.from_values(exam_type, level)
+    return f"{scope.exam_type.lower()}_{scope.level.lower()}_speaking"
+
+
+def speaking_turn_audio_path(*, exercise_type: str, exam_type: str, level: str, external_id: str, sequence: object) -> Path:
+    return SPEAKING_AUDIO_ROOT / _speaking_scope_folder(exam_type, level) / speaking_teil_folder(exercise_type) / speaking_turn_filename(
         level=level, external_id=external_id, sequence=sequence
     )
 
 
-def speaking_turn_audio_url(*, exercise_type: str, level: str, external_id: str, sequence: object) -> str:
+def speaking_turn_audio_url(*, exercise_type: str, exam_type: str, level: str, external_id: str, sequence: object) -> str:
     return (
-        f"{SPEAKING_AUDIO_PUBLIC_PREFIX}/{speaking_teil_folder(exercise_type)}/"
+        f"{SPEAKING_AUDIO_PUBLIC_PREFIX}/{_speaking_scope_folder(exam_type, level)}/{speaking_teil_folder(exercise_type)}/"
         f"{speaking_turn_filename(level=level, external_id=external_id, sequence=sequence)}"
     )
 
@@ -94,7 +101,7 @@ def synthesize_speaking_audio(text: str, *, voice: str, region: str, key: str) -
 
 
 def ensure_speaking_turn_audio(
-    *, exercise_type: str, level: str, external_id: str, sequence: object, text: str,
+    *, exercise_type: str, exam_type: str, level: str, external_id: str, sequence: object, text: str,
     voice: str = DEFAULT_VOICE, region: str | None = None, key: str | None = None,
     overwrite: bool = False, synthesizer=synthesize_speaking_audio,
 ) -> str:
@@ -106,7 +113,8 @@ def ensure_speaking_turn_audio(
     if not key or not re.fullmatch(r"[a-z0-9]+", region):
         raise RuntimeError("Set AZURE_SPEECH_KEY and AZURE_SPEECH_REGION in the environment")
     target = speaking_turn_audio_path(
-        exercise_type=exercise_type, level=level, external_id=external_id, sequence=sequence
+        exercise_type=exercise_type, exam_type=exam_type, level=level,
+        external_id=external_id, sequence=sequence,
     )
     target.parent.mkdir(parents=True, exist_ok=True)
     if not target.is_file() or overwrite:
@@ -115,23 +123,26 @@ def ensure_speaking_turn_audio(
         temporary.write_bytes(audio)
         temporary.replace(target)
     return speaking_turn_audio_url(
-        exercise_type=exercise_type, level=level, external_id=external_id, sequence=sequence
+        exercise_type=exercise_type, exam_type=exam_type, level=level,
+        external_id=external_id, sequence=sequence,
     )
 
 
-def _is_speaking_audio_url(url: object) -> bool:
+def _is_speaking_audio_url(url: object, *, expected_prefix: str) -> bool:
     if not isinstance(url, str):
         return False
     parsed = urlsplit(url)
     return (
         parsed.scheme == "" and parsed.netloc == ""
-        and parsed.path.startswith(f"{SPEAKING_AUDIO_PUBLIC_PREFIX}/")
-        and parsed.path.endswith(".mp3")
+        and parsed.path.startswith(expected_prefix)
+        and re.fullmatch(r"teil[123]/[^/]+\.mp3", parsed.path.removeprefix(expected_prefix))
     )
 
 
 def get_speaking_turn_audio_url(exercise, turn):
     stored_url = turn.get("audio_url")
-    if _is_speaking_audio_url(stored_url):
+    base = exercise.exercise_base
+    expected_prefix = f"{SPEAKING_AUDIO_PUBLIC_PREFIX}/{_speaking_scope_folder(base.exam_type, base.level)}/"
+    if _is_speaking_audio_url(stored_url, expected_prefix=expected_prefix):
         return stored_url
     return ""

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../api/auth/useAuth.js";
 import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
+import { examPreparationScope } from "../utils/examPreparationScope.js";
 import "./ExerciseSelectionPage.css";
 
 export default function ExerciseSelectionPage({
@@ -18,6 +19,8 @@ export default function ExerciseSelectionPage({
   emptyMessage = "Zurzeit sind keine Aufgaben verfügbar.",
 }) {
   const navigate = useNavigate();
+  const { level } = useParams();
+  const scope = examPreparationScope(level);
   const { user } = useAuth();
   const [exercises, setExercises] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +33,8 @@ export default function ExerciseSelectionPage({
       try {
         setLoading(true);
         setErrorText("");
-        const data = await fetchExercises();
+        if (!scope) return;
+        const data = await fetchExercises(scope);
         if (!aborted) {
           setExercises(Array.isArray(data?.results) ? data.results : []);
         }
@@ -49,12 +53,14 @@ export default function ExerciseSelectionPage({
     return () => {
       aborted = true;
     };
-  }, [fetchExercises]);
+  }, [fetchExercises, scope?.level]);
+
+  if (!scope) return <Navigate to="/modules/exam-preparation" replace />;
 
   return (
     <div className="exercise-selection-page">
       <div className="exercise-selection-topbar">
-        <Link to={backTo} className="exercise-selection-topbar__back">
+        <Link to={typeof backTo === "function" ? backTo(scope) : backTo} className="exercise-selection-topbar__back">
           {backLabel}
         </Link>
       </div>
@@ -63,7 +69,9 @@ export default function ExerciseSelectionPage({
         <div>
           <p className="exercise-selection-hero__eyebrow">{eyebrow}</p>
           <h1 className="exercise-selection-hero__title">{title}</h1>
-          <p className="exercise-selection-hero__copy">{description}</p>
+          <p className="exercise-selection-hero__copy">
+            {typeof description === "function" ? description(scope) : description}
+          </p>
         </div>
       </section>
 
@@ -130,14 +138,14 @@ export default function ExerciseSelectionPage({
                 key={exercise.id || index}
                 type="button"
                 className="exercise-selection-card exercise-selection-card--locked"
-                onClick={() => showExamPreparationPurchasePrompt(navigate, user)}
+                onClick={() => showExamPreparationPurchasePrompt(navigate, user, scope)}
               >
                 {cardContent}
               </button>
             ) : (
               <Link
                 key={exercise.id || index}
-                to={buildExerciseHref(exercise)}
+                to={buildExerciseHref(exercise, scope)}
                 className="exercise-selection-card"
               >
                 {cardContent}

@@ -7,6 +7,7 @@ It complements:
 - `local-docs/exam-preparation-tmp-to-imports.md` for routing files from `tmp/`
 - `local-docs/exam-preparation-xlsx-contract.md` for the canonical workbook contract
 - `scripts/exam_preparation_importer.py` for executable importer behavior
+- `scripts/exam_preparation_importer_telc_b2.py` for TELC B2-specific formats
 
 The preflight does not write to the database and does not move files into
 `processed/` or `failed/`.
@@ -20,6 +21,11 @@ test or guarantee that external database constraints and infrastructure are
 available.
 
 ## 1. Select Import Candidates
+
+Run preflight separately for each `(exam_type, level)` batch. TELC B1 and TELC
+B2 candidates must come from separate `raw/`, `processed/`, and `failed/`
+directory trees; do not combine them into one filesystem batch even though the
+database identity includes both scope fields.
 
 For each importer type, scan its `raw/` directory for:
 
@@ -67,7 +73,9 @@ normalization. Fully empty rows may be ignored where the importer explicitly
 allows them.
 
 After checking each file, build a batch-wide index of both internal IDs and
-filename suffix IDs by `(level, exercise_type, normalized ID)`:
+filename suffix IDs by `(exam_type, level, exercise_type, numerically normalized external_id)`.
+Normalize family values to uppercase before comparing them. B1 and B2, and
+different exam families, may reuse an ID; duplicate four-field keys are blocking:
 
 - duplicate filename suffix IDs are blocking because they still target the
   same database key
@@ -75,6 +83,16 @@ filename suffix IDs by `(level, exercise_type, normalized ID)`:
   reviewed
 - after review, the filename suffix is authoritative for the database ID while
   the internal ID remains authoritative for linking sheets inside that file
+
+For TELC B2, use the workbook ID when present. If the workbook's only exercise
+row has an empty ID, use the numeric filename suffix as its ID. A non-empty
+workbook ID that differs from the filename suffix is blocking.
+
+Before a TELC B2 real import, run every candidate through the dedicated parser
+inside a rollback-only transaction. Do not route or import files that fail this
+check. The B2 adapter ignores fully empty trailing rows. The title-bank
+mismatches in Lesen Teil 1 IDs 004, 017, 018, and 020 from the 2026-10-17 Drive
+batch were corrected before import.
 
 ## 4. Run Shared Content Checks
 
@@ -145,7 +163,10 @@ Interpret the flat `exercise` sheet as follows:
   populated `Explanation` cell is question-level, while two or more populated
   cells are retained as option-level
 - speaking Teil 1: require one sheet with `ID`, `Role`, and `内容`; every
-  dialogue row must have a role
+  dialogue row must have a role. Column-less legacy `Kennenlernen_...` files
+  are TELC/B1; B2 must have an explicit `b2_` filename prefix. Other filename
+  prefixes must identify a supported level, and a present `考试类型` column
+  must be non-empty on every dialogue row.
 - speaking Teil 2: require one matching row in `meta` and `example`, two
   complete opinion cards, and a fully TN1/TN2-tagged example dialogue
 - speaking Teil 3: require consistent repeated metadata, a non-empty

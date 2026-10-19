@@ -1,8 +1,8 @@
 from pathlib import Path
 import sys
 from types import SimpleNamespace
-from unittest import TestCase
 from unittest.mock import patch
+from django.test import SimpleTestCase, TestCase
 
 from apps.exam_preparation.models import ExerciseBase
 SCRIPTS_DIR = Path(__file__).resolve().parents[1]
@@ -12,7 +12,80 @@ import exam_preparation_importer
 from exam_preparation_importer import save_speaking_exercise
 
 
+class SpeakingTeil1ParsingTests(SimpleTestCase):
+    def test_legacy_kennenlernen_filename_defaults_to_telc_b1(self):
+        with (
+            patch.object(exam_preparation_importer.pd, "ExcelFile") as excel_file,
+            patch.object(exam_preparation_importer, "get_sheet") as get_sheet,
+        ):
+            excel_file.return_value.sheet_names = ["Sheet1"]
+            get_sheet.return_value = exam_preparation_importer.pd.DataFrame([
+                {"ID": "7", "Role": "TN1", "内容": "Hallo"}
+            ])
+            parsed = exam_preparation_importer.parse_speaking_einander_kennenlernen_workbook(
+                Path("Kennenlernen_001.xlsx")
+            )
+        self.assertEqual(parsed["level"], "B1")
+        self.assertEqual(parsed["exam_type"], "TELC")
+
+    def test_part_one_infers_b2_and_accepts_uppercase_exam_family(self):
+        with (
+            patch.object(exam_preparation_importer.pd, "ExcelFile") as excel_file,
+            patch.object(exam_preparation_importer, "get_sheet") as get_sheet,
+        ):
+            excel_file.return_value.sheet_names = ["Sheet1"]
+            get_sheet.return_value = exam_preparation_importer.pd.DataFrame([
+                {"ID": "7", "Role": "TN1", "内容": "Hallo", "考试类型": "telc"}
+            ])
+            parsed = exam_preparation_importer.parse_speaking_einander_kennenlernen_workbook(
+                Path("b2_speaking_7.xlsx")
+            )
+        self.assertEqual(parsed["level"], "B2")
+        self.assertEqual(parsed["exam_type"], "TELC")
+
+    def test_unknown_prefix_does_not_default_to_b1(self):
+        with (
+            patch.object(exam_preparation_importer.pd, "ExcelFile") as excel_file,
+            patch.object(exam_preparation_importer, "get_sheet") as get_sheet,
+        ):
+            excel_file.return_value.sheet_names = ["Sheet1"]
+            get_sheet.return_value = exam_preparation_importer.pd.DataFrame([
+                {"ID": "7", "Role": "TN1", "内容": "Hallo"}
+            ])
+            with self.assertRaisesRegex(exam_preparation_importer.ImportErrorWithContext, "Unsupported level"):
+                exam_preparation_importer.parse_speaking_einander_kennenlernen_workbook(
+                    Path("legacy_kennenlernen_001.xlsx")
+                )
+
+    def test_part_one_rejects_blank_family_when_new_column_is_present(self):
+        with (
+            patch.object(exam_preparation_importer.pd, "ExcelFile") as excel_file,
+            patch.object(exam_preparation_importer, "get_sheet") as get_sheet,
+        ):
+            excel_file.return_value.sheet_names = ["Sheet1"]
+            get_sheet.return_value = exam_preparation_importer.pd.DataFrame([
+                {"ID": "7", "Role": "TN1", "内容": "Hallo", "考试类型": ""}
+            ])
+            with self.assertRaisesRegex(exam_preparation_importer.ImportErrorWithContext, "考试类型"):
+                exam_preparation_importer.parse_speaking_einander_kennenlernen_workbook(
+                    Path("b2_speaking_7.xlsx")
+                )
+
 class SpeakingImportAudioTests(TestCase):
+    def test_upsert_keeps_same_numeric_id_for_each_exam_scope(self):
+        for family, level in (("telc", "B1"), ("telc", "B2"), ("goethe", "B1")):
+            exam_preparation_importer.upsert_base(
+                level=level, skill="SPEAKING", exercise_type="SPEAKING_TEIL1",
+                external_id="007", title="Thema", exam_type=family, is_real_exam=False,
+                imported_from_file=f"{family}_{level}_7.xlsx",
+            )
+        records = ExerciseBase.objects.filter(external_id="7", exercise_type="SPEAKING_TEIL1")
+        self.assertEqual(records.count(), 3)
+        self.assertSetEqual(
+            set(records.values_list("exam_type", "level")),
+            {("TELC", "B1"), ("TELC", "B2"), ("GOETHE", "B1")},
+        )
+
     def test_import_writes_audio_url_to_dialogue_and_section_turns(self):
         parsed = {
             "level": ExerciseBase.Level.B1,

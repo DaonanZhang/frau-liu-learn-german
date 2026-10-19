@@ -4,6 +4,10 @@ import {
   fetchFavoriteQuestions,
   removeFavoriteQuestion,
 } from "../api/exam_preparation/favoriteQuestions.js";
+import {
+  examPreparationFavoriteQuery,
+  examPreparationScopeFromSearchParams,
+} from "../utils/examPreparationScope.js";
 import "./FavoriteQuestionsPage.css";
 
 const SKILL_FILTERS = [
@@ -22,6 +26,9 @@ const SKILL_META = {
   WRITING: { label: "Schreiben", className: "is-writing" },
   SPEAKING: { label: "Sprechen", className: "is-speaking" },
 };
+
+const LEVEL_FILTERS = ["Alle", "B1", "B2"];
+const EXAM_TYPE_FILTERS = ["TELC"];
 
 function normalizePreview(value) {
   return String(value || "")
@@ -105,7 +112,7 @@ function FavoriteQuestionCard({ question, pending, onRemove }) {
   );
 }
 
-function FavoriteExerciseCard({ group }) {
+function FavoriteExerciseCard({ group, scope }) {
   const representative = group.questions[0];
   const title = String(representative.title || "").trim()
     || `套题 ${representative.external_id || representative.exercise_id}`;
@@ -118,7 +125,7 @@ function FavoriteExerciseCard({ group }) {
       </div>
 
       <Link
-        to={`/favorite-questions?exercise=${encodeURIComponent(group.key)}`}
+        to={`/favorite-questions?exercise=${encodeURIComponent(group.key)}${scope ? `&${examPreparationFavoriteQuery(scope)}` : ""}`}
         className="favorite-question-card__link"
       >
         <p className="favorite-question-card__label">套题收藏</p>
@@ -134,11 +141,38 @@ function FavoriteExerciseCard({ group }) {
 export default function FavoriteQuestionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [questions, setQuestions] = useState([]);
+  const [allFavorites, setAllFavorites] = useState(null);
   const [activeSkill, setActiveSkill] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
   const [pendingIds, setPendingIds] = useState(() => new Set());
   const [reloadKey, setReloadKey] = useState(0);
+  const scope = examPreparationScopeFromSearchParams(searchParams);
+  const activeExamType = scope?.examType || EXAM_TYPE_FILTERS[0];
+  const activeLevel = scope?.level || "Alle";
+
+  function updateLevelFilter(level) {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("exercise");
+    if (level === "Alle") {
+      nextParams.delete("exam_type");
+      nextParams.delete("level");
+    } else {
+      nextParams.set("exam_type", "TELC");
+      nextParams.set("level", level);
+    }
+    setSearchParams(nextParams);
+  }
+
+  useEffect(() => {
+    const hasScopeParams = searchParams.has("exam_type") || searchParams.has("level");
+    if (hasScopeParams && !scope) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("exam_type");
+      nextParams.delete("level");
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [scope, searchParams, setSearchParams]);
 
   useEffect(() => {
     let aborted = false;
@@ -147,9 +181,14 @@ export default function FavoriteQuestionsPage() {
       setLoading(true);
       setErrorText("");
       try {
-        const data = await fetchFavoriteQuestions();
+        const data = await fetchFavoriteQuestions({
+          examType: activeExamType,
+          level: activeLevel === "Alle" ? "" : activeLevel,
+        });
         if (!aborted) {
-          setQuestions(Array.isArray(data?.results) ? data.results : []);
+          const results = Array.isArray(data?.results) ? data.results : [];
+          setQuestions(results);
+          if (activeLevel === "Alle") setAllFavorites(results);
         }
       } catch (error) {
         if (!aborted) {
@@ -164,7 +203,7 @@ export default function FavoriteQuestionsPage() {
     return () => {
       aborted = true;
     };
-  }, [reloadKey]);
+  }, [activeExamType, activeLevel, reloadKey]);
 
   const countsBySkill = useMemo(() => {
     const counts = { ALL: questions.length };
@@ -194,9 +233,11 @@ export default function FavoriteQuestionsPage() {
 
   useEffect(() => {
     if (selectedExerciseKey && !selectedGroup && !loading) {
-      setSearchParams({}, { replace: true });
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("exercise");
+      setSearchParams(nextParams, { replace: true });
     }
-  }, [loading, selectedExerciseKey, selectedGroup, setSearchParams]);
+  }, [loading, searchParams, selectedExerciseKey, selectedGroup, setSearchParams]);
 
   async function handleRemove(question) {
     if (pendingIds.has(question.id)) return;
@@ -205,6 +246,7 @@ export default function FavoriteQuestionsPage() {
     try {
       await removeFavoriteQuestion(question);
       setQuestions((previous) => previous.filter((item) => item.id !== question.id));
+      setAllFavorites((previous) => previous?.filter((item) => item.id !== question.id) ?? previous);
     } catch (error) {
       setErrorText(error?.message || "取消收藏失败，请稍后重试。");
     } finally {
@@ -228,13 +270,51 @@ export default function FavoriteQuestionsPage() {
 
       {selectedGroup ? (
         <div className="favorite-questions-detail-bar">
-          <button type="button" onClick={() => setSearchParams({})}>← 返回全部收藏</button>
+          <button
+            type="button"
+            onClick={() => {
+              const nextParams = new URLSearchParams(searchParams);
+              nextParams.delete("exercise");
+              setSearchParams(nextParams);
+            }}
+          >← 返回全部收藏</button>
           <div>
             <strong>{selectedGroup.questions[0].title || selectedGroup.questions[0].external_id}</strong>
             <span>这套题共收藏 {selectedGroup.questions.length} 道题</span>
           </div>
         </div>
       ) : (
+        <>
+        {EXAM_TYPE_FILTERS.length > 1 ? (
+          <div className="favorite-questions-level-filter" role="group" aria-label="按考试类型筛选收藏题目">
+            <span>考试类型</span>
+            {EXAM_TYPE_FILTERS.map((examType) => (
+              <button
+                key={examType}
+                type="button"
+                aria-pressed={activeExamType === examType}
+                className={activeExamType === examType ? "is-active" : ""}
+                onClick={() => updateLevelFilter(activeLevel)}
+              >
+                {examType}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="favorite-questions-level-filter" role="group" aria-label="按等级筛选收藏题目">
+          <span>等级</span>
+          {LEVEL_FILTERS.map((level) => (
+            <button
+              key={level}
+              type="button"
+              aria-pressed={activeLevel === level}
+              className={activeLevel === level ? "is-active" : ""}
+              onClick={() => updateLevelFilter(level)}
+            >
+              {level}
+            </button>
+          ))}
+        </div>
         <div className="favorite-questions-tabs" role="tablist" aria-label="按技能筛选收藏题目">
           {SKILL_FILTERS.map((filter) => (
             <button
@@ -250,6 +330,7 @@ export default function FavoriteQuestionsPage() {
             </button>
           ))}
         </div>
+        </>
       )}
 
       {errorText ? (
@@ -266,7 +347,9 @@ export default function FavoriteQuestionsPage() {
       {!loading && !errorText && !selectedGroup && visibleQuestions.length === 0 ? (
         <div className="favorite-questions-empty">
           <span className="favorite-questions-empty__star" aria-hidden="true">☆</span>
-          <h2>{questions.length ? "这个分类还没有收藏题目" : "还没有收藏题目"}</h2>
+          <h2>{activeLevel === "Alle" && activeSkill === "ALL" && allFavorites?.length === 0
+            ? "还没有收藏题目"
+            : "当前筛选下没有收藏题目"}</h2>
           <p>在备考季做题时点击题目旁边的星标，之后就能在这里快速找到它。</p>
           <Link to="/modules/exam-preparation">前往备考季</Link>
         </div>
@@ -289,7 +372,7 @@ export default function FavoriteQuestionsPage() {
         <section className="favorite-questions-grid" aria-label="收藏题目列表">
           {visibleGroups.map((group) => (
             group.questions.length > 1 ? (
-              <FavoriteExerciseCard key={group.key} group={group} />
+              <FavoriteExerciseCard key={group.key} group={group} scope={scope} />
             ) : (
               <FavoriteQuestionCard
                 key={group.questions[0].id}

@@ -40,11 +40,12 @@ function LocationProbe() {
   return <div data-testid="location">{useLocation().pathname}{useLocation().search}</div>;
 }
 
-function renderPage() {
+function renderPage(level = "b1") {
   return render(
-    <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
+    <MemoryRouter initialEntries={[`/modules/exam-preparation/${level}`]}>
       <Routes>
-        <Route path="*" element={<><ExamPreparationModulePage /><LocationProbe /></>} />
+        <Route path="/modules/exam-preparation/:level" element={<><ExamPreparationModulePage /><LocationProbe /></>} />
+        <Route path="*" element={<LocationProbe />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -76,9 +77,23 @@ describe("exam preparation mock exam entry", () => {
     expect(within(unfinished).getAllByRole("article")).toHaveLength(3);
     expect(within(unfinished).getByRole("link", { name: "查看更多未完成考试" })).toHaveAttribute(
       "href",
-      "/modules/exam-preparation/mock-exams",
+      "/modules/exam-preparation/telc/b1/mock-exams",
     );
-    expect(fetchSavedMockExams).toHaveBeenCalledWith("active", 1, 3);
+    expect(fetchSavedMockExams).toHaveBeenCalledWith("active", 1, 3, { examType: "TELC", level: "B1", levelPath: "b1" });
+  });
+
+  it("filters active records and displays their persisted scope on the B2 home", async () => {
+    fetchSavedMockExams.mockResolvedValue({
+      count: 1,
+      results: [{ id: 35, exam_type: "telc", level: "B1", progress: { phase: "reading" }, updated_at: "2026-09-24T10:00:00Z" }],
+    });
+    renderPage("b2");
+
+    const unfinished = await screen.findByLabelText("未完成的模拟考试");
+    expect(fetchSavedMockExams).toHaveBeenCalledWith("active", 1, 3, { examType: "TELC", level: "B2", levelPath: "b2" });
+    expect(within(unfinished).getByText(/TELC B1/)).toBeInTheDocument();
+    fireEvent.click(within(unfinished).getByRole("button", { name: "继续考试" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/telc/b1/mock-exam?attempt=35");
   });
 
   it("clears only the deleted attempt annotations after a successful delete", async () => {
@@ -140,7 +155,7 @@ describe("exam preparation mock exam entry", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent(
-        "/modules/exam-preparation/mock-exam?attempt=31",
+        "/modules/exam-preparation/telc/b1/mock-exam?attempt=31",
       );
     });
   });
@@ -153,9 +168,9 @@ describe("exam preparation mock exam entry", () => {
     fireEvent.click(within(entry).getByRole("button", { name: "开始新考试" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/mock-exam");
+      expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/telc/b1/mock-exam");
     });
-    expect(fetchSavedMockExams).toHaveBeenCalledWith("active", 1, 3);
+    expect(fetchSavedMockExams).toHaveBeenCalledWith("active", 1, 3, { examType: "TELC", level: "B1", levelPath: "b1" });
   });
 
   it("clears only the abandoned active attempt annotations when starting a new exam", async () => {
@@ -168,7 +183,7 @@ describe("exam preparation mock exam entry", () => {
     fireEvent.click(screen.getByRole("button", { name: "开始新考试" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/mock-exam");
+      expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/telc/b1/mock-exam");
     });
     expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
     expect(sessionStorage.getItem(mockAnnotationScope(32))).not.toBeNull();
@@ -184,7 +199,7 @@ describe("exam preparation mock exam entry", () => {
     fireEvent.click(within(entry).getByRole("button", { name: "继续考试" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/mock-exam?attempt=31");
+      expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/telc/b1/mock-exam?attempt=31");
     });
     expect(sessionStorage.getItem(mockAnnotationScope(31))).not.toBeNull();
   });
@@ -196,7 +211,7 @@ describe("exam preparation mock exam entry", () => {
     fireEvent.click(screen.getByRole("button", { name: "开始新考试" }));
 
     await waitFor(() => {
-      expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/mock-exam");
+      expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/telc/b1/mock-exam");
     });
     expect(sessionStorage.getItem(mockAnnotationScope(31))).not.toBeNull();
   });
@@ -213,6 +228,27 @@ describe("exam preparation mock exam entry", () => {
 
     expect(sessionStorage.getItem(mockAnnotationScope(31))).toBe(annotation);
     expect(localStorage.getItem(activeMockExamKey(7))).toBe("31");
+  });
+
+  it("includes the active level in the checkout return path", () => {
+    renderPage("b2");
+
+    expect(screen.getByRole("link", { name: "延长有效期" })).toHaveAttribute(
+      "href",
+      "/modules/exam-preparation/purchase?return_to=%2Fmodules%2Fexam-preparation%2Fb2",
+    );
+  });
+
+  it("keeps the active level when the locked mock exam opens checkout", async () => {
+    authMocks.useAuth.mockReturnValue({ user: { id: 7, telephone: "13800138000", entitlements: [] } });
+    Swal.fire.mockResolvedValue({ isConfirmed: true });
+    renderPage("b2");
+
+    fireEvent.click(screen.getByRole("button", { name: /购买以解锁/ }));
+
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(
+      "/modules/exam-preparation/purchase?return_to=%2Fmodules%2Fexam-preparation%2Fb2",
+    ));
   });
 
   it("shows the question-bank search only to telephone 110", () => {
@@ -232,5 +268,51 @@ describe("exam preparation mock exam entry", () => {
     renderPage();
 
     expect(screen.queryByRole("heading", { name: "题库搜索" })).not.toBeInTheDocument();
+  });
+});
+
+describe("exam preparation level entry", () => {
+  it("offers TELC B1 and TELC B2 as links to their level homes", () => {
+    fetchSavedMockExams.mockClear();
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
+        <Routes><Route path="/modules/exam-preparation" element={<ExamPreparationModulePage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: /TELC B1/ })).toHaveAttribute("href", "/modules/exam-preparation/b1");
+    expect(screen.getByRole("link", { name: /TELC B2/ })).toHaveAttribute("href", "/modules/exam-preparation/b2");
+    expect(fetchSavedMockExams).not.toHaveBeenCalled();
+  });
+
+  it("keeps the active level on skill links in the reused level home", () => {
+    renderPage("b2");
+    expect(screen.getByRole("link", { name: "← 返回级别选择" })).toHaveAttribute(
+      "href",
+      "/modules/exam-preparation",
+    );
+    expect(screen.getByRole("link", { name: /进入听力模块/ })).toHaveAttribute(
+      "href",
+      "/modules/exam-preparation/b2/hoeren",
+    );
+    expect(screen.getByRole("heading", { name: "备考季 · B2" })).toBeInTheDocument();
+  });
+
+  it("describes the B2 speaking module as presentation training", () => {
+    renderPage("b2");
+
+    const speakingCard = screen.getByRole("link", { name: /进入 Sprechen/ });
+    expect(within(speakingCard).getByText(
+      "通过主题展示、主题讨论和共同策划三部分训练，在真实搭档任务中练习提问、表达观点、协商与达成一致。",
+    )).toBeInTheDocument();
+    expect(within(speakingCard).queryByText(/互相认识/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the B1 speaking module description", () => {
+    renderPage("b1");
+
+    const speakingCard = screen.getByRole("link", { name: /进入 Sprechen/ });
+    expect(within(speakingCard).getByText(
+      "通过互相认识、主题讨论和共同策划三部分训练，在真实搭档任务中练习提问、表达观点、协商与达成一致。",
+    )).toBeInTheDocument();
   });
 });

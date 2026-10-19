@@ -15,7 +15,7 @@ class GenerateSpeakingAudioTests(SimpleTestCase):
     def test_creates_one_turn_file_inside_each_teil_directory(self):
         first = SimpleNamespace(
             exercise_base=SimpleNamespace(
-                exercise_type="SPEAKING_TEIL1", level="B1", external_id="1"
+                exam_type="TELC", exercise_type="SPEAKING_TEIL1", level="B1", external_id="1"
             ),
             content={"dialogue": [
                 {"sequence": 1, "text": "Guten Tag!"},
@@ -24,11 +24,17 @@ class GenerateSpeakingAudioTests(SimpleTestCase):
         )
         second = SimpleNamespace(
             exercise_base=SimpleNamespace(
-                exercise_type="SPEAKING_TEIL3", level="B1", external_id="1"
+                exam_type="TELC", exercise_type="SPEAKING_TEIL3", level="B1", external_id="1"
             ),
             content={"dialogue": [{"sequence": 1, "text": "Guten Tag!"}]},
         )
-        fake_queryset = SimpleNamespace(iterator=lambda: iter([first, second]))
+        third = SimpleNamespace(
+            exercise_base=SimpleNamespace(
+                exam_type="TELC", exercise_type="SPEAKING_TEIL1", level="B2", external_id="1"
+            ),
+            content={"dialogue": [{"sequence": 1, "text": "Guten Morgen!"}]},
+        )
+        fake_queryset = SimpleNamespace(iterator=lambda: iter([first, second, third]))
         fake_manager = SimpleNamespace(
             select_related=lambda *_: SimpleNamespace(order_by=lambda *_: fake_queryset)
         )
@@ -45,17 +51,22 @@ class GenerateSpeakingAudioTests(SimpleTestCase):
                 call_command("generate_speaking_audio", apply=True)
                 manifest = json.loads((Path(directory) / "manifest.json").read_text())
                 turns = manifest["turns"]
-                self.assertEqual(len(turns), 3)
+                self.assertEqual(len(turns), 4)
                 self.assertEqual(
-                    turns["SPEAKING_TEIL1|B1|1|1"]["url"],
+                    turns["TELC|B1|SPEAKING_TEIL1|1|1"]["url"],
                     "/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/teil1/B1_1_1.mp3",
                 )
                 self.assertEqual(
-                    turns["SPEAKING_TEIL3|B1|1|1"]["url"],
+                    turns["TELC|B1|SPEAKING_TEIL3|1|1"]["url"],
                     "/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/teil3/B1_1_1.mp3",
                 )
-                self.assertTrue((Path(directory) / "teil1" / "B1_1_1.mp3").is_file())
-                self.assertTrue((Path(directory) / "teil3" / "B1_1_1.mp3").is_file())
-                self.assertEqual(synth.call_count, 3)
+                self.assertEqual(
+                    turns["TELC|B2|SPEAKING_TEIL1|1|1"]["url"],
+                    "/resources/ExamPreparation/exam_preparation_audio/telc_b2_speaking/teil1/B2_1_1.mp3",
+                )
+                self.assertTrue((Path(directory) / "telc_b1_speaking" / "teil1" / "B1_1_1.mp3").is_file())
+                self.assertTrue((Path(directory) / "telc_b1_speaking" / "teil3" / "B1_1_1.mp3").is_file())
+                self.assertTrue((Path(directory) / "telc_b2_speaking" / "teil1" / "B2_1_1.mp3").is_file())
+                self.assertEqual(synth.call_count, 4)
                 call_command("generate_speaking_audio", apply=True)
-                self.assertEqual(synth.call_count, 3)
+                self.assertEqual(synth.call_count, 4)

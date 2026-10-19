@@ -1,0 +1,1 @@
+"""TELC mock-exam rules."""

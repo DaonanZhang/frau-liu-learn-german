@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import Swal from "sweetalert2";
 import { useAuth } from "../api/auth/useAuth.js";
 import { EXAM_PREPARATION_MODULE } from "./Homepage/homeShared.js";
@@ -13,6 +13,7 @@ import {
   updateSavedMockExam,
 } from "../api/exam_preparation/mockExams.js";
 import { clearAnnotationScope, mockAnnotationScope } from "../utils/examTextAnnotations.js";
+import { examPreparationPurchasePath, examPreparationScope } from "../utils/examPreparationScope.js";
 import "./MockExamRecordsPage.css";
 
 const PHASE_LABELS = {
@@ -34,11 +35,13 @@ function formatCompletedResult(record) {
 }
 
 export default function MockExamRecordsPage() {
+  const { examType: routeExamType, level: routeLevel } = useParams();
+  const scope = examPreparationScope(routeLevel) || examPreparationScope("B1");
+  const supportsRoute = String(routeExamType || scope.examType).toUpperCase() === scope.examType;
   const { user } = useAuth();
   const navigate = useNavigate();
   const hasFullAccess = hasModuleAccess(user, EXAM_PREPARATION_MODULE);
-  const activeAttemptKey = activeMockExamKey(user?.id);
-  const sessionKey = mockExamSessionKey(user?.id);
+  const levelHomePath = `/modules/exam-preparation/${scope.levelPath}`;
   const [records, setRecords] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [recordCount, setRecordCount] = useState(0);
@@ -47,18 +50,18 @@ export default function MockExamRecordsPage() {
   const [favoritePage, setFavoritePage] = useState(1);
   const [hasPreviousPage, setHasPreviousPage] = useState(false);
   const [hasNextPage, setHasNextPage] = useState(false);
-  const [loading, setLoading] = useState(hasFullAccess);
+  const [loading, setLoading] = useState(hasFullAccess && supportsRoute);
   const [pendingId, setPendingId] = useState(null);
   const [errorText, setErrorText] = useState("");
   const [activeTab, setActiveTab] = useState("records");
 
   useEffect(() => {
-    if (!hasFullAccess) return undefined;
+    if (!supportsRoute || !hasFullAccess) return undefined;
     let cancelled = false;
     setLoading(true);
-    const scope = activeTab === "favorites" ? "favorites" : "history";
+    const listScope = activeTab === "favorites" ? "favorites" : "history";
     const page = activeTab === "favorites" ? favoritePage : recordPage;
-    fetchSavedMockExams(scope, page, 10)
+    fetchSavedMockExams(listScope, page, 10, scope)
       .then((data) => {
         if (cancelled) return;
         const results = Array.isArray(data?.results) ? data.results : [];
@@ -76,13 +79,17 @@ export default function MockExamRecordsPage() {
       .catch((error) => { if (!cancelled) setErrorText(error?.data?.message || "考试记录加载失败，请稍后重试。"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [hasFullAccess, activeTab, recordPage, favoritePage]);
+  }, [supportsRoute, hasFullAccess, activeTab, recordPage, favoritePage, scope.level]);
 
   function clearLocalAttempt(recordId) {
-    if (localStorage.getItem(activeAttemptKey) !== String(recordId)) return;
-    localStorage.removeItem(activeAttemptKey);
-    localStorage.removeItem(sessionKey);
-    sessionStorage.removeItem(sessionKey);
+    const record = [...records, ...favorites].find((item) => item.id === recordId);
+    const recordScope = record ? examPreparationScope(record.level) : scope;
+    const recordActiveKey = activeMockExamKey(user?.id, { ...recordScope, examType: String(record?.exam_type || "TELC").toUpperCase() });
+    const recordSessionKey = mockExamSessionKey(user?.id, { ...recordScope, examType: String(record?.exam_type || "TELC").toUpperCase() });
+    if (localStorage.getItem(recordActiveKey) !== String(recordId)) return;
+    localStorage.removeItem(recordActiveKey);
+    localStorage.removeItem(recordSessionKey);
+    sessionStorage.removeItem(recordSessionKey);
   }
 
   async function removeRecord(record) {
@@ -124,19 +131,24 @@ export default function MockExamRecordsPage() {
     setPendingId(record.id);
     try {
       const attempt = await retakeSavedMockExam(record.id);
-      sessionStorage.removeItem(sessionKey);
-      localStorage.removeItem(sessionKey);
-      localStorage.setItem(activeAttemptKey, String(attempt.id));
-      navigate(`/modules/exam-preparation/mock-exam?attempt=${attempt.id}`);
+      const recordScope = examPreparationScope(attempt.level || record.level) || scope;
+      const paperScope = { ...recordScope, examType: String(attempt.exam_type || record.exam_type || "TELC").toUpperCase() };
+      const paperSessionKey = mockExamSessionKey(user?.id, paperScope);
+      sessionStorage.removeItem(paperSessionKey);
+      localStorage.removeItem(paperSessionKey);
+      localStorage.setItem(activeMockExamKey(user?.id, paperScope), String(attempt.id));
+      navigate(`/modules/exam-preparation/${paperScope.examType.toLowerCase()}/${paperScope.levelPath}/mock-exam?attempt=${attempt.id}`);
     } catch (error) {
       await Swal.fire({ icon: "error", title: "暂时无法重考", text: error?.data?.message || "请稍后重试。" });
     } finally { setPendingId(null); }
   }
 
   function actionButtons(record) {
+    const recordScope = examPreparationScope(record.level) || scope;
+    const paperScope = { ...recordScope, examType: String(record.exam_type || "TELC").toUpperCase() };
     return (
       <div className="mock-records-actions">
-        <button onClick={() => navigate(`/modules/exam-preparation/mock-exam?${record.is_completed ? "saved" : "attempt"}=${record.id}`)}>
+        <button onClick={() => navigate(`/modules/exam-preparation/${paperScope.examType.toLowerCase()}/${paperScope.levelPath}/mock-exam?${record.is_completed ? "saved" : "attempt"}=${record.id}`)}>
           {record.is_completed ? "查看结果" : "继续考试"}
         </button>
         {record.is_completed ? <button disabled={pendingId === record.id} onClick={() => toggleFavorite(record)}>{record.is_favorite ? "取消收藏" : "收藏"}</button> : null}
@@ -146,8 +158,12 @@ export default function MockExamRecordsPage() {
     );
   }
 
+  if (!supportsRoute) {
+    return <Navigate to="/modules/exam-preparation" replace />;
+  }
+
   if (!hasFullAccess) {
-    return <div className="mock-records-page"><Link className="mock-records-back" to="/modules/exam-preparation">← 返回备考季</Link><section className="mock-records-empty"><h1>模拟考试记录</h1><p>购买备考季后可查看考试记录和收藏试卷。</p><Link to="/modules/exam-preparation/purchase">购买以解锁</Link></section></div>;
+    return <div className="mock-records-page"><Link className="mock-records-back" to={levelHomePath}>← 返回备考季</Link><section className="mock-records-empty"><h1>模拟考试记录</h1><p>购买备考季后可查看考试记录和收藏试卷。</p><Link to={examPreparationPurchasePath(scope)}>购买以解锁</Link></section></div>;
   }
 
   const visibleRecords = activeTab === "favorites" ? favorites : records;
@@ -162,7 +178,7 @@ export default function MockExamRecordsPage() {
   return (
     <div className="mock-records-page">
       <header className="mock-records-hero">
-        <Link className="mock-records-back" to="/modules/exam-preparation">← 返回备考季</Link>
+        <Link className="mock-records-back" to={levelHomePath}>← 返回备考季</Link>
         <h1>模拟考试记录</h1>
       </header>
       <div className="mock-records-tabs" role="tablist" aria-label="模拟考试记录分类">
@@ -171,7 +187,7 @@ export default function MockExamRecordsPage() {
       </div>
       {errorText ? <p className="mock-records-error">{errorText}</p> : null}
       {loading ? <p className="mock-records-loading">正在加载考试记录…</p> : null}
-      {!loading ? <section className="mock-records-section"><div className="mock-records-heading"><h2>{activeTab === "favorites" ? "收藏试卷" : "考试记录"}</h2><strong>{visibleCount} {activeTab === "favorites" ? "份" : "场"}</strong></div>{visibleRecords.length ? <div className="mock-records-list">{visibleRecords.map((record) => <article key={record.id} className="mock-records-card"><div><span>{record.exam_type} {record.level}</span><strong>{record.is_completed ? formatCompletedResult(record) : `未完成 · ${PHASE_LABELS[record.progress?.phase] || "阅读与语言模块"}`}</strong><small>{formatUpdatedAt(record.updated_at)}</small></div>{actionButtons(record)}</article>)}</div> : <p className="mock-records-empty-note">{activeTab === "favorites" ? "还没有收藏试卷" : "还没有考试记录"}</p>}<nav className="mock-records-pagination" aria-label="考试记录分页"><button type="button" disabled={!hasPreviousPage} onClick={() => changePage(visiblePage - 1)}>上一页</button><span>第 {visiblePage} 页</span><button type="button" disabled={!hasNextPage} onClick={() => changePage(visiblePage + 1)}>下一页</button></nav></section> : null}
+      {!loading ? <section className="mock-records-section"><div className="mock-records-heading"><h2>{activeTab === "favorites" ? "收藏试卷" : "考试记录"}</h2><strong>{visibleCount} {activeTab === "favorites" ? "份" : "场"}</strong></div>{visibleRecords.length ? <div className="mock-records-list">{visibleRecords.map((record) => <article key={record.id} className="mock-records-card"><div><span>{String(record.exam_type || "TELC").toUpperCase()} {String(record.level || scope.level).toUpperCase()}</span><strong>{record.is_completed ? formatCompletedResult(record) : `未完成 · ${PHASE_LABELS[record.progress?.phase] || "阅读与语言模块"}`}</strong><small>{formatUpdatedAt(record.updated_at)}</small></div>{actionButtons(record)}</article>)}</div> : <p className="mock-records-empty-note">{activeTab === "favorites" ? "还没有收藏试卷" : "还没有考试记录"}</p>}<nav className="mock-records-pagination" aria-label="考试记录分页"><button type="button" disabled={!hasPreviousPage} onClick={() => changePage(visiblePage - 1)}>上一页</button><span>第 {visiblePage} 页</span><button type="button" disabled={!hasNextPage} onClick={() => changePage(visiblePage + 1)}>下一页</button></nav></section> : null}
     </div>
   );
 }

@@ -213,7 +213,7 @@ class ContentSearchServiceTests(TestCase):
             ExerciseBase.Skill.SPEAKING,
             ExerciseBase.ExerciseType.SPEAKING_TEIL3,
             "SPEAK-T3-001",
-            exam_type="telc B1",
+            exam_type="TELC",
             source_reference="Prüfungssatz Sprechen",
         )
         SpeakingTeilExercise.objects.create(
@@ -238,7 +238,7 @@ class ContentSearchServiceTests(TestCase):
     @classmethod
     def _base(cls, skill, exercise_type, external_id, **overrides):
         values = {
-            "exam_type": "Goethe-Zertifikat B1",
+            "exam_type": "TELC",
             "level": ExerciseBase.Level.B1,
             "skill": skill,
             "exercise_type": exercise_type,
@@ -257,20 +257,20 @@ class ContentSearchServiceTests(TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["exercise_base_id"], self.listening_base.pk)
-        self.assertEqual(results[0]["href"], f"/modules/exam-preparation/hoeren/short-text-once/{self.listening.pk}")
+        self.assertEqual(results[0]["href"], f"/modules/exam-preparation/b1/hoeren/short-text-once/{self.listening.pk}")
         self.assertEqual(results[0]["teil"], 2)
         self.assertGreaterEqual(results[0]["match_count"], 2)
         self.assertIn("标题", {match["label"] for match in results[0]["matches"]})
 
     def test_projects_every_supported_exercise_family_and_correct_answers(self):
         cases = (
-            ("Dachgarten", "reading", 1, "/modules/exam-preparation/lesen/title-matching/"),
-            ("Mehrsprachigkeit", "reading", 2, "/modules/exam-preparation/lesen/understanding/"),
-            ("Fahrradreparatur", "reading", 3, "/modules/exam-preparation/lesen/ad-matching/"),
-            ("Verbform", "sprachbausteine", 1, "/modules/exam-preparation/sprachbausteine/cloze-choice/"),
-            ("Präposition", "sprachbausteine", 2, "/modules/exam-preparation/sprachbausteine/cloze-matching/"),
-            ("Arzttermins", "writing", None, "/modules/exam-preparation/schreiben/"),
-            ("Grillplatz", "speaking", 3, "/modules/exam-preparation/sprechen/teil-3/"),
+            ("Dachgarten", "reading", 1, "/modules/exam-preparation/b1/lesen/title-matching/"),
+            ("Mehrsprachigkeit", "reading", 2, "/modules/exam-preparation/b1/lesen/understanding/"),
+            ("Fahrradreparatur", "reading", 3, "/modules/exam-preparation/b1/lesen/ad-matching/"),
+            ("Verbform", "sprachbausteine", 1, "/modules/exam-preparation/b1/sprachbausteine/cloze-choice/"),
+            ("Präposition", "sprachbausteine", 2, "/modules/exam-preparation/b1/sprachbausteine/cloze-matching/"),
+            ("Arzttermins", "writing", None, "/modules/exam-preparation/b1/schreiben/"),
+            ("Grillplatz", "speaking", 3, "/modules/exam-preparation/b1/sprechen/teil-3/"),
         )
 
         for term, skill, teil, href_prefix in cases:
@@ -288,11 +288,32 @@ class ContentSearchServiceTests(TestCase):
         self.assertTrue(any("正确答案" in match["label"] for match in correct_answer["matches"]))
 
     def test_skill_and_teil_filters_narrow_before_matching(self):
-        reading = self.search("Goethe-Zertifikat", skill="reading", teil=2)
-        sprachbausteine = self.search("Goethe-Zertifikat", skill="sprachbausteine", teil=1)
+        reading = self.search("TELC", skill="reading", teil=2)
+        sprachbausteine = self.search("TELC", skill="sprachbausteine", teil=1)
 
         self.assertEqual([result["exercise_type"] for result in reading], [ExerciseBase.ExerciseType.READING_UNDERSTANDING])
         self.assertEqual([result["exercise_type"] for result in sprachbausteine], [ExerciseBase.ExerciseType.CLOZE_CHOICE])
+
+    def test_search_is_limited_to_requested_exam_scope(self):
+        b2_base = self._base(
+            ExerciseBase.Skill.LISTENING,
+            ExerciseBase.ExerciseType.LISTENING_TEIL2,
+            "LISTEN-B2-001",
+            exam_type="TELC",
+            level=ExerciseBase.Level.B2,
+        )
+        ListeningExercise.objects.create(
+            exercise_base=b2_base,
+            listening_type=ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE,
+            script="scope-needle B2 audio",
+        )
+
+        self.assertEqual(self.search("scope-needle"), [])
+        b2_results = search_exam_preparation_content(
+            parse_search_query(query="scope-needle", exam_type="telc", level="b2")
+        )
+        self.assertEqual(len(b2_results), 1)
+        self.assertIn("/b2/", b2_results[0]["href"])
 
     def test_technical_metadata_and_user_content_are_not_searchable(self):
         for excluded_term in (
@@ -382,7 +403,7 @@ class ContentSearchApiTests(APITestCase):
             ExerciseBase.ExerciseType.SPEAKING_TEIL3: ExerciseBase.Skill.SPEAKING,
         }
         base = ExerciseBase.objects.create(
-            exam_type="telc B1",
+            exam_type="TELC",
             level=ExerciseBase.Level.B1,
             skill=skill_by_type[exercise_type],
             exercise_type=exercise_type,
@@ -417,18 +438,18 @@ class ContentSearchApiTests(APITestCase):
             exercise = SpeakingTeilExercise.objects.create(exercise_base=base)
 
         route_templates = {
-            ExerciseBase.ExerciseType.LISTENING_TEIL1: "/modules/exam-preparation/hoeren/short-text-prep/{id}",
-            ExerciseBase.ExerciseType.LISTENING_TEIL2: "/modules/exam-preparation/hoeren/short-text-once/{id}",
-            ExerciseBase.ExerciseType.LISTENING_TEIL3: "/modules/exam-preparation/hoeren/dialog-twice/{id}",
-            ExerciseBase.ExerciseType.READING_TITLE_MATCHING: "/modules/exam-preparation/lesen/title-matching/{id}",
-            ExerciseBase.ExerciseType.READING_UNDERSTANDING: "/modules/exam-preparation/lesen/understanding/{id}",
-            ExerciseBase.ExerciseType.READING_AD_MATCHING: "/modules/exam-preparation/lesen/ad-matching/{id}",
-            ExerciseBase.ExerciseType.CLOZE_CHOICE: "/modules/exam-preparation/sprachbausteine/cloze-choice/{id}",
-            ExerciseBase.ExerciseType.CLOZE_MATCHING: "/modules/exam-preparation/sprachbausteine/cloze-matching/{id}",
-            ExerciseBase.ExerciseType.WRITING_PROMPT: "/modules/exam-preparation/schreiben/{id}",
-            ExerciseBase.ExerciseType.SPEAKING_TEIL1: "/modules/exam-preparation/sprechen/teil-1/{id}",
-            ExerciseBase.ExerciseType.SPEAKING_TEIL2: "/modules/exam-preparation/sprechen/teil-2/{id}",
-            ExerciseBase.ExerciseType.SPEAKING_TEIL3: "/modules/exam-preparation/sprechen/teil-3/{id}",
+            ExerciseBase.ExerciseType.LISTENING_TEIL1: "/modules/exam-preparation/b1/hoeren/short-text-prep/{id}",
+            ExerciseBase.ExerciseType.LISTENING_TEIL2: "/modules/exam-preparation/b1/hoeren/short-text-once/{id}",
+            ExerciseBase.ExerciseType.LISTENING_TEIL3: "/modules/exam-preparation/b1/hoeren/dialog-twice/{id}",
+            ExerciseBase.ExerciseType.READING_TITLE_MATCHING: "/modules/exam-preparation/b1/lesen/title-matching/{id}",
+            ExerciseBase.ExerciseType.READING_UNDERSTANDING: "/modules/exam-preparation/b1/lesen/understanding/{id}",
+            ExerciseBase.ExerciseType.READING_AD_MATCHING: "/modules/exam-preparation/b1/lesen/ad-matching/{id}",
+            ExerciseBase.ExerciseType.CLOZE_CHOICE: "/modules/exam-preparation/b1/sprachbausteine/cloze-choice/{id}",
+            ExerciseBase.ExerciseType.CLOZE_MATCHING: "/modules/exam-preparation/b1/sprachbausteine/cloze-matching/{id}",
+            ExerciseBase.ExerciseType.WRITING_PROMPT: "/modules/exam-preparation/b1/schreiben/{id}",
+            ExerciseBase.ExerciseType.SPEAKING_TEIL1: "/modules/exam-preparation/b1/sprechen/teil-1/{id}",
+            ExerciseBase.ExerciseType.SPEAKING_TEIL2: "/modules/exam-preparation/b1/sprechen/teil-2/{id}",
+            ExerciseBase.ExerciseType.SPEAKING_TEIL3: "/modules/exam-preparation/b1/sprechen/teil-3/{id}",
         }
         if title == "RouteNeedle":
             cls.expected_routes[exercise_type] = route_templates[exercise_type].format(id=exercise.pk)

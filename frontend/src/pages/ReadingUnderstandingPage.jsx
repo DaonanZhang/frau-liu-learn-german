@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { examPreparationScope } from "../utils/examPreparationScope.js";
 import {
   fetchReadingUnderstandingExerciseDetail,
 } from "../api/exam_preparation/readingUnderstanding.js";
@@ -40,6 +41,7 @@ function ReadingUnderstandingResetAction({ onReset }) {
 
 export default function ReadingUnderstandingPage() {
   const { exerciseId } = useParams();
+  const scope = examPreparationScope(useParams().level);
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -60,7 +62,7 @@ export default function ReadingUnderstandingPage() {
           throw new Error("No reading understanding exercise selected.");
         }
 
-        const detail = await fetchReadingUnderstandingExerciseDetail(exerciseId);
+        const detail = await fetchReadingUnderstandingExerciseDetail(exerciseId, scope);
         if (!aborted) {
           setExercise(detail || null);
           const stateData = await fetchReadingUnderstandingQuestionStates(exerciseId);
@@ -194,11 +196,11 @@ export default function ReadingUnderstandingPage() {
       <div className="reading-understanding-page">
         <div className="reading-understanding-shell">
         <div className="reading-understanding-topbar">
-          <Link to="/modules/exam-preparation/lesen/understanding" className="reading-understanding-topbar__back">
+          <Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/lesen/understanding`} className="reading-understanding-topbar__back">
             ← Zurück zu Lesen
           </Link>
           <span className="reading-understanding-topbar__meta">
-            {exercise?.exercise_base?.level || "B1"} · {exercise?.exercise_base?.external_id || "001"}
+            {exercise?.exercise_base?.level || scope?.level} · {exercise?.exercise_base?.external_id || "001"}
           </span>
         </div>
 
@@ -206,12 +208,12 @@ export default function ReadingUnderstandingPage() {
           <div className="reading-understanding-hero__main">
             <h1 className="reading-understanding-hero__title">{heroTitle}</h1>
           </div>
-          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
+          {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="reading-understanding-hero__badges">
               {exercise?.exercise_base?.exam_type ? <span className="reading-understanding-hero__badge reading-understanding-hero__badge--exam-type">{exercise.exercise_base.exam_type}</span> : null}
-              {exercise?.exercise_base?.level || exercise?.exercise_base?.difficulty ? (
+              {exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty ? (
                 <span className="reading-understanding-hero__badge">
-                  难度：{exercise.exercise_base.level || exercise.exercise_base.difficulty}
+                  难度：{exercise.exercise_base.level || scope?.level || exercise.exercise_base.difficulty}
                 </span>
               ) : null}
               {exercise?.exercise_base?.is_real_exam ? (

@@ -4,6 +4,7 @@ import { useAuth } from "../api/auth";
 import useMaxWidth from "../hooks/useMaxWidth.js";
 import { EXAM_PREPARATION_MODULE } from "../pages/Homepage/homeShared.js";
 import { hasModuleAccess } from "../utils/moduleAccess.js";
+import { examPreparationPurchasePath, examPreparationScope } from "../utils/examPreparationScope.js";
 
 export default function Navigator() {
   const { user, loading, logout } = useAuth();
@@ -32,7 +33,9 @@ export default function Navigator() {
   const isProfileActive = pathname.startsWith("/profile");
   const isExamPreparationActive = pathname.startsWith("/modules/exam-preparation");
   const isExamPreparationPurchaseActive = pathname === "/modules/exam-preparation/purchase";
-  const isExamPreparationRecordsActive = pathname === "/modules/exam-preparation/mock-exams";
+  const examLevelPath = pathname.match(/^\/modules\/exam-preparation\/(?:telc\/)?(b1|b2)(?:\/|$)/i)?.[1]?.toLowerCase() || null;
+  const examScope = examPreparationScope(examLevelPath);
+  const isExamPreparationRecordsActive = /^\/modules\/exam-preparation\/telc\/(b1|b2)\/mock-exams(?:\/|$)/i.test(pathname);
 
   const titleText = isMobileView ? "符号刘" : "符号刘的德语素材库";
   const manualText = isMobileView ? "手册" : "操作手册";
@@ -78,7 +81,7 @@ export default function Navigator() {
                 .join(" ")}
               type="button"
               onClick={() => {
-                navigate("/modules/exam-preparation/purchase");
+                navigate(examPreparationPurchasePath(examScope));
               }}
             >
               {examRenewText}
@@ -89,7 +92,7 @@ export default function Navigator() {
             <button
               className={["nav-btn", isExamPreparationRecordsActive ? "nav-btn--active" : ""].filter(Boolean).join(" ")}
               type="button"
-              onClick={() => navigate("/modules/exam-preparation/mock-exams")}
+              onClick={() => navigate(`/modules/exam-preparation/telc/${examLevelPath || "b1"}/mock-exams`)}
             >
               {examRecordsText}
             </button>
@@ -143,7 +146,7 @@ export default function Navigator() {
               .join(" ")}
             type="button"
             onClick={() => {
-              navigate("/favorite-questions");
+              navigate(examScope ? `/favorite-questions?exam_type=${examScope.examType}&level=${examScope.level}` : "/favorite-questions");
             }}
           >
             {favoriteQuestionsText}

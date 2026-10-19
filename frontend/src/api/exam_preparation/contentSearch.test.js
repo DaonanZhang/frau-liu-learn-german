@@ -12,6 +12,7 @@ describe("exam preparation content search API", () => {
 
   it("encodes the query and selected filters", () => {
     fetchExamPreparationContentSearch({
+      scope: { examType: "TELC", level: "B1", levelPath: "b1" },
       query: "Berlin & Wohnung",
       skill: "reading",
       teil: "2",
@@ -19,15 +20,15 @@ describe("exam preparation content search API", () => {
     });
 
     expect(apiFetch).toHaveBeenCalledWith(
-      "/exam_preparation/content-search/?q=Berlin+%26+Wohnung&skill=reading&teil=2&page=3",
+      "/exam_preparation/content-search/?q=Berlin+%26+Wohnung&skill=reading&teil=2&page=3&exam_type=TELC&level=B1",
     );
   });
 
   it("omits empty filters and defaults to the first page", () => {
-    fetchExamPreparationContentSearch({ query: "Grillplatz" });
+    fetchExamPreparationContentSearch({ query: "Grillplatz", scope: { examType: "TELC", level: "B2" } });
 
     expect(apiFetch).toHaveBeenCalledWith(
-      "/exam_preparation/content-search/?q=Grillplatz&page=1",
+      "/exam_preparation/content-search/?q=Grillplatz&page=1&exam_type=TELC&level=B2",
     );
   });
 });

@@ -27,7 +27,7 @@ synthesize = synthesize_speaking_audio
 
 def turn_key(exercise, turn):
     base = exercise.exercise_base
-    return f"{base.exercise_type}|{base.level}|{base.external_id}|{turn['sequence']}"
+    return f"{base.exam_type.upper()}|{base.level.upper()}|{base.exercise_type}|{base.external_id}|{turn['sequence']}"
 
 
 class Command(BaseCommand):
@@ -59,6 +59,7 @@ class Command(BaseCommand):
                     raise CommandError(f"Conflicting speaking turn key: {key}")
                 url = speaking_turn_audio_url(
                     exercise_type=exercise.exercise_base.exercise_type,
+                    exam_type=exercise.exercise_base.exam_type,
                     level=exercise.exercise_base.level,
                     external_id=exercise.exercise_base.external_id,
                     sequence=turn["sequence"],
@@ -66,6 +67,7 @@ class Command(BaseCommand):
                 entries[key] = {"text": text, "url": url}
                 target_paths[key] = speaking_turn_audio_path(
                     exercise_type=exercise.exercise_base.exercise_type,
+                    exam_type=exercise.exercise_base.exam_type,
                     level=exercise.exercise_base.level,
                     external_id=exercise.exercise_base.external_id,
                     sequence=turn["sequence"],
@@ -75,6 +77,7 @@ class Command(BaseCommand):
         existing = sum(
             speaking_turn_audio_path(
                 exercise_type=exercise.exercise_base.exercise_type,
+                exam_type=exercise.exercise_base.exam_type,
                 level=exercise.exercise_base.level,
                 external_id=exercise.exercise_base.external_id,
                 sequence=turn["sequence"],
@@ -100,6 +103,7 @@ class Command(BaseCommand):
         for exercise, turn, text in turns:
             target = speaking_turn_audio_path(
                 exercise_type=exercise.exercise_base.exercise_type,
+                exam_type=exercise.exercise_base.exam_type,
                 level=exercise.exercise_base.level,
                 external_id=exercise.exercise_base.external_id,
                 sequence=turn["sequence"],
@@ -110,6 +114,7 @@ class Command(BaseCommand):
                 break
             ensure_speaking_turn_audio(
                 exercise_type=exercise.exercise_base.exercise_type,
+                exam_type=exercise.exercise_base.exam_type,
                 level=exercise.exercise_base.level,
                 external_id=exercise.exercise_base.external_id,
                 sequence=turn["sequence"],

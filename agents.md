@@ -243,10 +243,14 @@ After run:
 - Every concrete exam-preparation exercise must have a non-empty `ExerciseBase.exam_type`, and every exercise card must display it as an exam-format badge independently of the `is_real_exam` / `真题` badge.
 - All exam-preparation import paths must reject rows whose `考试类型` / `exam_type` value is empty; do not silently create exercises without an exam-format badge.
 - Before a batch import, verify that
-  `(level, exercise_type, numerically normalized meta ID)` is unique across all
-  candidate workbooks. A duplicate ID causes the later file to replace the
+  `(exam_type, level, exercise_type, numerically normalized external_id)` is
+  unique across all candidate workbooks. Different exam families and levels may
+  reuse an ID; a duplicate four-field key causes the later file to replace the
   earlier exercise through `update_or_create`, even when every individual file
   imports successfully.
+- Keep TELC B1 and TELC B2 workbook batches in separate `raw`, `processed`, and
+  `failed` directory trees. Do not place B2 candidates in the existing B1
+  directories merely because the importer can distinguish their database scope.
 
 ## Project Documentation Index
 

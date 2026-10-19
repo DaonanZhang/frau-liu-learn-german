@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { examPreparationScope } from "../utils/examPreparationScope.js";
 import { fetchSpeakingTeilExerciseDetail } from "../api/exam_preparation/speakingExercises.js";
 import { fetchSpeakingTurnStates, saveSpeakingTurnState } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
@@ -108,12 +109,13 @@ function restoreOrder(turns, state) {
   return savedKeys.map((key) => turnByKey.get(key)).filter(Boolean);
 }
 
-function DialogueTurn({ turn, recorderId, showPractice = false, favoriteProps = null, annotationRegionId = null }) {
+function DialogueTurn({ turn, topic = "", recorderId, showPractice = false, favoriteProps = null, annotationRegionId = null }) {
   const role = turn.role || "TN1";
   const roleKind = role.startsWith("Prüfer") ? "examiner" : role.toLowerCase();
   return (
     <article className={`speaking-detail-turn speaking-detail-turn--${roleKind}`}>
-      <div className="speaking-detail-turn__heading">
+      <div className={`speaking-detail-turn__heading${topic ? " speaking-detail-turn__heading--with-topic" : ""}`}>
+        {topic ? <span className="speaking-detail-turn__topic">{topic}</span> : null}
         <span className="speaking-detail-turn__role">{role}</span>
       </div>
       {annotationRegionId ? (
@@ -494,6 +496,7 @@ function DialogueBuilder({ turns, value, onChange, checked, recorderPrefix, favo
 
 export default function SpeakingTeilExercisePage({ teil }) {
   const { exerciseId } = useParams();
+  const scope = examPreparationScope(useParams().level);
   const [exercise, setExercise] = useState(null);
   const [error, setError] = useState("");
   const [orders, setOrders] = useState({});
@@ -505,7 +508,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
 
   useEffect(() => {
     let active = true;
-    Promise.all([fetchSpeakingTeilExerciseDetail(exerciseId), fetchSpeakingTurnStates(exerciseId)])
+    Promise.all([fetchSpeakingTeilExerciseDetail(exerciseId, scope), fetchSpeakingTurnStates(exerciseId)])
       .then(([data, stateData]) => {
         if (!active) return;
         setExercise(data);
@@ -548,6 +551,27 @@ export default function SpeakingTeilExercisePage({ teil }) {
   const sections = useMemo(() => Array.isArray(content.sections) ? content.sections : [], [content.sections]);
   const topics = Array.isArray(content.topics) ? content.topics : [];
   const base = exercise?.exercise_base || {};
+  const isB2Telc = String(base.level || "").trim().toLowerCase() === "b2"
+    && String(base.exam_type || "").trim().toLowerCase() === "telc";
+  const taskTitle = isB2Telc && Number(teil) === 1 ? "Präsentation" : TITLES[teil];
+  const hideB2Task = isB2Telc;
+  const isB2Teil3 = isB2Telc && Number(teil) === 3;
+  const directTeil3Dialogue = useMemo(() => {
+    if (!isB2Teil3) return [];
+    return dialogue.map((turn) => {
+      const sentenceType = String(turn.sentence_type || "").trim();
+      const sectionIndex = sentenceType
+        ? sections.findIndex((section) => String(section.type || "").trim() === sentenceType)
+        : sections.findIndex((section) => (section.turns || []).some((sectionTurn) => sectionTurn === turn || (
+          sectionTurn.sequence === turn.sequence && sectionTurn.text === turn.text
+        )));
+      return {
+        turn,
+        topic: sentenceType || (sectionIndex >= 0 ? sections[sectionIndex].type : ""),
+        sectionIndex: sectionIndex >= 0 ? sectionIndex : 0,
+      };
+    });
+  }, [dialogue, isB2Teil3, sections]);
   const isTeil3Complete = sections.length > 0 && sections.every((section, index) => {
     const sectionTurns = Array.isArray(section.turns) ? section.turns : [];
     return sectionTurns.length > 0
@@ -622,16 +646,16 @@ export default function SpeakingTeilExercisePage({ teil }) {
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
     >
     <div className="speaking-detail-page">
-      <div className="speaking-detail-topbar"><Link to={`/modules/exam-preparation/sprechen/teil-${teil}`} className="speaking-detail-back">← Zurück zu Sprechen Teil {teil}</Link></div>
+      <div className="speaking-detail-topbar"><Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/sprechen/teil-${teil}`} className="speaking-detail-back">← Zurück zu Sprechen Teil {teil}</Link></div>
       <header className="speaking-detail-hero">
         <p className="speaking-detail-hero__eyebrow">Sprechen · Teil {teil}</p>
-        <div className="speaking-detail-hero__title-row"><h1>{base.title || TITLES[teil]}</h1>{base.exam_type ? <span className="speaking-detail-title-badge">{base.exam_type}</span> : null}</div>
-        <div className="speaking-detail-badges"><span>{base.level || "B1"}</span>{base.is_real_exam ? <span className="speaking-detail-badge--exam">真题</span> : null}</div>
+        <div className="speaking-detail-hero__title-row"><h1>{base.title || taskTitle}</h1>{base.exam_type ? <span className="speaking-detail-title-badge">{base.exam_type}</span> : null}</div>
+        <div className="speaking-detail-badges"><span>{base.level || scope?.level}</span>{base.is_real_exam ? <span className="speaking-detail-badge--exam">真题</span> : null}</div>
       </header>
       <section className="speaking-detail-card speaking-detail-task">
-        <p className="speaking-detail-card__eyebrow">Aufgabe</p><h2>{TITLES[teil]}</h2>
+        <p className="speaking-detail-card__eyebrow">Aufgabe</p><h2>{taskTitle}</h2>
         <AnnotatableTextRegion as="p" className="speaking-detail-task__instruction" regionId="task">{exercise.instruction}</AnnotatableTextRegion>
-        {content.task ? <AnnotatableTextRegion as="p" className="speaking-detail-task__text" regionId="material:task">{content.task}</AnnotatableTextRegion> : null}
+        {content.task && !hideB2Task ? <AnnotatableTextRegion as="p" className="speaking-detail-task__text" regionId="material:task">{content.task}</AnnotatableTextRegion> : null}
         {Number(teil) === 1 && topics.length ? <div className="speaking-detail-topic-list">{topics.map((topic) => <AnnotatableTextRegion as="span" key={topic} regionId={materialAnnotationId(topic, "topic")}>{topic}</AnnotatableTextRegion>)}</div> : null}
         {Number(teil) === 2 && cards.length ? <div className="speaking-detail-opinion-grid">{cards.map((card) => <AnnotatableTextRegion as="article" className="speaking-detail-opinion" key={stableContentKey(card, "card")} regionId={materialAnnotationId(card, "card")}><span>{card.participant}</span><h3>{card.title}</h3><p>{card.content}</p></AnnotatableTextRegion>)}</div> : null}
       </section>
@@ -645,7 +669,23 @@ export default function SpeakingTeilExercisePage({ teil }) {
           <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked.all) || !dialogue.length || (orders.all || []).length !== dialogue.length} onClick={() => checkSection("all", dialogue)} />{checked.all ? <SpeakingResetAction onReset={() => resetSection("all")} /> : null}</div>
         </section>
       ) : null}
-      {Number(teil) === 3 && currentSection ? (
+      {isB2Teil3 ? (
+        <section className="speaking-detail-card speaking-detail-example">
+          <div className="speaking-detail-dialogue speaking-detail-dialogue--flush">
+            {directTeil3Dialogue.map(({ turn, topic, sectionIndex }) => (
+              <DialogueTurn
+                key={turnKey(turn)}
+                turn={turn}
+                topic={topic}
+                showPractice
+                recorderId={`teil-3-${exerciseId}-${sectionIndex}-${turn.sequence}`}
+                annotationRegionId={turnAnnotationId(turn)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {Number(teil) === 3 && !isB2Teil3 && currentSection ? (
         <section className="speaking-detail-card speaking-detail-example">
           <div className="speaking-detail-carousel-header">
             <h2 className="speaking-detail-carousel-title">

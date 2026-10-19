@@ -55,11 +55,11 @@ export const EXAM_PREPARATION_MODULE = {
   route: "/modules/exam-preparation",
   moduleKey: "exam_preparation",
   title: "备考季",
-  subtitle: "telc B1 听说读写全真训练",
+  subtitle: "TELC B1/B2 听说读写全真训练",
   description:
     "“源于真题，高于真题” —— 我们的题库由符号刘博士团队精心打磨，紧扣官方大纲。用真题和模拟题复刻考试难度与命题规律，让你在考场上游刃有余、拒绝慌乱。",
   badge: "源于真题，高于真题",
-  stats: ["telc B1", "全题型交互", "答案详解"],
+  stats: ["TELC B1/B2", "全题型交互", "答案详解"],
   image: "/images/exam_cover.png",
   originalPricesByDuration: {
     30: 99.9,
@@ -68,7 +68,7 @@ export const EXAM_PREPARATION_MODULE = {
   },
   purchaseDescription:
     "“源于真题，高于真题”——我们的题库由符号刘博士团队精心打磨，紧扣官方大纲。用真题和模拟题复刻考试难度与命题规律，让你在考场上游刃有余、拒绝慌乱。",
-  purchaseNotice: "*目前只有 Telc B1 级别内容，其他考试类型题目正在开发中，敬请期待。",
+  purchaseNotice: "*当前提供 TELC B1 与 B2 级别内容；其他考试类型正在开发中。",
   purchaseFeatures: [
     "沉浸式交互学习：告别单向的“看答案”，所有题型均支持深度在线交互。无论是阅读匹配、听力选择还是语法填空，操作流畅自然，还原真实考试体验。",
     "保姆级答案详解：做错不可怕，不知错在哪才致命。每道题目均配备逐句拆解与核心考点剖析。",

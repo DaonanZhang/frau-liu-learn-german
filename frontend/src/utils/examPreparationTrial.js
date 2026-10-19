@@ -2,6 +2,7 @@ import Swal from "sweetalert2";
 import { EXAM_PREPARATION_MODULE } from "../pages/Homepage/homeShared.js";
 import { formatExpiredDuration, getLatestExpiredModuleExpiry } from "./moduleAccess.js";
 import { addRedeemActionToPurchaseModal } from "./modulePurchaseRedeem.js";
+import { examPreparationPurchasePath } from "./examPreparationScope.js";
 
 function escapeHtml(value) {
   return String(value || "")
@@ -51,7 +52,7 @@ function buildPurchaseModalHtml(module, expiredAt) {
   `;
 }
 
-export async function showExamPreparationPurchasePrompt(navigate, user) {
+export async function showExamPreparationPurchasePrompt(navigate, user, scope) {
   const module = EXAM_PREPARATION_MODULE;
   const expiredAt = getLatestExpiredModuleExpiry(user, module);
   const result = await Swal.fire({
@@ -77,6 +78,6 @@ export async function showExamPreparationPurchasePrompt(navigate, user) {
   });
 
   if (result.isConfirmed) {
-    navigate("/modules/exam-preparation/purchase");
+    navigate(examPreparationPurchasePath(scope));
   }
 }

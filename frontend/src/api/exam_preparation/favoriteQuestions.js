@@ -1,4 +1,5 @@
 import { apiFetch } from "../client";
+import { fetchExamPreparationContent } from "./contentText.js";
 
 const BASE = "/exam_preparation";
 
@@ -14,8 +15,12 @@ const STATE_ENDPOINTS = {
   speaking_turn: "user-speaking-turn-states",
 };
 
-export function fetchFavoriteQuestions() {
-  return apiFetch(`${BASE}/favorite-questions/`);
+export function fetchFavoriteQuestions({ examType = "", level = "" } = {}) {
+  const params = new URLSearchParams();
+  if (examType) params.set("exam_type", examType);
+  if (level) params.set("level", level);
+  const query = params.toString();
+  return fetchExamPreparationContent(`${BASE}/favorite-questions/${query ? `?${query}` : ""}`);
 }
 
 export function removeFavoriteQuestion(question) {

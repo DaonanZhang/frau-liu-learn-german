@@ -12,7 +12,7 @@ function displayOptionKey(row, optionKey) {
   return String(optionKey).replace(/^option_/, "");
 }
 
-export default function MockExamAnswerSheet({ rows, answers, onAnswer, review }) {
+export default function TelcMockExamAnswerSheet({ rows, answers, onAnswer, review }) {
   const [collapsed, setCollapsed] = useState(false);
   const contentId = useId();
   const sections = [

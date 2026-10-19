@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { fetchWritingExercises } from "../api/exam_preparation/writingExercises.js";
 import { useAuth } from "../api/auth/useAuth.js";
 import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
+import { examPreparationScope } from "../utils/examPreparationScope.js";
 import "./ExamPreparationWritingPage.css";
 
-function extractPreview(text) {
-  return String(text || "").replace(/\s+/g, " ").trim();
+export function extractPreview(text) {
+  return String(text || "").replace(/<br\s*\/?>/gi, "\n").replace(/[^\S\n]+/g, " ").trim();
 }
 
 export default function ExamPreparationWritingPage() {
+  const scope = examPreparationScope(useParams().level);
   const navigate = useNavigate();
   const { user } = useAuth();
   const [exercises, setExercises] = useState([]);
@@ -23,7 +25,8 @@ export default function ExamPreparationWritingPage() {
       try {
         setLoading(true);
         setErrorText("");
-        const data = await fetchWritingExercises();
+        if (!scope) return;
+        const data = await fetchWritingExercises(scope);
         if (!aborted) {
           setExercises(Array.isArray(data?.results) ? data.results : []);
         }
@@ -42,12 +45,14 @@ export default function ExamPreparationWritingPage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [scope?.level]);
+
+  if (!scope) return <Navigate to="/modules/exam-preparation" replace />;
 
   return (
     <div className="writing-page">
       <div className="writing-topbar">
-        <Link to="/modules/exam-preparation" className="writing-topbar__back">
+        <Link to={`/modules/exam-preparation/${scope.levelPath}`} className="writing-topbar__back">
           ← 返回备考季
         </Link>
       </div>
@@ -116,14 +121,14 @@ export default function ExamPreparationWritingPage() {
                 key={exercise.id || index}
                 type="button"
                 className="writing-entry-card writing-entry-card--locked"
-                onClick={() => showExamPreparationPurchasePrompt(navigate, user)}
+                onClick={() => showExamPreparationPurchasePrompt(navigate, user, scope)}
               >
                 {cardContent}
               </button>
             ) : (
               <Link
                 key={exercise.id || index}
-                to={`/modules/exam-preparation/schreiben/${exercise.id}`}
+                to={`/modules/exam-preparation/${scope.levelPath}/schreiben/${exercise.id}`}
                 className="writing-entry-card"
               >
                 {cardContent}

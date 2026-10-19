@@ -6,8 +6,19 @@ source "$ROOT_DIR/scripts/load_cos_env.sh"
 load_cos_env_file "${COS_ENV_FILE:-$ROOT_DIR/.env}"
 
 SYNC_SCRIPT="${COS_SYNC_HELPER:-$ROOT_DIR/scripts/sync_vlog_to_frankfurt_cos.sh}"
-SOURCE_DIR="${EXAM_SPEAKING_AUDIO_SOURCE_DIR:-$ROOT_DIR/frontend/public/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking}"
-OBJECT_PREFIX="resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking"
+EXAM_TYPE="${EXAM_TYPE:-TELC}"
+LEVEL="${LEVEL:-B1}"
+if [[ ! "$EXAM_TYPE" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+  echo "EXAM_TYPE must be an uppercase exam family, e.g. TELC" >&2
+  exit 2
+fi
+if [[ ! "$LEVEL" =~ ^(A1|A2|B1|B2|C1|C2)$ ]]; then
+  echo "LEVEL must be a supported uppercase CEFR level (A1, A2, B1, B2, C1, C2)" >&2
+  exit 2
+fi
+SCOPE_PREFIX="$(printf '%s_%s_speaking' "$EXAM_TYPE" "$LEVEL" | tr '[:upper:]' '[:lower:]')"
+SOURCE_DIR="${EXAM_SPEAKING_AUDIO_SOURCE_DIR:-$ROOT_DIR/frontend/public/resources/ExamPreparation/exam_preparation_audio/$SCOPE_PREFIX}"
+OBJECT_PREFIX="resources/ExamPreparation/exam_preparation_audio/$SCOPE_PREFIX"
 
 if [[ ! -x "$SYNC_SCRIPT" ]]; then
   echo "COS sync helper is missing or not executable: $SYNC_SCRIPT" >&2
@@ -27,7 +38,7 @@ run_target() {
   shift 4
 
   echo
-  echo "===== Syncing telc_b1_speaking audio to $name COS ====="
+  echo "===== Syncing $SCOPE_PREFIX audio to $name COS ====="
   "$SYNC_SCRIPT" "$@" \
     --source-dir "$SOURCE_DIR" \
     --scan-all \

@@ -1,12 +1,15 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { READING_TYPES } from "./examPreparationTypeContent.js";
 import "./ExamPreparationReadingPage.css";
+import { examPreparationScope } from "../utils/examPreparationScope.js";
 
 export default function ExamPreparationReadingPage() {
+  const scope = examPreparationScope(useParams().level);
+  if (!scope) return <Navigate to="/modules/exam-preparation" replace />;
   return (
     <div className="exam-reading-page">
       <div className="exam-reading-topbar">
-        <Link to="/modules/exam-preparation" className="exam-reading-topbar__back">
+        <Link to={`/modules/exam-preparation/${scope.levelPath}`} className="exam-reading-topbar__back">
           ← 返回备考季
         </Link>
       </div>
@@ -16,7 +19,7 @@ export default function ExamPreparationReadingPage() {
           <p className="exam-reading-hero__eyebrow">Lesen</p>
           <h1 className="exam-reading-hero__title">阅读模块</h1>
           <p className="exam-reading-hero__copy">
-            完整训练 telc B1 阅读的三个部分：短文本标题匹配、长文理解选择，以及生活情境与分类广告匹配。
+            训练 {scope.examType} {scope.level} 阅读的三个部分：短文本标题匹配、长文理解选择，以及生活情境与分类广告匹配。
           </p>
         </div>
       </section>
@@ -41,7 +44,7 @@ export default function ExamPreparationReadingPage() {
 
           if (item.to) {
             return (
-              <Link key={item.key} to={item.to} className="exam-reading-type exam-reading-type--link">
+              <Link key={item.key} to={item.to.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`)} className="exam-reading-type exam-reading-type--link">
                 {content}
               </Link>
             );

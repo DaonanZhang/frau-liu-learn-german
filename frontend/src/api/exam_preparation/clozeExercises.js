@@ -1,4 +1,5 @@
-import { apiFetch } from "../client";
+import { examPreparationScopeQuery } from "../../utils/examPreparationScope.js";
+import { fetchExamPreparationContent } from "./contentText.js";
 
 const BASE = "/exam_preparation";
 
@@ -12,20 +13,28 @@ function normalizeList(data) {
   return { results: [], count: 0 };
 }
 
-export async function fetchClozeChoiceExercises() {
-  const data = await apiFetch(`${BASE}/cloze-choice-exercises/`);
+export async function fetchClozeChoiceExercises(scope) {
+  const query = examPreparationScopeQuery(scope);
+  if (!query) return { results: [], count: 0 };
+  const data = await fetchExamPreparationContent(`${BASE}/cloze-choice-exercises/?${query}`);
   return normalizeList(data);
 }
 
-export function fetchClozeChoiceExerciseDetail(exerciseId) {
-  return apiFetch(`${BASE}/cloze-choice-exercises/${exerciseId}/`);
+export function fetchClozeChoiceExerciseDetail(exerciseId, scope) {
+  const query = examPreparationScopeQuery(scope);
+  if (!query) return Promise.reject(new Error("Invalid exam preparation scope"));
+  return fetchExamPreparationContent(`${BASE}/cloze-choice-exercises/${exerciseId}/?${query}`);
 }
 
-export async function fetchClozeMatchingExercises() {
-  const data = await apiFetch(`${BASE}/cloze-matching-exercises/`);
+export async function fetchClozeMatchingExercises(scope) {
+  const query = examPreparationScopeQuery(scope);
+  if (!query) return { results: [], count: 0 };
+  const data = await fetchExamPreparationContent(`${BASE}/cloze-matching-exercises/?${query}`);
   return normalizeList(data);
 }
 
-export function fetchClozeMatchingExerciseDetail(exerciseId) {
-  return apiFetch(`${BASE}/cloze-matching-exercises/${exerciseId}/`);
+export function fetchClozeMatchingExerciseDetail(exerciseId, scope) {
+  const query = examPreparationScopeQuery(scope);
+  if (!query) return Promise.reject(new Error("Invalid exam preparation scope"));
+  return fetchExamPreparationContent(`${BASE}/cloze-matching-exercises/${exerciseId}/?${query}`);
 }

@@ -23,9 +23,12 @@ export default function ModuleAccessGate({ moduleId, children }) {
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
-  const isMockExamRoute = location.pathname.startsWith("/modules/exam-preparation/mock-exam");
-  if (isMockExamRoute && !hasModuleAccess(user, module, accessCheckTime)) {
-    return <Navigate to="/modules/exam-preparation" replace />;
+  const mockExamRouteMatch = location.pathname.match(
+    /^\/modules\/exam-preparation\/telc\/(b1|b2)\/mock-exams?\/?$/i,
+  );
+  if (mockExamRouteMatch && !hasModuleAccess(user, module, accessCheckTime)) {
+    const level = mockExamRouteMatch[1]?.toLowerCase();
+    return <Navigate to={level ? `/modules/exam-preparation/${level}` : "/modules/exam-preparation"} replace />;
   }
   const allowsExamPreparationTrial =
     moduleId === "exam-preparation"

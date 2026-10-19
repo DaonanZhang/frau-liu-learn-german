@@ -32,6 +32,10 @@ Directory meaning:
 
 This follows the existing project style of keeping app-specific import data inside the app directory, similar to `apps/learning_by_video/data/...`.
 
+TELC B2 uses isolated directories under
+`apps/exam_preparation/data/imports/telc/b2/<kind>/{raw,processed,failed}` and
+the dedicated `scripts/exam_preparation_importer_telc_b2.py` entry point.
+
 ## Shared Database Meta
 
 All exercise types map their shared metadata into `ExerciseBase`.
@@ -56,9 +60,10 @@ Important notes:
 
 - `title_zh` no longer exists and must not appear in new import assumptions.
 - Every exercise must have a non-empty `exam_type`, because each concrete exercise card displays it as an exam-format badge.
-- `exam_type` stores values such as `telc` or `Daf`; an import with a blank `考试类型` value must fail instead of creating an unlabelled exercise.
-- `exam_type` is the exam family and must not contain the CEFR level; store `telc` and `B1` in `exam_type` and `level` respectively, rather than storing `telc B1` in one field.
-- Written mock-exam generation uses `(exam_type, level)` as its question-bank scope. Its current default is `(telc, B1)`, so a future parallel exam family or another telc level can reuse the same backend by supplying those two values.
+- `exam_type` stores uppercase family values such as `TELC` or `DAF`; an import with a blank `考试类型` value must fail instead of creating an unlabelled exercise. Legacy column-less Speaking Teil 1 files default to `TELC`.
+- `exam_type` is the exam family and must not contain the CEFR level; store `TELC` and `B1` in `exam_type` and `level` respectively, rather than storing `TELC B1` in one field.
+- Import identity is `(exam_type, level, exercise_type, numerically normalized external_id)`. Different families and levels may reuse the same external ID.
+- Written mock-exam generation uses `(exam_type, level)` as its question-bank scope. Its current default is `(TELC, B1)`.
 - `external_id` is the editor-facing ID inside one exercise type.
 - source file naming is separate from the exercise's own `external_id`.
 
@@ -80,6 +85,7 @@ Examples:
 - `b1_cloze_question_001.xlsx`
 - `b1_cloze_matching_001.xlsx`
 - `b1_writing_001.xlsx`
+- `b2_listening_teil1_001.xlsx` and matching `b2_...` prefixes for other exercise types
 
 The filename identifies the import batch/update file.
 It is not the same thing as the per-exercise `ID` inside the sheet.
@@ -91,6 +97,28 @@ suffix is the canonical database `external_id`. Internal numeric relationship
 IDs still link by numeric equivalence, so `012`, `12`, and `12.0` match. If an
 internal ID differs from the filename suffix, the importer uses the internal ID
 to read child sheets but stores the filename suffix and logs `ID OVERRIDE`.
+
+For TELC B2, a non-empty workbook ID is the database `external_id` and must
+numerically equal the filename suffix. If the only exercise row has no ID, the
+numeric filename suffix becomes its ID. Conflicting non-empty values fail.
+
+## TELC B2-specific formats
+
+- Lesen Teil 1 and Teil 2 use the existing reading sheet shapes.
+- Lesen Teil 3 ignores the source `task` value and stores the reviewed fixed
+  instruction in `ReadingAdMatchingExercise.instruction`.
+- Sprachbausteine Teil 1 maps `是否真题` to `is_real_exam`; Teil 2 maps
+  `是否原题` to the same field. `richtig` and `falsch` are accepted for B2
+  answer correctness. Placeholders such as `{{blank 1}}`, `{{blank1}}`, and
+  `{{blank_1}}` are stored in the canonical `{{blank_1}}` form so they match
+  the `blank_key` values used by the exercise and answer sheets.
+- Schreiben maps `Anzeige` to `request_text` and `words_limit_min` to
+  `words_limit`.
+- Sprechen uses the existing `SPEAKING_TEIL1/2/3` database types with the B2
+  names `Präsentation`, `Diskussion`, and `Problemlösung`. The three B2 parsers
+  normalize their `meta` and row-based `example` sheets into the existing
+  `SpeakingTeilExercise.content` JSON. Präsentation uses fixed metadata
+  `exam_type=TELC` and `is_real_exam=true` for this source batch.
 
 ## 1. Listening
 
@@ -126,13 +154,14 @@ Mapping:
   `frontend/public/resources/ExamPreparation/exam_preparation_audio/`
   after the workbook data is read
 - listening type determines the local subfolder:
-  - `short_text_true_false_with_prep` -> `telc_b1_teil1`
-  - `short_text_true_false_once` -> `telc_b1_teil2`
-  - `dialog_true_false_twice` -> `telc_b1_teil3`
+  - `short_text_true_false_with_prep` -> `{exam_type}_{level}_teil1`, e.g. `telc_b1_teil1` or `telc_b2_teil1`
+  - `short_text_true_false_once` -> `{exam_type}_{level}_teil2`
+  - `dialog_true_false_twice` -> `{exam_type}_{level}_teil3`
 - the local audio file must have the exact stem
   `TeilX_<音频文件_ID>`; for example, `Teil1_001.mp3`
 - `ListeningExercise.audio_file_identifier` -> the matched local audio file stem
 - `script` -> `ListeningExercise.script`
+- Audio URLs stay nginx-proxied under `/resources/ExamPreparation/...`; corresponding dual-COS keys keep the same path below `resources/`.
 - listening-level constants:
   - `ExerciseBase.skill = LISTENING`
   - `ExerciseBase.exercise_type` is determined by the filename:
@@ -149,10 +178,24 @@ Notes:
 - For compatibility, the importer accepts either `是否真题` or the legacy
   `什么真题` column name for the real-exam flag. If both are present,
   `是否真题` takes precedence.
-- The importer creates missing `telc_b1_teil1`, `telc_b1_teil2`, or
-  `telc_b1_teil3` directories, but a
+- The importer creates the scoped `{exam_type}_{level}_teilX` directory, but a
   missing matching audio file is an import error. The workbook transaction is
   rolled back and the workbook is moved to `failed/`.
+
+TELC B2 Hören Teil 2 audio-preparation notes:
+
+- `Einleitung` contains the shared narrator text. Generate it once with the
+  fixed narrator voice `de-DE-KlarissaNeural` and reuse it for all Teil 2
+  exercises; this voice must not be assigned to a dialogue participant.
+- In `copy`, `<60''>` means exactly 60 seconds of silence between the shared
+  introduction and the interview.
+- `出场人物` defines the dialogue participants and their genders. Speaker
+  labels in `copy` select voices and are not spoken aloud. Every participant
+  needs a distinct voice, including participants of the same gender.
+- A combined label is intentional. In exercise `011`,
+  `Herr Gasser / Frau Janke:` followed by `Vielen Dank!` means both voices say
+  the sentence simultaneously. Do not split the label into two consecutive
+  turns; synthesize both voices and mix them on the same timeline.
 
 ### 1.2 `exercise` tab
 
@@ -610,14 +653,13 @@ Shared mapping:
 - every workbook contains exactly one exercise
 - the normalized payload is stored in `SpeakingTeilExercise.content`
 - each imported dialogue turn receives an `audio_url` under
-  `frontend/public/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/teil1/`,
-  `teil2/`, or `teil3/` according to its fixed exercise type
+  `frontend/public/resources/ExamPreparation/exam_preparation_audio/{exam_type}_{level}_speaking/teilX/`
 - Teil 3 stores the same turn URL in both `content.dialogue[]` and the matching
   `content.sections[].turns[]` entry
 
 ### 5.2 Teil 1 — Einander kennenlernen
 
-Example filename: `Kennenlernen_002.xlsx`.
+Example filename: `b1_speaking_einander_kennenlernen_002.xlsx` (or the `b2_...` equivalent).
 
 The workbook has one worksheet; its name is not significant. Required columns:
 
@@ -629,8 +671,12 @@ Each non-empty row is one dialogue turn. `Role` is preserved exactly, including
 `TN1`, `TN2`, `Prüfer (an TN1)`, and `Prüfer (an TN2)`.
 
 This source format omits shared metadata. The Teil 1 contract therefore uses
-the fixed values `level=B1`, `exam_type=telc`, title
-`Einander kennenlernen`, and `is_real_exam=false`. The importer also adds the
+the legacy default `exam_type=TELC`. Existing column-less `Kennenlernen_...`
+filenames are retained as TELC/B1; new B2 files must use an explicit `b2_...`
+filename prefix. Other files must use an explicit supported level prefix.
+New format files may include `考试类型` and must provide a non-empty family
+value. The importer uses title `Einander kennenlernen`
+and `is_real_exam=false`. It also adds the
 standard conversation topics used by the frontend before the example dialogue
 is revealed.
 

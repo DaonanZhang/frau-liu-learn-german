@@ -30,6 +30,8 @@ class ExamPreparationContentSearchAPIView(APIView):
                 query=request.query_params.get("q", ""),
                 skill=request.query_params.get("skill"),
                 teil=request.query_params.get("teil"),
+                exam_type=request.query_params.get("exam_type"),
+                level=request.query_params.get("level"),
             )
             page_number = int(request.query_params.get("page", "1"))
             if page_number < 1:

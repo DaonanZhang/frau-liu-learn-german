@@ -20,8 +20,90 @@ class SpeakingAudioMigrationTests(TestCase):
                 resolved = migration_command._path_from_url(
                     root,
                     "/resources/ExamPreparation/exam_preparation_audio/speaking/old.mp3",
+                    exam_type="TELC",
+                    level="B1",
                 )
             self.assertEqual(resolved, legacy_root / "old.mp3")
+
+    def test_scoped_b2_url_resolves_only_inside_b2_audio_root(self):
+        root = Path("/audio")
+        resolved = migration_command._path_from_url(
+            root,
+            "/resources/ExamPreparation/exam_preparation_audio/telc_b2_speaking/teil1/B2_7_1.mp3",
+            exam_type="TELC",
+            level="B2",
+        )
+        self.assertEqual(resolved, root / "telc_b2_speaking" / "teil1" / "B2_7_1.mp3")
+
+    def test_b2_migration_rejects_existing_legacy_b1_audio(self):
+        base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.B2,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            external_id="legacy-b2", title="Thema",
+        )
+        exercise = SpeakingTeilExercise.objects.create(
+            exercise_base=base,
+            content={"dialogue": [{
+                "sequence": 1, "role": "TN1", "text": "Hallo!",
+                "audio_url": "/resources/ExamPreparation/exam_preparation_audio/speaking/old.mp3",
+            }]},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "audio"
+            legacy_root = Path(directory) / "speaking"
+            legacy_root.mkdir()
+            (legacy_root / "old.mp3").write_bytes(b"legacy B1 audio")
+            manifest = root / "manifest.json"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(json.dumps({"turns": {}}), encoding="utf-8")
+            with (
+                patch.object(migration_command, "SPEAKING_AUDIO_ROOT", root),
+                patch.object(migration_command, "LEGACY_SPEAKING_AUDIO_ROOT", legacy_root),
+                patch.object(migration_command, "MANIFEST_PATH", manifest),
+            ):
+                with self.assertRaisesRegex(CommandError, "Could not match 1 Speaking turn"):
+                    call_command("migrate_speaking_audio", apply=True, no_generate_missing=True)
+            self.assertFalse((root / "telc_b2_speaking" / "teil1" / "B2_legacy-b2_1.mp3").exists())
+        exercise.refresh_from_db()
+        self.assertEqual(
+            exercise.content["dialogue"][0]["audio_url"],
+            "/resources/ExamPreparation/exam_preparation_audio/speaking/old.mp3",
+        )
+
+    def test_b2_migration_rejects_legacy_fingerprint_audio(self):
+        base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.B2,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            external_id="fingerprint-b2", title="Thema",
+        )
+        SpeakingTeilExercise.objects.create(
+            exercise_base=base,
+            content={"dialogue": [{"sequence": 1, "role": "TN1", "text": "Hallo!"}]},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "audio"
+            legacy_root = Path(directory) / "speaking"
+            root.mkdir()
+            legacy_root.mkdir()
+            fingerprint_name = (
+                f"{migration_command.audio_fingerprint(migration_command.DEFAULT_VOICE, 'Hallo!')}.mp3"
+            )
+            (root / fingerprint_name).write_bytes(b"shared legacy B1 audio")
+            (legacy_root / fingerprint_name).write_bytes(b"legacy B1 audio")
+            manifest = root / "manifest.json"
+            manifest.write_text(json.dumps({"turns": {}}), encoding="utf-8")
+            with (
+                patch.object(migration_command, "SPEAKING_AUDIO_ROOT", root),
+                patch.object(migration_command, "LEGACY_SPEAKING_AUDIO_ROOT", legacy_root),
+                patch.object(migration_command, "MANIFEST_PATH", manifest),
+            ):
+                with self.assertRaisesRegex(CommandError, "Could not match 1 Speaking turn"):
+                    call_command("migrate_speaking_audio", apply=True, no_generate_missing=True)
+            self.assertFalse(
+                (root / "telc_b2_speaking" / "teil1" / "B2_fingerprint-b2_1.mp3").exists()
+            )
 
     def test_converts_labeled_legacy_dialogue_text_to_turns(self):
         base = ExerciseBase.objects.create(
@@ -38,7 +120,7 @@ class SpeakingAudioMigrationTests(TestCase):
             manifest.write_text(json.dumps({"turns": {}}), encoding="utf-8")
 
             def fake_generate(**kwargs):
-                target = root / "teil1" / f"B1_whole-9_{kwargs['sequence']}.mp3"
+                target = root / "telc_b1_speaking" / "teil1" / f"B1_whole-9_{kwargs['sequence']}.mp3"
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(b"generated")
                 return f"/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/teil1/{target.name}"
@@ -94,11 +176,12 @@ class SpeakingAudioMigrationTests(TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            legacy_file = root / "legacy-hash.mp3"
+            legacy_file = root / "telc_b1_speaking" / "legacy-hash.mp3"
+            legacy_file.parent.mkdir(parents=True)
             legacy_file.write_bytes(b"legacy audio")
             manifest = root / "manifest.json"
             manifest.write_text(json.dumps({"turns": {
-                "SPEAKING_TEIL2|B1|legacy-7|1": {
+                "TELC|B1|SPEAKING_TEIL2|legacy-7|1": {
                     "text": "Hallo!",
                     "url": "/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/legacy-hash.mp3",
                 },
@@ -109,7 +192,7 @@ class SpeakingAudioMigrationTests(TestCase):
             ):
                 call_command("migrate_speaking_audio", apply=True)
 
-            target = root / "teil2" / "B1_legacy-7_1.mp3"
+            target = root / "telc_b1_speaking" / "teil2" / "B1_legacy-7_1.mp3"
             self.assertEqual(target.read_bytes(), b"legacy audio")
             exercise.refresh_from_db()
             self.assertEqual(
@@ -122,7 +205,7 @@ class SpeakingAudioMigrationTests(TestCase):
             )
             migrated_manifest = json.loads(manifest.read_text(encoding="utf-8"))
             self.assertEqual(
-                migrated_manifest["turns"]["SPEAKING_TEIL2|B1|legacy-7|1"]["url"],
+                migrated_manifest["turns"]["TELC|B1|SPEAKING_TEIL2|legacy-7|1"]["url"],
                 exercise.content["dialogue"][0]["audio_url"],
             )
 
@@ -141,7 +224,7 @@ class SpeakingAudioMigrationTests(TestCase):
             manifest.write_text(json.dumps({"turns": {}}), encoding="utf-8")
 
             def fake_generate(**kwargs):
-                target = root / "teil1" / "B1_new-8_1.mp3"
+                target = root / "telc_b1_speaking" / "teil1" / "B1_new-8_1.mp3"
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(b"generated")
                 return "/resources/ExamPreparation/exam_preparation_audio/telc_b1_speaking/teil1/B1_new-8_1.mp3"

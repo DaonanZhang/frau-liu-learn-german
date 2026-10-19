@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../api/auth";
-import { fetchMyProfile, updateMyProfile } from "../api/auth/profile.js";
+import {
+  createPromotionCodes,
+  fetchMyProfile,
+  fetchPromotionCodeDetails,
+  fetchPromotionCodeHistory,
+  updateMyProfile,
+} from "../api/auth/profile.js";
 import { fetchMyCoupons } from "../api/coupons.js";
 import { hasModuleAccess } from "../utils/moduleAccess.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
@@ -58,6 +64,18 @@ function formatCouponDate(value) {
   }).format(date);
 }
 
+function formatPromotionDate(value) {
+  const date = new Date(value);
+  if (!value || Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function formatCouponAmount(value) {
   const amount = Number(value);
   if (!Number.isFinite(amount)) {
@@ -91,9 +109,9 @@ function couponCanUseForModule(coupon, module) {
   return true;
 }
 
-function extractErrorMessage(error) {
+function extractErrorMessage(error, fallback = "保存失败，请稍后重试。") {
   if (!error) {
-    return "保存失败，请稍后重试。";
+    return fallback;
   }
 
   const detail = error?.data?.detail;
@@ -115,7 +133,7 @@ function extractErrorMessage(error) {
     return String(error.message);
   }
 
-  return "保存失败，请稍后重试。";
+  return fallback;
 }
 
 export default function ProfilePage() {
@@ -136,10 +154,32 @@ export default function ProfilePage() {
   const [telephone, setTelephone] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [promotionTab, setPromotionTab] = useState("generate");
+  const [promotionPartner, setPromotionPartner] = useState("");
+  const [promotionOperator, setPromotionOperator] = useState("");
+  const [promotionCount, setPromotionCount] = useState("");
+  const [promotionAmount, setPromotionAmount] = useState("");
+  const [promotionGenerating, setPromotionGenerating] = useState(false);
+  const [promotionError, setPromotionError] = useState("");
+  const [promotionCodeModal, setPromotionCodeModal] = useState(null);
+  const [promotionDetailLoading, setPromotionDetailLoading] = useState(false);
+  const [promotionDetailError, setPromotionDetailError] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState("");
+  const [promotionHistory, setPromotionHistory] = useState([]);
+  const [promotionHistoryLoaded, setPromotionHistoryLoaded] = useState(false);
+  const [promotionHistoryLoading, setPromotionHistoryLoading] = useState(false);
+  const [promotionHistoryError, setPromotionHistoryError] = useState("");
+  const [promotionHistorySearchInput, setPromotionHistorySearchInput] = useState("");
+  const [promotionHistorySearch, setPromotionHistorySearch] = useState("");
+  const [promotionHistoryPage, setPromotionHistoryPage] = useState(1);
+  const [promotionHistoryCount, setPromotionHistoryCount] = useState(0);
+  const [promotionHistoryTotalPages, setPromotionHistoryTotalPages] = useState(1);
+  const [promotionHistoryRequestKey, setPromotionHistoryRequestKey] = useState(0);
 
   const normalizedUsername = useMemo(() => username.trim(), [username]);
   const normalizedEmail = useMemo(() => email.trim(), [email]);
   const canSave = !saving && !loadingProfile;
+  const canManagePromotionCodes = user?.is_superuser;
   const filteredCoupons = useMemo(
     () => coupons.filter((coupon) => couponFilterKey(coupon) === couponFilter),
     [couponFilter, coupons]
@@ -160,7 +200,7 @@ export default function ProfilePage() {
   );
 
   useEffect(() => {
-    if (!couponToUse) {
+    if (!couponToUse && !promotionCodeModal) {
       return undefined;
     }
     const previousOverflow = document.body.style.overflow;
@@ -168,6 +208,7 @@ export default function ProfilePage() {
     function handleKeyDown(event) {
       if (event.key === "Escape") {
         setCouponToUse(null);
+        setPromotionCodeModal(null);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
@@ -175,7 +216,35 @@ export default function ProfilePage() {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [couponToUse]);
+  }, [couponToUse, promotionCodeModal]);
+
+  useEffect(() => {
+    if (!canManagePromotionCodes || promotionTab !== "history" || promotionHistoryLoaded) {
+      return undefined;
+    }
+    let aborted = false;
+    setPromotionHistoryLoading(true);
+    setPromotionHistoryError("");
+    fetchPromotionCodeHistory({ search: promotionHistorySearch, page: promotionHistoryPage })
+      .then((data) => {
+        if (!aborted) {
+          setPromotionHistory(Array.isArray(data?.results) ? data.results : []);
+          setPromotionHistoryCount(Number(data?.count) || 0);
+          setPromotionHistoryPage(Math.max(1, Number(data?.page) || promotionHistoryPage));
+          setPromotionHistoryTotalPages(Math.max(1, Number(data?.total_pages) || 1));
+          setPromotionHistoryLoaded(true);
+        }
+      })
+      .catch((error) => {
+        if (!aborted) {
+          setPromotionHistoryError(extractErrorMessage(error, "生成记录加载失败，请稍后重试。"));
+        }
+      })
+      .finally(() => {
+        if (!aborted) setPromotionHistoryLoading(false);
+      });
+    return () => { aborted = true; };
+  }, [canManagePromotionCodes, promotionHistoryLoaded, promotionHistoryPage, promotionHistoryRequestKey, promotionHistorySearch, promotionTab]);
 
   useEffect(() => {
     let aborted = false;
@@ -283,6 +352,62 @@ export default function ProfilePage() {
     }
   }
 
+  async function handlePromotionSubmit(event) {
+    event.preventDefault();
+    const partnerName = promotionPartner.trim();
+    const operatorName = promotionOperator.trim();
+    const count = Number(promotionCount);
+    if (!partnerName || !operatorName || !Number.isInteger(count) || count < 1 || promotionGenerating) {
+      setPromotionError("请填写合作博主、管理员和有效数量。");
+      return;
+    }
+
+    setPromotionGenerating(true);
+    setPromotionError("");
+    setCopyFeedback("");
+    try {
+      const amount = promotionAmount.trim();
+      const result = await createPromotionCodes({
+        partner_name: partnerName,
+        operator_name: operatorName,
+        count,
+        ...(amount ? { discount_amount: amount } : {}),
+      });
+      setPromotionCodeModal(result);
+      setPromotionHistoryLoaded(false);
+      setPromotionHistoryRequestKey((value) => value + 1);
+    } catch (error) {
+      setPromotionError(extractErrorMessage(error, "优惠码生成失败，请稍后重试。"));
+    } finally {
+      setPromotionGenerating(false);
+    }
+  }
+
+  async function handleCopyPromotionCodes() {
+    const codes = promotionCodeModal?.codes || [];
+    try {
+      await navigator.clipboard.writeText(codes.join("\n"));
+      setCopyFeedback("已复制全部优惠码。");
+    } catch {
+      setCopyFeedback("复制失败，请手动选择并复制优惠码。");
+    }
+  }
+
+  async function handlePromotionHistoryDetails(generationBatchId) {
+    setPromotionDetailLoading(true);
+    setPromotionDetailError("");
+    setPromotionCodeModal(null);
+    setCopyFeedback("");
+    try {
+      const detail = await fetchPromotionCodeDetails(generationBatchId);
+      setPromotionCodeModal(detail);
+    } catch (error) {
+      setPromotionDetailError(extractErrorMessage(error, "优惠码详情加载失败，请稍后重试。"));
+    } finally {
+      setPromotionDetailLoading(false);
+    }
+  }
+
   return (
     <div className="profile-page">
       <div className="profile-page__stack">
@@ -367,6 +492,87 @@ export default function ProfilePage() {
           </form>
         )}
         </section>
+        {canManagePromotionCodes ? (
+          <section className="profile-card profile-promotionCard" aria-labelledby="promotion-code-title">
+            <h2 id="promotion-code-title" className="profile-promotionCard__title">生成优惠码</h2>
+            <div className="profile-promotionTabs" role="tablist" aria-label="优惠码管理">
+              <button type="button" role="tab" aria-selected={promotionTab === "generate"} className={promotionTab === "generate" ? "is-active" : ""} onClick={() => setPromotionTab("generate")}>生成优惠码</button>
+              <button type="button" role="tab" aria-selected={promotionTab === "history"} className={promotionTab === "history" ? "is-active" : ""} onClick={() => setPromotionTab("history")}>生成记录</button>
+            </div>
+            {promotionTab === "generate" ? (
+              <>
+                <form className="profile-form" onSubmit={handlePromotionSubmit}>
+                  <label className="profile-label">
+                    合作博主
+                    <input className="profile-input" value={promotionPartner} onChange={(event) => setPromotionPartner(event.target.value)} required />
+                  </label>
+                  <label className="profile-label">
+                    管理员
+                    <input className="profile-input" value={promotionOperator} onChange={(event) => setPromotionOperator(event.target.value)} required />
+                  </label>
+                  <label className="profile-label">
+                    数量
+                    <input className="profile-input" type="number" min="1" max="10000" step="1" value={promotionCount} onChange={(event) => setPromotionCount(event.target.value)} required />
+                  </label>
+                  <label className="profile-label">
+                    优惠金额
+                    <input className="profile-input" type="number" min="0.01" step="0.01" value={promotionAmount} onChange={(event) => setPromotionAmount(event.target.value)} />
+                  </label>
+                  {promotionError ? <div className="profile-errorText">{promotionError}</div> : null}
+                  <button type="submit" className="profile-saveBtn" disabled={promotionGenerating}>
+                    {promotionGenerating ? "生成中…" : "确认生成"}
+                  </button>
+                </form>
+              </>
+            ) : (
+              <div className="profile-promotionHistory">
+                <form className="profile-promotionHistory__search" onSubmit={(event) => {
+                  event.preventDefault();
+                  setPromotionHistorySearch(promotionHistorySearchInput.trim());
+                  setPromotionHistoryPage(1);
+                  setPromotionHistoryLoaded(false);
+                  setPromotionHistoryRequestKey((value) => value + 1);
+                }}>
+                  <label className="profile-label" htmlFor="promotion-history-search">搜索合作博主或管理员</label>
+                  <div className="profile-promotionHistory__searchRow">
+                    <input
+                      id="promotion-history-search"
+                      className="profile-input"
+                      value={promotionHistorySearchInput}
+                      onChange={(event) => setPromotionHistorySearchInput(event.target.value)}
+                      placeholder="输入名称"
+                    />
+                    <button type="submit" className="profile-promotionHistory__searchButton" disabled={promotionHistoryLoading}>搜索</button>
+                  </div>
+                </form>
+                {promotionHistoryLoading ? <div className="profile-stateText">正在加载生成记录…</div> : null}
+                {promotionDetailLoading ? <div className="profile-stateText">正在加载优惠码详情…</div> : null}
+                {!promotionHistoryLoading && promotionHistoryError ? <div className="profile-errorText">{promotionHistoryError}</div> : null}
+                {promotionDetailError ? <div className="profile-errorText">{promotionDetailError}</div> : null}
+                {!promotionHistoryLoading && !promotionHistoryError && promotionHistory.length === 0 ? <div className="profile-stateText">还没有生成记录</div> : null}
+                {promotionHistory.map((item) => (
+                  <button
+                    type="button"
+                    className="profile-promotionHistory__item"
+                    key={item.generation_batch_id}
+                    onClick={() => handlePromotionHistoryDetails(item.generation_batch_id)}
+                    disabled={promotionDetailLoading}
+                  >
+                    <div><strong>{item.partner_name}</strong><time>{formatPromotionDate(item.created_at)}</time></div>
+                    <p>{item.operator_name} 添加了 {item.count} 个优惠码</p>
+                  </button>
+                ))}
+                {!promotionHistoryLoading && !promotionHistoryError && promotionHistoryCount > 0 ? (
+                  <div className="profile-promotionHistory__pagination" aria-label="生成记录分页">
+                    <span>第 {promotionHistoryPage} / {promotionHistoryTotalPages} 页 · 共 {promotionHistoryCount} 条</span>
+                    <button type="button" onClick={() => { setPromotionHistoryPage((page) => page - 1); setPromotionHistoryLoaded(false); }} disabled={promotionHistoryLoading || promotionHistoryPage <= 1}>上一页</button>
+                    <button type="button" onClick={() => { setPromotionHistoryPage((page) => page + 1); setPromotionHistoryLoaded(false); }} disabled={promotionHistoryLoading || promotionHistoryPage >= promotionHistoryTotalPages}>下一页</button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </section>
+        ) : null}
         <section className="profile-couponWallet" id="coupons" aria-labelledby="coupon-wallet-title">
         <div className="profile-couponWallet__header">
           <div>
@@ -477,6 +683,27 @@ export default function ProfilePage() {
         </div>
         </section>
       </div>
+      {promotionCodeModal ? (
+        <div className="profile-promotionModal" role="presentation">
+          <button type="button" className="profile-promotionModal__backdrop" aria-label="关闭优惠码详情" onClick={() => setPromotionCodeModal(null)} />
+          <section className="profile-promotionModal__panel" role="dialog" aria-modal="true" aria-labelledby="promotion-modal-title">
+            <header className="profile-promotionModal__header">
+              <div>
+                <h3 id="promotion-modal-title">优惠码详情</h3>
+                <p>{promotionCodeModal.partner_name}</p>
+              </div>
+              <button type="button" className="profile-promotionModal__close" aria-label="关闭" onClick={() => setPromotionCodeModal(null)}>×</button>
+            </header>
+            <div className="profile-promotionModal__meta">
+              <span>数量：{promotionCodeModal.count}</span>
+              <span>优惠金额：¥{promotionCodeModal.discount_amount}</span>
+            </div>
+            <textarea className="profile-promotionModal__codes" value={(promotionCodeModal.codes || []).join("\n")} readOnly aria-label="优惠码列表" onFocus={(event) => event.target.select()} />
+            <button type="button" className="profile-promotionResult__copy" onClick={handleCopyPromotionCodes}>复制全部</button>
+            {copyFeedback ? <div className="profile-successText">{copyFeedback}</div> : null}
+          </section>
+        </div>
+      ) : null}
       {couponToUse ? (
         <div className="profile-couponPicker" role="presentation">
           <button

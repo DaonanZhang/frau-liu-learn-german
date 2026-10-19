@@ -68,6 +68,9 @@ export const SPEAKING_TYPES = [
     key: "teil1",
     title: "Teil 1",
     description: "互相认识（Einander kennenlernen）—— 约 3 分钟。双方围绕姓名、来源、居住情况、语言学习经历、工作或学习等基本信息进行介绍并互相提问。",
+    descriptionByLevel: {
+      B2: "主题展示（Präsentation）——从给出的主题中选择一个，参考括号中的提示要点，向搭档作约两分钟的简短展示。展示结束后，回答搭档提出的问题。",
+    },
     to: "/modules/exam-preparation/sprechen/teil-1",
     cta: "进入这一题型",
   },
@@ -86,3 +89,7 @@ export const SPEAKING_TYPES = [
     cta: "进入这一题型",
   },
 ];
+
+export function examPreparationTypeDescription(item, level) {
+  return item.descriptionByLevel?.[String(level || "").toUpperCase()] || item.description;
+}

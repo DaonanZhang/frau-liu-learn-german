@@ -20,7 +20,7 @@ vi.mock("../api/exam_preparation/userExerciseStates.js", () => ({
 }));
 
 vi.mock("../components/examPreparation/SpeakingPracticeRecorder.jsx", () => ({
-  default: ({ recordingId }) => <button type="button" aria-label={`record ${recordingId}`}>record</button>,
+  default: ({ recordingId, audioUrl }) => <button type="button" aria-label={`record ${recordingId}`} data-audio-url={audioUrl}>record</button>,
 }));
 
 vi.mock("../components/examPreparation/ExerciseFavoriteButton.jsx", () => ({
@@ -81,6 +81,22 @@ const teil2Exercise = {
   },
 };
 
+const teil1Exercise = {
+  id: 47,
+  exercise_base: {
+    level: "B1",
+    title: "Einander kennenlernen",
+    exam_type: "telc",
+    exercise_type: "SPEAKING_TEIL1",
+  },
+  instruction: "Stellen Sie sich vor.",
+  content: {
+    task: "Sprechen Sie über sich.",
+    topics: ["Name", "Wohnort"],
+    dialogue: [],
+  },
+};
+
 const teil3MultiSectionExercise = {
   id: 46,
   exercise_base: {
@@ -113,6 +129,42 @@ const teil3MultiSectionExercise = {
   },
 };
 
+const b2Teil3DirectExercise = {
+  id: 48,
+  exercise_base: {
+    level: "B2",
+    title: "Gemeinsam etwas planen",
+    exam_type: "TELC",
+    exercise_type: "SPEAKING_TEIL3",
+  },
+  instruction: "Sprechen Sie gemeinsam über die Planung.",
+  content: {
+    task: "Planen Sie gemeinsam.",
+    sections: [
+      {
+        type: "Reise",
+        turns: [
+          { id: "travel-1", sequence: 1, role: "TN1", text: "Wohin fahren wir?", sentence_type: "Reise", audio_url: "/audio/48-1.mp3" },
+          { id: "travel-3", sequence: 3, role: "TN1", text: "Wie lange bleiben wir?", sentence_type: "Reise", audio_url: "/audio/48-3.mp3" },
+        ],
+      },
+      {
+        type: "Termin",
+        turns: [
+          { id: "date-2", sequence: 2, role: "TN2", text: "Am Montag.", sentence_type: "Termin", audio_url: "/audio/48-2.mp3" },
+          { id: "date-4", sequence: 4, role: "TN2", text: "Das passt gut.", sentence_type: "Termin", audio_url: "/audio/48-4.mp3" },
+        ],
+      },
+    ],
+    dialogue: [
+      { id: "travel-1", sequence: 1, role: "TN1", text: "Wohin fahren wir?", sentence_type: "Reise", audio_url: "/audio/48-1.mp3" },
+      { id: "date-2", sequence: 2, role: "TN2", text: "Am Montag.", sentence_type: "Termin", audio_url: "/audio/48-2.mp3" },
+      { id: "travel-3", sequence: 3, role: "TN1", text: "Wie lange bleiben wir?", sentence_type: "Reise", audio_url: "/audio/48-3.mp3" },
+      { id: "date-4", sequence: 4, role: "TN2", text: "Das passt gut.", sentence_type: "Termin", audio_url: "/audio/48-4.mp3" },
+    ],
+  },
+};
+
 describe("SpeakingTeilExercisePage text annotations", () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -138,6 +190,62 @@ describe("SpeakingTeilExercisePage text annotations", () => {
       </MemoryRouter>,
     );
   }
+
+  it("hides only the task text for TELC B2 Sprechen Teil 1", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      ...teil1Exercise,
+      exercise_base: { ...teil1Exercise.exercise_base, level: " b2 ", exam_type: " TELC " },
+    });
+    renderPage(1, 47);
+
+    expect(await screen.findByText("Stellen Sie sich vor.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Präsentation" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2, name: "Einander kennenlernen" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Sprechen Sie über sich.")).not.toBeInTheDocument();
+    expect(screen.getByText("Name")).toBeInTheDocument();
+  });
+
+  it("keeps the task text for B1 Sprechen Teil 1", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue(teil1Exercise);
+    renderPage(1, 47);
+
+    expect(await screen.findByText("Stellen Sie sich vor.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Einander kennenlernen" })).toBeInTheDocument();
+    expect(screen.getByText("Sprechen Sie über sich.")).toBeInTheDocument();
+  });
+
+  it("hides the task text for TELC B2 Sprechen Teil 2", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      ...teil2Exercise,
+      exercise_base: { ...teil2Exercise.exercise_base, level: "B2", exam_type: "TELC" },
+    });
+    renderPage(2, 45);
+
+    expect(await screen.findByText("Ordnen Sie die Gesprächsteile.")).toBeInTheDocument();
+    expect(screen.queryByText("Sprechen Sie über das Thema Urlaub.")).not.toBeInTheDocument();
+  });
+
+  it("hides the task text for TELC B2 Sprechen Teil 3", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue(b2Teil3DirectExercise);
+    renderPage(3, 48);
+
+    expect(await screen.findByText("Sprechen Sie gemeinsam über die Planung.")).toBeInTheDocument();
+    expect(screen.queryByText("Planen Sie gemeinsam.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Prüfen" })).not.toBeInTheDocument();
+    expect(screen.queryByText("对话排序")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Wohin fahren wir?")).toHaveLength(1);
+    expect(screen.getAllByText("Am Montag.")).toHaveLength(1);
+    expect(screen.getAllByText("Wie lange bleiben wir?")).toHaveLength(1);
+    expect(screen.getAllByText("Das passt gut.")).toHaveLength(1);
+    expect(screen.getAllByText("Reise")).toHaveLength(2);
+    expect(screen.getAllByText("Termin")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "record teil-3-48-0-1" })).toHaveAttribute("data-audio-url", "/audio/48-1.mp3");
+    expect(screen.getByRole("button", { name: "record teil-3-48-1-2" })).toHaveAttribute("data-audio-url", "/audio/48-2.mp3");
+    expect(screen.getByRole("button", { name: "record teil-3-48-0-3" })).toHaveAttribute("data-audio-url", "/audio/48-3.mp3");
+    expect(screen.getByRole("button", { name: "record teil-3-48-1-4" })).toHaveAttribute("data-audio-url", "/audio/48-4.mp3");
+    const texts = Array.from(document.querySelectorAll(".speaking-detail-turn p")).map((element) => element.textContent);
+    expect(texts).toEqual(["Wohin fahren wir?", "Am Montag.", "Wie lange bleiben wir?", "Das passt gut."]);
+  });
 
   it("uses the real speaking scope, registers learning content, and excludes controls", async () => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue(teil3Exercise);

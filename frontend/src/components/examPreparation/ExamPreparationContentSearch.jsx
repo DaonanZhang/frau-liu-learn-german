@@ -42,7 +42,7 @@ function HighlightedText({ text, query }) {
   ));
 }
 
-export default function ExamPreparationContentSearch() {
+export default function ExamPreparationContentSearch({ scope }) {
   const [draftQuery, setDraftQuery] = useState("");
   const [draftSkill, setDraftSkill] = useState("");
   const [draftTeil, setDraftTeil] = useState("");
@@ -52,6 +52,10 @@ export default function ExamPreparationContentSearch() {
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [expandedResults, setExpandedResults] = useState(() => new Set());
+  const examType = scope.examType;
+  const level = scope.level;
+  const scopeKey = `${examType}:${level}`;
+  const [dataScopeKey, setDataScopeKey] = useState("");
 
   useEffect(() => {
     if (!submitted) return undefined;
@@ -61,8 +65,15 @@ export default function ExamPreparationContentSearch() {
       setLoading(true);
       setErrorText("");
       try {
-        const response = await fetchExamPreparationContentSearch({ ...submitted, page });
-        if (!cancelled) setData(response);
+        const response = await fetchExamPreparationContentSearch({
+          ...submitted,
+          page,
+          scope: { examType, level },
+        });
+        if (!cancelled) {
+          setData(response);
+          setDataScopeKey(scopeKey);
+        }
       } catch {
         if (!cancelled) {
           setData(null);
@@ -77,7 +88,7 @@ export default function ExamPreparationContentSearch() {
     return () => {
       cancelled = true;
     };
-  }, [submitted, page]);
+  }, [submitted, page, examType, level, scopeKey]);
 
   function submitSearch(event) {
     event.preventDefault();
@@ -85,6 +96,7 @@ export default function ExamPreparationContentSearch() {
     if (!query) return;
     setPage(1);
     setData(null);
+    setDataScopeKey("");
     setExpandedResults(new Set());
     setSubmitted({ query, skill: draftSkill, teil: draftTeil });
   }
@@ -104,7 +116,8 @@ export default function ExamPreparationContentSearch() {
   }
 
   const teilOptions = TEIL_OPTIONS[draftSkill] || [];
-  const results = Array.isArray(data?.results) ? data.results : [];
+  const scopedData = dataScopeKey === scopeKey ? data : null;
+  const results = Array.isArray(scopedData?.results) ? scopedData.results : [];
 
   return (
     <section className="exam-content-search" aria-labelledby="exam-content-search-title">
@@ -154,13 +167,13 @@ export default function ExamPreparationContentSearch() {
 
       {loading ? <p className="exam-content-search__state">正在搜索…</p> : null}
       {errorText ? <p className="exam-content-search__state is-error">{errorText}</p> : null}
-      {!loading && !errorText && data && results.length === 0 ? (
+      {!loading && !errorText && scopedData && results.length === 0 ? (
         <p className="exam-content-search__state">没有找到相关题库内容。</p>
       ) : null}
 
       {!loading && !errorText && results.length ? (
         <div className="exam-content-search__results" aria-live="polite">
-          <p className="exam-content-search__summary">找到 {data.count} 道练习</p>
+          <p className="exam-content-search__summary">找到 {scopedData.count} 道练习</p>
           {results.map((item) => {
             const expanded = expandedResults.has(item.exercise_base_id);
             const matches = expanded ? item.matches : item.matches.slice(0, COLLAPSED_MATCH_COUNT);
@@ -199,13 +212,13 @@ export default function ExamPreparationContentSearch() {
             );
           })}
 
-          {data.total_pages > 1 ? (
+          {scopedData.total_pages > 1 ? (
             <nav className="exam-content-search__pagination" aria-label="搜索结果分页">
-              <button type="button" disabled={data.page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>
+              <button type="button" disabled={scopedData.page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>
                 上一页
               </button>
-              <span>第 {data.page} / {data.total_pages} 页</span>
-              <button type="button" disabled={data.page >= data.total_pages || loading} onClick={() => setPage((value) => value + 1)}>
+              <span>第 {scopedData.page} / {scopedData.total_pages} 页</span>
+              <button type="button" disabled={scopedData.page >= scopedData.total_pages || loading} onClick={() => setPage((value) => value + 1)}>
                 下一页
               </button>
             </nav>

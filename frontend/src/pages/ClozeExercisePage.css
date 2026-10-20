@@ -364,6 +364,10 @@
   min-height: 0;
 }
 
+.cloze-blank-inline__annotation--compact {
+  width: max-content;
+}
+
 .cloze-choice-inline-details {
   display: flex;
   flex-direction: column;

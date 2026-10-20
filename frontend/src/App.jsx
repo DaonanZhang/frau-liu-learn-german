@@ -197,7 +197,7 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
             title="Teil 1"
-            description={LISTENING_TYPES[0].description}
+            description={(scope) => examPreparationTypeDescription(LISTENING_TYPES[0], scope.level)}
             fetchExercises={(scope) => fetchListeningExercises("short_text_true_false_with_prep", scope)}
             buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/hoeren/short-text-prep/${exercise.id}`}
             cardDescription="Öffne diese Hörübung und bearbeite die Aussagen nach einer kurzen Vorbereitungszeit."
@@ -221,10 +221,12 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
             title="Teil 2"
-            description={LISTENING_TYPES[1].description}
+            description={(scope) => examPreparationTypeDescription(LISTENING_TYPES[1], scope.level)}
             fetchExercises={(scope) => fetchListeningExercises("short_text_true_false_once", scope)}
             buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/hoeren/short-text-once/${exercise.id}`}
-            cardDescription="Öffne diese Hörübung und entscheide nach zweimaligem Hören des Gesprächs, welche Aussagen richtig oder falsch sind."
+            cardDescription={(scope) => scope.level === "B2"
+              ? "Öffne diese Hörübung und entscheide nach einmaligem Hören des Interviews, welche Aussagen richtig oder falsch sind."
+              : "Öffne diese Hörübung und entscheide nach zweimaligem Hören des Gesprächs, welche Aussagen richtig oder falsch sind."}
           />
         ),
       },
@@ -245,7 +247,7 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Hören"
             eyebrow="Hören"
             title="Teil 3"
-            description={LISTENING_TYPES[2].description}
+            description={(scope) => examPreparationTypeDescription(LISTENING_TYPES[2], scope.level)}
             fetchExercises={(scope) => fetchListeningExercises("dialog_true_false_twice", scope)}
             buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/hoeren/dialog-twice/${exercise.id}`}
             cardDescription="Öffne diese Hörübung und entscheide beim einmaligen Hören der kurzen Texte, welche Aussagen richtig oder falsch sind."

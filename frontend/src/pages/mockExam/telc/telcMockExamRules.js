@@ -32,12 +32,24 @@ export const ALL_REVIEW_PART_KEYS = [...READING_PART_KEYS, ...LISTENING_PART_KEY
 export const REVIEW_NAVIGATION_PART_KEYS = [...READING_PART_KEYS, ...LISTENING_PART_KEYS];
 
 export const AUDIO_SEQUENCE = [
-  { kind: "audio", partKey: "listening_teil1", playbackLabel: "einmal" },
-  { kind: "break", next: "Hören · Teil 2" },
-  { kind: "audio", partKey: "listening_teil2", playbackLabel: "zweimal" },
-  { kind: "break", next: "Hören · Teil 3" },
-  { kind: "audio", partKey: "listening_teil3", playbackLabel: "einmal" },
+  { kind: "audio", partKey: "listening_teil1", playbackLabel: "einmal", playCount: 1 },
+  { kind: "break", next: "Hören · Teil 2", durationSeconds: COLLECTION_SECONDS },
+  { kind: "audio", partKey: "listening_teil2", playbackLabel: "zweimal", playCount: 2 },
+  { kind: "break", next: "Hören · Teil 3", durationSeconds: COLLECTION_SECONDS },
+  { kind: "audio", partKey: "listening_teil3", playbackLabel: "einmal", playCount: 1 },
 ];
+
+const B2_AUDIO_SEQUENCE = [
+  { kind: "audio", partKey: "listening_teil1", playbackLabel: "einmal", playCount: 1 },
+  { kind: "break", next: "Hören · Teil 2", durationSeconds: 30 },
+  { kind: "audio", partKey: "listening_teil2", playbackLabel: "einmal", playCount: 1 },
+  { kind: "break", next: "Hören · Teil 3", durationSeconds: 30 },
+  { kind: "audio", partKey: "listening_teil3", playbackLabel: "einmal", playCount: 1 },
+];
+
+export function audioSequenceForLevel(level) {
+  return String(level || "").trim().toUpperCase() === "B2" ? B2_AUDIO_SEQUENCE : AUDIO_SEQUENCE;
+}
 
 export const WRITING_GRADE_POINTS = { A: 5, B: 3, C: 1, D: 0 };
 export const EMPTY_WRITING_ASSESSMENT = {

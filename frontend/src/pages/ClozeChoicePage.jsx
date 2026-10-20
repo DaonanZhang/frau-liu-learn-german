@@ -350,6 +350,12 @@ export default function ClozeChoicePage() {
                   const previousParts = paragraphs.slice(0, paragraphIndex).flat().concat(parts.slice(0, index));
                   const occurrenceIndex = previousParts.filter((candidate) => candidate === part).length;
                   const occurrenceCount = paragraphs.flat().filter((candidate) => candidate === part).length;
+                  const isLastOccurrence = occurrenceIndex === occurrenceCount - 1;
+                  const correctOptionText = clozeOptionTextForOccurrence(
+                    correctOption?.option_text || "-",
+                    occurrenceIndex,
+                    occurrenceCount,
+                  );
                   const followingText = parts[index + 1] && !/^\{\{blank_\d+\}\}$/.test(parts[index + 1])
                     ? parts[index + 1]
                     : "";
@@ -410,17 +416,22 @@ export default function ClozeChoicePage() {
                       />
                       {isChecked ? (
                         <span
-                          className="cloze-blank-inline__annotation"
-                          style={annotationPosition ? {
+                          className={[
+                            "cloze-blank-inline__annotation",
+                            !isLastOccurrence ? "cloze-blank-inline__annotation--compact" : "",
+                          ].filter(Boolean).join(" ")}
+                          style={isLastOccurrence && annotationPosition ? {
                             "--cloze-annotation-reserve-height": `${annotationPosition.reserveHeight}px`,
                           } : undefined}
                         >
                           <span
                             ref={(node) => {
-                              detailsRefs.current[blankKey] = node;
+                              if (isLastOccurrence) {
+                                detailsRefs.current[blankKey] = node;
+                              }
                             }}
                             className="cloze-choice-inline-details"
-                            style={annotationPosition ? {
+                            style={isLastOccurrence && annotationPosition ? {
                               "--cloze-annotation-x-offset": `${annotationPosition.xOffset}px`,
                               "--cloze-annotation-lane-offset": `${annotationPosition.laneOffset}px`,
                               ...(annotationPosition.width > 0
@@ -435,17 +446,19 @@ export default function ClozeChoicePage() {
                                   isCorrect ? "cloze-inline-feedback--correct" : "cloze-inline-feedback--wrong",
                                 ].join(" ")}
                               >
-                                {isCorrect ? "Richtig" : `Richtig: ${correctOption?.option_text || "-"}`}
+                                {isCorrect ? "Richtig" : `Richtig: ${correctOptionText}`}
                               </span>
-                              <ExerciseFavoriteButton
-                                isFavorited={Boolean(favoritedByBlankId[blank.id])}
-                                pending={Boolean(favoritePendingByBlankId[blank.id])}
-                                onClick={() => {
-                                  toggleFavorite(blank);
-                                }}
-                              />
+                              {isLastOccurrence ? (
+                                <ExerciseFavoriteButton
+                                  isFavorited={Boolean(favoritedByBlankId[blank.id])}
+                                  pending={Boolean(favoritePendingByBlankId[blank.id])}
+                                  onClick={() => {
+                                    toggleFavorite(blank);
+                                  }}
+                                />
+                              ) : null}
                             </span>
-                            {hasScopedExplanation(blank.explanation, blank.options || []) ? (
+                            {isLastOccurrence && hasScopedExplanation(blank.explanation, blank.options || []) ? (
                               <span className="cloze-choice-inline-explanation">
                                 Erklärung:{" "}
                                 <span>

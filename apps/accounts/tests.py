@@ -59,6 +59,7 @@ class UserGuideStateApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(response.data["has_seen_schreiben_guide"])
+        self.assertFalse(response.data["has_seen_b2_schreiben_guide"])
         self.assertTrue(response.data["release_access"])
 
     @override_settings(COMING_SOON=True)
@@ -98,6 +99,18 @@ class UserGuideStateApiTests(APITestCase):
         self.assertTrue(response.data["has_seen_schreiben_guide"])
         self.user.refresh_from_db()
         self.assertTrue(self.user.has_seen_schreiben_guide)
+
+    def test_me_can_mark_b2_schreiben_guide_as_seen(self) -> None:
+        response = self.client.patch(
+            "/api/accounts/users/me/",
+            {"has_seen_b2_schreiben_guide": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["has_seen_b2_schreiben_guide"])
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.has_seen_b2_schreiben_guide)
 
 
 @override_settings(

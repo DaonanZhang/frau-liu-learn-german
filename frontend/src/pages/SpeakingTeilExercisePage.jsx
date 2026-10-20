@@ -18,6 +18,13 @@ const TITLES = { 1: "Einander kennenlernen", 2: "Über ein Thema sprechen", 3: "
 const turnKey = (turn) => `turn:${turn.sequence}`;
 const orderStateKey = (key) => key === "all" ? "dialogue-order:all" : `dialogue-order:section:${key}`;
 const speakingRoleKind = (role) => String(role || "TN1").trim().toLowerCase() === "tn2" ? "tn2" : "tn1";
+const isExaminerTurn = (turn) => /^(?:prüfer|pruefer)(?:in|\/in)?\b/i.test(String(turn?.role || "").trim());
+
+function isTelcB2Exercise(exercise) {
+  const base = exercise?.exercise_base || {};
+  return String(base.level || "").trim().toUpperCase() === "B2"
+    && String(base.exam_type || "").trim().toUpperCase() === "TELC";
+}
 
 function stableContentKey(value, fallback = "") {
   if (value == null) return fallback;
@@ -516,7 +523,8 @@ export default function SpeakingTeilExercisePage({ teil }) {
         const stateResults = stateData?.results || [];
         const statesByKey = new Map(stateResults.map((item) => [item.turn_key, item]));
         if (Number(teil) === 2) {
-          const turns = Array.isArray(content.dialogue) ? content.dialogue : [];
+          const allTurns = Array.isArray(content.dialogue) ? content.dialogue : [];
+          const turns = isTelcB2Exercise(data) ? allTurns.filter((turn) => !isExaminerTurn(turn)) : allTurns;
           const state = statesByKey.get(orderStateKey("all"));
           const restored = restoreOrder(turns, state);
           setOrders({ all: restored });
@@ -551,8 +559,13 @@ export default function SpeakingTeilExercisePage({ teil }) {
   const sections = useMemo(() => Array.isArray(content.sections) ? content.sections : [], [content.sections]);
   const topics = Array.isArray(content.topics) ? content.topics : [];
   const base = exercise?.exercise_base || {};
-  const isB2Telc = String(base.level || "").trim().toLowerCase() === "b2"
-    && String(base.exam_type || "").trim().toLowerCase() === "telc";
+  const isB2Telc = isTelcB2Exercise(exercise);
+  const examinerTurns = isB2Telc && Number(teil) === 2
+    ? dialogue.filter(isExaminerTurn)
+    : [];
+  const sortableDialogue = isB2Telc && Number(teil) === 2
+    ? dialogue.filter((turn) => !isExaminerTurn(turn))
+    : dialogue;
   const taskTitle = isB2Telc && Number(teil) === 1 ? "Präsentation" : TITLES[teil];
   const hideB2Task = isB2Telc;
   const isB2Teil3 = isB2Telc && Number(teil) === 3;
@@ -664,9 +677,23 @@ export default function SpeakingTeilExercisePage({ teil }) {
       ) : null}
       {Number(teil) === 2 ? (
         <section className="speaking-detail-card speaking-detail-example">
+          {examinerTurns.length ? (
+            <div className="speaking-detail-dialogue speaking-detail-dialogue--flush speaking-detail-examiner-turns">
+              {examinerTurns.map((turn) => (
+                <DialogueTurn
+                  key={turnKey(turn)}
+                  turn={turn}
+                  showPractice
+                  recorderId={`teil-2-${exerciseId}-${turn.sequence}`}
+                  favoriteProps={favoriteForTurn(turn)}
+                  annotationRegionId={turnAnnotationId(turn)}
+                />
+              ))}
+            </div>
+          ) : null}
           <p className="speaking-detail-card__eyebrow">Reihenfolge</p><h2>对话排序</h2>
-          <DialogueBuilder turns={dialogue} value={orders.all || []} onChange={(value) => { setOrders({ all: value }); setChecked({ all: false }); }} checked={Boolean(checked.all)} recorderPrefix={`teil-2-${exerciseId}`} favoriteForTurn={favoriteForTurn} />
-          <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked.all) || !dialogue.length || (orders.all || []).length !== dialogue.length} onClick={() => checkSection("all", dialogue)} />{checked.all ? <SpeakingResetAction onReset={() => resetSection("all")} /> : null}</div>
+          <DialogueBuilder turns={sortableDialogue} value={orders.all || []} onChange={(value) => { setOrders({ all: value }); setChecked({ all: false }); }} checked={Boolean(checked.all)} recorderPrefix={`teil-2-${exerciseId}`} favoriteForTurn={favoriteForTurn} />
+          <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked.all) || !sortableDialogue.length || (orders.all || []).length !== sortableDialogue.length} onClick={() => checkSection("all", sortableDialogue)} />{checked.all ? <SpeakingResetAction onReset={() => resetSection("all")} /> : null}</div>
         </section>
       ) : null}
       {isB2Teil3 ? (

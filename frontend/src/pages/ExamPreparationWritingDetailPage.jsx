@@ -20,6 +20,7 @@ import {
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
+import { isTelcB2Writing, writingWordLimitLabel } from "./writingDisplay.js";
 import "./ExamPreparationWritingDetailPage.css";
 
 export function renderStoredLineBreaks(text, fallback = "") {
@@ -100,6 +101,10 @@ export default function ExamPreparationWritingDetailPage() {
   const guideTargetRefs = useRef([]);
   const guideDialogRef = useRef(null);
   const guideInitializationKeyRef = useRef("");
+  const isTelcB2 = isTelcB2Writing(exercise);
+  const guideSeenField = isTelcB2
+    ? "has_seen_b2_schreiben_guide"
+    : "has_seen_schreiben_guide";
 
   useEffect(() => {
     let aborted = false;
@@ -190,10 +195,10 @@ export default function ExamPreparationWritingDetailPage() {
       return;
     }
     guideInitializationKeyRef.current = initializationKey;
-    if (!user.has_seen_schreiben_guide) {
+    if (!user[guideSeenField]) {
       setGuideStep(0);
     }
-  }, [exercise, user]);
+  }, [exercise, guideSeenField, user]);
 
   useEffect(() => {
     if (guideStep === null) {
@@ -215,6 +220,9 @@ export default function ExamPreparationWritingDetailPage() {
   }, [guideStep]);
 
   const wordCount = useMemo(() => countWords(draftText), [draftText]);
+  const wordTargetLabel = isTelcB2
+    ? writingWordLimitLabel(exercise)
+    : `${exercise?.words_limit || 80} 词`;
   const exampleTexts = useMemo(
     () => (Array.isArray(exercise?.example_texts) ? exercise.example_texts : []),
     [exercise]
@@ -294,7 +302,7 @@ export default function ExamPreparationWritingDetailPage() {
     setGuideErrorText("");
     try {
       await updateMyProfile({
-        has_seen_schreiben_guide: true,
+        [guideSeenField]: true,
       });
       setGuideStep(null);
       await reloadMe();
@@ -368,32 +376,46 @@ export default function ExamPreparationWritingDetailPage() {
 
         <section className="writing-detail-meta-panel">
           <div className="writing-detail-meta-chip">
-            最多 {exercise?.words_limit || 80} 词
+            {isTelcB2 ? wordTargetLabel : `最多 ${wordTargetLabel}`}
           </div>
-          <button
-            ref={(node) => {
-              guideTargetRefs.current[1] = node;
-            }}
-            type="button"
-            className={[
-              "writing-detail-timer-btn",
-              guideTargetClass(1),
-            ].filter(Boolean).join(" ")}
-            onClick={() => {
-              if (!timerStarted && remainingSeconds > 0) {
-                setTimerStarted(true);
-              }
-            }}
-            disabled={isChecked || timerStarted || remainingSeconds <= 0}
-          >
-            {isChecked
-              ? submittedTimeSpentSeconds === null
-                ? "计时已结束"
-                : `用时：${formatTime(submittedTimeSpentSeconds)}`
-              : timerStarted
-                ? `计时中：${formatTime(remainingSeconds)}`
-                : `开始计时：${formatTime(remainingSeconds)}`}
-          </button>
+          <div className="writing-detail-meta-actions">
+            {isTelcB2 ? (
+              <button
+                type="button"
+                className="writing-detail-guide-replay-btn"
+                onClick={() => {
+                  setGuideErrorText("");
+                  setGuideStep(0);
+                }}
+              >
+                查看引导
+              </button>
+            ) : null}
+            <button
+              ref={(node) => {
+                guideTargetRefs.current[1] = node;
+              }}
+              type="button"
+              className={[
+                "writing-detail-timer-btn",
+                guideTargetClass(1),
+              ].filter(Boolean).join(" ")}
+              onClick={() => {
+                if (!timerStarted && remainingSeconds > 0) {
+                  setTimerStarted(true);
+                }
+              }}
+              disabled={isChecked || timerStarted || remainingSeconds <= 0}
+            >
+              {isChecked
+                ? submittedTimeSpentSeconds === null
+                  ? "计时已结束"
+                  : `用时：${formatTime(submittedTimeSpentSeconds)}`
+                : timerStarted
+                  ? `计时中：${formatTime(remainingSeconds)}`
+                  : `开始计时：${formatTime(remainingSeconds)}`}
+            </button>
+          </div>
         </section>
 
         <section className="writing-detail-workspace">
@@ -418,6 +440,7 @@ export default function ExamPreparationWritingDetailPage() {
             }}
             className={[
               "writing-detail-input-card",
+              isTelcB2 ? "writing-detail-input-card--long" : "",
               guideTargetClass(3),
             ].filter(Boolean).join(" ")}
           >
@@ -481,10 +504,12 @@ export default function ExamPreparationWritingDetailPage() {
           </section>
         ) : null}
 
-        <section className="writing-detail-actions">
-          <span className="writing-detail-actions__meta">
-            {wordCount} / {exercise?.words_limit || 80} 词
-          </span>
+        <section className={`writing-detail-actions${isTelcB2 ? " writing-detail-actions--compact" : ""}`}>
+          {!isTelcB2 ? (
+            <span className="writing-detail-actions__meta">
+              {wordCount} / {wordTargetLabel}
+            </span>
+          ) : null}
           <div className="writing-detail-actions__buttons">
             <ExamActionButton
               className="writing-detail-check-btn"

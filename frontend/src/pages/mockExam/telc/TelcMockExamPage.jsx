@@ -45,9 +45,9 @@ import {
 import { clearAnnotationScope, mockAnnotationScope } from "../../../utils/examTextAnnotations.js";
 import { clozeOptionTextForOccurrence } from "../../../utils/clozePlaceholderText.js";
 import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../../../hooks/useReliableAudioSources.js";
+import { TELC_B2_LISTENING_TEIL2_INSTRUCTION } from "../../examPreparationTypeContent.js";
 import {
   ALL_REVIEW_PART_KEYS,
-  AUDIO_SEQUENCE,
   COLLECTION_SECONDS,
   EARLY_SUBMISSION_WRITING_ASSESSMENT,
   EMPTY_WRITING_ASSESSMENT,
@@ -61,6 +61,7 @@ import {
   WRITING_CRITERIA,
   WRITING_GRADE_POINTS,
   WRITING_SECONDS,
+  audioSequenceForLevel,
 } from "./telcMockExamRules.js";
 import "./TelcMockExamPage.css";
 import "../../ReadingAdMatchingPage.css";
@@ -84,6 +85,45 @@ function formatTime(seconds) {
 
 function formatScore(score) {
   return Number.isInteger(score) ? String(score) : score.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+async function playAudioCompletionSignal() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+
+  let context;
+  try {
+    context = new AudioContextClass();
+    if (context.state === "suspended") await context.resume();
+
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const startedAt = context.currentTime;
+    const endsAt = startedAt + 0.8;
+
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(900, startedAt);
+    gain.gain.setValueAtTime(0.0001, startedAt);
+    gain.gain.exponentialRampToValueAtTime(0.16, startedAt + 0.02);
+    gain.gain.setValueAtTime(0.16, endsAt - 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, endsAt);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+
+    await new Promise((resolve) => {
+      oscillator.onended = resolve;
+      oscillator.start(startedAt);
+      oscillator.stop(endsAt);
+    });
+  } catch {
+    // Continue the exam when the browser cannot create or start the signal.
+  } finally {
+    try {
+      await context?.close?.();
+    } catch {
+      // The signal has already finished; closing failure must not block the exam.
+    }
+  }
 }
 
 function createRequestId() {
@@ -610,11 +650,13 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
   );
 }
 
-function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor, questionNumbers, sectionRef, examLabel }) {
+function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor, questionNumbers, sectionRef, examLabel, examLevel }) {
   if (!exercise) return <p>该部分题目加载失败。</p>;
   const heading = exercise.exercise_base?.title || PARTS[partKey].title;
   const baseIntroduction = String(exercise.instruction || INTRODUCTION_BY_PART[partKey] || "").trim();
-  const introduction = listeningIntroduction(partKey, exercise, questionNumbers, baseIntroduction);
+  const introduction = String(examLevel || "").toUpperCase() === "B2" && partKey === "listening_teil2"
+    ? TELC_B2_LISTENING_TEIL2_INSTRUCTION
+    : listeningIntroduction(partKey, exercise, questionNumbers, baseIntroduction);
 
   let body = null;
   if (partKey === "reading_title_matching") {
@@ -892,7 +934,8 @@ export default function TelcMockExamPage() {
   const [questionFavoritePending, setQuestionFavoritePending] = useState({});
   const [resultModalOpen, setResultModalOpen] = useState(false);
   const [wasEarlySubmitted, setWasEarlySubmitted] = useState(false);
-  const currentAudioAction = AUDIO_SEQUENCE[audioStep] || null;
+  const audioSequence = useMemo(() => audioSequenceForLevel(currentScope.level), [currentScope.level]);
+  const currentAudioAction = audioSequence[audioStep] || null;
   const currentAudioExercise = currentAudioAction?.kind === "audio" ? exam?.parts?.[currentAudioAction.partKey] : null;
   const currentAudioUrl = currentAudioExercise?.audio_file_url || "";
   const listeningAudioUrls = useMemo(() => ["reading", "collection", "listening"].includes(phase)
@@ -1289,10 +1332,13 @@ export default function TelcMockExamPage() {
   }, [audioStep, persist, attemptId, isSavedReview, answers, writingText, writingAssessment, isFavorite, phase, deadline, activePart, listeningRemainingMs]);
 
   const handleAudioEnded = useCallback(async (event) => {
+    const audioElement = event.currentTarget;
     setAudioPlaying(false);
-    if (currentAudioAction?.partKey === "listening_teil2" && teil2CompletedPlaysRef.current === 0) {
-      teil2CompletedPlaysRef.current = 1;
-      event.currentTarget.currentTime = 0;
+    await playAudioCompletionSignal();
+    const completedPlays = teil2CompletedPlaysRef.current + 1;
+    if (currentAudioAction?.kind === "audio" && completedPlays < (currentAudioAction.playCount || 1)) {
+      teil2CompletedPlaysRef.current = completedPlays;
+      audioElement.currentTime = 0;
       hasStartedCurrentAudioRef.current = false;
       await playCurrentAudio();
       return;
@@ -1311,7 +1357,7 @@ export default function TelcMockExamPage() {
       });
       return () => window.cancelAnimationFrame(frame);
     }
-    const remaining = Math.max(0, COLLECTION_SECONDS * 1000 - (Date.now() - audioStepStartedAt));
+    const remaining = Math.max(0, (currentAudioAction.durationSeconds || COLLECTION_SECONDS) * 1000 - (Date.now() - audioStepStartedAt));
     const timer = window.setTimeout(advanceAudioStep, remaining);
     return () => window.clearTimeout(timer);
   }, [phase, currentAudioAction, audioStepStartedAt, playCurrentAudio, advanceAudioStep]);
@@ -1628,7 +1674,7 @@ export default function TelcMockExamPage() {
         <section className={`telc-mock-exam-audio-status${audioLoading ? " is-loading" : audioFailed ? " is-error" : ""}`} aria-live="polite">
           {audioLoading ? <><span className="telc-mock-exam-audio-spinner" aria-hidden="true" /><span className="telc-mock-exam-audio-status__title">{audioPlaybackState === "switching" ? "正在切换备用音频…" : audioPlaybackState === "recovering" ? "正在恢复听力播放…" : "正在加载听力音频…"}</span></> : null}
           {audioFailed ? <span className="telc-mock-exam-audio-status__error" role="alert">{AUDIO_LOAD_ERROR}</span> : null}
-          {currentAudioAction?.kind === "audio" && !audioLoading && !audioFailed ? <><span className="telc-mock-exam-audio-status__title">{needsAudioGesture ? "听力音频已就绪" : `正在播放 · ${PARTS[currentAudioAction.partKey].title}`}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, COLLECTION_SECONDS - Math.floor((now - audioStepStartedAt) / 1000)))}</strong><small>接下来：{currentAudioAction.next}</small></> : currentAudioAction?.kind !== "audio" ? <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></> : null}
+          {currentAudioAction?.kind === "audio" && !audioLoading && !audioFailed ? <><span className="telc-mock-exam-audio-status__title">{needsAudioGesture ? "听力音频已就绪" : `正在播放 · ${PARTS[currentAudioAction.partKey].title}`}</span><strong>{currentAudioAction.playbackLabel}</strong></> : currentAudioAction?.kind === "break" ? <><span>录音间隔</span><strong>{formatTime(Math.max(0, (currentAudioAction.durationSeconds || COLLECTION_SECONDS) - Math.max(0, Math.floor((now - audioStepStartedAt) / 1000))))}</strong><small>接下来：{currentAudioAction.next}</small></> : currentAudioAction?.kind !== "audio" ? <><span>录音播放完毕</span><strong>自由检查</strong><small>倒计时结束前可切换并修改答案</small></> : null}
           {needsAudioGesture ? <button onClick={() => playCurrentAudio(true)}>点击继续播放录音</button> : null}
           {currentAudioAction?.kind === "audio" ? (
             <div
@@ -1668,7 +1714,7 @@ export default function TelcMockExamPage() {
 
       <ExercisePart partKey={activePart} exercise={exam.parts[activePart]} answers={answers} setAnswer={setAnswer} setAnswers={setAnswers}
         disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
-        favoriteFor={favoriteFor} questionNumbers={questionNumbers} sectionRef={exercisePartRef} examLabel={`${currentScope.examType} ${currentScope.level}`} />
+        favoriteFor={favoriteFor} questionNumbers={questionNumbers} sectionRef={exercisePartRef} examLabel={`${currentScope.examType} ${currentScope.level}`} examLevel={currentScope.level} />
 
       {activePartIndex >= 0 ? (
         <nav className="telc-mock-exam-bottom-nav" aria-label="前后部分导航">

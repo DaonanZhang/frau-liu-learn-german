@@ -1,4 +1,6 @@
 import { render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { useEffect } from "react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
@@ -13,6 +15,16 @@ function Location() {
 }
 
 describe("exam preparation route migration", () => {
+  it("resolves every listening selection description from the active level", () => {
+    const appSource = readFileSync(resolve("src/App.jsx"), "utf8");
+
+    [0, 1, 2].forEach((index) => {
+      expect(appSource).toContain(
+        `description={(scope) => examPreparationTypeDescription(LISTENING_TYPES[${index}], scope.level)}`,
+      );
+    });
+  });
+
   it.each([["b1", "B1"], ["b2", "B2"]])("renders the %s home from its actual route config", (pathLevel, level) => {
     const routes = addExamPreparationLevelRoutes(examPreparationLevelHomeRoutes());
     const { container } = render(

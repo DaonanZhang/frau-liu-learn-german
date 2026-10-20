@@ -144,6 +144,25 @@
   font-weight: 700;
 }
 
+.writing-detail-meta-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.writing-detail-guide-replay-btn {
+  min-height: 2.25rem;
+  padding: 0 0.75rem;
+  border: 1px solid rgba(47, 111, 94, 0.28);
+  border-radius: 999px;
+  background: #ffffff;
+  color: #2f6f5e;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .writing-detail-meta-chip {
   background: rgba(47, 111, 94, 0.12);
   border: 1px solid rgba(47, 111, 94, 0.2);
@@ -219,6 +238,16 @@
   line-height: 1.7;
 }
 
+.writing-detail-input-card--long {
+  display: flex;
+  flex-direction: column;
+}
+
+.writing-detail-input-card--long .writing-detail-textarea {
+  flex: 1;
+  min-height: 28rem;
+}
+
 .writing-detail-review-card--user {
   background: rgba(207, 99, 39, 0.06);
 }
@@ -232,6 +261,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+}
+
+.writing-detail-actions--compact {
+  justify-content: flex-end;
 }
 
 .writing-detail-actions__buttons {
@@ -425,6 +458,11 @@
 }
 
 @media (max-width: 560px) {
+  .writing-detail-meta-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .writing-detail-review-card__titleRow {
     gap: 0.6rem;
   }

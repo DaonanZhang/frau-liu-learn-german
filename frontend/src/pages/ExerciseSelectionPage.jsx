@@ -124,7 +124,9 @@ export default function ExerciseSelectionPage({
                 {isLocked ? (
                   <span className="exercise-selection-card__lock" aria-hidden="true">🔒</span>
                 ) : null}
-                <p className="exercise-selection-card__description">{cardDescription}</p>
+                <p className="exercise-selection-card__description">
+                  {typeof cardDescription === "function" ? cardDescription(scope) : cardDescription}
+                </p>
                 <div className="exercise-selection-card__bottom">
                   <span className="exercise-selection-card__cta">
                     {isLocked ? "购买后解锁" : cardCta}

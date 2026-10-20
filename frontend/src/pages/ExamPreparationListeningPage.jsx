@@ -1,5 +1,5 @@
 import { Link, Navigate, useParams } from "react-router-dom";
-import { LISTENING_TYPES } from "./examPreparationTypeContent.js";
+import { LISTENING_TYPES, examPreparationTypeDescription } from "./examPreparationTypeContent.js";
 import "./ExamPreparationListeningPage.css";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
 
@@ -30,7 +30,7 @@ export default function ExamPreparationListeningPage() {
             <div className="exam-listening-type__top">
               <h2 className="exam-listening-type__title">{item.title}</h2>
             </div>
-            <p className="exam-listening-type__description">{item.description}</p>
+            <p className="exam-listening-type__description">{examPreparationTypeDescription(item, scope.level)}</p>
             <div className="exam-listening-type__bottom">
               <span className="exam-listening-type__cta">{item.cta}</span>
             </div>

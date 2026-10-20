@@ -20,6 +20,7 @@ import ScopedExplanation from "../components/examPreparation/ScopedExplanation.j
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../hooks/useReliableAudioSources.js";
+import { TELC_B2_LISTENING_TEIL2_INSTRUCTION } from "./examPreparationTypeContent.js";
 import "./ListeningExercisePage.css";
 
 const INSTRUCTION_BY_TYPE = {
@@ -88,6 +89,7 @@ export default function ListeningExercisePage({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const isTeil2 = listeningType === "short_text_true_false_once";
+  const isTelcB2 = scope?.examType === "TELC" && scope.level === "B2";
   const audioUrls = useMemo(() => [exercise?.audio_file_url].filter(Boolean), [exercise?.audio_file_url]);
   const { sources: audioSources, statuses: audioStatuses } = useReliableAudioSources(audioUrls);
   const audioUrl = exercise?.audio_file_url || "";
@@ -197,11 +199,11 @@ export default function ListeningExercisePage({
   const questions = useMemo(() => {
     return Array.isArray(exercise?.questions) ? exercise.questions : [];
   }, [exercise]);
-  const instruction = scope?.examType === "TELC"
-    && scope.level === "B2"
-    && listeningType === "short_text_true_false_with_prep"
+  const instruction = isTelcB2 && listeningType === "short_text_true_false_with_prep"
     ? TELC_B2_TEIL1_INSTRUCTION
-    : INSTRUCTION_BY_TYPE[listeningType] || INSTRUCTION_BY_TYPE.short_text_true_false_once;
+    : isTelcB2 && listeningType === "short_text_true_false_once"
+      ? TELC_B2_LISTENING_TEIL2_INSTRUCTION
+      : INSTRUCTION_BY_TYPE[listeningType] || INSTRUCTION_BY_TYPE.short_text_true_false_once;
   const heroTitle = useMemo(() => {
     const title = exercise?.exercise_base?.title?.trim();
     if (title) {
@@ -298,7 +300,7 @@ export default function ListeningExercisePage({
 
   async function handleAudioEnded(event) {
     const audioElement = event.currentTarget;
-    if (isTeil2 && teil2CompletedPlaysRef.current === 0) {
+    if (isTeil2 && !isTelcB2 && teil2CompletedPlaysRef.current === 0) {
       teil2CompletedPlaysRef.current = 1;
       audioElement.currentTime = 0;
       setCurrentTime(0);

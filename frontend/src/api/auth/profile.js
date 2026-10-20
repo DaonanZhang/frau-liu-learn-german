@@ -24,6 +24,7 @@ export function fetchMyProfile() {
  *   username?: string,
  *   email?: string | null,
  *   has_seen_schreiben_guide?: boolean,
+ *   has_seen_b2_schreiben_guide?: boolean,
  * }} payload
  * @returns {Promise<{
  *   id: number,

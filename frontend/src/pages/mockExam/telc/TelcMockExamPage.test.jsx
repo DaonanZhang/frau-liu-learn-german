@@ -1706,6 +1706,92 @@ describe("mock exam exercise layout", () => {
     expect(screen.queryByText(/第二遍/)).not.toBeInTheDocument();
   });
 
+  it("plays TELC B2 Teil 2 once and starts a 30-second gap", async () => {
+    const beepOscillator = {
+      frequency: { setValueAtTime: vi.fn() },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+      onended: null,
+    };
+    beepOscillator.stop.mockImplementation(() => queueMicrotask(() => beepOscillator.onended?.()));
+    const closeAudioContext = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("AudioContext", class {
+      constructor() {
+        this.currentTime = 1;
+        this.state = "running";
+        this.destination = {};
+      }
+
+      createOscillator() {
+        return beepOscillator;
+      }
+
+      createGain() {
+        return {
+          gain: {
+            setValueAtTime: vi.fn(),
+            exponentialRampToValueAtTime: vi.fn(),
+          },
+          connect: vi.fn(),
+        };
+      }
+
+      close() {
+        return closeAudioContext();
+      }
+    });
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B2:7", JSON.stringify({
+      exam: {
+        exam_type: "TELC",
+        level: "B2",
+        parts: {
+          listening_teil2: { exercise_base: { title: "Teil 2" }, audio_file_url: "/b2-teil2.m4a", questions: [] },
+          listening_teil3: { exercise_base: { title: "Teil 3" }, audio_file_url: "/b2-teil3.m4a", questions: [] },
+        },
+      },
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil2",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 2,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/telc/b2/mock-exam"]}>
+        <Routes>
+          <Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<TelcMockExamPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const audio = await waitFor(() => {
+      const element = container.querySelector("audio");
+      expect(element).toHaveAttribute("src", "/b2-teil2.m4a");
+      return element;
+    });
+
+    await waitFor(() => expect(screen.getByText("einmal")).toBeInTheDocument());
+    expect(screen.getByText(
+      "Sie hören nun ein Interview. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch nur einmal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
+    )).toBeInTheDocument();
+    const playCallsBeforeEnd = playSpy.mock.calls.length;
+    fireEvent.ended(audio);
+
+    await waitFor(() => expect(beepOscillator.start).toHaveBeenCalledOnce());
+    expect(beepOscillator.stop).toHaveBeenCalledOnce();
+    expect(closeAudioContext).toHaveBeenCalledOnce();
+    expect(await screen.findByText("录音间隔")).toBeInTheDocument();
+    expect(playSpy).toHaveBeenCalledTimes(playCallsBeforeEnd);
+    expect(screen.getByText("00:30")).toBeInTheDocument();
+    expect(screen.getByText("接下来：Hören · Teil 3")).toBeInTheDocument();
+  });
+
   it("labels the single Teil 3 audio-file playback as einmal", async () => {
     sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
       exam: {

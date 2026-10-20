@@ -24,6 +24,7 @@ export function layoutClozeAnnotations({
       anchorBottom: Number.isFinite(annotation.anchorBottom)
         ? Math.max(annotation.anchorBottom, annotation.top)
         : (Number.isFinite(annotation.top) ? annotation.top : 0),
+      annotationTop: Number.isFinite(annotation.annotationTop) ? annotation.annotationTop : null,
       width: clamp(
         Number.isFinite(annotation.preferredWidth) ? Math.max(annotation.preferredWidth, 0) : 0,
         0,
@@ -35,11 +36,29 @@ export function layoutClozeAnnotations({
 
   sortedAnnotations.forEach((annotation) => {
     let row = rows[rows.length - 1];
-    if (!row || annotation.top > row.bottom + rowTolerance) {
-      row = { top: annotation.top, bottom: annotation.anchorBottom, entries: [], lanes: [] };
+    const overlapsRenderedAnnotations = Boolean(row)
+      && annotation.annotationTop !== null
+      && row.annotationBottom !== null
+      && annotation.annotationTop <= row.annotationBottom + rowTolerance;
+    if (!row || (annotation.top > row.bottom + rowTolerance && !overlapsRenderedAnnotations)) {
+      row = {
+        top: annotation.top,
+        bottom: annotation.anchorBottom,
+        annotationBottom: annotation.annotationTop === null
+          ? null
+          : annotation.annotationTop + annotation.height,
+        entries: [],
+        lanes: [],
+      };
       rows.push(row);
     }
     row.bottom = Math.max(row.bottom, annotation.anchorBottom);
+    if (annotation.annotationTop !== null) {
+      row.annotationBottom = Math.max(
+        row.annotationBottom ?? annotation.annotationTop,
+        annotation.annotationTop + annotation.height,
+      );
+    }
 
     const x = clamp(annotation.anchor, left, Math.max(left, right - annotation.width));
     let lane = 0;
@@ -134,6 +153,7 @@ export function useClozeAnnotationLayout({ blanks, isChecked, paragraphs }) {
           preferredWidth: Math.max(detailsElement.scrollWidth || 0, detailsRect.width),
           height: Math.max(detailsRect.height, detailsElement.scrollHeight || 0),
           annotationLeft: annotationRect.left,
+          annotationTop: annotationRect.top,
         };
       }).filter(Boolean);
 

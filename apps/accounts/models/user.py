@@ -81,6 +81,10 @@ class User(AbstractUser):
         default=False,
         verbose_name="has seen Schreiben guide",
     )
+    has_seen_b2_schreiben_guide = models.BooleanField(
+        default=False,
+        verbose_name="has seen B2 Schreiben guide",
+    )
 
     objects = CustomUserManager()
 

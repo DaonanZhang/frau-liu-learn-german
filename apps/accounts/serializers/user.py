@@ -36,6 +36,7 @@ class UserMeReadSerializer(serializers.ModelSerializer):
             "is_staff",
             "is_superuser",
             "has_seen_schreiben_guide",
+            "has_seen_b2_schreiben_guide",
             "has_platform_wide_access",
             "release_access",
             "user_data",
@@ -70,6 +71,7 @@ class UserMeWriteSerializer(serializers.ModelSerializer):
         },
     )
     has_seen_schreiben_guide = serializers.BooleanField(required=False)
+    has_seen_b2_schreiben_guide = serializers.BooleanField(required=False)
 
     def validate_username(self, value: str | None) -> str | None:
         if value is None:
@@ -97,6 +99,7 @@ class UserMeWriteSerializer(serializers.ModelSerializer):
             "username",
             "email",
             "has_seen_schreiben_guide",
+            "has_seen_b2_schreiben_guide",
         )
 
 

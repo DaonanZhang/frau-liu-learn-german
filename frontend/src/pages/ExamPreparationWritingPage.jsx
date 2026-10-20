@@ -4,11 +4,8 @@ import { fetchWritingExercises } from "../api/exam_preparation/writingExercises.
 import { useAuth } from "../api/auth/useAuth.js";
 import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
+import { writingCardContent, writingWordLimitLabel } from "./writingDisplay.js";
 import "./ExamPreparationWritingPage.css";
-
-export function extractPreview(text) {
-  return String(text || "").replace(/<br\s*\/?>/gi, "\n").replace(/[^\S\n]+/g, " ").trim();
-}
 
 export default function ExamPreparationWritingPage() {
   const scope = examPreparationScope(useParams().level);
@@ -73,10 +70,9 @@ export default function ExamPreparationWritingPage() {
       {!loading && !errorText ? (
         <section className="writing-list-grid" aria-label="写作练习列表">
           {exercises.map((exercise, index) => {
-            const title = `写作练习 ${index + 1}`;
-            const preview = extractPreview(exercise?.request_text) || "进入后查看完整题目要求并开始书面作答练习。";
+            const { title, preview } = writingCardContent(exercise);
             const timeLimit = exercise?.time_limit_minutes ? `${exercise.time_limit_minutes} 分钟` : "不限时";
-            const wordsLimit = exercise?.words_limit ? `${exercise.words_limit} 词` : "字数不限";
+            const wordsLimit = writingWordLimitLabel(exercise);
             const isLocked = Boolean(exercise?.is_locked);
             const showFreeTrialBadge = Boolean(exercise?.show_free_trial_badge);
 
@@ -101,7 +97,7 @@ export default function ExamPreparationWritingPage() {
                   <span className="writing-entry-card__lock" aria-hidden="true">🔒</span>
                 ) : null}
 
-                <p className="writing-entry-card__description">{preview}</p>
+                {preview ? <p className="writing-entry-card__description">{preview}</p> : null}
 
                 <div className="writing-entry-card__facts">
                   <span className="writing-entry-card__fact">{timeLimit}</span>

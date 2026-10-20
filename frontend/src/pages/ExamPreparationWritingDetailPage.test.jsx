@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +13,7 @@ import {
   saveWritingExerciseState,
 } from "../api/exam_preparation/userExerciseStates.js";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
+import { updateMyProfile } from "../api/auth/profile.js";
 import ExamPreparationWritingDetailPage from "./ExamPreparationWritingDetailPage.jsx";
 
 vi.mock("../api/auth/index.js", () => ({
@@ -54,10 +55,17 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     sessionStorage.clear();
     window.Highlight = FakeHighlight;
     window.CSS = { highlights: new Map() };
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false });
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
     useAuth.mockReturnValue({
-      user: { id: 7, has_seen_schreiben_guide: true },
+      user: {
+        id: 7,
+        has_seen_schreiben_guide: true,
+        has_seen_b2_schreiben_guide: true,
+      },
       reloadMe: vi.fn(),
     });
+    updateMyProfile.mockResolvedValue({});
     fetchWritingExerciseDetail.mockResolvedValue({
       id: 41,
       exercise_base: {
@@ -86,6 +94,8 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     vi.useRealTimers();
     delete window.Highlight;
     delete window.CSS;
+    delete window.matchMedia;
+    delete window.HTMLElement.prototype.scrollIntoView;
   });
 
   function renderPage() {
@@ -115,6 +125,7 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
       "data-exam-annotation-region",
     );
     expect(screen.getByRole("textbox").closest("[data-exam-annotation-region]")).toBeNull();
+    expect(screen.getByRole("textbox").closest(".writing-detail-input-card--long")).toBeNull();
     expect(screen.getByRole("button", { name: /开始计时/ }).closest("[data-exam-annotation-region]")).toBeNull();
     expect(screen.getByRole("button", { name: "Prüfen" }).closest("[data-exam-annotation-region]")).toBeNull();
   });
@@ -136,6 +147,74 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(task).toHaveTextContent("ErsteZeileDritte<strong>fett</strong>");
     expect(task.querySelectorAll("br")).toHaveLength(3);
     expect(task.querySelector("strong")).toBeNull();
+  });
+
+  it("shows TELC B2 writing as a minimum of 150 words", async () => {
+    fetchWritingExerciseDetail.mockResolvedValueOnce({
+      id: 41,
+      exercise_base: { level: "B2", exam_type: "TELC", exercise_type: "WRITING" },
+      request_text: "Schreiben Sie eine Reklamation.",
+      task_text: "Begründen Sie Ihre Beschwerde.",
+      time_limit_minutes: 30,
+      words_limit: 150,
+      example_texts: [],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("最少 150 词")).toBeInTheDocument();
+    expect(document.querySelector(".writing-detail-actions__meta")).not.toBeInTheDocument();
+    expect(screen.getAllByText("0 词")).toHaveLength(1);
+    expect(screen.getByRole("textbox").closest(".writing-detail-input-card--long")).toBeInTheDocument();
+    expect(screen.queryByText("最多 150 词")).not.toBeInTheDocument();
+  });
+
+  it("opens the B2 guide once and saves its own completion field", async () => {
+    useAuth.mockReturnValue({
+      user: {
+        id: 7,
+        has_seen_schreiben_guide: true,
+        has_seen_b2_schreiben_guide: false,
+      },
+      reloadMe: vi.fn(),
+    });
+    fetchWritingExerciseDetail.mockResolvedValueOnce({
+      id: 41,
+      exercise_base: { level: "B2", exam_type: "TELC", exercise_type: "WRITING" },
+      request_text: "Schreiben Sie eine Reklamation.",
+      task_text: "Begründen Sie Ihre Beschwerde.",
+      words_limit: 150,
+      example_texts: [],
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "跳过引导" }));
+    await waitFor(() => expect(updateMyProfile).toHaveBeenCalledWith({
+      has_seen_b2_schreiben_guide: true,
+    }));
+  });
+
+  it("lets B2 users reopen the guide from the small button before the timer", async () => {
+    fetchWritingExerciseDetail.mockResolvedValueOnce({
+      id: 41,
+      exercise_base: { level: "B2", exam_type: "TELC", exercise_type: "WRITING" },
+      request_text: "Schreiben Sie eine Reklamation.",
+      task_text: "Begründen Sie Ihre Beschwerde.",
+      words_limit: 150,
+      example_texts: [],
+    });
+
+    renderPage();
+
+    const replayButton = await screen.findByRole("button", { name: "查看引导" });
+    const timerButton = screen.getByRole("button", { name: /开始计时/ });
+    expect(replayButton.nextElementSibling).toBe(timerButton);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(replayButton);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
   it("accepts draft input, preserves marks after Prüfen, and clears only this scope on Wiederholen", async () => {

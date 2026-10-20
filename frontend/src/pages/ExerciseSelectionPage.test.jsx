@@ -33,4 +33,32 @@ describe("ExerciseSelectionPage", () => {
 
     expect(screen.getByText("Präsentation B2")).toBeInTheDocument();
   });
+
+  it("resolves card copy from the active exam level", async () => {
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/b2/hoeren/short-text-once"]}>
+        <Routes>
+          <Route
+            path="/modules/exam-preparation/:level/hoeren/short-text-once"
+            element={(
+              <ExerciseSelectionPage
+                backTo="/modules/exam-preparation/b2/hoeren"
+                backLabel="Zurück"
+                eyebrow="Hören"
+                title="Teil 2"
+                description="Beschreibung"
+                fetchExercises={vi.fn().mockResolvedValue({
+                  results: [{ id: 1, exercise_base: { title: "Interview" } }],
+                })}
+                buildExerciseHref={() => "/exercise/1"}
+                cardDescription={(scope) => `${scope.level}: nur einmal hören`}
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("B2: nur einmal hören")).toBeInTheDocument();
+  });
 });

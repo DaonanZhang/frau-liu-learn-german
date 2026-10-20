@@ -226,6 +226,18 @@ describe("listening exercise playback count", () => {
     expect(playSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("does not automatically replay TELC B2 Teil 2", async () => {
+    const { container } = renderExercise("short_text_true_false_once", "b2");
+    const audio = await waitFor(() => {
+      const element = container.querySelector("audio");
+      expect(element).toHaveAttribute("src", "/teil2.m4a");
+      return element;
+    });
+
+    fireEvent.ended(audio);
+    expect(playSpy).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["Teil 1", "short_text_true_false_with_prep"],
     ["Teil 3", "dialog_true_false_twice"],
@@ -252,6 +264,14 @@ describe("listening exercise playback count", () => {
 
     expect(await screen.findByText(
       "Sie hören nun eine Nachrichtensendung. Dazu sollen Sie fünf Aufgaben lösen. Sie hören die Nachrichtensendung nur einmal. Entscheiden Sie beim Hören, ob die Aussagen 1–5 richtig oder falsch sind. Markieren Sie Ihre Lösungen auf dem Antwortbogen bei den Aufgaben 1–5. Markieren Sie PLUS (+) gleich richtig und MINUS (–) gleich falsch auf dem Antwortbogen. Lesen Sie jetzt die Aufgaben 1–5. Sie haben dazu 30 Sekunden Zeit.",
+    )).toBeInTheDocument();
+  });
+
+  it("shows the TELC B2 Teil 2 Anleitung for a single playback", async () => {
+    renderExercise("short_text_true_false_once", "b2");
+
+    expect(await screen.findByText(
+      "Sie hören nun ein Interview. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch nur einmal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.",
     )).toBeInTheDocument();
   });
 });

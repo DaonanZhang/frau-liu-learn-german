@@ -225,6 +225,28 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     expect(screen.queryByText("Sprechen Sie über das Thema Urlaub.")).not.toBeInTheDocument();
   });
 
+  it("shows TELC B2 Teil 2 examiner turns above and excludes them from sorting", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      ...teil2Exercise,
+      exercise_base: { ...teil2Exercise.exercise_base, level: "B2", exam_type: "TELC" },
+      content: {
+        ...teil2Exercise.content,
+        dialogue: [
+          { id: "examiner", sequence: 1, role: "Prüfer/in", text: "Sprechen Sie über das Thema." },
+          { id: "first", sequence: 2, role: "TN1", text: "Was möchtest du im Urlaub machen?" },
+          { id: "second", sequence: 3, role: "TN2", text: "Ich möchte wandern." },
+        ],
+      },
+    });
+    const { container } = renderPage(2, 45);
+
+    expect(await screen.findByText("Sprechen Sie über das Thema.")).toBeInTheDocument();
+    expect(container.querySelector(".speaking-detail-examiner-turns")).toHaveTextContent("Prüfer/in");
+    expect(screen.getByText("0 / 2")).toBeInTheDocument();
+    expect(screen.getAllByText("Prüfer/in")).toHaveLength(1);
+    expect(container.querySelector(".speaking-dialogue-pools")).not.toHaveTextContent("Prüfer/in");
+  });
+
   it("hides the task text for TELC B2 Sprechen Teil 3", async () => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue(b2Teil3DirectExercise);
     renderPage(3, 48);

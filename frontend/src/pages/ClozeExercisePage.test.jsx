@@ -126,6 +126,37 @@ describe("Cloze exercise layout", () => {
     expect(getAnnotation("next")).toMatchObject({ lane: 0, lineHeight: 25, reserveHeight: 25 });
   });
 
+  it("moves a later annotation down when rendered details overlap despite separated slot bounds", () => {
+    const layout = layoutClozeAnnotations({
+      containerLeft: 0,
+      containerRight: 500,
+      annotations: [
+        {
+          id: "first",
+          anchor: 80,
+          top: 100,
+          anchorBottom: 120,
+          annotationTop: 128,
+          preferredWidth: 180,
+          height: 36,
+        },
+        {
+          id: "later",
+          anchor: 180,
+          top: 130,
+          anchorBottom: 150,
+          annotationTop: 132,
+          preferredWidth: 180,
+          height: 28,
+        },
+      ],
+    });
+
+    const getAnnotation = (id) => layout.annotations.find((annotation) => annotation.id === id);
+    expect(getAnnotation("first")).toMatchObject({ lane: 0, laneOffset: 0, reserveHeight: 72 });
+    expect(getAnnotation("later")).toMatchObject({ lane: 1, laneOffset: 44, reserveHeight: 0 });
+  });
+
   it("clears checked annotation layout before rebuilding it for a new answer size", async () => {
     const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
     const originalScrollWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollWidth");
@@ -252,16 +283,20 @@ describe("Cloze exercise layout", () => {
     expect(clozeStyles).toMatch(/\.cloze-drop-slot--selected \.cloze-drop-slot__chip\s*\{[^}]*width:\s*auto/);
   });
 
-  it("opens only the selected slot when one B2 question has two placeholder positions", async () => {
+  it("splits a B2 paired answer while rendering its explanation only once", async () => {
     fetchClozeChoiceExerciseDetail.mockResolvedValue({
       id: 17,
       exercise_base: { title: "Cloze", external_id: "17", level: "B2", exercise_type: "CLOZE_CHOICE" },
-      content_with_placeholders: "Sowohl {{blank_1}} als auch {{blank_1}}.",
+      content_with_placeholders: "Es ist {{blank_1}} kalt {{blank_1}} warm.",
       blanks: [{
         id: 101,
         blank_key: "blank_1",
         blank_number: 1,
-        options: [{ option_key: "A", option_text: "sowohl … als auch", is_correct: true }],
+        explanation: "Diese beiden Teile gehören zu derselben Antwort.",
+        options: [
+          { option_key: "A", option_text: "weder … noch", is_correct: true },
+          { option_key: "B", option_text: "entweder … oder", is_correct: false },
+        ],
       }],
     });
     fetchClozeChoiceBlankStates.mockResolvedValue({ results: [] });
@@ -278,11 +313,21 @@ describe("Cloze exercise layout", () => {
     expect(slots).toHaveLength(2);
     fireEvent.click(slots[0]);
     expect(screen.getAllByRole("dialog", { name: "1" })).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "sowohl … als auch" }));
-    expect(slots[0]).toHaveTextContent("sowohl");
-    expect(slots[0]).not.toHaveTextContent("als auch");
-    expect(slots[1]).toHaveTextContent("als auch");
-    expect(slots[1]).not.toHaveTextContent("sowohl");
+    fireEvent.click(screen.getByRole("button", { name: "entweder … oder" }));
+    expect(slots[0]).toHaveTextContent("entweder");
+    expect(slots[0]).not.toHaveTextContent("oder");
+    expect(slots[1]).toHaveTextContent("oder");
+    expect(slots[1]).not.toHaveTextContent("entweder");
+
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    await waitFor(() => {
+      expect(screen.getByText("Richtig: weder")).toBeInTheDocument();
+      expect(screen.getByText("Richtig: noch")).toBeInTheDocument();
+    });
+    expect(document.querySelectorAll(".cloze-choice-inline-details")).toHaveLength(2);
+    expect(document.querySelectorAll(".cloze-choice-inline-explanation")).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "收藏题目" })).toHaveLength(1);
+    expect(document.querySelector(".cloze-blank-inline__annotation--compact")).toBeInTheDocument();
   });
 
   it("keeps Teil 2 unanswered slots compact and selected slots fitted to their text", async () => {

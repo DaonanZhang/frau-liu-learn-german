@@ -1,8 +1,13 @@
+export const TELC_B2_LISTENING_TEIL2_INSTRUCTION = "Sie hören nun ein Interview. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch nur einmal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.";
+
 export const LISTENING_TYPES = [
   {
     key: "short-text-prep",
     title: "Teil 1",
     description: "听 5 段日常生活中的短对话或独白，录音只播放一次，判断给出的陈述是正确（+）还是错误（-）。共 5 道正误判断题。",
+    descriptionByLevel: {
+      B2: "听一段新闻，录音播放一次，判断 5 个陈述句的正误。共 5 道正误判断题。",
+    },
     to: "/modules/exam-preparation/hoeren/short-text-prep",
     cta: "进入这一题型",
   },
@@ -10,6 +15,9 @@ export const LISTENING_TYPES = [
     key: "short-text-once",
     title: "Teil 2",
     description: "听一段较长的访谈或对话，录音播放两次，判断 10 个陈述句的正误。共 10 道正误判断题。",
+    descriptionByLevel: {
+      B2: "听一段较长的访谈，录音播放一次，判断 10 个陈述句的正误。共 10 道正误判断题。",
+    },
     to: "/modules/exam-preparation/hoeren/short-text-once",
     cta: "进入这一题型",
   },
@@ -41,6 +49,9 @@ export const READING_TYPES = [
     key: "ad-matching",
     title: "Teil 3",
     description: "阅读 12 个简短的分类广告，为 10 种具体生活情境匹配对应的广告。共 10 道配对题。",
+    descriptionByLevel: {
+      B2: "阅读 12 个简短的宣传文字，为 10 种具体生活情境匹配对应的文章。共 10 道配对题。",
+    },
     to: "/modules/exam-preparation/lesen/ad-matching",
     cta: "进入这一题型",
   },

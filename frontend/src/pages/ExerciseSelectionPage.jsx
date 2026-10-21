@@ -36,7 +36,10 @@ export default function ExerciseSelectionPage({
         if (!scope) return;
         const data = await fetchExercises(scope);
         if (!aborted) {
-          setExercises(Array.isArray(data?.results) ? data.results : []);
+          const results = Array.isArray(data?.results) ? data.results : [];
+          setExercises([...results].sort(
+            (left, right) => Number(Boolean(left?.is_locked)) - Number(Boolean(right?.is_locked)),
+          ));
         }
       } catch (error) {
         if (!aborted) {

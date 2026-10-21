@@ -272,6 +272,27 @@ describe("exam preparation mock exam entry", () => {
 });
 
 describe("exam preparation level entry", () => {
+  beforeEach(() => {
+    authMocks.useAuth.mockReturnValue({ user: entitledUser(true, "13800138000") });
+    Swal.fire.mockReset();
+  });
+
+  it("lets a regular user enter the TELC B2 module", () => {
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
+        <Routes>
+          <Route path="/modules/exam-preparation" element={<ExamPreparationModulePage />} />
+          <Route path="/modules/exam-preparation/b2" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: /TELC B2/ }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/b2");
+    expect(Swal.fire).not.toHaveBeenCalled();
+  });
+
   it("offers TELC B1 and TELC B2 as links to their level homes", () => {
     fetchSavedMockExams.mockClear();
     render(

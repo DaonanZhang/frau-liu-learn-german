@@ -181,6 +181,12 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
               key={level}
               className={`exam-level-selection__card exam-level-selection__card--${level.toLowerCase()}`}
               to={`/modules/exam-preparation/${level.toLowerCase()}`}
+              onClick={(event) => {
+                if (level === "B2" && String(user?.telephone || "").trim() !== "110") {
+                  event.preventDefault();
+                  Swal.fire({ icon: "info", title: "Coming soon" });
+                }
+              }}
             >
               <span className="exam-level-selection__title">TELC {level}</span>
               <span className="exam-level-selection__action">

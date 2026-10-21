@@ -277,20 +277,19 @@ describe("exam preparation level entry", () => {
     Swal.fire.mockReset();
   });
 
-  it("lets a regular user enter the TELC B2 module", () => {
+  it("keeps TELC B2 limited to telephone 110", () => {
     render(
       <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
         <Routes>
-          <Route path="/modules/exam-preparation" element={<ExamPreparationModulePage />} />
-          <Route path="/modules/exam-preparation/b2" element={<LocationProbe />} />
+          <Route path="*" element={<><ExamPreparationModulePage /><LocationProbe /></>} />
         </Routes>
       </MemoryRouter>,
     );
 
     fireEvent.click(screen.getByRole("link", { name: /TELC B2/ }));
 
-    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/b2");
-    expect(Swal.fire).not.toHaveBeenCalled();
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/modules\/exam-preparation$/);
+    expect(Swal.fire).toHaveBeenCalledWith({ icon: "info", title: "Coming soon" });
   });
 
   it("offers TELC B1 and TELC B2 as links to their level homes", () => {

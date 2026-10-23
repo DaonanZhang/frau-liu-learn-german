@@ -71,6 +71,7 @@ def grant_or_extend_entitlement(
     now = timezone.now()
     lifetime = Entitlement.objects.filter(
         user=locked_user,
+        plan=Entitlement.Plan.LIFETIME,
         status=Entitlement.Status.ACTIVE,
         starts_at__lte=now,
         expires_at__isnull=True,

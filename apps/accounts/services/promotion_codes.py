@@ -16,6 +16,7 @@ from apps.accounts.models import (
     UserCoupon,
 )
 from apps.accounts.services.activation_codes import activation_code_exists
+from apps.accounts.services.referral_campaign import is_reserved_referral_code
 
 
 def promotion_code_exists(code: str) -> bool:
@@ -40,6 +41,8 @@ def store_promotion_code(*, code: str, **values) -> PromotionCodeRecord:
     normalized = str(code or "").strip().upper()
     if not normalized:
         raise ValueError("Promotion code cannot be empty")
+    if is_reserved_referral_code(normalized):
+        raise ValueError("Code prefix is reserved for referral campaigns")
     if activation_code_exists(normalized):
         raise ValueError("Code already exists as an activation code")
     try:
@@ -122,6 +125,8 @@ def redeem_promotion_code(*, user, code: str) -> UserCoupon:
         )
     except PromotionCodeRecord.DoesNotExist as exc:
         raise ValueError("推广码无效") from exc
+    if record.source_kind != PromotionCodeRecord.SourceKind.OPERATIONAL:
+        raise ValueError("推广码无效")
 
     now = timezone.now()
     has_expired = record.expires_at is not None and record.expires_at <= now
@@ -277,13 +282,27 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
             PaymentDiscountApplication.Status.APPLIED,
         }:
             application.status = PaymentDiscountApplication.Status.REFUNDED
-            application.refunded_at = payment.refunded_at or now
-            application.save(update_fields=["status", "refunded_at", "updated_at"])
+            application.applied_at = application.applied_at or payment.paid_at or now
+            application.refunded_at = application.refunded_at or payment.refunded_at or now
+            application.save(
+                update_fields=["status", "applied_at", "refunded_at", "updated_at"]
+            )
         if coupon.status == UserCoupon.Status.RESERVED and coupon.reserved_payment_id == payment.id:
             coupon.status = UserCoupon.Status.USED
+            coupon.reserved_payment = None
+            coupon.reserved_at = None
             coupon.used_payment = payment
-            coupon.used_at = payment.paid_at or now
-            coupon.save(update_fields=["status", "used_payment", "used_at", "updated_at"])
+            coupon.used_at = coupon.used_at or payment.paid_at or now
+            coupon.save(
+                update_fields=[
+                    "status",
+                    "reserved_payment",
+                    "reserved_at",
+                    "used_payment",
+                    "used_at",
+                    "updated_at",
+                ]
+            )
         return
 
     if payment.status in {
@@ -303,6 +322,14 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
             coupon.reserved_payment = None
             coupon.reserved_at = None
             coupon.save(update_fields=["status", "reserved_payment", "reserved_at", "updated_at"])
+        from apps.accounts.services.referral_qualification import (
+            release_referral_participation_for_payment,
+        )
+
+        transaction.on_commit(
+            lambda: release_referral_participation_for_payment(payment_id=payment.pk),
+            robust=True,
+        )
 
 
 __all__ = [

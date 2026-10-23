@@ -140,7 +140,7 @@ export default function CheckoutCouponSelector({
                 <p>
                   {offerTitle || "当前商品"} · {hasOldUserDiscount
                     ? hasExclusiveChoice
-                      ? "昆仑字幕组优惠券不能与品牌挚友专享优惠叠加"
+                      ? "部分优惠券不能与品牌挚友专享优惠叠加"
                       : "品牌挚友专享优惠已自动使用，可再选择其他优惠券"
                     : "可选择使用或不使用优惠券"}
                 </p>

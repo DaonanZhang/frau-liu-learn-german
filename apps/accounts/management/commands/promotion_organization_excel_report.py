@@ -9,7 +9,12 @@ from pathlib import Path
 import pandas as pd
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.accounts.models import AlipayWebsitePayment, Entitlement, PaymentDiscountApplication
+from apps.accounts.models import (
+    AlipayWebsitePayment,
+    Entitlement,
+    PaymentDiscountApplication,
+    PromotionCodeRecord,
+)
 
 
 COLUMNS = ["Promotion Code", "购买商品", "购买时长", "订单金额"]
@@ -98,6 +103,7 @@ class Command(BaseCommand):
         applications = (
             PaymentDiscountApplication.objects.filter(
                 status=PaymentDiscountApplication.Status.APPLIED,
+                promotion_code__source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
                 payment__status__in=SUCCESSFUL_PAYMENT_STATUSES,
                 applied_at__gte=start_at,
                 applied_at__lt=end_at,

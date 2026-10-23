@@ -134,6 +134,49 @@ explicit confirmation before replacing the old-user discount. The coupon is
 not selected automatically. Other promotion coupons continue to stack with the
 ¥8 old-user discount.
 
+### FRAULIU8 Public Code
+
+Create the reusable public code once on the server:
+
+```bash
+.venv/bin/python manage.py shell <<'PY'
+from apps.accounts.models import PromotionCodeRecord
+from apps.accounts.services.promotion_codes import store_promotion_code
+
+code = "FRAULIU8"
+existing = PromotionCodeRecord.objects.filter(code=code).first()
+if existing:
+    print(f"already exists: {existing.code}; not overwritten")
+    print("If its configuration differs, inspect it and correct it manually.")
+else:
+    record = store_promotion_code(
+        code=code,
+        campaign_name="FRAULIU8",
+        organization_name="",
+        discount_amount=8,
+        minimum_order_amount=0,
+        applicable_module=None,
+        applicable_season=None,
+        applicable_offer=None,
+        coupon_valid_days=None,
+        expires_at=None,
+        redemption_mode=PromotionCodeRecord.RedemptionMode.REUSABLE,
+        stacking_policy=PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND,
+    )
+    print(f"created: code={record.code}, discount_amount={record.discount_amount}")
+PY
+```
+
+This code gives a reusable ¥8 coupon with no minimum order and no module
+restriction. Both the code and issued coupons are permanently valid because
+`expires_at` and `coupon_valid_days` are `None`. Repeating the command leaves
+an existing record unchanged and prints that it already exists; if the
+existing record has different settings, inspect and correct it manually. FRAULIU8 is
+automatically selected when it gives the best price and wins an equal-price
+tie against the automatic brand-friend discount or another coupon. It still
+replaces, rather than stacks with, that discount. The existing KLDYZMZ code
+keeps its manual confirmation flow.
+
 ## User Coupon Wallet and Checkout
 
 - The signed-in redemption page is `/redeem-code` and is rendered inside the

@@ -12,6 +12,8 @@ from django.core.cache import cache
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from apps.accounts.services.referral_campaign import is_reserved_referral_code
+
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +205,41 @@ def activation_code_exists(code: str) -> bool:
     return _read_redis_payload(normalized_code) is not None
 
 
+def durable_activation_code_prefix_exists(prefix: str) -> bool:
+    """Return whether a durable activation code starts with the given prefix."""
+    normalized_prefix = str(prefix or "").strip().upper()
+    if not normalized_prefix:
+        raise ValueError("Activation code prefix cannot be empty")
+    ActivationCodeRecord = apps.get_model("accounts", "ActivationCodeRecord")
+    return ActivationCodeRecord.objects.filter(
+        code__startswith=normalized_prefix
+    ).exists()
+
+
+def legacy_activation_code_prefix_exists(prefix: str) -> bool:
+    """Return whether the legacy cache contains a code with this prefix."""
+    normalized_prefix = str(prefix or "").strip().upper()
+    if not normalized_prefix:
+        raise ValueError("Activation code prefix cannot be empty")
+
+    pattern = _redis_key(f"{normalized_prefix}*")
+    iter_keys = getattr(cache, "iter_keys", None)
+    if callable(iter_keys):
+        try:
+            sentinel = object()
+            return next(iter_keys(pattern), sentinel) is not sentinel
+        except Exception as exc:
+            raise RuntimeError("Could not scan legacy activation codes") from exc
+
+    keys = getattr(cache, "keys", None)
+    if not callable(keys):
+        raise RuntimeError("Legacy activation code store does not support prefix scans")
+    try:
+        return bool(keys(pattern))
+    except Exception as exc:
+        raise RuntimeError("Could not scan legacy activation codes") from exc
+
+
 def generate_activation_code(length: int = 8) -> str:
     """
     Generate an activation code like: A9F3KQ2M
@@ -233,6 +270,8 @@ def store_activation_code(
         raise ValueError("Activation code cannot be empty")
     if ttl_seconds <= 0:
         raise ValueError("Activation code TTL must be positive")
+    if is_reserved_referral_code(normalized_code):
+        raise ValueError("Code prefix is reserved for referral campaigns")
     from apps.accounts.models import ActivationCodeRecord
     PromotionCodeRecord = apps.get_model("accounts", "PromotionCodeRecord")
 

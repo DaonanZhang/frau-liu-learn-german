@@ -15,7 +15,11 @@ from apps.accounts.services.payment_grant_service import (
 from apps.accounts.services.entitlement_grant_service import (
     revoke_and_compact_payment_entitlement,
 )
-from apps.accounts.models import AlipayWebsitePayment, PaymentGrantTask
+from apps.accounts.models import (
+    AlipayWebsitePayment,
+    PaymentGrantTask,
+    ReferralParticipation,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -33,6 +37,52 @@ def process_payment_grant_task(payment_grant_task_id: int) -> None:
     process_payment_grant_task_by_id(
         payment_grant_task_id=payment_grant_task_id,
     )
+
+
+@shared_task
+def process_referral_reward_pending_task(participation_id: int) -> None:
+    from apps.accounts.services.referral_qualification import process_referral_reward_pending
+
+    process_referral_reward_pending(participation_id=participation_id)
+
+
+def reconcile_pending_referrals_now(*, limit: int = 100) -> dict[str, int]:
+    stats = {
+        "referral_processed": 0,
+        "referral_disqualified": 0,
+        "referral_deferred": 0,
+        "referral_failed": 0,
+    }
+    participation_ids = (
+        ReferralParticipation.objects.filter(
+            status=ReferralParticipation.Status.REWARD_PENDING
+        )
+        .order_by("updated_at", "id")
+        .values_list("id", flat=True)[:limit]
+    )
+    from apps.accounts.services.referral_qualification import process_referral_reward_pending
+
+    for participation_id in participation_ids:
+        try:
+            ReferralParticipation.objects.filter(
+                pk=participation_id,
+                status=ReferralParticipation.Status.REWARD_PENDING,
+            ).update(updated_at=timezone.now())
+            process_referral_reward_pending(participation_id=participation_id)
+            participation = ReferralParticipation.objects.get(pk=participation_id)
+            if participation.status == ReferralParticipation.Status.QUALIFIED:
+                stats["referral_processed"] += 1
+            elif participation.status == ReferralParticipation.Status.DISQUALIFIED:
+                stats["referral_disqualified"] += 1
+            elif participation.status == ReferralParticipation.Status.REWARD_PENDING:
+                stats["referral_deferred"] += 1
+        except Exception:
+            stats["referral_failed"] += 1
+            logger.exception(
+                "Scheduled referral reward reconciliation failed",
+                extra={"participation_id": participation_id},
+            )
+    return stats
 
 
 def reconcile_alipay_payments_now(*, limit: int = 100) -> dict[str, int]:
@@ -103,7 +153,10 @@ def reconcile_alipay_payments_now(*, limit: int = 100) -> dict[str, int]:
             )
 
     failed_or_pending = PaymentGrantTask.objects.filter(
-        payment__status=AlipayWebsitePayment.Status.PAID,
+        payment__status__in=[
+            AlipayWebsitePayment.Status.PAID,
+            AlipayWebsitePayment.Status.PARTIALLY_REFUNDED,
+        ],
         status__in=[PaymentGrantTask.Status.PENDING, PaymentGrantTask.Status.FAILED],
     ).order_by("updated_at")[:limit]
     for grant_task in failed_or_pending:
@@ -151,6 +204,7 @@ def reconcile_alipay_payments_now(*, limit: int = 100) -> dict[str, int]:
             AlipayWebsitePayment.Status.REFUNDED,
         ],
     ).update(raw_notify_payload=None)
+    stats.update(reconcile_pending_referrals_now(limit=limit))
     return stats
 
 

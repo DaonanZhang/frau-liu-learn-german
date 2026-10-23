@@ -45,6 +45,7 @@ from apps.accounts.services import (
     get_purchase_pricing,
 )
 from apps.accounts.services.promotion_codes import get_coupon_for_offer, sync_payment_discount_status
+from apps.accounts.services.referral_qualification import reserve_referral_participation_for_payment
 
 REMOTE_PAYMENT_QUERY_COOLDOWN_SECONDS = 5
 logger = logging.getLogger(__name__)
@@ -890,6 +891,22 @@ class CreateAlipayPurchaseAPIView(APIView):
                         "updated_at",
                     ]
                 )
+                try:
+                    reserve_referral_participation_for_payment(
+                        user=request.user,
+                        offer=validated_data["offer"],
+                        coupon=pricing.coupon,
+                        payment=payment,
+                    )
+                except ValueError:
+                    transaction.set_rollback(True)
+                    return Response(
+                        {
+                            "detail": "推荐优惠券状态已变化，请刷新优惠券后重试。",
+                            "code": "referral_coupon_invalid",
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
         if getattr(settings, "ALIPAY_LOCAL_SIMULATE_SUCCESS", False):
             try:
                 pay_url = _simulate_local_paid_purchase(

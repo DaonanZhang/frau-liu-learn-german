@@ -35,17 +35,20 @@ class Command(BaseCommand):
         next_month = timezone.make_aware(datetime.combine(next_month_date, datetime.min.time()), current_tz)
 
         redeemed = PromotionCodeRecord.objects.filter(
+            source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
             campaign_name=options["campaign_name"],
             status=PromotionCodeRecord.Status.CONSUMED,
             consumed_at__gte=month_start,
             consumed_at__lt=next_month,
         ).select_related("consumed_by_user")
         redemptions = UserCoupon.objects.filter(
+            promotion_code__source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
             promotion_code__campaign_name=options["campaign_name"],
             issued_at__gte=month_start,
             issued_at__lt=next_month,
         ).select_related("user", "promotion_code")
         paid = PaymentDiscountApplication.objects.filter(
+            promotion_code__source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
             campaign_name_snapshot=options["campaign_name"],
             status=PaymentDiscountApplication.Status.APPLIED,
             applied_at__gte=month_start,

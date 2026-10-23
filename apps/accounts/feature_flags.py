@@ -7,6 +7,10 @@ def coming_soon_enabled() -> bool:
     return bool(getattr(settings, "COMING_SOON", False))
 
 
+def exam_preparation_referral_enabled() -> bool:
+    return bool(getattr(settings, "EXAM_PREPARATION_REFERRAL_ENABLED", False))
+
+
 def user_has_release_access(user) -> bool:
     if not coming_soon_enabled():
         return True

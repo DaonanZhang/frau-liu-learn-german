@@ -68,6 +68,36 @@ class PromotionCodeTests(APITestCase):
             format="json",
         )
 
+    def test_promotion_source_kind_defaults_to_operational_and_keeps_supported_values(self) -> None:
+        self.assertEqual(self.record.source_kind, "operational")
+        self.assertEqual(
+            PromotionCodeRecord.SourceKind.choices,
+            [
+                ("operational", "Operational"),
+                ("referral", "Referral"),
+                ("internal_reward", "Internal reward"),
+            ],
+        )
+
+    def test_coupon_revocation_audit_is_empty_by_default_and_persists(self) -> None:
+        coupon = UserCoupon.objects.create(
+            user=self.user,
+            promotion_code=self.record,
+            discount_amount=self.record.discount_amount,
+        )
+
+        self.assertIsNone(coupon.revoked_at)
+        self.assertEqual(coupon.revocation_reason, "")
+
+        revoked_at = timezone.now()
+        coupon.revoked_at = revoked_at
+        coupon.revocation_reason = "Issued in error"
+        coupon.save(update_fields=["revoked_at", "revocation_reason"])
+        coupon.refresh_from_db()
+
+        self.assertEqual(coupon.revoked_at, revoked_at)
+        self.assertEqual(coupon.revocation_reason, "Issued in error")
+
     def test_redeem_requires_authentication_without_consuming_code(self) -> None:
         self.client.force_authenticate(user=None)
 

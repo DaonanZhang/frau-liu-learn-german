@@ -9,6 +9,11 @@ from django.db.models import F, Q
 
 
 class PromotionCodeRecord(models.Model):
+    class SourceKind(models.TextChoices):
+        OPERATIONAL = "operational", "Operational"
+        REFERRAL = "referral", "Referral"
+        INTERNAL_REWARD = "internal_reward", "Internal reward"
+
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
         CONSUMED = "consumed", "Consumed"
@@ -27,6 +32,12 @@ class PromotionCodeRecord(models.Model):
         )
 
     code = models.CharField(max_length=32, unique=True)
+    source_kind = models.CharField(
+        max_length=32,
+        choices=SourceKind.choices,
+        default=SourceKind.OPERATIONAL,
+        db_index=True,
+    )
     generation_batch_id = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
     operator_name = models.CharField(max_length=128, default="daonan")
     campaign_name = models.CharField(max_length=128)
@@ -149,6 +160,8 @@ class UserCoupon(models.Model):
         db_index=True,
     )
     expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revocation_reason = models.CharField(max_length=255, blank=True, default="")
     reserved_payment = models.OneToOneField(
         "accounts.AlipayWebsitePayment",
         null=True,
@@ -186,6 +199,8 @@ class UserCoupon(models.Model):
             self.promotion_code.stacking_policy
             == PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND
         ):
+            if self.promotion_code.code == "FRAULIU8":
+                return "FRAULIU8无门槛优惠券"
             return "昆仑字幕组专属优惠券"
         if self.minimum_order_amount > 0:
             return "满减优惠券"

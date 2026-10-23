@@ -75,6 +75,10 @@ COMING_SOON = env.bool(
     default=False,
 )
 RELEASE_ACCESS_TELEPHONES = ("110",)
+EXAM_PREPARATION_REFERRAL_ENABLED = env.bool(
+    "EXAM_PREPARATION_REFERRAL_ENABLED",
+    default=False,
+)
 
 CACHES = {
     "default": {

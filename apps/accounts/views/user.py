@@ -96,7 +96,10 @@ class UserViewSet(viewsets.GenericViewSet):
                 batch_id = query_serializer.validated_data["generation_batch_id"]
                 batch = (
                     PromotionCodeRecord.objects
-                    .filter(generation_batch_id=batch_id)
+                    .filter(
+                        generation_batch_id=batch_id,
+                        source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
+                    )
                     .values("generation_batch_id", "operator_name", "campaign_name")
                     .annotate(
                         count=Count("id"),
@@ -110,7 +113,10 @@ class UserViewSet(viewsets.GenericViewSet):
                     return Response(status=status.HTTP_404_NOT_FOUND)
                 codes = list(
                     PromotionCodeRecord.objects
-                    .filter(generation_batch_id=batch_id)
+                    .filter(
+                        generation_batch_id=batch_id,
+                        source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
+                    )
                     .order_by("id")
                     .values_list("code", flat=True)
                 )
@@ -125,7 +131,9 @@ class UserViewSet(viewsets.GenericViewSet):
                 })
             search = query_serializer.validated_data["search"]
             page = query_serializer.validated_data["page"]
-            records = PromotionCodeRecord.objects.all()
+            records = PromotionCodeRecord.objects.filter(
+                source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL
+            )
             if search:
                 records = records.filter(
                     Q(campaign_name__icontains=search)

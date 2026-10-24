@@ -11,6 +11,7 @@ const profileStyles = readFileSync(resolve("src/pages/ProfilePage.css"), "utf8")
 
 const mocks = vi.hoisted(() => ({
   fetchMyCoupons: vi.fn(),
+  fetchReferralCampaign: vi.fn(),
   fetchMyProfile: vi.fn(),
   fetchPromotionCodeDetails: vi.fn(),
   fetchPromotionCodeHistory: vi.fn(),
@@ -29,9 +30,11 @@ vi.mock("../api/auth/profile.js", () => ({
   createPromotionCodes: mocks.createPromotionCodes,
 }));
 vi.mock("../api/coupons.js", () => ({ fetchMyCoupons: mocks.fetchMyCoupons }));
+vi.mock("../api/referrals.js", () => ({ fetchReferralCampaign: mocks.fetchReferralCampaign }));
 
 describe("ProfilePage coupon module picker", () => {
   beforeEach(() => {
+    mocks.fetchReferralCampaign.mockResolvedValue({ enabled: false });
     const user = {
       country_code: "+86",
       telephone: "13800138000",
@@ -84,11 +87,19 @@ describe("ProfilePage coupon module picker", () => {
     expect(screen.getByRole("button", { name: /科普季/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /备考季/ })).toBeInTheDocument();
   });
+
+  it("places the referral campaign panel before the coupon wallet", async () => {
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
+    const panel = await screen.findByRole("region", { name: "推广活动" });
+    const wallet = screen.getByRole("region", { name: "我的优惠券" });
+    expect(panel.compareDocumentPosition(wallet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
 describe("ProfilePage promotion code manager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.fetchReferralCampaign.mockResolvedValue({ enabled: false });
     mocks.createPromotionCodes.mockResolvedValue({
       partner_name: "于云",
       operator_name: "daonan",

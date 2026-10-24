@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import AuthLayout from "../components/AuthLayout.jsx";
@@ -8,6 +8,7 @@ import { useAuth } from "../api/auth/useAuth.js";
 export default function ActivateEntitlementPage() {
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const submitting = useRef(false);
   const navigate = useNavigate();
   const { reloadMe, logout } = useAuth();
 
@@ -18,12 +19,29 @@ export default function ActivateEntitlementPage() {
 
   const onVerify = async (e) => {
     e.preventDefault();
-    if (!canVerify) return;
+    if (!canVerify || submitting.current) return;
 
+    submitting.current = true;
     setLoading(true);
     try {
-      const result = await redeemCode(code.trim());
-      if (result?.type === "promotion") {
+      let result = await redeemCode(code.trim());
+      if (result?.type === "referral" && result.outcome === "replacement_required") {
+        const confirmation = await Swal.fire({
+          icon: "warning",
+          title: "确认替换优惠券",
+          text: "同活动旧优惠券将被替换，是否继续？",
+          showCancelButton: true,
+          confirmButtonText: "确认替换",
+          cancelButtonText: "取消",
+        });
+        if (!confirmation.isConfirmed) return;
+        result = await redeemCode(code.trim(), { confirmReplace: true });
+      }
+      if (
+        (result?.type === "promotion" || result?.type === "referral")
+        && result.coupon
+        && ["issued", "already_issued"].includes(result.outcome || "issued")
+      ) {
         await Swal.fire({
           icon: "success",
           title: "优惠领取成功",
@@ -31,15 +49,21 @@ export default function ActivateEntitlementPage() {
         });
         navigate(result?.coupon?.profile_path || "/profile#coupons", { replace: true });
         return;
-      } else {
+      } else if (result?.type === "activation") {
         await Swal.fire({
           icon: "success",
           title: "激活成功",
           text: "权限已添加到当前账户",
         });
         await reloadMe();
+        navigate("/", { replace: true });
+        return;
       }
-      navigate("/", { replace: true });
+      await Swal.fire({
+        icon: "error",
+        title: "兑换失败",
+        text: result?.message || result?.detail || "兑换码无效或已过期",
+      });
     } catch (err) {
       console.error("[verify] failed:", err);
       if (err?.status === 401) {
@@ -64,13 +88,15 @@ export default function ActivateEntitlementPage() {
         return;
       }
       const errorDetail = err?.data?.detail || "兑换码无效或已过期";
-      const isExpiredPromotionCode = errorDetail === "推广码已过期";
+      const errorMessage = err?.data?.message || errorDetail;
+      const isExpiredPromotionCode = errorMessage === "推广码已过期";
       await Swal.fire({
         icon: "error",
         title: isExpiredPromotionCode ? "推广码已过期" : "兑换码无效",
-        text: errorDetail,
+        text: errorMessage,
       });
     } finally {
+      submitting.current = false;
       setLoading(false);
     }
   };
@@ -84,7 +110,7 @@ export default function ActivateEntitlementPage() {
       </div>
 
       <h1 className="auth-title">兑换码</h1>
-      <p className="auth-subtitle">输入激活码或推广码，兑换权限或优惠</p>
+      <p className="auth-subtitle">输入激活码、优惠码或推广码，兑换权限或优惠</p>
 
       <form className="auth-form" onSubmit={onVerify}>
         <input

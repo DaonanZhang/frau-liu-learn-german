@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Swal from "sweetalert2";
 
@@ -13,6 +13,7 @@ import {
 } from "../utils/moduleAccess.js";
 import PurchaseFeatureList from "../components/PurchaseFeatureList.jsx";
 import CheckoutCouponSelector from "../components/CheckoutCouponSelector.jsx";
+import CheckoutCodeRedemption from "../components/CheckoutCodeRedemption.jsx";
 import { examPreparationReturnPath } from "../utils/examPreparationScope.js";
 
 import "./ModuleCheckoutPage.css";
@@ -121,6 +122,8 @@ export default function ModuleCheckoutPage() {
   const { moduleId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const checkoutPageRef = useRef(null);
+  const redemptionFocusedRef = useRef(false);
   const { user, loading, isAuthenticated, reloadMe } = useAuth();
   const module = MODULES_BY_ID[moduleId];
   const alreadyHasAccess = useMemo(() => hasModuleAccess(user, module), [user, module]);
@@ -149,6 +152,27 @@ export default function ModuleCheckoutPage() {
   const [selectedCouponByOffer, setSelectedCouponByOffer] = useState({});
   const [couponSelectionModeByOffer, setCouponSelectionModeByOffer] = useState({});
   const [couponSheetOfferCode, setCouponSheetOfferCode] = useState("");
+
+  useEffect(() => {
+    if (
+      searchParams.get("redeem") !== "1"
+      || !isAuthenticated
+      || loadingOffers
+      || !offers.length
+      || redemptionFocusedRef.current
+    ) {
+      return;
+    }
+
+    const input = checkoutPageRef.current?.querySelector(".checkout-code-redemption__input");
+    if (!input) {
+      return;
+    }
+
+    redemptionFocusedRef.current = true;
+    input.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    input.focus();
+  }, [isAuthenticated, loadingOffers, offers.length, searchParams]);
 
   const targetSeasonNumber = useMemo(() => {
     if (Number.isFinite(Number(module?.purchaseSeasonNumber))) {
@@ -330,6 +354,38 @@ export default function ModuleCheckoutPage() {
     }
   }
 
+  async function handleCouponIssued(offer, coupon) {
+    const offerCode = String(offer?.code || "").trim();
+    const refreshedBundle = await fetchCouponChoices(offerCode);
+    setCouponChoicesByOffer((current) => ({ ...current, [offerCode]: refreshedBundle }));
+    const issuedChoice = refreshedBundle?.choices?.find(
+      (choice) => choice?.coupon?.id === coupon?.id
+    );
+    if (issuedChoice?.is_applicable === true) {
+      setSelectedCouponByOffer((current) => ({ ...current, [offerCode]: coupon.id }));
+      setCouponSelectionModeByOffer((current) => ({ ...current, [offerCode]: "manual" }));
+      return;
+    }
+    await Swal.fire({
+      icon: "info",
+      title: "优惠券已领取",
+      text: "已领取，但不适用于当前方案，可在其他适用购买页使用",
+    });
+  }
+
+  async function handleActivationApplied() {
+    const latestUser = await reloadMe();
+    if (!latestUser) {
+      throw new Error("Unable to refresh user after activation");
+    }
+    if (hasModuleAccess(latestUser, module)) {
+      await Swal.fire({ icon: "success", title: "激活成功", text: "当前内容已解锁。" });
+      navigate(module.route, { replace: true });
+      return;
+    }
+    await Swal.fire({ icon: "success", title: "激活成功", text: "已激活其他内容。" });
+  }
+
   if (!module) {
     return <Navigate to="/" replace />;
   }
@@ -339,7 +395,7 @@ export default function ModuleCheckoutPage() {
   }
 
   return (
-    <div className="module-checkout-page">
+    <div className="module-checkout-page" ref={checkoutPageRef}>
       <button
         className="module-checkout-page__back"
         type="button"
@@ -549,6 +605,15 @@ export default function ModuleCheckoutPage() {
                                 }));
                                 setCouponSheetOfferCode("");
                               }}
+                            />
+                          ) : null}
+
+                          {isAuthenticated ? (
+                            <CheckoutCodeRedemption
+                              offer={offer}
+                              module={module.moduleKey}
+                              onCouponIssued={(coupon) => handleCouponIssued(offer, coupon)}
+                              onActivationApplied={handleActivationApplied}
                             />
                           ) : null}
 

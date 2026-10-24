@@ -1,0 +1,112 @@
+.checkout-code-redemption {
+  width: 100%;
+  min-width: 0;
+}
+
+.checkout-code-redemption__form {
+  display: grid;
+  gap: 8px;
+}
+
+.checkout-code-redemption__label {
+  font-weight: 600;
+}
+
+.checkout-code-redemption__controls {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.checkout-code-redemption__input,
+.checkout-code-redemption__submit,
+.checkout-code-redemption__actions button {
+  min-height: 44px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.checkout-code-redemption__input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 12px;
+}
+
+.checkout-code-redemption__submit,
+.checkout-code-redemption__actions button {
+  padding: 8px 14px;
+  cursor: pointer;
+  background: #fff;
+}
+
+.checkout-code-redemption button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.checkout-code-redemption__message {
+  min-height: 1.5em;
+  margin-top: 4px;
+}
+
+.checkout-code-redemption__message[role="alert"] {
+  color: #b42318;
+}
+
+.checkout-code-redemption__overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(15 23 42 / 45%);
+}
+
+.checkout-code-redemption__dialog {
+  width: min(100%, 440px);
+  padding: 24px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(15 23 42 / 20%);
+}
+
+.checkout-code-redemption__dialog h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+}
+
+.checkout-code-redemption__dialog p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.checkout-code-redemption__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.checkout-code-redemption button:focus-visible,
+.checkout-code-redemption input:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+@media (max-width: 360px) {
+  .checkout-code-redemption__controls {
+    flex-wrap: wrap;
+  }
+
+  .checkout-code-redemption__submit {
+    width: 100%;
+  }
+
+  .checkout-code-redemption__dialog {
+    padding: 18px;
+  }
+}

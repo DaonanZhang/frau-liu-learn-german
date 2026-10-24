@@ -361,6 +361,25 @@
     linear-gradient(180deg, rgba(248, 251, 255, 1), rgba(255, 255, 255, 1));
 }
 
+.module-checkout-page .checkout-code-redemption {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.module-checkout-page .checkout-code-redemption__controls {
+  align-items: stretch;
+}
+
+.module-checkout-page .checkout-code-redemption__input {
+  min-width: 0;
+}
+
+.module-checkout-page .checkout-code-redemption__submit {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
 .module-checkout-page__price-caption {
   color: #66758a;
   font-size: 0.78rem;
@@ -896,6 +915,14 @@
 }
 
 @media (max-width: 420px) {
+  .module-checkout-page .checkout-code-redemption__controls {
+    flex-wrap: wrap;
+  }
+
+  .module-checkout-page .checkout-code-redemption__submit {
+    flex: 1 0 100%;
+  }
+
   .module-checkout-page__couponSelectorCount {
     display: none;
   }

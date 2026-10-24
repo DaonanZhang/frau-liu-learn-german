@@ -161,6 +161,24 @@ class ReferralRefundDebitTests(TestCase):
         self.assertEqual(other_reward.status, ReferralReward.Status.GRANTED)
         self.assertEqual(list(Entitlement.objects.filter(pk=lifetime.pk).values()), before)
 
+    def test_canceled_shared_lifetime_artifact_allows_reward_revocation(self):
+        from apps.accounts.services.referral_refunds import debit_exam_preparation_reward
+
+        lifetime = Entitlement.objects.create(
+            user=self.user, module=None, season=None, plan=Entitlement.Plan.LIFETIME,
+            status=Entitlement.Status.CANCELED, starts_at=datetime(2026, 1, 1, tzinfo=ZoneInfo("Asia/Shanghai")),
+            expires_at=None, external_ref="admin:shared-canceled-lifetime",
+        )
+        self.reward.entitlement = lifetime
+        self.reward.save(update_fields=["entitlement"])
+        self.entitlement.delete()
+        before = list(Entitlement.objects.filter(pk=lifetime.pk).values())
+
+        self.assertIsNone(debit_exam_preparation_reward(reward=self.reward, at=self.at))
+        self.reward.refresh_from_db()
+        self.assertEqual(self.reward.status, ReferralReward.Status.REVOKED)
+        self.assertEqual(list(Entitlement.objects.filter(pk=lifetime.pk).values()), before)
+
     def test_shared_reward_specific_timed_artifact_fails_without_writes(self):
         from apps.accounts.services.referral_refunds import debit_exam_preparation_reward
 

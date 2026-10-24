@@ -4,6 +4,77 @@ Promotion and activation codes are database-backed. Activation codes also keep
 Redis compatibility so codes created before the database ledger was introduced
 remain redeemable.
 
+## Exam Preparation Referral Campaign
+
+The first campaign uses tag `exam_preparation_referral_v1` and reserves the
+`BK1-` code namespace. The setting
+`EXAM_PREPARATION_REFERRAL_ENABLED` defaults to `False`; a missing variable is
+also disabled. Keep it unset or set it to `False` during deployment and
+backfill. In production, set `EXAM_PREPARATION_REFERRAL_ENABLED=True` in the
+server `.env` only after the rollout checklist in
+`server-post-pull-checklist.md` is complete, then restart the web process.
+
+Before backfill, check that the namespace is clear in promotion-code records,
+database activation codes, and legacy Redis activation-code keys:
+
+```bash
+cd /srv/projects/frau-liu-learn-german
+.venv/bin/python manage.py shell -c "from apps.accounts.services.referral_campaign import assert_referral_code_prefix_available; assert_referral_code_prefix_available(); print('BK1- prefix available')"
+```
+
+The command raises `Referral code prefix is already in use` if it finds a
+collision. The backfill repeats this preflight before processing users. First
+run its dry run:
+
+```bash
+cd /srv/projects/frau-liu-learn-german
+.venv/bin/python manage.py backfill_exam_preparation_referral_codes --dry-run
+```
+
+Review `mode=dry-run created=0 existing=… skipped=… failed=0`; `skipped` is the
+number of eligible users who do not yet have a code. Then apply the backfill:
+
+```bash
+cd /srv/projects/frau-liu-learn-german
+.venv/bin/python manage.py backfill_exam_preparation_referral_codes
+```
+
+Review `mode=apply created=… existing=… skipped=0 failed=0`. Stop and inspect
+any collision, nonzero `failed`, or unexpected counts before enabling the
+feature. The command creates codes and linked records; it does not enable the
+campaign flag.
+
+The Alipay reconciliation runner also reconciles referral rewards and full
+refunds. Its Celery task is `apps.accounts.tasks.reconcile_alipay_payments`,
+scheduled by the existing `reconcile-alipay-payments` Beat entry at
+`ALIPAY_RECONCILE_INTERVAL_SECONDS` (default 900 seconds). Keep a Celery worker
+and Beat running, or keep the deployment's existing periodic invocation of
+`manage.py reconcile_alipay_payments --limit 100`; a one-off command is not a
+scheduler. Its output is a Python counter dictionary, including
+`referral_processed`, `referral_disqualified`, `referral_deferred`,
+`referral_failed`, `referral_refunds_reconciled`,
+`referral_refunds_deferred`, and `referral_refunds_failed`. Investigate
+nonzero failure counters and the log message
+`Scheduled referral refund reconciliation failed`.
+The scheduled repair also emits `referral_terminal_processed` and
+`referral_terminal_failed`. If the latter is nonzero, inspect
+`Scheduled terminal referral release failed` and
+`Scheduled terminal milestone resolution failed`, then rerun or confirm the
+next periodic reconciliation cycle. This repairs lost post-commit work for
+`FAILED`/`CLOSED` `payment_reserved` rows and `revocation_pending` milestones;
+payment failure is not a refund, and partial refunds do not roll back progress.
+
+Only a payment whose status is `REFUNDED`, whose `refunded_at` is set, and whose
+`refunded_amount` equals `total_amount` is selected for referral refund
+reconciliation. Payment failures and partial refunds do not reverse referral
+progress or rewards.
+
+To roll back the launch, remove the setting or set
+`EXAM_PREPARATION_REFERRAL_ENABLED=False` in the production `.env`, then restart
+the web process. This disables the feature flag without deleting referral
+codes, participations, reward history, or already granted access. Do not delete
+campaign data as part of flag rollback.
+
 ## Plaintext Code Storage
 
 Activation codes and promotion codes both use normalized uppercase plaintext

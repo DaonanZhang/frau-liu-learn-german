@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from apps.accounts.models import (
     AlipayWebsitePayment, Entitlement, Module, PaymentDiscountApplication,
-    PromotionCodeRecord, ReferralCode, ReferralNotice, ReferralParticipation,
+    PaymentGrantTask, PromotionCodeRecord, ReferralCode, ReferralNotice, ReferralParticipation,
     ReferralReward, UserCoupon,
 )
 from apps.accounts.services.referral_campaign import FIRST_REFERRAL_CAMPAIGN
@@ -38,8 +38,14 @@ def reconcile_referral_refund(*, payment_id: int, at=None) -> ReferralRefundResu
         return ReferralRefundResult(None, False, False, None)
     participation_locator = ReferralParticipation.objects.filter(
         qualifying_payment_id=payment_id,
-    ).values("pk", "campaign_tag", "referral_code__user_id").first()
-    if participation_locator is None or participation_locator["campaign_tag"] != FIRST_REFERRAL_CAMPAIGN.campaign_tag:
+    ).values(
+        "pk", "referred_user_id", "campaign_tag",
+        "referral_code__campaign_tag", "referral_code__user_id",
+    ).first()
+    if participation_locator is None or (
+        participation_locator["campaign_tag"] != FIRST_REFERRAL_CAMPAIGN.campaign_tag
+        and participation_locator["referral_code__campaign_tag"] != FIRST_REFERRAL_CAMPAIGN.campaign_tag
+    ):
         return ReferralRefundResult(None, False, False, None)
     participation_id = participation_locator["pk"]
     if payment_locator["status"] != AlipayWebsitePayment.Status.REFUNDED:
@@ -51,13 +57,19 @@ def reconcile_referral_refund(*, payment_id: int, at=None) -> ReferralRefundResu
     ).first()
     if referrer is None:
         raise ValueError(_INVALID_REWARD)
+    task_ids = list(PaymentGrantTask.objects.filter(
+        payment_id=payment_id, user_id=participation_locator["referred_user_id"],
+    ).order_by("pk").values_list("pk", flat=True)[:2])
+    task = PaymentGrantTask.objects.select_for_update().filter(
+        pk=task_ids[0],
+    ).first() if len(task_ids) == 1 else None
     payment = AlipayWebsitePayment.objects.select_for_update().filter(pk=payment_id).first()
     if payment is None or payment.status != AlipayWebsitePayment.Status.REFUNDED:
         return ReferralRefundResult(participation_id, False, False, None)
     participation = ReferralParticipation.objects.select_for_update().filter(
         pk=participation_id,
     ).first()
-    if participation is None:
+    if participation is None or participation.referred_user_id != participation_locator["referred_user_id"]:
         raise ValueError(_INVALID_REWARD)
     application = PaymentDiscountApplication.objects.select_for_update().filter(
         payment_id=payment_id,
@@ -69,19 +81,57 @@ def reconcile_referral_refund(*, payment_id: int, at=None) -> ReferralRefundResu
     ).first()
     module = Module.objects.filter(key=FIRST_REFERRAL_CAMPAIGN.module_key).first()
     qualified = participation.status == ReferralParticipation.Status.QUALIFIED
+    qualification_recorded = (
+        qualified or participation.status == ReferralParticipation.Status.REFUNDED
+        and participation.qualified_at is not None
+    )
+    lifetime_proof_end = participation.qualified_at or timezone.now()
+    canceled_lifetime = bool(
+        task is not None
+        and task.status == PaymentGrantTask.Status.CANCELED
+        and module is not None
+        and Entitlement.objects.filter(
+            user_id=participation.referred_user_id,
+            season__isnull=True,
+            plan=Entitlement.Plan.LIFETIME,
+            status=Entitlement.Status.ACTIVE,
+            expires_at__isnull=True,
+            starts_at__gte=payment.created_at,
+            starts_at__lte=lifetime_proof_end,
+            created_at__gte=payment.created_at,
+            created_at__lte=lifetime_proof_end,
+        ).filter(Q(module_id=module.pk) | Q(module__isnull=True)).exists()
+    )
     month_rewards = list(ReferralReward.objects.select_for_update().filter(
         participation_id=participation.pk,
         kind=ReferralReward.Kind.REFERRAL_MONTH,
     ).order_by("pk"))
 
     if participation.status == ReferralParticipation.Status.REFUNDED:
-        if participation.refund_reconciled_at is None or participation.refunded_at is None:
+        if (
+            participation.refund_reconciled_at is None
+            or participation.refunded_at is None
+            or participation.refunded_at != payment.refunded_at
+        ):
             raise ValueError(_INVALID_REWARD)
         if not _valid_referral_refund_chain(
             payment=payment, participation=participation, application=application,
-            coupon=coupon, referral=referral, promotion=promotion, module=module,
-            referrer_id=referrer.pk,
+            coupon=coupon, referral=referral, promotion=promotion, task=task, module=module,
+            referrer_id=referrer.pk, qualified=qualification_recorded,
+            canceled_lifetime=canceled_lifetime,
         ):
+            raise ValueError(_INVALID_REWARD)
+        if qualification_recorded:
+            if (
+                len(month_rewards) != 1
+                or month_rewards[0].referrer_id != referrer.pk
+                or month_rewards[0].campaign_tag != FIRST_REFERRAL_CAMPAIGN.campaign_tag
+                or month_rewards[0].status != ReferralReward.Status.REVOKED
+                or month_rewards[0].revoked_at is None
+                or month_rewards[0].revocation_pending_at is not None
+            ):
+                raise ValueError(_INVALID_REWARD)
+        elif month_rewards:
             raise ValueError(_INVALID_REWARD)
         return ReferralRefundResult(participation.pk, False, False, None)
 
@@ -92,12 +142,26 @@ def reconcile_referral_refund(*, payment_id: int, at=None) -> ReferralRefundResu
         ReferralParticipation.Status.QUALIFIED,
     }:
         raise ValueError(_INVALID_REWARD)
+    if qualified:
+        if (
+            participation.qualified_at is None
+            or participation.refunded_at is not None
+            or participation.refund_reconciled_at is not None
+        ):
+            raise ValueError(_INVALID_REWARD)
+    elif (
+        participation.qualified_at is not None
+        or participation.refunded_at is not None
+        or participation.refund_reconciled_at is not None
+    ):
+        raise ValueError(_INVALID_REWARD)
     if (
         payment.refunded_at is None or payment.refunded_amount != payment.total_amount
         or not _valid_referral_refund_chain(
             payment=payment, participation=participation, application=application,
-            coupon=coupon, referral=referral, promotion=promotion, module=module,
-            referrer_id=referrer.pk,
+            coupon=coupon, referral=referral, promotion=promotion, task=task, module=module,
+            referrer_id=referrer.pk, qualified=qualified,
+            canceled_lifetime=canceled_lifetime,
         )
     ):
         raise ValueError(_INVALID_REWARD)
@@ -122,17 +186,40 @@ def reconcile_referral_refund(*, payment_id: int, at=None) -> ReferralRefundResu
     ])
 
     if qualified:
-        access_expires_at = debit_exam_preparation_reward(reward=month_rewards[0], at=effective_at)
+        before_expiry = _effective_exam_preparation_expiry(
+            referrer_id=referrer.pk, module=module, at=effective_at,
+        )
+        debit_exam_preparation_reward(reward=month_rewards[0], at=effective_at)
+        access_expires_at = _effective_exam_preparation_expiry(
+            referrer_id=referrer.pk, module=module, at=effective_at,
+        )
+        days_removed = (
+            max(0, round((before_expiry - access_expires_at).total_seconds() / 86400, 2))
+            if before_expiry is not None and access_expires_at is not None
+            else 0
+        )
+        milestone_before = _latest_granted_milestones(referrer_id=referrer.pk)
         reconcile_referral_milestones(
             referrer=referrer, campaign_tag=FIRST_REFERRAL_CAMPAIGN.campaign_tag,
+        )
+        effective_count = ReferralParticipation.objects.filter(
+            campaign_tag=FIRST_REFERRAL_CAMPAIGN.campaign_tag,
+            referral_code__campaign_tag=FIRST_REFERRAL_CAMPAIGN.campaign_tag,
+            referral_code__user_id=referrer.pk,
+            status=ReferralParticipation.Status.QUALIFIED,
+        ).count()
+        milestone_changes = _milestone_changes(
+            referrer_id=referrer.pk, before=milestone_before,
         )
         ReferralNotice.objects.create(
             user=referrer, campaign_tag=FIRST_REFERRAL_CAMPAIGN.campaign_tag,
             event_type="referral_refunded",
             payload={
                 "progress_removed": True,
-                "days_removed": access_expires_at is not None,
+                "days_removed": days_removed,
                 "access_expires_at": access_expires_at.isoformat() if access_expires_at else None,
+                "effective_count": effective_count,
+                "milestone_changes": milestone_changes,
             },
             is_global_notice=True, acknowledged_at=None,
         )
@@ -140,8 +227,67 @@ def reconcile_referral_refund(*, payment_id: int, at=None) -> ReferralRefundResu
     return ReferralRefundResult(participation.pk, True, False, None)
 
 
+def _latest_granted_milestones(*, referrer_id):
+    latest = {}
+    for reward in ReferralReward.objects.filter(
+        campaign_tag=FIRST_REFERRAL_CAMPAIGN.campaign_tag,
+        referrer_id=referrer_id,
+        kind__in=[ReferralReward.Kind.SCIENCE_3, ReferralReward.Kind.VLOG_5],
+    ).order_by("kind", "-generation"):
+        latest.setdefault(reward.kind, reward)
+    return {
+        kind: (reward.pk, "entitlement" if reward.entitlement_id else "coupon")
+        for kind, reward in latest.items()
+        if reward.status == ReferralReward.Status.GRANTED
+    }
+
+
+def _milestone_changes(*, referrer_id, before):
+    after = _latest_granted_milestones(referrer_id=referrer_id)
+    latest_rewards = {
+        reward.pk: reward
+        for reward in ReferralReward.objects.filter(
+            pk__in=[item[0] for item in before.values()],
+        )
+    }
+    changes = []
+    for threshold, kind in ((3, ReferralReward.Kind.SCIENCE_3), (5, ReferralReward.Kind.VLOG_5)):
+        previous = before.get(kind)
+        if previous is None or kind in after:
+            continue
+        reward = latest_rewards[previous[0]]
+        outcomes = {
+            ReferralReward.Status.REVOKED: "revoked",
+            ReferralReward.Status.REVOCATION_PENDING: "revocation_pending",
+            ReferralReward.Status.NON_REVERSIBLE: "non_reversible",
+        }
+        outcome = outcomes.get(reward.status)
+        if outcome:
+            changes.append({
+                "threshold": threshold, "kind": kind, "outcome": outcome,
+                "reward_type": previous[1],
+            })
+    return changes
+
+
 def _valid_referral_refund_chain(*, payment, participation, application, coupon,
-                                 referral, promotion, module, referrer_id) -> bool:
+                                 referral, promotion, task, module, referrer_id,
+                                 qualified, canceled_lifetime) -> bool:
+    valid_task_status = bool(
+        task is not None
+        and (
+            task.status in {
+                PaymentGrantTask.Status.PENDING,
+                PaymentGrantTask.Status.PROCESSING,
+                PaymentGrantTask.Status.SUCCEEDED,
+                PaymentGrantTask.Status.FAILED,
+                PaymentGrantTask.Status.CANCELED,
+            }
+            if not qualified
+            else task.status == PaymentGrantTask.Status.SUCCEEDED
+            or task.status == PaymentGrantTask.Status.CANCELED and canceled_lifetime
+        )
+    )
     return bool(
         module is not None
         and payment.status == AlipayWebsitePayment.Status.REFUNDED
@@ -166,7 +312,24 @@ def _valid_referral_refund_chain(*, payment, participation, application, coupon,
         and application.user_id == participation.referred_user_id
         and application.coupon_id == (coupon.pk if coupon else None)
         and application.promotion_code_id == (promotion.pk if promotion else None)
+        and application.final_amount == payment.total_amount
+        and application.original_amount == application.offer.price_amount
+        and application.automatic_discount_amount >= Decimal("0.00")
+        and application.original_amount - application.automatic_discount_amount
+        - application.promotion_discount_amount == application.final_amount
         and application.offer.module_id == module.pk
+        and application.offer.season_id is None
+        and task is not None
+        and task.payment_id == payment.pk
+        and task.user_id == participation.referred_user_id
+        and task.module_id == module.pk
+        and task.offer_id is not None
+        and task.offer_id == application.offer_id
+        and task.offer.module_id == module.pk
+        and task.offer.season_id is None
+        and task.plan == task.offer.plan
+        and task.season_id is None
+        and valid_task_status
         and application.promotion_discount_amount == Decimal("5.00")
         and coupon is not None and coupon.user_id == participation.referred_user_id
         and coupon.promotion_code_id == (promotion.pk if promotion else None)
@@ -188,8 +351,32 @@ def _valid_referral_refund_chain(*, payment, participation, application, coupon,
         and promotion.coupon_valid_days is None and promotion.expires_at is None
         and promotion.redemption_mode == PromotionCodeRecord.RedemptionMode.REUSABLE
         and promotion.stacking_policy == PromotionCodeRecord.StackingPolicy.STACK
-        and promotion.status == PromotionCodeRecord.Status.ACTIVE
     )
+
+
+def _effective_exam_preparation_expiry(*, referrer_id: int, module: Module, at: datetime) -> datetime | None:
+    relevant = list(Entitlement.objects.select_for_update().filter(
+        user_id=referrer_id,
+    ).filter(
+        Q(module__isnull=True, season__isnull=True) | Q(module=module, season__isnull=True)
+    ).order_by("pk"))
+    covering_lifetime = any(
+        item.status == Entitlement.Status.ACTIVE
+        and item.plan == Entitlement.Plan.LIFETIME
+        and item.starts_at is not None and item.starts_at <= at and item.expires_at is None
+        for item in relevant
+    )
+    if covering_lifetime:
+        return None
+    expiries = [
+        item.expires_at for item in relevant
+        if item.status == Entitlement.Status.ACTIVE
+        and (item.module_id is None and item.season_id is None
+             or item.module_id == module.pk and item.season_id is None)
+        and item.plan != Entitlement.Plan.LIFETIME
+        and item.expires_at is not None and item.expires_at > at
+    ]
+    return max(expiries, default=None)
 
 
 @transaction.atomic
@@ -254,7 +441,8 @@ def debit_exam_preparation_reward(*, reward: ReferralReward, at=None) -> datetim
     )
     linked_lifetime = (
         linked.external_ref != expected_entitlement_ref
-        and linked.plan == Entitlement.Plan.LIFETIME and linked.status == Entitlement.Status.ACTIVE
+        and linked.plan == Entitlement.Plan.LIFETIME
+        and linked.status in {Entitlement.Status.ACTIVE, Entitlement.Status.CANCELED}
         and linked.starts_at is not None and linked.starts_at <= at and linked.expires_at is None
         and (linked.module_id is None or linked.module_id == module.pk)
     )

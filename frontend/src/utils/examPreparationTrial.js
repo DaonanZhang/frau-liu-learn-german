@@ -73,7 +73,7 @@ export async function showExamPreparationPurchasePrompt(navigate, user, scope) {
     buttonsStyling: false,
     width: 720,
     didOpen: (popup) => {
-      addRedeemActionToPurchaseModal(popup, navigate, () => Swal.close());
+      addRedeemActionToPurchaseModal(popup, examPreparationPurchasePath(scope), navigate, () => Swal.close());
     },
   });
 

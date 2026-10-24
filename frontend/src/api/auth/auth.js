@@ -309,11 +309,11 @@ export async function applyActivationCode(code) {
   }
 }
 
-/** Redeem either an access code or a promotion code for the signed-in user. */
-export async function redeemCode(code) {
+/** Redeem an activation, promotion, or referral code at checkout. */
+export async function redeemCode(code, { confirmReplace = false } = {}) {
   return apiFetch("/accounts/auth/redeem-code/", {
     method: "POST",
-    body: { code },
+    body: { code: code.trim(), confirm_replace: Boolean(confirmReplace) },
   });
 }
 

@@ -7,6 +7,11 @@ from .homepage_setting import HomepageSettingViewSet
 from .purchase_offer import PurchaseOfferViewSet
 from .public_status import PublicStatusAPIView
 from .coupon import UserCouponViewSet
+from .referral import (
+    ReferralCampaignAPIView,
+    ReferralNoticeAcknowledgeAPIView,
+    ReferralNoticeUnreadAPIView,
+)
 
 __all__ = [
     "UserViewSet",
@@ -19,4 +24,7 @@ __all__ = [
     "UserCouponViewSet",
     "PasswordResetRequestAPIView",
     "PasswordResetConfirmAPIView",
+    "ReferralCampaignAPIView",
+    "ReferralNoticeUnreadAPIView",
+    "ReferralNoticeAcknowledgeAPIView",
 ]

@@ -11,6 +11,9 @@ from apps.accounts.views import (
     UserDataViewSet,
     UserViewSet,
     UserCouponViewSet,
+    ReferralCampaignAPIView,
+    ReferralNoticeUnreadAPIView,
+    ReferralNoticeAcknowledgeAPIView,
 )
 from apps.accounts.views.registration import (
     RegisterVerifyCodeAPIView,
@@ -56,6 +59,9 @@ urlpatterns = [
 
 # Registration Urls
 urlpatterns += [
+    path("referral-campaign/", ReferralCampaignAPIView.as_view(), name="referral-campaign"),
+    path("referral-notices/unread/", ReferralNoticeUnreadAPIView.as_view(), name="referral-notices-unread"),
+    path("referral-notices/<int:notice_id>/acknowledge/", ReferralNoticeAcknowledgeAPIView.as_view(), name="referral-notice-acknowledge"),
     path(
         "auth/register/verify-code/",
         RegisterVerifyCodeAPIView.as_view(),

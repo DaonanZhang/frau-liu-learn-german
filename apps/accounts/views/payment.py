@@ -277,6 +277,7 @@ def _query_and_sync_payment_status(
     ):
         _process_pending_payment_grant_tasks_safely(payment_id=payment.id)
     if current_status == AlipayWebsitePayment.Status.REFUNDED:
+        _reconcile_referral_refund_safely(payment_id=payment.id)
         revoke_and_compact_payment_entitlement(payment=locked_payment)
 
     return "synced"
@@ -315,6 +316,18 @@ def _process_pending_payment_grant_tasks_safely(*, payment_id: int) -> None:
         process_pending_payment_grant_tasks_for_payment(payment_id=payment_id)
     except (DatabaseError, ValueError):
         logger.exception("Payment entitlement grant failed", extra={"payment_id": payment_id})
+
+
+def _reconcile_referral_refund_safely(*, payment_id: int) -> None:
+    from apps.accounts.services.referral_refunds import reconcile_referral_refund
+
+    try:
+        reconcile_referral_refund(payment_id=payment_id)
+    except (DatabaseError, ValueError):
+        logger.exception(
+            "Referral refund reconciliation failed",
+            extra={"payment_id": payment_id},
+        )
 
 
 def _find_incomplete_paid_purchase(
@@ -1044,6 +1057,7 @@ class AlipayNotifyAPIView(APIView):
                 logger.exception("Alipay notify confirmed payment but entitlement grant failed")
                 return HttpResponse("failure", status=500, content_type="text/plain")
         elif payment.status == AlipayWebsitePayment.Status.REFUNDED:
+            _reconcile_referral_refund_safely(payment_id=payment.id)
             revoke_and_compact_payment_entitlement(payment=payment)
 
         return HttpResponse("success", content_type="text/plain")

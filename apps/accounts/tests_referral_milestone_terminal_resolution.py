@@ -15,6 +15,7 @@ from apps.accounts.services.promotion_codes import sync_payment_discount_status
 from apps.accounts.services.referral_milestones import (
     reconcile_referral_milestones, resolve_pending_milestone_revocation,
 )
+from apps.accounts.tasks import reconcile_referral_terminal_states_now
 
 
 class ReferralMilestoneTerminalResolutionTests(TestCase):
@@ -215,6 +216,112 @@ class ReferralMilestoneTerminalResolutionTests(TestCase):
         self.assertIsNotNone(self.coupon.used_at)
         resolve_pending_milestone_revocation(payment_id=payment.pk)
         self.reward.refresh_from_db()
+        self.assertEqual(self.reward.status, ReferralReward.Status.NON_REVERSIBLE)
+
+    def test_scheduled_repair_resolves_lost_failed_callback_and_is_idempotent(self):
+        payment, app = self.make_application(
+            AlipayWebsitePayment.Status.CREATED,
+            PaymentDiscountApplication.Status.RESERVED,
+            UserCoupon.Status.RESERVED,
+        )
+        ReferralParticipation.objects.filter(referral_code=self.referral_code).update(
+            status=ReferralParticipation.Status.OPEN,
+        )
+        payment.status = AlipayWebsitePayment.Status.FAILED
+        payment.save(update_fields=["status", "updated_at"])
+        with patch("apps.accounts.services.promotion_codes.transaction.on_commit") as on_commit:
+            sync_payment_discount_status(payment_id=payment.pk)
+        on_commit.assert_called_once()
+        app.refresh_from_db()
+        self.coupon.refresh_from_db()
+        self.reward.refresh_from_db()
+        self.assertEqual(app.status, PaymentDiscountApplication.Status.RELEASED)
+        self.assertEqual(self.coupon.status, UserCoupon.Status.AVAILABLE)
+        self.assertEqual(self.reward.status, ReferralReward.Status.REVOCATION_PENDING)
+
+        first = reconcile_referral_terminal_states_now()
+        second = reconcile_referral_terminal_states_now()
+        self.reward.refresh_from_db()
+        self.coupon.refresh_from_db()
+        self.assertEqual(first, {
+            "referral_terminal_processed": 1,
+            "referral_terminal_failed": 0,
+        })
+        self.assertEqual(second, {
+            "referral_terminal_processed": 0,
+            "referral_terminal_failed": 0,
+        })
+        self.assertEqual(self.reward.status, ReferralReward.Status.REVOKED)
+        self.assertEqual(self.coupon.status, UserCoupon.Status.REVOKED)
+
+    def test_scheduled_repair_retries_lost_paid_callback_with_real_resolver(self):
+        payment, app = self.make_application(
+            AlipayWebsitePayment.Status.CREATED,
+            PaymentDiscountApplication.Status.RESERVED,
+            UserCoupon.Status.RESERVED,
+        )
+        payment.status = AlipayWebsitePayment.Status.PAID
+        payment.paid_at = timezone.now()
+        payment.save(update_fields=["status", "paid_at", "updated_at"])
+        with patch("apps.accounts.services.promotion_codes.transaction.on_commit") as on_commit:
+            sync_payment_discount_status(payment_id=payment.pk)
+        on_commit.assert_called_once()
+        app.refresh_from_db()
+        self.coupon.refresh_from_db()
+        self.reward.refresh_from_db()
+        self.assertEqual(app.status, PaymentDiscountApplication.Status.APPLIED)
+        self.assertEqual(self.coupon.status, UserCoupon.Status.USED)
+        self.assertEqual(self.reward.status, ReferralReward.Status.REVOCATION_PENDING)
+
+        with patch(
+            "apps.accounts.services.promotion_codes._reconcile_terminal_discount",
+            side_effect=RuntimeError("temporary"),
+        ), self.assertLogs("apps.accounts.tasks", level="ERROR"):
+            failed = reconcile_referral_terminal_states_now()
+        retried = reconcile_referral_terminal_states_now()
+        settled = reconcile_referral_terminal_states_now()
+        self.reward.refresh_from_db()
+        self.assertEqual(failed, {
+            "referral_terminal_processed": 0,
+            "referral_terminal_failed": 1,
+        })
+        self.assertEqual(retried, {
+            "referral_terminal_processed": 1,
+            "referral_terminal_failed": 0,
+        })
+        self.assertEqual(settled, {
+            "referral_terminal_processed": 0,
+            "referral_terminal_failed": 0,
+        })
+        self.assertEqual(self.reward.status, ReferralReward.Status.NON_REVERSIBLE)
+
+    def test_scheduled_repair_resolves_lost_refund_callback(self):
+        payment, app = self.make_application(
+            AlipayWebsitePayment.Status.CREATED,
+            PaymentDiscountApplication.Status.RESERVED,
+            UserCoupon.Status.RESERVED,
+        )
+        payment.status = AlipayWebsitePayment.Status.REFUNDED
+        payment.paid_at = timezone.now()
+        payment.refunded_at = timezone.now()
+        payment.refunded_amount = payment.total_amount
+        payment.save(update_fields=[
+            "status", "paid_at", "refunded_at", "refunded_amount", "updated_at",
+        ])
+        with patch("apps.accounts.services.promotion_codes.transaction.on_commit") as on_commit:
+            sync_payment_discount_status(payment_id=payment.pk)
+        on_commit.assert_called_once()
+        app.refresh_from_db()
+        self.reward.refresh_from_db()
+        self.assertEqual(app.status, PaymentDiscountApplication.Status.REFUNDED)
+        self.assertEqual(self.reward.status, ReferralReward.Status.REVOCATION_PENDING)
+
+        first = reconcile_referral_terminal_states_now()
+        second = reconcile_referral_terminal_states_now()
+        self.reward.refresh_from_db()
+        self.assertEqual(first["referral_terminal_processed"], 1)
+        self.assertEqual(first["referral_terminal_failed"], 0)
+        self.assertEqual(second["referral_terminal_processed"], 0)
         self.assertEqual(self.reward.status, ReferralReward.Status.NON_REVERSIBLE)
 
     def test_corrupt_reward_timestamps_fail_closed(self):

@@ -1,0 +1,61 @@
+.referral-panel {
+  min-width: 0;
+  border: 1px solid #d8dee8;
+  border-radius: 1rem;
+  background: linear-gradient(145deg, #172238, #243651);
+  color: #f8fafc;
+  padding: 1.25rem;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
+}
+
+.referral-panel h2 { margin: 0; font-size: 1.3rem; }
+.referral-panel p { margin: 0.45rem 0 0; color: #d4deeb; line-height: 1.5; }
+.referral-panel__header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.referral-panel__total { display: flex; align-items: baseline; gap: 0.35rem; }
+.referral-panel__count { font-size: 1.2rem; line-height: 1.3; }
+.referral-panel__code { display: flex; align-items: center; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
+.referral-panel__code code { min-width: 0; overflow-wrap: anywhere; margin-right: auto; color: #fff; font-size: 1.1rem; font-weight: 800; letter-spacing: 0.08em; }
+.referral-panel button { min-height: 44px; border: 1px solid #71829c; border-radius: 0.7rem; background: #334863; color: #fff; padding: 0.55rem 0.9rem; font: inherit; font-weight: 700; cursor: pointer; touch-action: manipulation; user-select: none; transition: transform 140ms ease-out, background-color 140ms ease-out; }
+.referral-panel button:active { transform: scale(0.97); }
+.referral-panel__track { display: grid; grid-template-columns: repeat(5, minmax(2.5rem, 1fr)); gap: clamp(0.35rem, 3vw, 1rem); margin: 1.25rem 0 0.7rem; }
+.referral-panel__node { display: grid; place-items: center; justify-self: center; width: clamp(2.5rem, 9vw, 3.25rem); aspect-ratio: 1; border: 2px solid #71829c; border-radius: 50%; background: #202f45; color: #d4deeb; font-weight: 800; }
+.referral-panel__node.is-complete { border-color: #8de0be; background: #27644f; color: #fff; }
+.referral-panel__node--milestone { width: clamp(3.1rem, 11vw, 4rem); border-width: 3px; box-shadow: 0 0 0 3px rgba(226, 183, 104, 0.2); }
+.referral-panel__node--milestone.is-complete { border-color: #f0c66e; background: #8a6121; }
+.referral-panel__overflow { text-align: center; }
+.referral-panel__rewards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+.referral-panel__rewards > div { display: grid; gap: 0.3rem; min-width: 0; border: 1px solid rgba(212, 222, 235, 0.25); border-radius: 0.75rem; padding: 0.8rem; }
+.referral-panel__rewards > div:first-child { border-color: rgba(226, 183, 104, 0.75); }
+.referral-panel__rewards strong { overflow-wrap: anywhere; }
+.referral-panel__rewards span { color: #f0c66e; font-weight: 700; }
+.referral-panel__rewards small { color: #d4deeb; }
+.referral-panel__automatic { font-size: 0.85rem; }
+.referral-panel__history { display: grid; gap: 0.45rem; max-height: 12rem; overflow-y: auto; margin: 0.9rem 0 0; padding: 0; list-style: none; }
+.referral-panel__history li { display: flex; justify-content: space-between; gap: 0.75rem; border-top: 1px solid rgba(212, 222, 235, 0.18); padding-top: 0.55rem; color: #e2e8f0; font-size: 0.84rem; }
+.referral-panel__history time { flex: 0 0 auto; color: #bdc9d8; }
+.referral-panel__feedback { min-height: 1.35rem; margin-top: 0.45rem; color: #b8f2d7; font-size: 0.85rem; }
+.referral-panel--locked, .referral-panel--disabled { background: #374151; color: #f3f4f6; }
+.referral-panel--locked p, .referral-panel--disabled p { color: #d1d5db; }
+.referral-panel--locked button { margin-top: 0.8rem; }
+
+@media (hover: hover) and (pointer: fine) {
+  .referral-panel button:hover { background: #435b78; }
+}
+
+@media (max-width: 768px) {
+  .referral-panel { padding: 1rem; }
+  .referral-panel__rewards { gap: 0.5rem; }
+}
+
+@media (max-width: 480px) {
+  .referral-panel__header { align-items: flex-start; }
+  .referral-panel__code { align-items: stretch; }
+  .referral-panel__code code { flex-basis: 100%; }
+  .referral-panel__rewards { grid-template-columns: 1fr; }
+  .referral-panel__history li { flex-direction: column; gap: 0.2rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .referral-panel button { transition: none; }
+  .referral-panel button:active { transform: none; }
+}

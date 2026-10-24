@@ -85,6 +85,53 @@ describe("CheckoutCouponSelector", () => {
     expect(onSelectCoupon).toHaveBeenCalledWith(17);
   });
 
+  it("explains that switching to an equally priced exclusive coupon leaves payment unchanged", () => {
+    render(
+      <CheckoutCouponSelector
+        couponBundle={{
+          available_count: 1,
+          default_coupon_id: null,
+          no_coupon_pricing: {
+            brand_friend_coupon_discount_amount: "8.00",
+            final_amount: "51.90",
+          },
+          choices: [{
+            coupon: {
+              id: 18,
+              display_name: "FRAULIU8 exclusive 8元券",
+              discount_amount: "8.00",
+              minimum_order_amount: "0.00",
+              expires_at: null,
+              stacking_policy: "exclusive_brand_friend",
+              scope: {},
+            },
+            is_applicable: true,
+            unavailable_reason: "",
+            pricing: {
+              promotion_discount_amount: "8.00",
+              total_discount_amount: "8.00",
+              final_amount: "51.90",
+            },
+          }],
+        }}
+        isOpen
+        offerTitle="测试商品"
+        selectedCouponId={null}
+        onOpen={vi.fn()}
+        onClose={vi.fn()}
+        onSelectCoupon={vi.fn()}
+        onSelectNone={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /FRAULIU8 exclusive 8元券/ }));
+
+    const confirmDialog = screen.getByRole("dialog", { name: "优惠方式确认" });
+    expect(confirmDialog).toHaveTextContent("改用 FRAULIU8 exclusive 8元券");
+    expect(confirmDialog).toHaveTextContent("实付不变，仍为 ¥51.90");
+    expect(confirmDialog).not.toHaveTextContent("比当前价格高 ¥0");
+  });
+
   it("does not mark the old-user discount selected when an exclusive coupon is selected", () => {
     render(
       <CheckoutCouponSelector

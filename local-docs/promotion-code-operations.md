@@ -134,6 +134,86 @@ explicit confirmation before replacing the old-user discount. The coupon is
 not selected automatically. Other promotion coupons continue to stack with the
 ¥8 old-user discount.
 
+### FRAULIU8 Brand Coupon
+
+Create the global, reusable FRAULIU8 code once on the server. This command is
+safe to rerun: if `FRAULIU8` already exists, it only prints the existing
+record for verification and does not overwrite it.
+
+```bash
+.venv/bin/python manage.py shell <<'PY'
+from decimal import Decimal
+
+from apps.accounts.models import PromotionCodeRecord
+from apps.accounts.services.promotion_codes import store_promotion_code
+
+existing = PromotionCodeRecord.objects.filter(code="FRAULIU8").first()
+if existing:
+    print(
+        "FRAULIU8 already exists; verify it before using it: "
+        f"campaign_name={existing.campaign_name!r}, discount={existing.discount_amount}, "
+        f"status={existing.status}, redemption_mode={existing.redemption_mode}, "
+        f"stacking_policy={existing.stacking_policy}"
+    )
+else:
+    store_promotion_code(
+        code="FRAULIU8",
+        campaign_name="FRAULIU专属优惠券",
+        organization_name="",
+        discount_amount=Decimal("8.00"),
+        minimum_order_amount=Decimal("0.00"),
+        applicable_module=None,
+        applicable_season=None,
+        applicable_offer=None,
+        coupon_valid_days=None,
+        expires_at=None,
+        redemption_mode=PromotionCodeRecord.RedemptionMode.REUSABLE,
+        stacking_policy=PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND,
+    )
+    print("Created active reusable code FRAULIU8")
+PY
+```
+
+The issued coupon display name is `FRAULIU专属优惠券`. A signed-in user
+redeems it at `/redeem-code` (the API endpoint is
+`/api/accounts/auth/redeem-code/`). Every successful redemption creates a new
+one-use `UserCoupon` for that user; the reusable `PromotionCodeRecord` remains
+active and is never consumed. The coupon applies to every module, has no
+minimum order, discounts CNY 8.00, and has no expiry on either the code or the
+issued coupon. One order can use at most one coupon.
+
+Automatic selection follows these rules:
+
+- If the user has no FRAULIU8 coupon, the existing automatic-selection logic
+  is unchanged.
+- If the user has FRAULIU8, it participates in the normal best-final-price
+  comparison. It replaces the automatic CNY 8 brand-friend discount rather
+  than stacking with it. When the final prices tie, FRAULIU8 wins over that
+  brand-friend discount.
+- A regular `STACK` coupon that produces a lower final price than FRAULIU8
+  still wins. Regular `STACK` coupons otherwise keep their existing behavior.
+- `KLDYZMZ` remains a manually selected coupon and is not automatically
+  selected.
+
+The user may explicitly choose a coupon, or send `use_coupon=false` to place
+the order without a coupon while retaining any automatic member discount.
+Checkout recalculates the price and locks the selected coupon inside the
+payment transaction. A successful payment marks it `USED`; a failed or closed
+order releases it. A full refund keeps it consumed and marks the discount
+audit as refunded; it does not return the coupon to the wallet.
+
+Examples of the automatic result:
+
+| Available coupons / discounts | Automatic result |
+| --- | --- |
+| No coupon | Existing automatic member/brand-friend pricing only. |
+| Only a regular coupon | Existing automatic discount plus the regular coupon according to `STACK` rules. |
+| Only FRAULIU8 | CNY 8 off; it is selected automatically. |
+| FRAULIU8 + old-user/brand-friend CNY 8 discount | FRAULIU8 replaces the brand-friend discount; the equal-price tie goes to FRAULIU8. |
+| FRAULIU8 + a regular coupon | The coupon with the lower final price wins; equal-price ties prefer FRAULIU8. |
+| FRAULIU8 + KLDYZMZ | FRAULIU8 may be automatic; KLDYZMZ remains manual and is mutually exclusive with the brand-friend discount. |
+| Same user redeems FRAULIU8 repeatedly | Each redemption creates another separate one-use `UserCoupon`; the code remains active and reusable. |
+
 ## User Coupon Wallet and Checkout
 
 - The signed-in redemption page is `/redeem-code` and is rendered inside the

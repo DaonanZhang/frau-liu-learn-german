@@ -153,7 +153,8 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
             candidate.promotion_code.stacking_policy
             == PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND
         )
-        if is_exclusive_brand_friend and not explicit_coupon:
+        is_frauliu8 = candidate.promotion_code.code == "FRAULIU8"
+        if is_exclusive_brand_friend and not explicit_coupon and not is_frauliu8:
             continue
         replaces_brand_friend = (
             is_exclusive_brand_friend
@@ -168,13 +169,18 @@ def get_purchase_pricing(*, user, offer: PurchaseOffer, coupon=None) -> Purchase
             automatic_label = "" if retained_automatic_discount <= 0 else automatic.discount_label
         base_amount = automatic.original_amount - retained_automatic_discount
         candidate_final = max(base_amount - candidate.discount_amount, Decimal("0.01"))
-        if (
-            candidate_final > best.final_amount
-            and not (explicit_coupon and is_exclusive_brand_friend)
-        ) or (
-            candidate_final == best.final_amount and not explicit_coupon
+        if candidate_final > best.final_amount and not (
+            explicit_coupon and is_exclusive_brand_friend
         ):
             continue
+        if candidate_final == best.final_amount and not explicit_coupon:
+            best_code = (
+                best.coupon.promotion_code.code
+                if best.coupon is not None
+                else None
+            )
+            if not (is_frauliu8 and best_code != "FRAULIU8"):
+                continue
         promotion_discount = base_amount - candidate_final
         best = PurchasePricing(
             original_amount=automatic.original_amount,

@@ -46,7 +46,7 @@ function countWords(text) {
 
 const WRITING_GUIDE_STEPS = [
   {
-    title: "先阅读 Anleitung",
+    title: "先阅读题目内容",
     description: "这里说明本题的写作场景。开始作答前，先确认你要写给谁，以及为什么要写。",
   },
   {
@@ -365,13 +365,35 @@ export default function ExamPreparationWritingDetailPage() {
           }}
           className={[
             "writing-detail-request-panel",
+            isTelcB2
+              ? "writing-detail-request-panel--announcement"
+              : "writing-detail-request-panel--email",
             guideTargetClass(0),
           ].filter(Boolean).join(" ")}
         >
-          <h2>Anleitung</h2>
-          <AnnotatableTextRegion as="p" regionId="task">
-            {renderStoredLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}
-          </AnnotatableTextRegion>
+          {isTelcB2 ? (
+            <>
+              <div className="writing-detail-request-panel__announcement-title">
+                <h2>Aushang</h2>
+              </div>
+              <div className="writing-detail-request-panel__announcement-sheet">
+                <span className="writing-detail-request-panel__notice-pin" aria-hidden="true">📌</span>
+                <AnnotatableTextRegion as="p" regionId="task">
+                  {renderStoredLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}
+                </AnnotatableTextRegion>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="writing-detail-request-panel__heading">
+                <h2>E-Mail</h2>
+              </div>
+              <div className="writing-detail-request-panel__recipient">An: Prüfer</div>
+              <AnnotatableTextRegion as="p" regionId="task">
+                {renderStoredLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}
+              </AnnotatableTextRegion>
+            </>
+          )}
         </section>
 
         <section className="writing-detail-meta-panel">

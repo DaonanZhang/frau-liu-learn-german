@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -111,6 +111,16 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
   it("registers the real writing scope and learning regions while excluding controls and draft input", async () => {
     renderPage();
 
+    const emailHeading = await screen.findByRole("heading", { name: "E-Mail" });
+    expect(emailHeading.closest(".writing-detail-request-panel"))
+      .toHaveClass("writing-detail-request-panel--email");
+    const emailPanel = emailHeading.closest(".writing-detail-request-panel");
+    const recipient = within(emailPanel).getByText("An: Prüfer");
+    expect(recipient).toBeInTheDocument();
+    expect(recipient.closest("[data-exam-annotation-region]")).toBeNull();
+    expect(screen.queryByRole("heading", { name: "邮件" })).not.toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("Anleitung");
+    expect(screen.queryByRole("heading", { name: /^(Anleitung|Aufgabe)$/ })).not.toBeInTheDocument();
     expect((await screen.findByText("Schreiben Sie eine E-Mail an Ihre Freundin.")).closest("[data-exam-annotation-region]"))
       .toHaveAttribute(
       "data-exam-annotation-region",
@@ -162,6 +172,22 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
 
     renderPage();
 
+    const requestText = await screen.findByText("Schreiben Sie eine Reklamation.");
+    const requestPanel = requestText.closest(".writing-detail-request-panel");
+    expect(requestPanel).toHaveClass("writing-detail-request-panel--announcement");
+    const announcementTitle = requestPanel.querySelector(".writing-detail-request-panel__announcement-title");
+    expect(within(announcementTitle).getByRole("heading", { name: "Aushang" })).toBeInTheDocument();
+    expect(announcementTitle.closest(".writing-detail-request-panel__announcement-sheet")).toBeNull();
+    expect(within(requestPanel).queryByRole("heading", { name: "公告" })).not.toBeInTheDocument();
+    const announcementSheet = requestPanel.querySelector(".writing-detail-request-panel__announcement-sheet");
+    expect(announcementSheet).toBeInTheDocument();
+    expect(announcementSheet.querySelector(".writing-detail-request-panel__notice-pin")).toHaveAttribute("aria-hidden", "true");
+    expect(announcementSheet.querySelector("h2")).toBeNull();
+    expect(announcementSheet.children).toHaveLength(2);
+    expect(requestPanel.querySelector(".writing-detail-request-panel__notice-mark")).toBeNull();
+    expect(requestText.closest('[data-exam-annotation-region="task"]')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent("Anleitung");
+    expect(screen.queryByRole("heading", { name: /^(Anleitung|Aufgabe)$/ })).not.toBeInTheDocument();
     expect(await screen.findByText("最少 150 词")).toBeInTheDocument();
     expect(document.querySelector(".writing-detail-actions__meta")).not.toBeInTheDocument();
     expect(screen.getAllByText("0 词")).toHaveLength(1);
@@ -295,7 +321,9 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(screen.getByRole("button", { name: "跳过引导" }).closest("[data-exam-annotation-region]")).toBeNull();
     expect(screen.getByRole("button", { name: "上一步" }).closest("[data-exam-annotation-region]")).toBeNull();
     expect(screen.getByRole("button", { name: "下一步" }).closest("[data-exam-annotation-region]")).toBeNull();
-    expect(screen.getByText("先阅读 Anleitung").closest("[data-exam-annotation-region]")).toBeNull();
+    expect(screen.getByText("先阅读题目内容").closest("[data-exam-annotation-region]")).toBeNull();
+    expect(document.body).not.toHaveTextContent("Anleitung");
+    expect(screen.queryByRole("heading", { name: /^(Anleitung|Aufgabe)$/ })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
     expect(await screen.findByText("需要时开始计时")).toBeInTheDocument();

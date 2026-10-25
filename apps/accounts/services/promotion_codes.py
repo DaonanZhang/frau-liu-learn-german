@@ -3,10 +3,11 @@ from __future__ import annotations
 import secrets
 import string
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
+from decimal import Decimal
 
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, F, OuterRef, Q
+from django.db.models import Count, Exists, F, OuterRef, Q, Sum
 from django.utils import timezone
 
 from apps.accounts.models import (
@@ -23,6 +24,16 @@ def promotion_code_exists(code: str) -> bool:
     if not normalized:
         return False
     return PromotionCodeRecord.objects.filter(code=normalized).exists()
+
+
+def list_promotion_campaign_names() -> list[str]:
+    return list(
+        PromotionCodeRecord.objects
+        .exclude(campaign_name="")
+        .order_by("campaign_name")
+        .values_list("campaign_name", flat=True)
+        .distinct()
+    )
 
 
 def generate_promotion_code(length: int = 10) -> str:
@@ -107,6 +118,112 @@ def create_promotion_code_batch(
         )
         codes.append(code)
     return codes
+
+
+def get_promotion_campaign_report(
+    *,
+    campaign_name: str,
+    month_text: str,
+    organization: str = "",
+    code: str = "",
+) -> dict[str, object]:
+    normalized_month = str(month_text or "").strip()
+    month_start = None
+    next_month = None
+    if normalized_month != "all":
+        try:
+            month_start_date = datetime.strptime(normalized_month, "%Y-%m").date().replace(day=1)
+        except ValueError as exc:
+            raise ValueError("--month must use YYYY-MM or all") from exc
+        if month_start_date.strftime("%Y-%m") != normalized_month:
+            raise ValueError("--month must use YYYY-MM or all")
+        if month_start_date.month == 12:
+            next_month_date = month_start_date.replace(year=month_start_date.year + 1, month=1)
+        else:
+            next_month_date = month_start_date.replace(month=month_start_date.month + 1)
+        current_tz = timezone.get_current_timezone()
+        month_start = timezone.make_aware(
+            datetime.combine(month_start_date, datetime.min.time()),
+            current_tz,
+        )
+        next_month = timezone.make_aware(
+            datetime.combine(next_month_date, datetime.min.time()),
+            current_tz,
+        )
+
+    redeemed = PromotionCodeRecord.objects.filter(
+        campaign_name__icontains=campaign_name,
+        status=PromotionCodeRecord.Status.CONSUMED,
+    )
+    redemptions = UserCoupon.objects.filter(
+        promotion_code__campaign_name__icontains=campaign_name,
+    ).select_related("user", "promotion_code")
+    paid = PaymentDiscountApplication.objects.filter(
+        campaign_name_snapshot__icontains=campaign_name,
+        status=PaymentDiscountApplication.Status.APPLIED,
+    ).select_related("user", "offer", "payment", "promotion_code")
+    if month_start is not None:
+        redeemed = redeemed.filter(consumed_at__gte=month_start, consumed_at__lt=next_month)
+        redemptions = redemptions.filter(issued_at__gte=month_start, issued_at__lt=next_month)
+        paid = paid.filter(applied_at__gte=month_start, applied_at__lt=next_month)
+    if organization:
+        redeemed = redeemed.filter(organization_name=organization)
+        redemptions = redemptions.filter(promotion_code__organization_name=organization)
+        paid = paid.filter(campaign_organization_snapshot=organization)
+    normalized_code = str(code or "").strip().upper()
+    if normalized_code:
+        redeemed = redeemed.filter(code=normalized_code)
+        redemptions = redemptions.filter(promotion_code__code=normalized_code)
+        paid = paid.filter(promotion_code__code=normalized_code)
+
+    redemption_totals = redemptions.aggregate(
+        coupon_redemptions=Count("id"),
+        redeeming_users=Count("user_id", distinct=True),
+    )
+    totals = paid.aggregate(
+        paid_orders=Count("id"),
+        paying_users=Count("user_id", distinct=True),
+        original_amount=Sum("original_amount"),
+        promotion_discount=Sum("promotion_discount_amount"),
+        final_amount=Sum("final_amount"),
+    )
+
+    return {
+        "campaign_name": campaign_name,
+        "organization": organization,
+        "code": normalized_code,
+        "month": normalized_month,
+        "redeemed_codes": redeemed.count(),
+        "coupon_redemptions": redemption_totals["coupon_redemptions"] or 0,
+        "redeeming_users": redemption_totals["redeeming_users"] or 0,
+        "paid_orders": totals["paid_orders"] or 0,
+        "paying_users": totals["paying_users"] or 0,
+        "original_amount": totals["original_amount"] or Decimal("0.00"),
+        "promotion_discount": totals["promotion_discount"] or Decimal("0.00"),
+        "final_amount": totals["final_amount"] or Decimal("0.00"),
+        "redemptions": [
+            {
+                "promotion_code": coupon.promotion_code.code,
+                "telephone": getattr(coupon.user, "telephone", "") or "",
+                "issued_at": coupon.issued_at,
+            }
+            for coupon in redemptions.order_by("issued_at", "id")
+        ],
+        "purchases": [
+            {
+                "promotion_code": application.promotion_code.code,
+                "telephone": application.user.telephone,
+                "offer_code": application.offer.code,
+                "offer_title": application.offer.title,
+                "merchant_order_no": application.payment.merchant_order_no,
+                "original_amount": application.original_amount,
+                "promotion_discount": application.promotion_discount_amount,
+                "final_amount": application.final_amount,
+                "applied_at": application.applied_at,
+            }
+            for application in paid.order_by("applied_at", "id")
+        ],
+    }
 
 
 @transaction.atomic
@@ -309,8 +426,10 @@ __all__ = [
     "create_promotion_code_batch",
     "eligible_coupon_queryset",
     "generate_promotion_code",
+    "get_promotion_campaign_report",
     "get_coupon_for_offer",
     "get_coupon_unavailable_reason",
+    "list_promotion_campaign_names",
     "promotion_code_exists",
     "redeem_promotion_code",
     "store_promotion_code",

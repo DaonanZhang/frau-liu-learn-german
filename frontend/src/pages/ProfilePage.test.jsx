@@ -10,6 +10,8 @@ const profileStyles = readFileSync(resolve("src/pages/ProfilePage.css"), "utf8")
 
 
 const mocks = vi.hoisted(() => ({
+  fetchPromotionCampaigns: vi.fn(),
+  fetchPromotionCampaignReport: vi.fn(),
   fetchMyCoupons: vi.fn(),
   fetchMyProfile: vi.fn(),
   fetchPromotionCodeDetails: vi.fn(),
@@ -27,6 +29,8 @@ vi.mock("../api/auth/profile.js", () => ({
   updateMyProfile: mocks.updateMyProfile,
   fetchPromotionCodeHistory: mocks.fetchPromotionCodeHistory,
   createPromotionCodes: mocks.createPromotionCodes,
+  fetchPromotionCampaigns: mocks.fetchPromotionCampaigns,
+  fetchPromotionCampaignReport: mocks.fetchPromotionCampaignReport,
 }));
 vi.mock("../api/coupons.js", () => ({ fetchMyCoupons: mocks.fetchMyCoupons }));
 
@@ -89,6 +93,7 @@ describe("ProfilePage coupon module picker", () => {
 describe("ProfilePage promotion code manager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.fetchPromotionCampaigns.mockResolvedValue({ campaigns: [] });
     mocks.createPromotionCodes.mockResolvedValue({
       partner_name: "于云",
       operator_name: "daonan",
@@ -143,9 +148,47 @@ describe("ProfilePage promotion code manager", () => {
     expect(mocks.fetchPromotionCodeHistory).toHaveBeenCalledWith({ search: "", page: 1 });
   });
 
+  it("shows campaign reporting only to the telephone 110 superuser", async () => {
+    const { unmount } = renderProfile(true, "110");
+    expect(await screen.findByRole("heading", { name: "合作博主优惠码统计" })).toBeInTheDocument();
+    unmount();
+
+    renderProfile(true, "13800138000");
+    expect(await screen.findByText("个人资料")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "合作博主优惠码统计" })).not.toBeInTheDocument();
+  });
+
+  it("uses the freshly loaded profile when the auth context is stale", async () => {
+    mocks.useAuth.mockReturnValue({
+      user: { telephone: "110", is_staff: false, is_superuser: false },
+      reloadMe: mocks.reloadMe,
+    });
+    mocks.fetchMyProfile.mockResolvedValue({
+      id: 1,
+      telephone: "110",
+      country_code: "+86",
+      username: "管理员",
+      email: "admin@example.com",
+      is_staff: true,
+      is_superuser: true,
+    });
+    mocks.fetchMyCoupons.mockResolvedValue([]);
+
+    render(<MemoryRouter><ProfilePage /></MemoryRouter>);
+
+    expect(await screen.findByRole("heading", { name: "合作博主优惠码统计" })).toBeInTheDocument();
+  });
+
+  it("hides campaign reporting from telephone 110 without superuser access", async () => {
+    renderProfile(false, "110");
+    expect(await screen.findByText("个人资料")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "合作博主优惠码统计" })).not.toBeInTheDocument();
+  });
+
   it("submits without an empty amount and copies generated codes", async () => {
     renderProfile();
-    const partnerInput = await screen.findByLabelText("合作博主");
+    const generatorForm = (await screen.findByRole("button", { name: "确认生成" })).closest("form");
+    const partnerInput = within(generatorForm).getByLabelText("合作博主");
     expect(partnerInput).not.toHaveAttribute("placeholder");
     fireEvent.change(partnerInput, { target: { value: "于云" } });
     fireEvent.change(screen.getByLabelText("管理员"), { target: { value: "daonan" } });
@@ -186,7 +229,8 @@ describe("ProfilePage promotion code manager", () => {
 
   it("closes the promotion modal with the close button and Escape", async () => {
     renderProfile();
-    fireEvent.change(await screen.findByLabelText("合作博主"), { target: { value: "于云" } });
+    const generatorForm = (await screen.findByRole("button", { name: "确认生成" })).closest("form");
+    fireEvent.change(within(generatorForm).getByLabelText("合作博主"), { target: { value: "于云" } });
     fireEvent.change(screen.getByLabelText("管理员"), { target: { value: "daonan" } });
     fireEvent.change(screen.getByLabelText("数量"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "确认生成" }));
@@ -202,7 +246,8 @@ describe("ProfilePage promotion code manager", () => {
   it("sends a custom amount and shows API errors", async () => {
     mocks.createPromotionCodes.mockRejectedValueOnce({ data: { detail: "生成失败" } });
     renderProfile();
-    fireEvent.change(await screen.findByLabelText("合作博主"), { target: { value: "旧博主" } });
+    const generatorForm = (await screen.findByRole("button", { name: "确认生成" })).closest("form");
+    fireEvent.change(within(generatorForm).getByLabelText("合作博主"), { target: { value: "旧博主" } });
     fireEvent.change(screen.getByLabelText("管理员"), { target: { value: "Anna" } });
     fireEvent.change(screen.getByLabelText("数量"), { target: { value: "8" } });
     fireEvent.change(screen.getByLabelText("优惠金额"), { target: { value: "8" } });

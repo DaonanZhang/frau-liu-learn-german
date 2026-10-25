@@ -64,3 +64,17 @@ export function fetchPromotionCodeDetails(generationBatchId) {
   const params = new URLSearchParams({ generation_batch_id: generationBatchId });
   return apiFetch(`/accounts/users/promotion-codes/?${params.toString()}`, { method: "GET" });
 }
+
+export function fetchPromotionCampaignReport({ campaignName, month }) {
+  const params = new URLSearchParams({
+    campaign_name: String(campaignName || "").trim(),
+    month: String(month || "").trim(),
+  });
+  return apiFetch(`/accounts/users/promotion-campaign-report/?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export function fetchPromotionCampaigns() {
+  return apiFetch("/accounts/users/promotion-campaigns/", { method: "GET" });
+}

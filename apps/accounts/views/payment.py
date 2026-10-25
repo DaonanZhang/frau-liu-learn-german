@@ -835,12 +835,6 @@ class CreateAlipayPurchaseAPIView(APIView):
                         {"detail": "优惠券已被使用、已过期或不再适用于该商品。"},
                         status=status.HTTP_409_CONFLICT,
                     )
-            else:
-                locked_coupon = get_coupon_for_offer(
-                    user=request.user,
-                    offer=validated_data["offer"],
-                    for_update=True,
-                )
             pricing = get_purchase_pricing(
                 user=request.user,
                 offer=validated_data["offer"],

@@ -12,6 +12,7 @@ from apps.accounts.models import (
     PaymentDiscountApplication,
     PromotionCodeRecord,
     PurchaseOffer,
+    UserCoupon,
 )
 from apps.accounts.services.promotion_codes import store_promotion_code
 
@@ -58,7 +59,7 @@ class Frauliu8Tests(APITestCase):
         self.assertEqual(second.status_code, 200)
         self.assertEqual(record.coupons.count(), 2)
         coupon = record.coupons.first()
-        self.assertEqual(coupon.display_name, "FRAULIU8无门槛优惠券")
+        self.assertEqual(coupon.display_name, "FRAULIU专属优惠券")
         self.assertEqual(coupon.discount_amount, Decimal("8.00"))
         self.assertEqual(coupon.minimum_order_amount, Decimal("0.00"))
         self.assertIsNone(coupon.applicable_module_id)
@@ -91,6 +92,28 @@ class Frauliu8Tests(APITestCase):
         application = PaymentDiscountApplication.objects.get(payment_id=purchase.data["payment_id"])
         self.assertEqual(application.automatic_discount_amount, Decimal("0.00"))
         self.assertEqual(application.promotion_discount_amount, Decimal("8.00"))
+        self.assertEqual(
+            application.selection_source,
+            PaymentDiscountApplication.SelectionSource.AUTOMATIC,
+        )
+        coupon = UserCoupon.objects.get(pk=coupon)
+        self.assertEqual(coupon.status, UserCoupon.Status.USED)
+
+    def test_frauliu8_wins_same_discount_tie_against_regular_stack_coupon(self):
+        stack_record = self.create_code(
+            code="STACK8", stacking_policy=PromotionCodeRecord.StackingPolicy.STACK
+        )
+        frauliu8_record = self.create_code(code="FRAULIU8")
+        self.client.post(
+            "/api/accounts/auth/redeem-code/", {"code": stack_record.code}, format="json"
+        )
+        frauliu8_coupon_id = self.client.post(
+            "/api/accounts/auth/redeem-code/", {"code": frauliu8_record.code}, format="json"
+        ).data["coupon"]["id"]
+
+        choices = self.client.get("/api/accounts/coupons/choices/", {"offer_code": self.offer.code})
+
+        self.assertEqual(choices.data["default_coupon_id"], frauliu8_coupon_id)
 
     def test_kunlun_exclusive_coupon_is_not_auto_selected(self):
         Entitlement.objects.create(
@@ -104,3 +127,33 @@ class Frauliu8Tests(APITestCase):
         choices = self.client.get("/api/accounts/coupons/choices/", {"offer_code": self.offer.code})
         self.assertIsNone(choices.data["default_coupon_id"])
         self.assertEqual(choices.data["choices"][0]["coupon"]["id"], coupon)
+
+    @override_settings(ALIPAY_LOCAL_SIMULATE_SUCCESS=True, DEBUG=True)
+    def test_payment_without_coupon_id_keeps_old_user_discount_instead_of_using_kunlun_coupon(self):
+        Entitlement.objects.create(
+            user=self.user, module=self.other_module, plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE, starts_at=timezone.now(),
+        )
+        record = self.create_code(
+            code="KLDYZMZ", campaign_name="昆仑字幕组", discount_amount=Decimal("5.00")
+        )
+        coupon_id = self.client.post(
+            "/api/accounts/auth/redeem-code/", {"code": record.code}, format="json"
+        ).data["coupon"]["id"]
+
+        purchase = self.client.post(
+            "/api/accounts/payments/alipay/create/",
+            {
+                "offer_code": self.offer.code,
+                "use_coupon": True,
+                "idempotency_key": "00000000-0000-4000-8000-000000000802",
+            },
+            format="json",
+        )
+
+        self.assertEqual(purchase.status_code, 201)
+        self.assertEqual(purchase.data["amount"], "51.90")
+        self.assertFalse(PaymentDiscountApplication.objects.exists())
+        coupon = self.user.promotion_coupons.get(pk=coupon_id)
+        self.assertEqual(coupon.status, coupon.Status.AVAILABLE)
+        self.assertIsNone(coupon.reserved_payment_id)

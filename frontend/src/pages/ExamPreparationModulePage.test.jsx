@@ -277,11 +277,12 @@ describe("exam preparation level entry", () => {
     Swal.fire.mockReset();
   });
 
-  it("keeps TELC B2 limited to telephone 110", () => {
+  it("lets a regular user enter the TELC B2 module", () => {
     render(
       <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
         <Routes>
-          <Route path="*" element={<><ExamPreparationModulePage /><LocationProbe /></>} />
+          <Route path="/modules/exam-preparation" element={<ExamPreparationModulePage />} />
+          <Route path="/modules/exam-preparation/b2" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>,
     );

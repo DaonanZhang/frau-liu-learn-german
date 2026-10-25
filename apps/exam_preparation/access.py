@@ -7,6 +7,7 @@ from apps.accounts.models import Entitlement
 
 
 FREE_EXERCISES_PER_TYPE = 3
+TELC_B2_READING_UNDERSTANDING_FREE_EXTERNAL_IDS = {"1", "2", "6"}
 
 
 def user_has_full_exam_preparation_access(user) -> bool:
@@ -31,21 +32,31 @@ def user_has_full_exam_preparation_access(user) -> bool:
     )
 
 
-def is_free_trial_exercise(exercise) -> bool:
+def get_free_trial_exercise_ids(exercise) -> set:
     exercise_base = getattr(exercise, "exercise_base", None)
     if exercise_base is None or exercise.pk is None:
-        return False
+        return set()
 
-    free_ids = list(
-        type(exercise).objects.filter(
-            exercise_base__exercise_type=exercise_base.exercise_type,
-            exercise_base__exam_type=exercise_base.exam_type,
-            exercise_base__level=exercise_base.level,
-        )
-        .order_by("id")
-        .values_list("id", flat=True)[:FREE_EXERCISES_PER_TYPE]
+    exercises = type(exercise).objects.filter(
+        exercise_base__exercise_type=exercise_base.exercise_type,
+        exercise_base__exam_type=exercise_base.exam_type,
+        exercise_base__level=exercise_base.level,
     )
-    return exercise.pk in free_ids
+    if (
+        exercise_base.exam_type == "TELC"
+        and exercise_base.level == "B2"
+        and exercise_base.exercise_type == "READING_UNDERSTANDING"
+    ):
+        return set(
+            exercises.filter(
+                exercise_base__external_id__in=TELC_B2_READING_UNDERSTANDING_FREE_EXTERNAL_IDS,
+            ).values_list("id", flat=True)
+        )
+    return set(exercises.order_by("id").values_list("id", flat=True)[:FREE_EXERCISES_PER_TYPE])
+
+
+def is_free_trial_exercise(exercise) -> bool:
+    return exercise.pk in get_free_trial_exercise_ids(exercise)
 
 
 def get_parent_exercise(target):

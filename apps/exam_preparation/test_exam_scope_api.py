@@ -115,3 +115,46 @@ class ExerciseScopeApiTests(APITestCase):
         detail = reverse("exam-prep-listening-exercises-detail", args=[locked_b2_id])
         self.assertEqual(self.client.get(detail).status_code, 403)
 
+
+class B2ReadingUnderstandingFreeTrialTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138002", password="test-password"
+        )
+        self.exercises = {}
+        for external_id in ("1", "2", "3", "6"):
+            base = ExerciseBase.objects.create(
+                exam_type="TELC",
+                level="B2",
+                skill=ExerciseBase.Skill.READING,
+                exercise_type=ExerciseBase.ExerciseType.READING_UNDERSTANDING,
+                external_id=external_id,
+                title=f"Reading {external_id}",
+            )
+            self.exercises[external_id] = ReadingUnderstandingExercise.objects.create(
+                exercise_base=base, text_markdown="Text"
+            )
+        self.client.force_authenticate(self.user)
+
+    def test_b2_reading_understanding_trial_uses_external_id_allowlist(self):
+        url = reverse("exam-prep-reading-understanding-exercises-list")
+        response = self.client.get(url, {"exam_type": "TELC", "level": "B2"})
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data.get("results", []) if isinstance(response.data, dict) else response.data
+        by_external_id = {item["exercise_base"]["external_id"]: item for item in results}
+        for external_id in ("1", "2", "6"):
+            self.assertFalse(by_external_id[external_id]["is_locked"])
+            self.assertTrue(by_external_id[external_id]["show_free_trial_badge"])
+        self.assertTrue(by_external_id["3"]["is_locked"])
+        self.assertFalse(by_external_id["3"]["show_free_trial_badge"])
+
+        free_detail = reverse(
+            "exam-prep-reading-understanding-exercises-detail", args=[self.exercises["6"].pk]
+        )
+        locked_detail = reverse(
+            "exam-prep-reading-understanding-exercises-detail", args=[self.exercises["3"].pk]
+        )
+        self.assertEqual(self.client.get(f"{free_detail}?exam_type=TELC&level=B2").status_code, 200)
+        self.assertEqual(self.client.get(f"{locked_detail}?exam_type=TELC&level=B2").status_code, 403)
+

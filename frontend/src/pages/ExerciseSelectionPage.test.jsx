@@ -9,6 +9,42 @@ vi.mock("../api/auth/useAuth.js", () => ({
 }));
 
 describe("ExerciseSelectionPage", () => {
+  it.each([
+    ["试用", [false, false, true, true, true, false], ["1", "2", "6", "3", "4", "5"]],
+    ["已解锁", [false, false, false, false, false, false], ["1", "2", "3", "4", "5", "6"]],
+  ])("按预期排列%s题目", async (_state, lockedStates, expectedOrder) => {
+    const results = lockedStates.map((isLocked, index) => ({
+      id: index + 1,
+      is_locked: isLocked,
+      exercise_base: { external_id: String(index + 1) },
+    }));
+
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/b2/lesen/understanding"]}>
+        <Routes>
+          <Route
+            path="/modules/exam-preparation/:level/lesen/understanding"
+            element={(
+              <ExerciseSelectionPage
+                backTo="/modules/exam-preparation/b2/lesen"
+                backLabel="Zurück"
+                eyebrow="Lesen"
+                title="Teil 2"
+                description="Beschreibung"
+                fetchExercises={vi.fn().mockResolvedValue({ results })}
+                buildExerciseHref={(exercise) => `/exercise/${exercise.id}`}
+                buildCardTitle={(exercise) => exercise.exercise_base.external_id}
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const cardTitles = await screen.findAllByRole("heading", { level: 2 });
+    expect(cardTitles.map((heading) => heading.textContent)).toEqual(expectedOrder);
+  });
+
   it("resolves a scoped description from the active exam level", async () => {
     render(
       <MemoryRouter initialEntries={["/modules/exam-preparation/b2/sprechen/teil-1"]}>

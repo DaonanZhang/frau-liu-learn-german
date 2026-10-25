@@ -230,16 +230,25 @@ export default function CheckoutCouponSelector({
                 aria-label="优惠方式确认"
               >
                 <h3>优惠方式确认</h3>
-                <p>
-                  该优惠券不能与品牌挚友专享优惠叠加使用。
-                  使用后将取消当前 {formatAmount(oldUserDiscount)} 元优惠，改为减 {formatAmount(pendingExclusiveCoupon.coupon.discount_amount)} 元。
-                  本单实付将从 ¥{formatMoney(couponBundle?.no_coupon_pricing?.final_amount)} 变为
-                  ¥{formatMoney(pendingExclusiveCoupon.pricing?.final_amount)}，比当前价格高
-                  ¥{formatAmount(
-                    Number(pendingExclusiveCoupon.pricing?.final_amount)
-                      - Number(couponBundle?.no_coupon_pricing?.final_amount)
-                  )}。
-                </p>
+                {Number(pendingExclusiveCoupon.pricing?.final_amount)
+                  === Number(couponBundle?.no_coupon_pricing?.final_amount) ? (
+                    <p>
+                      该优惠券不能与品牌挚友专享优惠叠加使用。
+                      使用后将取消当前 {formatAmount(oldUserDiscount)} 元优惠，改用 {pendingExclusiveCoupon.coupon.display_name}。
+                      本单实付不变，仍为 ¥{formatMoney(pendingExclusiveCoupon.pricing?.final_amount)}。
+                    </p>
+                  ) : (
+                    <p>
+                      该优惠券不能与品牌挚友专享优惠叠加使用。
+                      使用后将取消当前 {formatAmount(oldUserDiscount)} 元优惠，改为减 {formatAmount(pendingExclusiveCoupon.coupon.discount_amount)} 元。
+                      本单实付将从 ¥{formatMoney(couponBundle?.no_coupon_pricing?.final_amount)} 变为
+                      ¥{formatMoney(pendingExclusiveCoupon.pricing?.final_amount)}，比当前价格高
+                      ¥{formatAmount(
+                        Number(pendingExclusiveCoupon.pricing?.final_amount)
+                          - Number(couponBundle?.no_coupon_pricing?.final_amount)
+                      )}。
+                    </p>
+                  )}
                 <div className="module-checkout-page__couponConfirmActions">
                   <button type="button" onClick={() => setPendingExclusiveCoupon(null)}>取消</button>
                   <button

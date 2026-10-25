@@ -3,7 +3,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.exam_preparation.access import (
-    FREE_EXERCISES_PER_TYPE,
+    get_free_trial_exercise_ids,
     user_has_full_exam_preparation_access,
 )
 from apps.exam_preparation.speaking_audio import get_speaking_turn_audio_url
@@ -66,15 +66,7 @@ class TrialAwareExerciseSerializerMixin:
         )
         free_ids_by_type = self.context.setdefault("free_trial_exercise_ids", {})
         if cache_key not in free_ids_by_type:
-            free_ids_by_type[cache_key] = set(
-                type(exercise).objects.filter(
-                    exercise_base__exercise_type=exercise_type,
-                    exercise_base__exam_type=exercise.exercise_base.exam_type,
-                    exercise_base__level=exercise.exercise_base.level,
-                )
-                .order_by("id")
-                .values_list("id", flat=True)[:FREE_EXERCISES_PER_TYPE]
-            )
+            free_ids_by_type[cache_key] = get_free_trial_exercise_ids(exercise)
         return exercise.pk not in free_ids_by_type[cache_key]
 
     def get_show_free_trial_badge(self, exercise):

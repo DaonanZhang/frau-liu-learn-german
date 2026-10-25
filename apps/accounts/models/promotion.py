@@ -200,7 +200,7 @@ class UserCoupon(models.Model):
             == PromotionCodeRecord.StackingPolicy.EXCLUSIVE_BRAND_FRIEND
         ):
             if self.promotion_code.code == "FRAULIU8":
-                return "FRAULIU8无门槛优惠券"
+                return "FRAULIU专属优惠券"
             return "昆仑字幕组专属优惠券"
         if self.minimum_order_amount > 0:
             return "满减优惠券"

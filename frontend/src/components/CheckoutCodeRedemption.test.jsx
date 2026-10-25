@@ -11,7 +11,7 @@ describe("CheckoutCodeRedemption", () => {
   beforeEach(() => redeemCode.mockReset());
 
   function renderControl(callbacks = {}) {
-    return render(<CheckoutCodeRedemption offer={{ id: 1 }} module="learning_by_video" {...callbacks} />);
+    return render(<CheckoutCodeRedemption module="learning_by_video" {...callbacks} />);
   }
 
   it("applies activation entitlements once", async () => {
@@ -88,8 +88,8 @@ describe("CheckoutCodeRedemption", () => {
     redeemCode.mockResolvedValue({ type: "referral", outcome: "replacement_required", replacement: {} });
     const { container } = render(
       <>
-        <CheckoutCodeRedemption offer={{ id: 1 }} module="a" />
-        <CheckoutCodeRedemption offer={{ id: 2 }} module="b" />
+        <CheckoutCodeRedemption module="a" />
+        <CheckoutCodeRedemption module="b" />
       </>,
     );
     const inputs = [...container.querySelectorAll("input")];

@@ -4,7 +4,6 @@ import { redeemCode } from "../api/auth/auth.js";
 import "./CheckoutCodeRedemption.css";
 
 export default function CheckoutCodeRedemption({
-  offer,
   module,
   onCouponIssued,
   onActivationApplied,
@@ -81,7 +80,19 @@ export default function CheckoutCodeRedemption({
   }
 
   return (
-    <section className="checkout-code-redemption" data-offer={offer?.id || ""} data-module={module || ""}>
+    <section className="checkout-code-redemption" data-module={module || ""}>
+      <div className="checkout-code-redemption__header">
+        <span className="checkout-code-redemption__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5v2a2.5 2.5 0 0 0 0 5v2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5v-2a2.5 2.5 0 0 0 0-5v-2Z" />
+            <path d="M13 8.5v1m0 2v1m0 2v1" />
+          </svg>
+        </span>
+        <div>
+          <h2 className="checkout-code-redemption__title">使用兑换码</h2>
+          <p className="checkout-code-redemption__description">兑换优惠券或激活当前模块。</p>
+        </div>
+      </div>
       <form
         className="checkout-code-redemption__form"
         onSubmit={(event) => {
@@ -100,6 +111,7 @@ export default function CheckoutCodeRedemption({
             value={code}
             onChange={(event) => setCode(event.target.value)}
             autoComplete="off"
+            placeholder="输入兑换码"
           />
           <button ref={submitButtonRef} className="checkout-code-redemption__submit" type="submit" disabled={pending || !code.trim()}>
             {pending ? "处理中…" : "兑换"}

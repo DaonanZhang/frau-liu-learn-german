@@ -354,23 +354,50 @@ export default function ModuleCheckoutPage() {
     }
   }
 
-  async function handleCouponIssued(offer, coupon) {
-    const offerCode = String(offer?.code || "").trim();
-    const refreshedBundle = await fetchCouponChoices(offerCode);
-    setCouponChoicesByOffer((current) => ({ ...current, [offerCode]: refreshedBundle }));
-    const issuedChoice = refreshedBundle?.choices?.find(
-      (choice) => choice?.coupon?.id === coupon?.id
+  async function handleCouponIssued(coupon) {
+    const choiceResults = await Promise.allSettled(
+      offers.map((offer) => fetchCouponChoices(offer.code))
     );
-    if (issuedChoice?.is_applicable === true) {
-      setSelectedCouponByOffer((current) => ({ ...current, [offerCode]: coupon.id }));
-      setCouponSelectionModeByOffer((current) => ({ ...current, [offerCode]: "manual" }));
-      return;
-    }
-    await Swal.fire({
-      icon: "info",
-      title: "优惠券已领取",
-      text: "已领取，但不适用于当前方案，可在其他适用购买页使用",
+    let appliesToAnOffer = false;
+    const refreshedBundles = {};
+    const applicableOffers = [];
+
+    choiceResults.forEach((result, index) => {
+      if (result.status !== "fulfilled") return;
+      const offerCode = offers[index].code;
+      refreshedBundles[offerCode] = result.value;
+      const issuedChoice = result.value?.choices?.find(
+        (choice) => choice?.coupon?.id === coupon?.id && choice?.is_applicable === true
+      );
+      if (issuedChoice) {
+        appliesToAnOffer = true;
+        applicableOffers.push(offerCode);
+      }
     });
+
+    setCouponChoicesByOffer((current) => ({ ...current, ...refreshedBundles }));
+    if (applicableOffers.length) {
+      setSelectedCouponByOffer((current) => {
+        const next = { ...current };
+        applicableOffers.forEach((offerCode) => { next[offerCode] = coupon.id; });
+        return next;
+      });
+      setCouponSelectionModeByOffer((current) => {
+        const next = { ...current };
+        applicableOffers.forEach((offerCode) => { next[offerCode] = "manual"; });
+        return next;
+      });
+    }
+    if (choiceResults.some((result) => result.status === "rejected")) {
+      throw new Error("Some coupon choices could not be refreshed");
+    }
+    if (!appliesToAnOffer && choiceResults.every((result) => result.status === "fulfilled")) {
+      await Swal.fire({
+        icon: "info",
+        title: "优惠券已领取",
+        text: "已领取，但不适用于当前方案，可在其他适用购买页使用",
+      });
+    }
   }
 
   async function handleActivationApplied() {
@@ -608,15 +635,6 @@ export default function ModuleCheckoutPage() {
                             />
                           ) : null}
 
-                          {isAuthenticated ? (
-                            <CheckoutCodeRedemption
-                              offer={offer}
-                              module={module.moduleKey}
-                              onCouponIssued={(coupon) => handleCouponIssued(offer, coupon)}
-                              onActivationApplied={handleActivationApplied}
-                            />
-                          ) : null}
-
                           <button
                             className="module-checkout-page__pay"
                             type="button"
@@ -635,6 +653,14 @@ export default function ModuleCheckoutPage() {
               })}
             </div>
           </div>
+        ) : null}
+
+        {!loadingOffers && !offersError && offers.length > 0 && isAuthenticated ? (
+          <CheckoutCodeRedemption
+            module={module.moduleKey}
+            onCouponIssued={handleCouponIssued}
+            onActivationApplied={handleActivationApplied}
+          />
         ) : null}
 
       <div className="module-checkout-page__footer-row">

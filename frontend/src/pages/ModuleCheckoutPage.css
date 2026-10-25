@@ -416,10 +416,18 @@
   width: 2rem;
   height: 2rem;
   border-radius: 8px;
-  background: #e45b24;
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 900;
+  background: #fff0df;
+  color: #c04b1c;
+}
+
+.module-checkout-page__couponSelectorIcon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
 
 .module-checkout-page__couponSelectorText {

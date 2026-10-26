@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -9,7 +9,16 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from apps.accounts.models import PromotionCodeRecord
+from apps.accounts.models import (
+    AlipayWebsitePayment,
+    Entitlement,
+    Module,
+    PaymentDiscountApplication,
+    PromotionCodeRecord,
+    PurchaseOffer,
+    UserCoupon,
+)
+from apps.accounts.services.promotion_codes import store_promotion_code
 
 
 class ProfilePromotionCodeApiTests(APITestCase):
@@ -41,6 +50,7 @@ class ProfilePromotionCodeApiTests(APITestCase):
         self.assertEqual(generated.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(history.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(PromotionCodeRecord.objects.count(), 0)
+
 
     def test_telephone_110_without_superuser_is_rejected(self) -> None:
         self.admin.is_superuser = False
@@ -308,3 +318,198 @@ class ProfilePromotionCodeApiTests(APITestCase):
                 response = self.client.post(self.url, payload, format="json")
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(PromotionCodeRecord.objects.count(), 0)
+
+
+class ProfilePromotionCampaignReportApiTests(APITestCase):
+    def setUp(self) -> None:
+        User = get_user_model()
+        self.admin = User.objects.create_user(
+            telephone="110",
+            country_code="+86",
+            password="pass-123456",
+            is_superuser=True,
+            is_staff=True,
+        )
+        self.user = User.objects.create_user(
+            telephone="13800138009",
+            country_code="+86",
+            password="pass-123456",
+        )
+        self.other_superuser = User.objects.create_user(
+            telephone="13800138010",
+            country_code="+86",
+            password="pass-123456",
+            is_superuser=True,
+            is_staff=True,
+        )
+        self.url = "/api/accounts/users/promotion-campaign-report/"
+        self.campaigns_url = "/api/accounts/users/promotion-campaigns/"
+
+    def test_campaign_report_requires_superuser_telephone_110(self) -> None:
+        for user in (self.user, self.other_superuser):
+            with self.subTest(telephone=user.telephone):
+                self.client.force_authenticate(user=user)
+                response = self.client.get(
+                    self.url,
+                    {"campaign_name": "花虫二", "month": "2026-10"},
+                )
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.admin.is_superuser = False
+        self.admin.save(update_fields=["is_superuser"])
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get(
+            self.url,
+            {"campaign_name": "花虫二", "month": "2026-10"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_campaign_report_returns_summary_and_purchase_details(self) -> None:
+        module = Module.objects.create(
+            key="profile-report",
+            name="Profile Report",
+            is_active=True,
+        )
+        offer = PurchaseOffer.objects.create(
+            code="profile-report-lifetime",
+            title="科普季永久权限",
+            module=module,
+            plan=Entitlement.Plan.LIFETIME,
+            price_amount=Decimal("39.90"),
+            currency="CNY",
+        )
+        promotion = store_promotion_code(
+            code="PROFILE001",
+            campaign_name="花虫二",
+            organization_name="花虫二",
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=None,
+            redemption_mode=PromotionCodeRecord.RedemptionMode.REUSABLE,
+        )
+        similar_promotion = store_promotion_code(
+            code="PROFILE002",
+            campaign_name="花虫二-其他批次",
+            organization_name="花虫二",
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=None,
+            redemption_mode=PromotionCodeRecord.RedemptionMode.REUSABLE,
+        )
+        coupon = UserCoupon.objects.create(
+            user=self.user,
+            promotion_code=promotion,
+            discount_amount=Decimal("5.00"),
+        )
+        similar_coupon = UserCoupon.objects.create(
+            user=self.user,
+            promotion_code=similar_promotion,
+            discount_amount=Decimal("5.00"),
+        )
+        applied_at = timezone.make_aware(datetime(2026, 10, 15, 12, 0))
+        UserCoupon.objects.filter(pk__in=[coupon.pk, similar_coupon.pk]).update(
+            issued_at=applied_at
+        )
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="profile-report-order",
+            subject=offer.title,
+            total_amount=Decimal("34.90"),
+            status=AlipayWebsitePayment.Status.PAID,
+            paid_at=applied_at,
+        )
+        PaymentDiscountApplication.objects.create(
+            payment=payment,
+            coupon=coupon,
+            promotion_code=promotion,
+            user=self.user,
+            offer=offer,
+            original_amount=Decimal("39.90"),
+            automatic_discount_amount=Decimal("0.00"),
+            promotion_discount_amount=Decimal("5.00"),
+            final_amount=Decimal("34.90"),
+            selection_source=PaymentDiscountApplication.SelectionSource.MANUAL,
+            campaign_name_snapshot="花虫二",
+            campaign_organization_snapshot="花虫二",
+            status=PaymentDiscountApplication.Status.APPLIED,
+            applied_at=applied_at,
+        )
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get(
+            self.url,
+            {"campaign_name": "花虫二", "month": "2026-10"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["campaign_name"], "花虫二")
+        self.assertEqual(response.data["month"], "2026-10")
+        self.assertEqual(response.data["coupon_redemptions"], 2)
+        self.assertEqual(response.data["redeeming_users"], 1)
+        self.assertEqual(response.data["paid_orders"], 1)
+        self.assertEqual(response.data["paying_users"], 1)
+        self.assertEqual(response.data["original_amount"], "39.90")
+        self.assertEqual(response.data["promotion_discount"], "5.00")
+        self.assertEqual(response.data["final_amount"], "34.90")
+        self.assertEqual(len(response.data["purchases"]), 1)
+        self.assertEqual(response.data["purchases"][0]["telephone"], self.user.telephone)
+        self.assertEqual(response.data["purchases"][0]["offer_code"], offer.code)
+        self.assertEqual(response.data["purchases"][0]["offer_title"], offer.title)
+        self.assertEqual(
+            response.data["purchases"][0]["merchant_order_no"],
+            payment.merchant_order_no,
+        )
+
+        all_time_response = self.client.get(
+            self.url,
+            {"campaign_name": "花虫二", "month": "all"},
+        )
+        self.assertEqual(all_time_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(all_time_response.data["month"], "all")
+        self.assertEqual(all_time_response.data["paid_orders"], 1)
+
+    def test_campaign_report_validates_query_and_returns_empty_result(self) -> None:
+        self.client.force_authenticate(user=self.admin)
+        invalid_queries = (
+            {"campaign_name": "花虫二"},
+            {"campaign_name": "花虫二", "month": "2026-1"},
+            {"campaign_name": "", "month": "2026-10"},
+        )
+        for query in invalid_queries:
+            with self.subTest(query=query):
+                response = self.client.get(self.url, query)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        response = self.client.get(
+            self.url,
+            {"campaign_name": "不存在的博主", "month": "2026-10"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["coupon_redemptions"], 0)
+        self.assertEqual(response.data["paid_orders"], 0)
+        self.assertEqual(response.data["purchases"], [])
+
+    def test_campaign_list_is_complete_distinct_sorted_and_restricted(self) -> None:
+        for code, campaign_name in (
+            ("PROFILE101", "Beta"),
+            ("PROFILE102", "Alpha"),
+            ("PROFILE103", "Alpha"),
+            ("PROFILE104", ""),
+        ):
+            PromotionCodeRecord.objects.create(
+                code=code,
+                campaign_name=campaign_name,
+                discount_amount=Decimal("5.00"),
+            )
+
+        self.client.force_authenticate(user=self.admin)
+        response = self.client.get(self.campaigns_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"campaigns": ["Alpha", "Beta"]})
+
+        for user in (self.user, self.other_superuser):
+            with self.subTest(telephone=user.telephone):
+                self.client.force_authenticate(user=user)
+                response = self.client.get(self.campaigns_url)
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

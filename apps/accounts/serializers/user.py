@@ -126,3 +126,8 @@ class PromotionCodeHistoryQuerySerializer(serializers.Serializer):
         default="",
     )
     page = serializers.IntegerField(min_value=1, required=False, default=1)
+
+
+class PromotionCampaignReportQuerySerializer(serializers.Serializer):
+    campaign_name = serializers.CharField(max_length=128, trim_whitespace=True)
+    month = serializers.RegexField(regex=r"^(all|\d{4}-(0[1-9]|1[0-2]))$")

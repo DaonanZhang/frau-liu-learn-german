@@ -14,12 +14,17 @@ from rest_framework.response import Response
 from apps.accounts.models import PromotionCodeRecord
 from apps.accounts.models.entitlement import Entitlement
 from apps.accounts.serializers.user import (
+    PromotionCampaignReportQuerySerializer,
     PromotionCodeBatchSerializer,
     PromotionCodeHistoryQuerySerializer,
     UserMeReadSerializer,
     UserMeWriteSerializer,
 )
-from apps.accounts.services.promotion_codes import create_promotion_code_batch
+from apps.accounts.services.promotion_codes import (
+    create_promotion_code_batch,
+    get_promotion_campaign_report,
+    list_promotion_campaign_names,
+)
 
 User = get_user_model()
 
@@ -201,3 +206,49 @@ class UserViewSet(viewsets.GenericViewSet):
             },
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=False, methods=["get"], url_path="promotion-campaign-report")
+    def promotion_campaign_report(self, request: Request) -> Response:
+        if not (
+            request.user.is_superuser
+            and str(request.user.telephone or "").strip() == "110"
+        ):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        serializer = PromotionCampaignReportQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        report = get_promotion_campaign_report(
+            campaign_name=serializer.validated_data["campaign_name"],
+            month_text=serializer.validated_data["month"],
+        )
+        return Response({
+            "campaign_name": report["campaign_name"],
+            "month": report["month"],
+            "redeemed_codes": report["redeemed_codes"],
+            "coupon_redemptions": report["coupon_redemptions"],
+            "redeeming_users": report["redeeming_users"],
+            "paid_orders": report["paid_orders"],
+            "paying_users": report["paying_users"],
+            "original_amount": f"{report['original_amount']:.2f}",
+            "promotion_discount": f"{report['promotion_discount']:.2f}",
+            "final_amount": f"{report['final_amount']:.2f}",
+            "redemptions": report["redemptions"],
+            "purchases": [
+                {
+                    **purchase,
+                    "original_amount": f"{purchase['original_amount']:.2f}",
+                    "promotion_discount": f"{purchase['promotion_discount']:.2f}",
+                    "final_amount": f"{purchase['final_amount']:.2f}",
+                }
+                for purchase in report["purchases"]
+            ],
+        })
+
+    @action(detail=False, methods=["get"], url_path="promotion-campaigns")
+    def promotion_campaigns(self, request: Request) -> Response:
+        if not (
+            request.user.is_superuser
+            and str(request.user.telephone or "").strip() == "110"
+        ):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        return Response({"campaigns": list_promotion_campaign_names()})

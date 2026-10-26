@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from io import StringIO
 from unittest.mock import Mock, patch
@@ -489,6 +489,162 @@ class PromotionCodeTests(APITestCase):
         self.assertIn("paid_orders=1", report)
         self.assertIn(self.user.telephone, report)
         self.assertIn(self.offer.code, report)
+
+    def test_campaign_report_service_uses_campaign_contains(self) -> None:
+        from apps.accounts.services.promotion_codes import get_promotion_campaign_report
+
+        campaign_name = "花虫二"
+        october_start = timezone.make_aware(datetime(2026, 10, 1))
+        november_start = timezone.make_aware(datetime(2026, 11, 1))
+        promotion = store_promotion_code(
+            code="HUACHONG01",
+            campaign_name=campaign_name,
+            organization_name=campaign_name,
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=None,
+            redemption_mode=PromotionCodeRecord.RedemptionMode.REUSABLE,
+        )
+        similar_promotion = store_promotion_code(
+            code="HUACHONG02",
+            campaign_name="花虫二-其他批次",
+            organization_name=campaign_name,
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=None,
+            redemption_mode=PromotionCodeRecord.RedemptionMode.REUSABLE,
+        )
+        october_coupons = [
+            UserCoupon.objects.create(
+                user=self.user,
+                promotion_code=promotion,
+                discount_amount=Decimal("5.00"),
+            )
+            for _ in range(2)
+        ]
+        UserCoupon.objects.filter(
+            id__in=[coupon.id for coupon in october_coupons]
+        ).update(issued_at=october_start + timedelta(days=10))
+        november_coupon = UserCoupon.objects.create(
+            user=self.user,
+            promotion_code=promotion,
+            discount_amount=Decimal("5.00"),
+        )
+        UserCoupon.objects.filter(pk=november_coupon.pk).update(
+            issued_at=november_start
+        )
+        similar_coupon = UserCoupon.objects.create(
+            user=self.user,
+            promotion_code=similar_promotion,
+            discount_amount=Decimal("5.00"),
+        )
+        UserCoupon.objects.filter(pk=similar_coupon.pk).update(
+            issued_at=october_start + timedelta(days=12)
+        )
+
+        def create_application(*, suffix, coupon, campaign, status_value, applied_at):
+            payment = AlipayWebsitePayment.objects.create(
+                merchant_order_no=f"report-{suffix}",
+                subject=f"Report {suffix}",
+                total_amount=Decimal("34.90"),
+                status=AlipayWebsitePayment.Status.PAID,
+                paid_at=applied_at,
+            )
+            return PaymentDiscountApplication.objects.create(
+                payment=payment,
+                coupon=coupon,
+                promotion_code=coupon.promotion_code,
+                user=self.user,
+                offer=self.offer,
+                original_amount=Decimal("39.90"),
+                automatic_discount_amount=Decimal("0.00"),
+                promotion_discount_amount=Decimal("5.00"),
+                final_amount=Decimal("34.90"),
+                selection_source=PaymentDiscountApplication.SelectionSource.MANUAL,
+                campaign_name_snapshot=campaign,
+                campaign_organization_snapshot=campaign_name,
+                status=status_value,
+                applied_at=applied_at,
+            )
+
+        create_application(
+            suffix="applied",
+            coupon=october_coupons[0],
+            campaign=campaign_name,
+            status_value=PaymentDiscountApplication.Status.APPLIED,
+            applied_at=october_start + timedelta(days=15),
+        )
+        create_application(
+            suffix="refunded",
+            coupon=october_coupons[1],
+            campaign=campaign_name,
+            status_value=PaymentDiscountApplication.Status.REFUNDED,
+            applied_at=october_start + timedelta(days=16),
+        )
+        create_application(
+            suffix="similar",
+            coupon=similar_coupon,
+            campaign="花虫二-其他批次",
+            status_value=PaymentDiscountApplication.Status.APPLIED,
+            applied_at=october_start + timedelta(days=17),
+        )
+        create_application(
+            suffix="next-month",
+            coupon=november_coupon,
+            campaign=campaign_name,
+            status_value=PaymentDiscountApplication.Status.APPLIED,
+            applied_at=november_start,
+        )
+
+        report = get_promotion_campaign_report(
+            campaign_name=campaign_name,
+            month_text="2026-10",
+        )
+
+        self.assertEqual(report["coupon_redemptions"], 3)
+        self.assertEqual(report["redeeming_users"], 1)
+        self.assertEqual(report["paid_orders"], 2)
+        self.assertEqual(report["paying_users"], 1)
+        self.assertEqual(report["original_amount"], Decimal("79.80"))
+        self.assertEqual(report["promotion_discount"], Decimal("10.00"))
+        self.assertEqual(report["final_amount"], Decimal("69.80"))
+        self.assertEqual(len(report["purchases"]), 2)
+        self.assertEqual(report["purchases"][0]["telephone"], self.user.telephone)
+        self.assertEqual(report["purchases"][0]["offer_code"], self.offer.code)
+        self.assertEqual(report["purchases"][0]["offer_title"], self.offer.title)
+        self.assertEqual(report["purchases"][0]["merchant_order_no"], "report-applied")
+        self.assertEqual(report["purchases"][1]["merchant_order_no"], "report-similar")
+
+        all_time_report = get_promotion_campaign_report(
+            campaign_name=campaign_name,
+            month_text="all",
+        )
+
+        self.assertEqual(all_time_report["coupon_redemptions"], 4)
+        self.assertEqual(all_time_report["paid_orders"], 3)
+        self.assertEqual(all_time_report["original_amount"], Decimal("119.70"))
+        self.assertEqual(all_time_report["promotion_discount"], Decimal("15.00"))
+        self.assertEqual(all_time_report["final_amount"], Decimal("104.70"))
+        self.assertEqual(len(all_time_report["purchases"]), 3)
+
+    def test_list_promotion_campaign_names(self) -> None:
+        from apps.accounts.services.promotion_codes import list_promotion_campaign_names
+
+        PromotionCodeRecord.objects.filter(pk=self.record.pk).update(campaign_name="Beta")
+        for code, campaign_name in (
+            ("CAMPAIGN01", "Alpha"),
+            ("CAMPAIGN02", "Alpha"),
+            ("CAMPAIGN03", ""),
+        ):
+            PromotionCodeRecord.objects.create(
+                code=code,
+                campaign_name=campaign_name,
+                discount_amount=Decimal("5.00"),
+            )
+
+        self.assertEqual(list_promotion_campaign_names(), ["Alpha", "Beta"])
 
     def test_coupon_choices_default_to_the_largest_effective_discount(self) -> None:
         best_coupon_id = self.redeem().data["coupon"]["id"]

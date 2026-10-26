@@ -12,6 +12,7 @@ import { fetchMyCoupons } from "../api/coupons.js";
 import ReferralCampaignPanel from "../components/ReferralCampaignPanel.jsx";
 import { hasModuleAccess } from "../utils/moduleAccess.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
+import PromotionCampaignReportCard from "./profile/PromotionCampaignReportCard.jsx";
 import "./ProfilePage.css";
 
 const COUNTRY_CODE_OPTIONS = [
@@ -142,6 +143,7 @@ export default function ProfilePage() {
   const { user, reloadMe } = useAuth();
 
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [loadedProfile, setLoadedProfile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [successText, setSuccessText] = useState("");
@@ -180,7 +182,13 @@ export default function ProfilePage() {
   const normalizedUsername = useMemo(() => username.trim(), [username]);
   const normalizedEmail = useMemo(() => email.trim(), [email]);
   const canSave = !saving && !loadingProfile;
-  const canManagePromotionCodes = user?.is_superuser;
+  const effectiveUser = useMemo(
+    () => ({ ...(user || {}), ...(loadedProfile || {}) }),
+    [loadedProfile, user]
+  );
+  const canManagePromotionCodes = effectiveUser.is_superuser;
+  const canViewPromotionCampaignReport = Boolean(effectiveUser.is_superuser)
+    && String(effectiveUser.telephone || "").trim() === "110";
   const filteredCoupons = useMemo(
     () => coupons.filter((coupon) => couponFilterKey(coupon) === couponFilter),
     [couponFilter, coupons]
@@ -265,6 +273,7 @@ export default function ProfilePage() {
         setCountryCode(String(profile?.country_code || "+86"));
         setUsername(String(profile?.username || ""));
         setEmail(String(profile?.email || ""));
+        setLoadedProfile(profile || null);
       } catch (error) {
         if (aborted) {
           return;
@@ -344,6 +353,7 @@ export default function ProfilePage() {
       setCountryCode(String(updated?.country_code || "+86"));
       setUsername(String(updated?.username || ""));
       setEmail(String(updated?.email || ""));
+      setLoadedProfile(updated || null);
       setSuccessText("资料已保存。");
       await reloadMe();
     } catch (error) {
@@ -574,6 +584,7 @@ export default function ProfilePage() {
             )}
           </section>
         ) : null}
+        {canViewPromotionCampaignReport ? <PromotionCampaignReportCard /> : null}
         <ReferralCampaignPanel />
         <section className="profile-couponWallet" id="coupons" aria-labelledby="coupon-wallet-title">
         <div className="profile-couponWallet__header">

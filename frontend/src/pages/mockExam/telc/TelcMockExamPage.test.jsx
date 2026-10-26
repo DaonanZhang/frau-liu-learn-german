@@ -33,6 +33,7 @@ const mockExamStyleSource = readFileSync(resolve("src/pages/mockExam/telc/TelcMo
 const clozeExerciseStyleSource = readFileSync(resolve("src/pages/ClozeExercisePage.css"), "utf8");
 const appLayoutStyleSource = readFileSync(resolve("src/layouts/AppLayout.css"), "utf8");
 const readingAdStyleSource = readFileSync(resolve("src/pages/ReadingAdMatchingPage.css"), "utf8");
+const writingDetailStyleSource = readFileSync(resolve("src/pages/ExamPreparationWritingDetailPage.css"), "utf8");
 
 function LocationProbe() {
   const location = useLocation();
@@ -2788,6 +2789,8 @@ describe("TELC B2 writing choice", () => {
     expect(mockExamStyleSource).toContain(".telc-mock-exam-writing-choice-card .telc-mock-exam-source-text { flex: 1;");
     expect(mockExamStyleSource).toContain(".telc-mock-exam-writing-chooser__options { grid-template-columns: 1fr; }");
     expect(screen.getAllByRole("button", { name: "Wählen" })).toHaveLength(2);
+    expect(screen.getAllByRole("heading", { name: "Aushang" })).toHaveLength(2);
+    expect(screen.queryByRole("heading", { name: "Anleitung" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "提交写作并自评" })).not.toBeInTheDocument();
     expect(screen.getByText("30:00")).toBeInTheDocument();
@@ -2817,7 +2820,16 @@ describe("TELC B2 writing choice", () => {
     expect(screen.getByRole("textbox")).toBeInTheDocument();
     expect(screen.getByText("Aufgabe 502")).toBeInTheDocument();
     expect(screen.queryByText("Aufgabe 501")).not.toBeInTheDocument();
-    expect(JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B2:7")).writingChoiceId).toBe(502);
+    const snapshot = JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B2:7"));
+    expect(snapshot.writingChoiceId).toBe(502);
+    expect(snapshot.exam.parts.writing.id).toBe(502);
+    expect(screen.getByRole("heading", { name: "Aushang" }).closest(".writing-detail-request-panel"))
+      .toHaveClass("writing-detail-request-panel--announcement");
+    expect(screen.getByRole("heading", { name: "写作要求" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /^(Anleitung|Aufgabe)$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox").closest(".writing-detail-input-card--long")).toBeInTheDocument();
+    expect(document.querySelector(".telc-mock-exam-writing-grid")).not.toBeInTheDocument();
+    expect(document.querySelector(".telc-mock-exam-writing-chooser")).not.toBeInTheDocument();
     await act(async () => { vi.advanceTimersByTime(500); await Promise.resolve(); });
     expect(updateSavedMockExam).toHaveBeenCalled();
     expect(updateSavedMockExam.mock.calls.at(-1)[1].progress.writing_choice_id).toBe(502);
@@ -2891,5 +2903,20 @@ describe("TELC B2 writing choice", () => {
     await act(async () => { await Promise.resolve(); });
     expect(screen.getByRole("textbox")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Wählen" })).not.toBeInTheDocument();
+    const isB2 = key.includes(":B2:");
+    const requestHeading = screen.getByRole("heading", { name: isB2 ? "Aushang" : "E-Mail" });
+    expect(requestHeading.closest(".writing-detail-request-panel")).toHaveClass(
+      isB2 ? "writing-detail-request-panel--announcement" : "writing-detail-request-panel--email",
+    );
+    const requestBody = requestHeading.closest(".writing-detail-request-panel")
+      .querySelector(`[data-exam-annotation-region="writing:request"]`);
+    expect(requestBody).toHaveClass("writing-detail-request-panel__body");
+    expect(writingDetailStyleSource).toContain(".writing-detail-request-panel--email .writing-detail-request-panel__body {");
+    expect(requestHeading.closest(".telc-mock-exam-paper")).toHaveClass("telc-mock-exam-paper--writing");
+    expect(mockExamStyleSource).toContain(".telc-mock-exam-paper--writing { width: min(100%, 72rem); margin-right: auto; margin-left: auto; padding: 0; border: 0; background: transparent; box-shadow: none; }");
+    expect(screen.queryByRole("heading", { name: /^(Anleitung|Aufgabe)$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox").closest(".writing-detail-input-card--long"))[
+      isB2 ? "toBeInTheDocument" : "toBeNull"
+    ]();
   });
 });

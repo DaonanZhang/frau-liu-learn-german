@@ -14,6 +14,9 @@ import {
 } from "../api/exam_preparation/userExerciseStates.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
+import WritingExerciseWorkspace, {
+  StoredLineBreaks,
+} from "../components/examPreparation/WritingExerciseWorkspace.jsx";
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
@@ -22,14 +25,6 @@ import {
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import { isTelcB2Writing, writingWordLimitLabel } from "./writingDisplay.js";
 import "./ExamPreparationWritingDetailPage.css";
-
-export function renderStoredLineBreaks(text, fallback = "") {
-  return String(text || fallback).split(/<br\s*\/?>|\r\n?|\n/gi).map((part, index) => (
-    <span key={`${index}-${part}`}>
-      {index > 0 ? <br /> : null}{part}
-    </span>
-  ));
-}
 
 function formatTime(totalSeconds) {
   const minutes = Math.floor(totalSeconds / 60);
@@ -359,130 +354,63 @@ export default function ExamPreparationWritingDetailPage() {
           ) : null}
         </section>
 
-        <section
-          ref={(node) => {
-            guideTargetRefs.current[0] = node;
+        <WritingExerciseWorkspace
+          exercise={exercise}
+          isTelcB2={isTelcB2}
+          value={draftText}
+          onChange={(event) => {
+            if (isChecked) {
+              setIsChecked(false);
+            }
+            setDraftText(event.target.value);
           }}
-          className={[
-            "writing-detail-request-panel",
-            isTelcB2
-              ? "writing-detail-request-panel--announcement"
-              : "writing-detail-request-panel--email",
-            guideTargetClass(0),
-          ].filter(Boolean).join(" ")}
-        >
-          {isTelcB2 ? (
-            <>
-              <div className="writing-detail-request-panel__announcement-title">
-                <h2>Aushang</h2>
+          requestRef={(node) => { guideTargetRefs.current[0] = node; }}
+          taskRef={(node) => { guideTargetRefs.current[2] = node; }}
+          inputRef={(node) => { guideTargetRefs.current[3] = node; }}
+          requestClassName={guideTargetClass(0)}
+          taskClassName={guideTargetClass(2)}
+          inputClassName={guideTargetClass(3)}
+          metaPanel={(
+            <section className="writing-detail-meta-panel">
+              <div className="writing-detail-meta-chip">
+                {isTelcB2 ? wordTargetLabel : `最多 ${wordTargetLabel}`}
               </div>
-              <div className="writing-detail-request-panel__announcement-sheet">
-                <span className="writing-detail-request-panel__notice-pin" aria-hidden="true">📌</span>
-                <AnnotatableTextRegion as="p" regionId="task">
-                  {renderStoredLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}
-                </AnnotatableTextRegion>
+              <div className="writing-detail-meta-actions">
+                {isTelcB2 ? (
+                  <button
+                    type="button"
+                    className="writing-detail-guide-replay-btn"
+                    onClick={() => {
+                      setGuideErrorText("");
+                      setGuideStep(0);
+                    }}
+                  >
+                    查看引导
+                  </button>
+                ) : null}
+                <button
+                  ref={(node) => { guideTargetRefs.current[1] = node; }}
+                  type="button"
+                  className={["writing-detail-timer-btn", guideTargetClass(1)].filter(Boolean).join(" ")}
+                  onClick={() => {
+                    if (!timerStarted && remainingSeconds > 0) {
+                      setTimerStarted(true);
+                    }
+                  }}
+                  disabled={isChecked || timerStarted || remainingSeconds <= 0}
+                >
+                  {isChecked
+                    ? submittedTimeSpentSeconds === null
+                      ? "计时已结束"
+                      : `用时：${formatTime(submittedTimeSpentSeconds)}`
+                    : timerStarted
+                      ? `计时中：${formatTime(remainingSeconds)}`
+                      : `开始计时：${formatTime(remainingSeconds)}`}
+                </button>
               </div>
-            </>
-          ) : (
-            <>
-              <div className="writing-detail-request-panel__heading">
-                <h2>E-Mail</h2>
-              </div>
-              <div className="writing-detail-request-panel__recipient">An: Prüfende</div>
-              <AnnotatableTextRegion as="p" regionId="task">
-                {renderStoredLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}
-              </AnnotatableTextRegion>
-            </>
+            </section>
           )}
-        </section>
-
-        <section className="writing-detail-meta-panel">
-          <div className="writing-detail-meta-chip">
-            {isTelcB2 ? wordTargetLabel : `最多 ${wordTargetLabel}`}
-          </div>
-          <div className="writing-detail-meta-actions">
-            {isTelcB2 ? (
-              <button
-                type="button"
-                className="writing-detail-guide-replay-btn"
-                onClick={() => {
-                  setGuideErrorText("");
-                  setGuideStep(0);
-                }}
-              >
-                查看引导
-              </button>
-            ) : null}
-            <button
-              ref={(node) => {
-                guideTargetRefs.current[1] = node;
-              }}
-              type="button"
-              className={[
-                "writing-detail-timer-btn",
-                guideTargetClass(1),
-              ].filter(Boolean).join(" ")}
-              onClick={() => {
-                if (!timerStarted && remainingSeconds > 0) {
-                  setTimerStarted(true);
-                }
-              }}
-              disabled={isChecked || timerStarted || remainingSeconds <= 0}
-            >
-              {isChecked
-                ? submittedTimeSpentSeconds === null
-                  ? "计时已结束"
-                  : `用时：${formatTime(submittedTimeSpentSeconds)}`
-                : timerStarted
-                  ? `计时中：${formatTime(remainingSeconds)}`
-                  : `开始计时：${formatTime(remainingSeconds)}`}
-            </button>
-          </div>
-        </section>
-
-        <section className="writing-detail-workspace">
-          <article
-            ref={(node) => {
-              guideTargetRefs.current[2] = node;
-            }}
-            className={[
-              "writing-detail-task-card",
-              guideTargetClass(2),
-            ].filter(Boolean).join(" ")}
-          >
-            <h2>写作要求</h2>
-            <AnnotatableTextRegion as="p" regionId="prompt">
-              {renderStoredLineBreaks(exercise?.task_text, "请根据题目要求完成写作。")}
-            </AnnotatableTextRegion>
-          </article>
-
-          <article
-            ref={(node) => {
-              guideTargetRefs.current[3] = node;
-            }}
-            className={[
-              "writing-detail-input-card",
-              isTelcB2 ? "writing-detail-input-card--long" : "",
-              guideTargetClass(3),
-            ].filter(Boolean).join(" ")}
-          >
-            <div className="writing-detail-input-card__header">
-              <h2>我的作答</h2>
-              <span>{wordCount} 词</span>
-            </div>
-            <textarea
-              className="writing-detail-textarea"
-              value={draftText}
-              onChange={(event) => {
-                if (isChecked) {
-                  setIsChecked(false);
-                }
-                setDraftText(event.target.value);
-              }}
-              placeholder="请在这里输入你的写作内容..."
-            />
-          </article>
-        </section>
+        />
 
         {isChecked ? (
           <section className="writing-detail-review-grid">
@@ -495,7 +423,7 @@ export default function ExamPreparationWritingDetailPage() {
                   onClick={toggleFavorite}
                 />
               </div>
-              <p>{renderStoredLineBreaks(draftText, "你还没有输入内容。")}</p>
+              <p><StoredLineBreaks text={draftText} fallback="你还没有输入内容。" /></p>
             </article>
 
             {exampleTexts.map((example, index) => (
@@ -519,7 +447,7 @@ export default function ExamPreparationWritingDetailPage() {
                   />
                 </div>
                 <AnnotatableTextRegion as="p" regionId={`reference-answer:${example.id}`}>
-                  {renderStoredLineBreaks(example.example_text)}
+                  <StoredLineBreaks text={example.example_text} />
                 </AnnotatableTextRegion>
               </article>
             ))}

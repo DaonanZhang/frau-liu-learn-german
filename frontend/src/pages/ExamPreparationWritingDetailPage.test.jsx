@@ -115,7 +115,7 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(emailHeading.closest(".writing-detail-request-panel"))
       .toHaveClass("writing-detail-request-panel--email");
     const emailPanel = emailHeading.closest(".writing-detail-request-panel");
-    const recipient = within(emailPanel).getByText("An: Prüfer");
+    const recipient = within(emailPanel).getByText("An: Prüfende");
     expect(recipient).toBeInTheDocument();
     expect(recipient.closest("[data-exam-annotation-region]")).toBeNull();
     expect(screen.queryByRole("heading", { name: "邮件" })).not.toBeInTheDocument();

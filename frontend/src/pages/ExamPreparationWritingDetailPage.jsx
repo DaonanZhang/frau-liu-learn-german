@@ -388,7 +388,7 @@ export default function ExamPreparationWritingDetailPage() {
               <div className="writing-detail-request-panel__heading">
                 <h2>E-Mail</h2>
               </div>
-              <div className="writing-detail-request-panel__recipient">An: Prüfer</div>
+              <div className="writing-detail-request-panel__recipient">An: Prüfende</div>
               <AnnotatableTextRegion as="p" regionId="task">
                 {renderStoredLineBreaks(exercise?.request_text, "请阅读题目要求并完成写作。")}
               </AnnotatableTextRegion>

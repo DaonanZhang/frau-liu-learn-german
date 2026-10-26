@@ -71,6 +71,20 @@ class ReferralCampaignAPITests(TestCase):
         self.assertIsNotNone(response.data["code"])
         self.assertEqual(ReferralCode.objects.filter(user=self.user).count(), 1)
 
+    def test_superuser_without_entitlement_is_eligible_and_receives_code(self):
+        self.user.is_superuser = True
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_superuser", "is_staff"])
+        self.authenticate()
+
+        response = self.client.get(self.snapshot_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["eligible"])
+        self.assertFalse(response.data["locked"])
+        self.assertIsNotNone(response.data["code"])
+        self.assertEqual(ReferralCode.objects.filter(user=self.user).count(), 1)
+
     @override_settings(EXAM_PREPARATION_REFERRAL_ENABLED=False)
     def test_disabled_campaign_remains_readable_with_enabled_false(self):
         self.authenticate()

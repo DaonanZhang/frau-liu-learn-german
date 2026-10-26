@@ -86,6 +86,12 @@ class ReferralBackfillSelectionTests(TestCase):
         eligible.append(platform_user)
         self.entitlement(platform_user)
 
+        superuser = self.user()
+        superuser.is_superuser = True
+        superuser.is_staff = True
+        superuser.save(update_fields=["is_superuser", "is_staff"])
+        eligible.append(superuser)
+
         self.assertEqual(
             list(referral_campaign._eligible_referral_backfill_users().values_list("pk", flat=True)),
             sorted(user.pk for user in eligible),

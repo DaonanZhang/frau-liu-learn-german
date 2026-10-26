@@ -46,13 +46,14 @@ FIRST_REFERRAL_CAMPAIGN = ReferralCampaignConfig(
 def _eligible_referral_backfill_users(*, config=FIRST_REFERRAL_CAMPAIGN):
     return (
         get_user_model().objects.filter(
-            Q(entitlements__module__key=config.module_key)
+            Q(is_superuser=True)
+            | Q(entitlements__module__key=config.module_key)
             | Q(
                 entitlements__module__isnull=True,
                 entitlements__season__isnull=True,
+                entitlements__isnull=False,
             )
         )
-        .filter(entitlements__isnull=False)
         .distinct()
         .order_by("pk")
         .only("pk")
@@ -117,6 +118,8 @@ def is_reserved_referral_code(code) -> bool:
 def has_historical_exam_preparation_access(
     *, user, before=None, exclude_external_ref=""
 ) -> bool:
+    if user.is_superuser:
+        return True
     entitlements = Entitlement.objects.filter(user=user).filter(
         Q(module__key=FIRST_REFERRAL_CAMPAIGN.module_key)
         | Q(module__isnull=True, season__isnull=True)

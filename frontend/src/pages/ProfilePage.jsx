@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../api/auth";
 import {
   createPromotionCodes,
@@ -140,6 +140,7 @@ function extractErrorMessage(error, fallback = "保存失败，请稍后重试�
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const { hash } = useLocation();
   const { user, reloadMe } = useAuth();
 
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -178,6 +179,12 @@ export default function ProfilePage() {
   const [promotionHistoryCount, setPromotionHistoryCount] = useState(0);
   const [promotionHistoryTotalPages, setPromotionHistoryTotalPages] = useState(1);
   const [promotionHistoryRequestKey, setPromotionHistoryRequestKey] = useState(0);
+
+  useEffect(() => {
+    if (hash === "#referral-campaign") {
+      document.getElementById("referral-campaign")?.scrollIntoView({ block: "start" });
+    }
+  }, [hash]);
 
   const normalizedUsername = useMemo(() => username.trim(), [username]);
   const normalizedEmail = useMemo(() => email.trim(), [email]);
@@ -585,7 +592,9 @@ export default function ProfilePage() {
           </section>
         ) : null}
         {canViewPromotionCampaignReport ? <PromotionCampaignReportCard /> : null}
-        <ReferralCampaignPanel />
+        <div id="referral-campaign">
+          <ReferralCampaignPanel />
+        </div>
         <section className="profile-couponWallet" id="coupons" aria-labelledby="coupon-wallet-title">
         <div className="profile-couponWallet__header">
           <div>

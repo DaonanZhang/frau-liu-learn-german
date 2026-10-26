@@ -89,10 +89,11 @@ export default function Home() {
   const [userData, setUserData] = useState(null);
   const [learningVideoUserData, setLearningVideoUserData] = useState(null);
   const [failedSources, setFailedSources] = useState({});
+  const [showInvitationModal, setShowInvitationModal] = useState(true);
 
   const isMobileView = useMaxWidth(990);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  useBodyScrollLock(isMobileView && isMobileSidebarOpen);
+  useBodyScrollLock(showInvitationModal || (isMobileView && isMobileSidebarOpen));
 
   useEffect(() => {
     let aborted = false;
@@ -150,6 +151,61 @@ export default function Home() {
 
   return (
     <div className="home-page">
+      {showInvitationModal && (
+        <div className="home-invitation-modal__overlay">
+          <section
+            className="home-invitation-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="home-invitation-title"
+          >
+            <button
+              className="home-invitation-modal__close"
+              type="button"
+              aria-label="关闭邀请有礼弹窗"
+              onClick={() => setShowInvitationModal(false)}
+            >
+              ×
+            </button>
+
+            <header className="home-invitation-modal__header">
+              <h2 id="home-invitation-title">🎉 【符号刘德语备考平台】<br />邀请有礼功能正式上线！</h2>
+              <p>邀请好友一起学德语，双方都能拿奖励！</p>
+            </header>
+
+            <section className="home-invitation-modal__card">
+              <h3>🎁 好友专属优惠</h3>
+              <p>只要好友作为网站新用户使用你的专属分享码下单备考季，即可享受 <strong>立减 5 元</strong> 优惠！</p>
+            </section>
+
+            <section className="home-invitation-modal__card">
+              <h3>🚀 你的阶梯奖励 <small>（成功推荐下单备考季）</small></h3>
+              <ul className="home-invitation-modal__rewards">
+                <li><span aria-hidden="true">✅</span><p>推荐 1 人：备考季自动 <strong>延长 1 个月</strong>（可无限叠加！）</p></li>
+                <li><span aria-hidden="true">✅</span><p>推荐 3 人：额外赠送 <strong>【科普季】</strong>权限<small>（如已拥有则赠送 10 元优惠券）</small></p></li>
+                <li><span aria-hidden="true">✅</span><p>推荐 5 人：额外解锁赠送 <strong>【Vlog】</strong>权限<small>（如已拥有则赠送 10 元优惠券）</small></p></li>
+              </ul>
+            </section>
+
+            <section className="home-invitation-modal__guide">
+              <h3>🔗 如何获取分享码？</h3>
+              <p>现在登录网站，进入个人页面（网页右上角），即可一键复制。</p>
+              <p>👉 国内：<a href="https://www.frauliu.com">www.frauliu.com</a>｜海外：<a href="https://www.frauliu.cn">www.frauliu.cn</a></p>
+            </section>
+
+            <button
+              className="home-invitation-modal__cta"
+              type="button"
+              onClick={() => {
+                setShowInvitationModal(false);
+                navigate("/profile#referral-campaign");
+              }}
+            >
+              立即前往获取 <span aria-hidden="true">→</span>
+            </button>
+          </section>
+        </div>
+      )}
       <div className={`home-layout ${isMobileView ? "home-layout--mobile" : ""}`}>
         <div
           className={`home-mobile-overlay ${

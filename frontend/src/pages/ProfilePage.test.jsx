@@ -96,7 +96,17 @@ describe("ProfilePage coupon module picker", () => {
     render(<MemoryRouter><ProfilePage /></MemoryRouter>);
     const panel = await screen.findByRole("region", { name: "推广活动" });
     const wallet = screen.getByRole("region", { name: "我的优惠券" });
+    expect(panel.closest("#referral-campaign")).toBeInTheDocument();
     expect(panel.compareDocumentPosition(wallet) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("scrolls to the referral campaign when opened with its hash", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+
+    render(<MemoryRouter initialEntries={["/profile#referral-campaign"]}><ProfilePage /></MemoryRouter>);
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" }));
   });
 });
 

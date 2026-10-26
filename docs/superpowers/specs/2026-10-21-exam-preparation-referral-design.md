@@ -249,7 +249,7 @@ If B replaces A's code with C's code before paying, only C may receive credit.
 ### Explicit failures
 
 - Self referral: `不能兑换自己的推广码。`
-- Existing exam-preparation history: `你已经获得过备考季权限，无法参加本次推广活动。`
+- Existing exam-preparation history: `本次推广活动仅针对第一次购买备考季的用户哦！`
 - Campaign already completed or refunded: `你已经参加过本次推广活动。`
 - Coupon reserved by a pending order: explain that the pending order must be
   handled first.

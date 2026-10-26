@@ -155,7 +155,7 @@ def redeem_referral_code(
             raise ReferralRedemptionError(
                 EXISTING_EXAM_PREPARATION_ACCESS,
                 normalized,
-                "你已经获得过备考季权限，无法参加本次推广活动。",
+                "本次推广活动仅针对第一次购买备考季的用户哦！",
             )
 
         if current_coupon is None or current_coupon.status not in (
@@ -240,7 +240,7 @@ def redeem_referral_code(
         raise ReferralRedemptionError(
             EXISTING_EXAM_PREPARATION_ACCESS,
             normalized,
-            "你已经获得过备考季权限，无法参加本次推广活动。",
+            "本次推广活动仅针对第一次购买备考季的用户哦！",
         )
 
     coupon = UserCoupon.objects.create(

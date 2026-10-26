@@ -8,7 +8,7 @@ describe("addRedeemActionToPurchaseModal", () => {
     document.body.innerHTML = "";
   });
 
-  it("adds a redeem action before cancel and navigates to the redemption page", () => {
+  it("adds redeem=1 to the checkout path and closes before navigating", () => {
     document.body.innerHTML = `
       <div class="swal2-popup">
         <div class="swal2-actions">
@@ -22,7 +22,7 @@ describe("addRedeemActionToPurchaseModal", () => {
     const navigate = vi.fn();
     const closeModal = vi.fn();
 
-    addRedeemActionToPurchaseModal(popup, navigate, closeModal);
+    addRedeemActionToPurchaseModal(popup, "/modules/science-season/purchase", navigate, closeModal);
 
     const redeemButton = screen.getByRole("button", { name: "立刻兑换" });
     expect(redeemButton.nextElementSibling).toHaveTextContent("稍后再看");
@@ -30,7 +30,26 @@ describe("addRedeemActionToPurchaseModal", () => {
     fireEvent.click(redeemButton);
 
     expect(closeModal).toHaveBeenCalledOnce();
-    expect(navigate).toHaveBeenCalledWith("/redeem-code");
+    expect(navigate).toHaveBeenCalledWith("/modules/science-season/purchase?redeem=1");
+    expect(closeModal.mock.invocationCallOrder[0]).toBeLessThan(navigate.mock.invocationCallOrder[0]);
+  });
+
+  it("preserves an existing checkout query when adding redeem=1", () => {
+    document.body.innerHTML = '<div class="swal2-popup"><div class="swal2-actions"></div></div>';
+    const navigate = vi.fn();
+
+    addRedeemActionToPurchaseModal(
+      document.querySelector(".swal2-popup"),
+      "/modules/exam-preparation/purchase?return_to=%2Fmodules%2Fexam-preparation%2Fb1",
+      navigate,
+      vi.fn(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "立刻兑换" }));
+
+    expect(navigate).toHaveBeenCalledWith(
+      "/modules/exam-preparation/purchase?return_to=%2Fmodules%2Fexam-preparation%2Fb1&redeem=1",
+    );
   });
 
   it("does not add a duplicate redeem action when initialized twice", () => {
@@ -41,8 +60,8 @@ describe("addRedeemActionToPurchaseModal", () => {
     `;
     const popup = document.querySelector(".swal2-popup");
 
-    addRedeemActionToPurchaseModal(popup, vi.fn(), vi.fn());
-    addRedeemActionToPurchaseModal(popup, vi.fn(), vi.fn());
+    addRedeemActionToPurchaseModal(popup, "/modules/science-season/purchase", vi.fn(), vi.fn());
+    addRedeemActionToPurchaseModal(popup, "/modules/science-season/purchase", vi.fn(), vi.fn());
 
     expect(screen.getAllByRole("button", { name: "立刻兑换" })).toHaveLength(1);
   });

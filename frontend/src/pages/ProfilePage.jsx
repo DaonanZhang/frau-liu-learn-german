@@ -9,6 +9,7 @@ import {
   updateMyProfile,
 } from "../api/auth/profile.js";
 import { fetchMyCoupons } from "../api/coupons.js";
+import ReferralCampaignPanel from "../components/ReferralCampaignPanel.jsx";
 import { hasModuleAccess } from "../utils/moduleAccess.js";
 import { MODULES_BY_ID } from "./Homepage/homeShared.js";
 import PromotionCampaignReportCard from "./profile/PromotionCampaignReportCard.jsx";
@@ -584,6 +585,7 @@ export default function ProfilePage() {
           </section>
         ) : null}
         {canViewPromotionCampaignReport ? <PromotionCampaignReportCard /> : null}
+        <ReferralCampaignPanel />
         <section className="profile-couponWallet" id="coupons" aria-labelledby="coupon-wallet-title">
         <div className="profile-couponWallet__header">
           <div>

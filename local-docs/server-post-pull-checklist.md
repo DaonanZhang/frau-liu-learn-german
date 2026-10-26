@@ -215,6 +215,104 @@ Notes:
 
 After updating env vars, restart the backend and worker processes again.
 
+## Exam Preparation Referral Campaign Rollout
+
+Complete this sequence before enabling the campaign. The feature flag defaults
+to disabled when `EXAM_PREPARATION_REFERRAL_ENABLED` is missing or false.
+
+- [ ] Apply all migrations on the production server:
+
+  ```bash
+  cd /srv/projects/frau-liu-learn-german
+  .venv/bin/python manage.py migrate --noinput
+  ```
+
+- [ ] Check the reserved `BK1-` namespace across promotion codes, database
+  activation codes, and legacy Redis activation-code keys:
+
+  ```bash
+  cd /srv/projects/frau-liu-learn-german
+  .venv/bin/python manage.py shell -c "from apps.accounts.services.referral_campaign import assert_referral_code_prefix_available; assert_referral_code_prefix_available(); print('BK1- prefix available')"
+  ```
+
+  Continue only if it prints `BK1- prefix available`. A collision raises
+  `Referral code prefix is already in use`; resolve it before proceeding.
+
+- [ ] Preview eligible-account backfill counts (this does not create records):
+
+  ```bash
+  cd /srv/projects/frau-liu-learn-german
+  .venv/bin/python manage.py backfill_exam_preparation_referral_codes --dry-run
+  ```
+
+  Confirm output `mode=dry-run created=0 existing=… skipped=… failed=0` is
+  consistent with the production account population.
+
+- [ ] Apply the backfill and confirm `failed=0`:
+
+  ```bash
+  cd /srv/projects/frau-liu-learn-german
+  .venv/bin/python manage.py backfill_exam_preparation_referral_codes
+  ```
+
+  Expected output shape:
+  `mode=apply created=… existing=… skipped=0 failed=0`.
+
+- [ ] Confirm the production Celery worker and Celery Beat are running and
+  consuming the deployed release. The scheduled
+  `apps.accounts.tasks.reconcile_alipay_payments` task reconciles referral
+  rewards and refunds through the existing `reconcile-alipay-payments` schedule
+  (default interval 900 seconds). If this host uses cron or a systemd timer
+  instead, confirm its periodic `manage.py reconcile_alipay_payments --limit
+  100` invocation is active. A manual one-off run does not replace the
+  scheduler.
+
+- [ ] Before launch, inspect referral counters in the production database:
+
+  ```bash
+  cd /srv/projects/frau-liu-learn-german
+  .venv/bin/python manage.py shell -c "from django.db.models import Count, F; from apps.accounts.models import AlipayWebsitePayment, ReferralCode, ReferralParticipation, ReferralReward; tag='exam_preparation_referral_v1'; print('codes=', ReferralCode.objects.filter(campaign_tag=tag).count()); print('participations=', list(ReferralParticipation.objects.filter(campaign_tag=tag).values('status').annotate(count=Count('id')).order_by('status'))); print('rewards=', list(ReferralReward.objects.filter(campaign_tag=tag).values('status','kind').annotate(count=Count('id')).order_by('status','kind'))); print('full_refunds_pending=', AlipayWebsitePayment.objects.filter(status=AlipayWebsitePayment.Status.REFUNDED, refunded_at__isnull=False, refunded_amount=F('total_amount'), referral_participation__refund_reconciled_at__isnull=True).count())"
+  ```
+
+  These are direct model counts. Review them against the backfill result and
+  known campaign activity; the last count is qualifying full-refund work still
+  awaiting reconciliation.
+
+- [ ] Only after the checks above pass, set
+  `EXAM_PREPARATION_REFERRAL_ENABLED=True` in the production `.env` and restart
+  the Django web process so it reads the setting. Do not enable it in the
+  migration, preflight, or backfill steps.
+
+- [ ] After launch, inspect the output dictionary from the scheduled task or
+  run one bounded reconciliation:
+
+  ```bash
+  cd /srv/projects/frau-liu-learn-german
+  .venv/bin/python manage.py reconcile_alipay_payments --limit 100
+  ```
+
+  The command prints counters including `referral_processed`,
+  `referral_disqualified`, `referral_deferred`, `referral_failed`,
+  `referral_refunds_reconciled`, `referral_refunds_deferred`,
+  `referral_refunds_failed`, `referral_terminal_processed`, and
+  `referral_terminal_failed`. Check application logs for
+  `Scheduled referral reward reconciliation failed` and
+  `Scheduled referral refund reconciliation failed`; when terminal failures
+  are nonzero, also inspect `Scheduled terminal referral release failed` and
+  `Scheduled terminal milestone resolution failed`; investigate nonzero
+  failure counters and rerun or confirm the next periodic cycle. Terminal
+  repair covers lost post-commit work for `FAILED`/`CLOSED` `payment_reserved`
+  rows and `revocation_pending` milestones. The task selects referral refund work only when payment
+  status is `REFUNDED`, `refunded_at` is present, and `refunded_amount` equals
+  `total_amount`; failed payments and partial refunds do not roll back referral
+  progress or rewards; payment failure is not a refund.
+
+To roll back the launch, remove the setting or set
+`EXAM_PREPARATION_REFERRAL_ENABLED=False` in the production `.env` and restart
+the web process. This turns off the feature flag without deleting campaign
+codes, participations, reward history, or granted access. Do not delete the
+campaign data during flag rollback.
+
 ## Optional Verification
 
 ### Verify seasons and purchase offers

@@ -70,6 +70,8 @@ describe("CheckoutCouponSelector", () => {
     );
 
     const kunlunCoupon = screen.getByRole("button", { name: /昆仑字幕组专属优惠券/ });
+    expect(screen.getByTestId("coupon-ticket-icon")).toBeInTheDocument();
+    expect(screen.queryByText("券", { selector: ".module-checkout-page__couponSelectorIcon" })).not.toBeInTheDocument();
     expect(kunlunCoupon).toHaveTextContent("¥5");
     fireEvent.click(kunlunCoupon);
 

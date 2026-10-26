@@ -18,6 +18,7 @@ from apps.accounts.models import (
     PaymentGrantTask,
 )
 from apps.accounts.services.entitlement_grant_service import grant_or_extend_entitlement
+from apps.accounts.services.referral_campaign import CAMPAIGN_TAG, ensure_referral_code
 from apps.accounts.services import (
     AlipayConfigurationError,
     AlipayGatewayError,
@@ -111,4 +112,13 @@ def apply_activation_code_for_user(*, user, code: str):
     record.consumed_at = timezone.now()
     record.save(update_fields=["status", "consumed_by_user", "consumed_at", "updated_at"])
     delete_redis_code_on_commit(normalized_code)
+    if any(
+        (entitlement.module_id is None and entitlement.season_id is None)
+        or getattr(entitlement.module, "key", None) == "exam_preparation"
+        for entitlement in created
+    ):
+        transaction.on_commit(
+            lambda: ensure_referral_code(user=user, campaign_tag=CAMPAIGN_TAG),
+            robust=True,
+        )
     return created

@@ -15,11 +15,70 @@ from apps.accounts.models import (
     PaymentDiscountApplication,
     PaymentGrantTask,
     PromotionCodeRecord,
+    ReferralCode,
+    ReferralNotice,
+    ReferralParticipation,
+    ReferralReward,
     UserCoupon,
 )
 from apps.accounts.models.user_data import UserData, UserActiveDay
 
 User = get_user_model()
+
+
+class ReadOnlyReferralAdmin(admin.ModelAdmin):
+    actions = []
+
+    def get_readonly_fields(self, request, obj=None):
+        return [field.name for field in self.model._meta.fields]
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ReferralCode)
+class ReferralCodeAdmin(ReadOnlyReferralAdmin):
+    list_display = ("id", "user", "campaign_tag", "code_prefix", "promotion_code", "is_active", "created_at")
+    list_filter = ("campaign_tag", "is_active", "created_at")
+    search_fields = ("user__telephone", "campaign_tag", "code_prefix", "promotion_code__code")
+
+
+@admin.register(ReferralParticipation)
+class ReferralParticipationAdmin(ReadOnlyReferralAdmin):
+    list_display = (
+        "id", "referred_user", "referral_code", "campaign_tag", "status", "current_coupon",
+        "qualifying_payment", "created_at", "qualified_at",
+    )
+    list_filter = ("campaign_tag", "status", "created_at")
+    search_fields = (
+        "referred_user__telephone", "referral_code__user__telephone", "campaign_tag",
+        "qualifying_payment__merchant_order_no",
+    )
+
+
+@admin.register(ReferralReward)
+class ReferralRewardAdmin(ReadOnlyReferralAdmin):
+    list_display = (
+        "id", "referrer", "campaign_tag", "kind", "status", "amount_days", "threshold",
+        "generation", "participation", "created_at",
+    )
+    list_filter = ("campaign_tag", "kind", "status", "created_at")
+    search_fields = ("referrer__telephone", "campaign_tag", "idempotency_key")
+
+
+@admin.register(ReferralNotice)
+class ReferralNoticeAdmin(ReadOnlyReferralAdmin):
+    list_display = (
+        "id", "user", "campaign_tag", "event_type", "is_global_notice", "acknowledged_at", "created_at",
+    )
+    list_filter = ("campaign_tag", "event_type", "is_global_notice", "acknowledged_at", "created_at")
+    search_fields = ("user__telephone", "campaign_tag", "event_type")
 
 
 @admin.register(BugReport)

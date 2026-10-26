@@ -721,11 +721,17 @@ class MockExamApiTests(APITestCase):
                 audio_file_url="/resources/test.mp3",
                 script=f"Transcript for {exercise_type}",
             )
-        WritingExercise.objects.create(
-            exercise_base=base(ExerciseBase.ExerciseType.WRITING_PROMPT, ExerciseBase.Skill.WRITING),
-            request_text="Anleitung",
-            task_text="Aufgabe",
-        )
+        writing_count = 2 if level == ExerciseBase.Level.B2 else 1
+        for index in range(writing_count):
+            writing_base = base(ExerciseBase.ExerciseType.WRITING_PROMPT, ExerciseBase.Skill.WRITING)
+            if writing_count > 1:
+                writing_base.external_id = f"{writing_base.external_id}-{index + 1}"
+                writing_base.save(update_fields=["external_id"])
+            WritingExercise.objects.create(
+                exercise_base=writing_base,
+                request_text="Anleitung",
+                task_text=f"Aufgabe {index + 1}" if writing_count > 1 else "Aufgabe",
+            )
 
     def test_trial_user_cannot_generate_mock_exam(self):
         response = self.client.post(self.url, {}, format="json")
@@ -833,6 +839,123 @@ class MockExamApiTests(APITestCase):
                 "listening_teil3",
             ))
         )
+
+    def test_b2_generation_persists_two_writing_options_and_rebuilds_in_order(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.create_question_bank(level=ExerciseBase.Level.B2, id_prefix="MOCK-B2")
+
+        generated = self.client.post(self.url, {"level": "B2"}, format="json")
+
+        self.assertEqual(generated.status_code, status.HTTP_201_CREATED)
+        writing_ids = generated.data["selection"]["writing"]
+        self.assertEqual(len(writing_ids), 2)
+        self.assertEqual(len(set(writing_ids)), 2)
+        self.assertEqual(
+            [item["id"] for item in generated.data["parts"]["writing_options"]],
+            writing_ids,
+        )
+        self.assertEqual(generated.data["parts"]["writing"]["id"], writing_ids[0])
+        attempt = SavedMockExam.objects.get(pk=generated.data["attempt_id"])
+        self.assertEqual(attempt.paper.exercise_selection["writing"], writing_ids)
+
+        detail = self.client.get(
+            reverse("exam-prep-saved-mock-exams-detail", args=[attempt.pk])
+        )
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["id"] for item in detail.data["exam"]["parts"]["writing_options"]],
+            writing_ids,
+        )
+
+    def test_b2_generation_requires_two_writing_exercises(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.create_question_bank(level=ExerciseBase.Level.B2, id_prefix="MOCK-B2")
+        WritingExercise.objects.filter(exercise_base__level=ExerciseBase.Level.B2).last().delete()
+
+        response = self.client.post(self.url, {"level": "B2"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["missing_parts"], ["writing"])
+
+    def test_b2_direct_save_and_progress_require_a_pair_choice(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.create_question_bank(level=ExerciseBase.Level.B2, id_prefix="MOCK-B2")
+        generated = self.client.post(self.url, {"level": "B2"}, format="json")
+        saved_url = reverse("exam-prep-saved-mock-exams-list")
+        selection = generated.data["selection"]
+
+        for invalid_writing in ([selection["writing"][0]], [selection["writing"][0]] * 2, selection["writing"][0]):
+            response = self.client.post(
+                saved_url,
+                {"exam_type": "TELC", "level": "B2", "exercise_selection": {**selection, "writing": invalid_writing}},
+                format="json",
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        detail_url = reverse("exam-prep-saved-mock-exams-detail", args=[generated.data["attempt_id"]])
+        invalid_patch = self.client.patch(
+            detail_url,
+            {"progress": {"writing_choice_id": 999999}},
+            format="json",
+        )
+        self.assertEqual(invalid_patch.status_code, status.HTTP_400_BAD_REQUEST)
+
+        incomplete_submit = self.client.post(
+            reverse("exam-prep-saved-mock-exams-submit", args=[generated.data["attempt_id"]]),
+            {"writing_assessment": self.writing_assessment()},
+            format="json",
+        )
+        self.assertEqual(incomplete_submit.status_code, status.HTTP_400_BAD_REQUEST)
+
+        early_submit = self.client.post(
+            reverse("exam-prep-saved-mock-exams-submit", args=[generated.data["attempt_id"]]),
+            {
+                "writing_assessment": self.writing_assessment(),
+                "progress": {"phase": "results", "early_submitted": True},
+            },
+            format="json",
+        )
+        self.assertEqual(early_submit.status_code, status.HTTP_200_OK)
+
+    def test_b2_legacy_scalar_writing_selection_can_still_be_retrieved(self):
+        Entitlement.objects.create(
+            user=self.user,
+            module=self.module,
+            season=None,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.create_question_bank(level=ExerciseBase.Level.B2, id_prefix="MOCK-B2")
+        generated = self.client.post(self.url, {"level": "B2"}, format="json")
+        attempt = SavedMockExam.objects.get(pk=generated.data["attempt_id"])
+        legacy_selection = {**attempt.paper.exercise_selection, "writing": generated.data["selection"]["writing"][0]}
+        attempt.paper.exercise_selection = legacy_selection
+        attempt.paper.save(update_fields=["exercise_selection"])
+
+        detail = self.client.get(
+            reverse("exam-prep-saved-mock-exams-detail", args=[attempt.pk])
+        )
+
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertNotIn("writing_options", detail.data["exam"]["parts"])
 
     def test_mock_creation_rejects_exam_families_without_exam_rules(self):
         Entitlement.objects.create(

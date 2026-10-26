@@ -361,6 +361,25 @@
     linear-gradient(180deg, rgba(248, 251, 255, 1), rgba(255, 255, 255, 1));
 }
 
+.module-checkout-page .checkout-code-redemption {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.module-checkout-page .checkout-code-redemption__controls {
+  align-items: stretch;
+}
+
+.module-checkout-page .checkout-code-redemption__input {
+  min-width: 0;
+}
+
+.module-checkout-page .checkout-code-redemption__submit {
+  flex: 0 0 auto;
+  min-height: 44px;
+}
+
 .module-checkout-page__price-caption {
   color: #66758a;
   font-size: 0.78rem;
@@ -397,10 +416,18 @@
   width: 2rem;
   height: 2rem;
   border-radius: 8px;
-  background: #e45b24;
-  color: #fff;
-  font-size: 0.78rem;
-  font-weight: 900;
+  background: #fff0df;
+  color: #c04b1c;
+}
+
+.module-checkout-page__couponSelectorIcon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
 
 .module-checkout-page__couponSelectorText {
@@ -896,6 +923,14 @@
 }
 
 @media (max-width: 420px) {
+  .module-checkout-page .checkout-code-redemption__controls {
+    flex-wrap: wrap;
+  }
+
+  .module-checkout-page .checkout-code-redemption__submit {
+    flex: 1 0 100%;
+  }
+
   .module-checkout-page__couponSelectorCount {
     display: none;
   }

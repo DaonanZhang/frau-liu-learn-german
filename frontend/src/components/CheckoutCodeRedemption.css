@@ -1,0 +1,197 @@
+.checkout-code-redemption {
+  width: 100%;
+  min-width: 0;
+  padding: 1.1rem;
+  border: 1px solid #d8dfeb;
+  border-radius: 1.2rem;
+  background:
+    radial-gradient(circle at top right, rgba(245, 208, 226, 0.3), transparent 34%),
+    linear-gradient(135deg, #fffdfa 0%, #ffffff 62%, #f5f9ff 100%);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  overflow-wrap: anywhere;
+}
+
+.checkout-code-redemption__header {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.checkout-code-redemption__icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid #f0d8aa;
+  border-radius: 0.9rem;
+  background: #fff7e8;
+  color: #b45324;
+}
+
+.checkout-code-redemption__icon svg {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.checkout-code-redemption__title {
+  margin: 0;
+  color: #14213d;
+  font-size: 1.05rem;
+  font-weight: 850;
+}
+
+.checkout-code-redemption__description {
+  margin: 0.18rem 0 0;
+  color: #687386;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.checkout-code-redemption__form {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.checkout-code-redemption__label {
+  color: #334155;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.checkout-code-redemption__controls {
+  display: flex;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.checkout-code-redemption__input,
+.checkout-code-redemption__submit,
+.checkout-code-redemption__actions button {
+  min-height: 44px;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  font: inherit;
+}
+
+.checkout-code-redemption__input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0.6rem 0.8rem;
+  background: #fff;
+  color: #14213d;
+}
+
+.checkout-code-redemption__input::placeholder {
+  color: #98a2b3;
+}
+
+.checkout-code-redemption__submit,
+.checkout-code-redemption__actions button {
+  padding: 0.55rem 1rem;
+  cursor: pointer;
+  background: #fff;
+  color: #344054;
+  font-weight: 750;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 100ms ease;
+}
+
+.checkout-code-redemption__submit {
+  flex: 0 0 auto;
+  min-width: 5rem;
+  border-color: #1f8f63;
+  background: #1f8f63;
+  color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .checkout-code-redemption__submit:not(:disabled):hover {
+    border-color: #197550;
+    background: #197550;
+  }
+}
+
+.checkout-code-redemption__submit:not(:disabled):active,
+.checkout-code-redemption__actions button:not(:disabled):active {
+  transform: scale(0.98);
+}
+
+.checkout-code-redemption button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.checkout-code-redemption__message {
+  min-height: 1.5em;
+  margin-top: 0.5rem;
+  color: #39705b;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.checkout-code-redemption__message[role="alert"] {
+  color: #b42318;
+}
+
+.checkout-code-redemption__overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(15 23 42 / 45%);
+}
+
+.checkout-code-redemption__dialog {
+  width: min(100%, 440px);
+  padding: 24px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(15 23 42 / 20%);
+}
+
+.checkout-code-redemption__dialog h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+}
+
+.checkout-code-redemption__dialog p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.checkout-code-redemption__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.checkout-code-redemption button:focus-visible,
+.checkout-code-redemption input:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+@media (max-width: 360px) {
+  .checkout-code-redemption__controls {
+    flex-wrap: wrap;
+  }
+
+  .checkout-code-redemption__submit {
+    width: 100%;
+  }
+
+  .checkout-code-redemption__dialog {
+    padding: 18px;
+  }
+}

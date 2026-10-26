@@ -14,9 +14,14 @@ from apps.accounts.models import (
     AlipayWebsitePayment,
     PaymentDiscountApplication,
     PromotionCodeRecord,
+    ReferralReward,
     UserCoupon,
 )
 from apps.accounts.services.activation_codes import activation_code_exists
+from apps.accounts.services.referral_campaign import (
+    FIRST_REFERRAL_CAMPAIGN,
+    is_reserved_referral_code,
+)
 
 
 def promotion_code_exists(code: str) -> bool:
@@ -51,6 +56,8 @@ def store_promotion_code(*, code: str, **values) -> PromotionCodeRecord:
     normalized = str(code or "").strip().upper()
     if not normalized:
         raise ValueError("Promotion code cannot be empty")
+    if is_reserved_referral_code(normalized):
+        raise ValueError("Code prefix is reserved for referral campaigns")
     if activation_code_exists(normalized):
         raise ValueError("Code already exists as an activation code")
     try:
@@ -239,6 +246,8 @@ def redeem_promotion_code(*, user, code: str) -> UserCoupon:
         )
     except PromotionCodeRecord.DoesNotExist as exc:
         raise ValueError("推广码无效") from exc
+    if record.source_kind != PromotionCodeRecord.SourceKind.OPERATIONAL:
+        raise ValueError("推广码无效")
 
     now = timezone.now()
     has_expired = record.expires_at is not None and record.expires_at <= now
@@ -344,6 +353,32 @@ def get_coupon_for_offer(*, user, offer, coupon_id=None, for_update: bool = Fals
     ).first()
 
 
+def _release_referral_payment(*, payment_id: int) -> None:
+    from apps.accounts.services.referral_qualification import (
+        release_referral_participation_for_payment,
+    )
+
+    release_referral_participation_for_payment(payment_id=payment_id)
+
+
+def _reconcile_terminal_discount(*, payment_id: int, release_referral: bool = False) -> None:
+    if release_referral:
+        _release_referral_payment(payment_id=payment_id)
+    from apps.accounts.services.referral_milestones import (
+        resolve_pending_milestone_revocation,
+    )
+
+    resolve_pending_milestone_revocation(payment_id=payment_id)
+
+
+def _has_milestone_coupon(*, coupon_id: int) -> bool:
+    return ReferralReward.objects.filter(
+        coupon_id=coupon_id,
+        campaign_tag=FIRST_REFERRAL_CAMPAIGN.campaign_tag,
+        kind__in=[ReferralReward.Kind.SCIENCE_3, ReferralReward.Kind.VLOG_5],
+    ).exists()
+
+
 @transaction.atomic
 def sync_payment_discount_status(*, payment_id: int) -> None:
     application = (
@@ -358,6 +393,7 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
     payment = application.payment
     coupon = UserCoupon.objects.select_for_update().get(pk=application.coupon_id)
     now = timezone.now()
+    has_milestone_coupon = _has_milestone_coupon(coupon_id=coupon.pk)
 
     if payment.status in {
         AlipayWebsitePayment.Status.PAID,
@@ -386,6 +422,11 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
                     "updated_at",
                 ]
             )
+        if has_milestone_coupon:
+            transaction.on_commit(
+                lambda: _reconcile_terminal_discount(payment_id=payment.pk),
+                robust=True,
+            )
         return
 
     if payment.status == AlipayWebsitePayment.Status.REFUNDED:
@@ -394,13 +435,32 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
             PaymentDiscountApplication.Status.APPLIED,
         }:
             application.status = PaymentDiscountApplication.Status.REFUNDED
-            application.refunded_at = payment.refunded_at or now
-            application.save(update_fields=["status", "refunded_at", "updated_at"])
+            application.applied_at = application.applied_at or payment.paid_at or now
+            application.refunded_at = application.refunded_at or payment.refunded_at or now
+            application.save(
+                update_fields=["status", "applied_at", "refunded_at", "updated_at"]
+            )
         if coupon.status == UserCoupon.Status.RESERVED and coupon.reserved_payment_id == payment.id:
             coupon.status = UserCoupon.Status.USED
+            coupon.reserved_payment = None
+            coupon.reserved_at = None
             coupon.used_payment = payment
-            coupon.used_at = payment.paid_at or now
-            coupon.save(update_fields=["status", "used_payment", "used_at", "updated_at"])
+            coupon.used_at = coupon.used_at or payment.paid_at or now
+            coupon.save(
+                update_fields=[
+                    "status",
+                    "reserved_payment",
+                    "reserved_at",
+                    "used_payment",
+                    "used_at",
+                    "updated_at",
+                ]
+            )
+        if has_milestone_coupon:
+            transaction.on_commit(
+                lambda: _reconcile_terminal_discount(payment_id=payment.pk),
+                robust=True,
+            )
         return
 
     if payment.status in {
@@ -420,6 +480,13 @@ def sync_payment_discount_status(*, payment_id: int) -> None:
             coupon.reserved_payment = None
             coupon.reserved_at = None
             coupon.save(update_fields=["status", "reserved_payment", "reserved_at", "updated_at"])
+        transaction.on_commit(
+            lambda: _reconcile_terminal_discount(
+                payment_id=payment.pk,
+                release_referral=True,
+            ) if has_milestone_coupon else _release_referral_payment(payment_id=payment.pk),
+            robust=True,
+        )
 
 
 __all__ = [

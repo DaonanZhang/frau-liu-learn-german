@@ -120,7 +120,7 @@ export default function VideoGrid({
                     buttonsStyling: false,
                     width: 720,
                     didOpen: (popup) => {
-                      addRedeemActionToPurchaseModal(popup, navigate, () => Swal.close());
+                      addRedeemActionToPurchaseModal(popup, `/modules/${module.id}/purchase`, navigate, () => Swal.close());
                     },
                   });
 

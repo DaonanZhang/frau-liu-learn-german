@@ -95,7 +95,12 @@ export default function CheckoutCouponSelector({
         disabled={!couponBundle}
         onClick={onOpen}
       >
-        <span className="module-checkout-page__couponSelectorIcon" aria-hidden="true">券</span>
+        <span className="module-checkout-page__couponSelectorIcon" aria-hidden="true">
+          <svg data-testid="coupon-ticket-icon" viewBox="0 0 24 24" focusable="false">
+            <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5v2a2.5 2.5 0 0 0 0 5v2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5v-2a2.5 2.5 0 0 0 0-5v-2Z" />
+            <path d="M13 8.5v1m0 2v1m0 2v1" />
+          </svg>
+        </span>
         <span className="module-checkout-page__couponSelectorText">
           <strong>优惠券</strong>
           <small>

@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
 from django.db import DatabaseError, transaction
 from django.utils import timezone
 
-from apps.accounts.models import PaymentGrantTask
+from apps.accounts.models import (
+    AlipayWebsitePayment,
+    PaymentGrantTask,
+    ReferralParticipation,
+)
 from apps.accounts.services.entitlement_grant_service import (
     ExistingLifetimeAccessError,
     grant_or_extend_entitlement,
 )
+from apps.accounts.services.referral_campaign import CAMPAIGN_TAG, ensure_referral_code
+from apps.accounts.services.referral_qualification import mark_referral_reward_pending
 
 
 def enqueue_payment_grant_task(*, payment_grant_task: PaymentGrantTask) -> str:
@@ -81,10 +88,29 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
 
     try:
         with transaction.atomic():
+            locator = PaymentGrantTask.objects.filter(pk=payment_grant_task_id).values(
+                "user_id", "payment_id"
+            ).first()
+            if locator is None:
+                raise PaymentGrantTask.DoesNotExist
+            buyer = get_user_model().objects.select_for_update().get(
+                pk=locator["user_id"]
+            )
             payment_grant_task = (
                 PaymentGrantTask.objects.select_for_update()
                 .get(pk=payment_grant_task_id)
             )
+            if (
+                payment_grant_task.user_id != buyer.pk
+                or payment_grant_task.payment_id != locator["payment_id"]
+            ):
+                raise ValueError("Payment grant task relationships changed during processing.")
+            payment = AlipayWebsitePayment.objects.select_for_update().get(
+                pk=locator["payment_id"]
+            )
+            if payment_grant_task.payment_id != payment.pk:
+                raise ValueError("Payment grant task payment changed during processing.")
+            payment_grant_task.payment = payment
 
             if payment_grant_task.status in {
                 PaymentGrantTask.Status.SUCCEEDED,
@@ -99,11 +125,14 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
                 update_fields=["attempt_count", "status", "last_error", "updated_at"]
             )
 
-            if payment_grant_task.payment.status != payment_grant_task.payment.Status.PAID:
+            if payment.status not in {
+                payment.Status.PAID,
+                payment.Status.PARTIALLY_REFUNDED,
+            }:
                 raise ValueError("Payment is not confirmed as paid.")
 
             try:
-                grant_or_extend_entitlement(
+                entitlement = grant_or_extend_entitlement(
                     user=payment_grant_task.user,
                     module=payment_grant_task.module,
                     season=payment_grant_task.season,
@@ -112,20 +141,38 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
                     reject_if_lifetime=True,
                 )
             except ExistingLifetimeAccessError as exc:
+                participation = mark_referral_reward_pending(payment_grant_task=payment_grant_task)
                 payment_grant_task.status = PaymentGrantTask.Status.CANCELED
                 payment_grant_task.processed_at = timezone.now()
                 payment_grant_task.last_error = str(exc)
                 payment_grant_task.save(
                     update_fields=["status", "processed_at", "last_error", "updated_at"]
                 )
+                _schedule_referral_reward(participation)
                 return
 
+            participation = mark_referral_reward_pending(payment_grant_task=payment_grant_task)
             payment_grant_task.status = PaymentGrantTask.Status.SUCCEEDED
             payment_grant_task.processed_at = timezone.now()
             payment_grant_task.last_error = ""
             payment_grant_task.save(
                 update_fields=["status", "processed_at", "last_error", "updated_at"]
             )
+            _schedule_referral_reward(participation)
+            if (
+                entitlement.module_id is None
+                and entitlement.season_id is None
+            ) or (
+                entitlement.module is not None
+                and entitlement.module.key == "exam_preparation"
+            ):
+                transaction.on_commit(
+                    lambda: ensure_referral_code(
+                        user=payment_grant_task.user,
+                        campaign_tag=CAMPAIGN_TAG,
+                    ),
+                    robust=True,
+                )
     except (DatabaseError, ValueError) as exc:
         PaymentGrantTask.objects.filter(pk=payment_grant_task_id).update(
             status=PaymentGrantTask.Status.FAILED,
@@ -133,3 +180,17 @@ def process_payment_grant_task_by_id(*, payment_grant_task_id: int) -> None:
             updated_at=timezone.now(),
         )
         raise
+
+
+def _schedule_referral_reward(participation: ReferralParticipation | None) -> None:
+    if participation is None or participation.status != ReferralParticipation.Status.REWARD_PENDING:
+        return
+
+    participation_id = participation.pk
+
+    def enqueue(participation_id=participation_id):
+        from apps.accounts.tasks import process_referral_reward_pending_task
+
+        process_referral_reward_pending_task.delay(participation_id)
+
+    transaction.on_commit(enqueue, robust=True)

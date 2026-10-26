@@ -839,7 +839,7 @@ export default function LexiconPage() {
             buttonsStyling: false,
             width: 720,
             didOpen: (popup) => {
-              addRedeemActionToPurchaseModal(popup, navigate, () => Swal.close());
+              addRedeemActionToPurchaseModal(popup, `/modules/${moduleConfig.id}/purchase`, navigate, () => Swal.close());
             },
           });
 

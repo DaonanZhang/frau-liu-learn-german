@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import Navigator from "../components/Navigator";
 import SiteFooter from "../components/SiteFooter";
+import ReferralNoticeModal from "../components/ReferralNoticeModal.jsx";
 import { useAuth } from "../api/auth";
 import "./AppLayout.css";
 
@@ -53,6 +54,7 @@ export default function AppLayout() {
       </div>
 
       <SiteFooter />
+      <ReferralNoticeModal />
     </div>
   );
 }

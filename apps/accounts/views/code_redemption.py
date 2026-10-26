@@ -8,10 +8,16 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.accounts.security.activation import apply_activation_code_for_user
-from apps.accounts.serializers.activation import ActivationCodeApplySerializer
+from apps.accounts.serializers.code_redemption import CodeRedemptionSerializer
+from apps.accounts.serializers.coupon import UserCouponReadSerializer
 from apps.accounts.serializers.entitlement import EntitlementReadSerializer
 from apps.accounts.services.activation_codes import activation_code_exists
 from apps.accounts.services.promotion_codes import redeem_promotion_code
+from apps.accounts.services.referral_campaign import is_reserved_referral_code
+from apps.accounts.services.referral_redemption import (
+    ReferralRedemptionError,
+    redeem_referral_code,
+)
 
 
 class RedeemCodeAPIView(APIView):
@@ -22,9 +28,10 @@ class RedeemCodeAPIView(APIView):
     throttle_scope = "activation_code_redeem"
 
     def post(self, request: Request) -> Response:
-        serializer = ActivationCodeApplySerializer(data=request.data)
+        serializer = CodeRedemptionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         code = serializer.validated_data["code"]
+        confirm_replace = serializer.validated_data["confirm_replace"]
 
         try:
             if activation_code_exists(code):
@@ -38,6 +45,30 @@ class RedeemCodeAPIView(APIView):
                     },
                     status=status.HTTP_200_OK,
                 )
+
+            if is_reserved_referral_code(code):
+                result = redeem_referral_code(
+                    user=request.user,
+                    code=code,
+                    confirm_replace=confirm_replace,
+                )
+                payload = {
+                    "type": result.type,
+                    "outcome": result.outcome,
+                    "code": result.code,
+                    "message": result.message,
+                }
+                if result.coupon is not None:
+                    coupon = dict(
+                        UserCouponReadSerializer(
+                            result.coupon, context={"request": request}
+                        ).data
+                    )
+                    coupon["profile_path"] = "/profile#coupons"
+                    payload["coupon"] = coupon
+                if result.replacement is not None:
+                    payload["replacement"] = result.replacement
+                return Response(payload, status=status.HTTP_200_OK)
 
             coupon = redeem_promotion_code(user=request.user, code=code)
             return Response(
@@ -53,6 +84,17 @@ class RedeemCodeAPIView(APIView):
                     },
                 },
                 status=status.HTTP_200_OK,
+            )
+        except ReferralRedemptionError as exc:
+            return Response(
+                {
+                    "type": "referral",
+                    "outcome": exc.outcome,
+                    "code": exc.code,
+                    "message": str(exc),
+                    "detail": str(exc),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)

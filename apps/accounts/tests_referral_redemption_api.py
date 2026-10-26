@@ -186,7 +186,7 @@ class CodeRedemptionReferralAPITests(APITestCase):
         self.assert_structured_error(
             code="BK1-ABCDEFGH2",
             outcome="existing_exam_preparation_access",
-            message="你已经获得过备考季权限，无法参加本次推广活动。",
+            message="本次推广活动仅针对第一次购买备考季的用户哦！",
         )
 
     def test_reserved_coupon_is_structured_and_write_free(self):

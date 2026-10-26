@@ -161,6 +161,15 @@
 .telc-mock-exam-writing-field textarea { width: 100%; min-height: 29rem; resize: vertical; padding: 1rem; border: 1px solid #b9c7c1; border-radius: 1rem; color: var(--exam-ink); font: inherit; line-height: 1.7; box-sizing: border-box; }
 .telc-mock-exam-writing-field textarea:focus { outline: 3px solid rgba(23, 107, 86, 0.14); border-color: var(--exam-green); }
 .telc-mock-exam-writing-field small { text-align: right; color: #65766f; }
+.telc-mock-exam-writing-chooser__intro { margin: 0 0 1rem; color: #5e7169; }
+.telc-mock-exam-writing-chooser__options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.telc-mock-exam-writing-choice-card { display: flex; flex-direction: column; min-width: 0; padding: 1rem; border: 1px solid #d8e1dc; border-radius: 1rem; background: #fafbf9; }
+.telc-mock-exam-writing-choice-card h3 { margin: 0 0 0.8rem; font-size: 1.05rem; }
+.telc-mock-exam-writing-choice-card h4 { margin: 0.8rem 0 0.25rem; color: #526b63; font-size: 0.95rem; }
+.telc-mock-exam-writing-choice-card .telc-mock-exam-source-text { flex: 1; margin: 0 0 1rem; padding: 0.9rem; overflow-wrap: anywhere; }
+.telc-mock-exam-writing-choice-card button { width: 100%; }
+.telc-mock-exam-writing-empty { display: grid; place-items: center; min-height: 12rem; color: #5e7169; }
+.telc-mock-exam-writing-empty p { margin: 0; }
 
 .telc-mock-exam-audio-status {
   display: grid;
@@ -338,6 +347,7 @@
 
 @media (max-width: 560px) {
   .telc-mock-exam-page { gap: 0.7rem; padding-bottom: 8rem; }
+  .telc-mock-exam-writing-chooser__options { grid-template-columns: 1fr; }
   .telc-mock-exam-header { align-items: stretch; padding: 0.8rem; border-radius: 1rem; }
   .telc-mock-exam-header__actions { max-width: none; }
   .telc-mock-exam-utility { flex: 1 1 auto; }

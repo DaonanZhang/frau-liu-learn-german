@@ -306,6 +306,31 @@ def _create_mock_exam_paper(*, user, exam_type, level, selection, creation_metho
     )
 
 
+def _b2_writing_pair(selection, *, exam_type, level):
+    writing = selection.get("writing") if isinstance(selection, dict) else None
+    return (
+        str(exam_type).upper() == "TELC"
+        and str(level).upper() == ExerciseBase.Level.B2
+        and isinstance(writing, list)
+        and len(writing) == 2
+        and all(isinstance(item, int) and not isinstance(item, bool) for item in writing)
+        and writing[0] != writing[1]
+    )
+
+
+def _validate_b2_writing_choice(progress, selection, *, exam_type, level, require_choice=False):
+    if not _b2_writing_pair(selection, exam_type=exam_type, level=level):
+        return None
+    choice = progress.get("writing_choice_id")
+    if choice is None:
+        if require_choice and progress.get("early_submitted") is not True:
+            return "请选择一道写作题。"
+        return None
+    if not isinstance(choice, int) or isinstance(choice, bool) or choice not in selection["writing"]:
+        return "写作题选择无效。"
+    return None
+
+
 class SavedMockExamPagination(PageNumberPagination):
     page_size = 10
     page_size_query_param = "page_size"
@@ -493,7 +518,21 @@ class SavedMockExamViewSet(ViewSet):
         if not isinstance(selection, dict) or set(selection) != expected_keys:
             return Response({"message": "试卷题目 ID 不完整。"}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            selection = {key: int(selection[key]) for key in sorted(expected_keys)}
+            normalized_selection = {}
+            for key in sorted(expected_keys):
+                value = selection[key]
+                if key == "writing" and str(level).upper() == ExerciseBase.Level.B2:
+                    if (
+                        not isinstance(value, list)
+                        or len(value) != 2
+                        or any(not isinstance(item, int) or isinstance(item, bool) for item in value)
+                        or value[0] == value[1]
+                    ):
+                        return Response({"message": "B2 写作题必须选择两个不同题目。"}, status=status.HTTP_400_BAD_REQUEST)
+                    normalized_selection[key] = list(value)
+                else:
+                    normalized_selection[key] = int(value)
+            selection = normalized_selection
         except (TypeError, ValueError):
             return Response({"message": "试卷题目 ID 无效。"}, status=status.HTTP_400_BAD_REQUEST)
         _, _, missing_parts = _mock_exam_payload(
@@ -539,6 +578,17 @@ class SavedMockExamViewSet(ViewSet):
             "is_favorite": is_completed and bool(request.data.get("is_favorite", True)),
             "progress": request.data.get("progress", {}),
         }
+        if not isinstance(defaults["progress"], dict):
+            return Response({"message": "考试进度格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+        choice_error = _validate_b2_writing_choice(
+            defaults["progress"],
+            selection,
+            exam_type=exam_type,
+            level=level,
+            require_choice=is_completed,
+        )
+        if choice_error:
+            return Response({"message": choice_error}, status=status.HTTP_400_BAD_REQUEST)
         instance = SavedMockExam.objects.filter(user=request.user, fingerprint=fingerprint).first()
         created = instance is None
         if created:
@@ -616,6 +666,14 @@ class SavedMockExamViewSet(ViewSet):
         if "progress" in request.data:
             if not isinstance(request.data["progress"], dict):
                 return Response({"message": "考试进度格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+            choice_error = _validate_b2_writing_choice(
+                request.data["progress"],
+                instance.paper.exercise_selection,
+                exam_type=instance.paper.exam_type,
+                level=instance.paper.level,
+            )
+            if choice_error:
+                return Response({"message": choice_error}, status=status.HTTP_400_BAD_REQUEST)
             instance.progress = request.data["progress"]
             update_fields.append("progress")
         if update_fields:
@@ -647,6 +705,15 @@ class SavedMockExamViewSet(ViewSet):
             progress = request.data.get("progress", instance.progress)
             if not isinstance(progress, dict):
                 return Response({"message": "考试进度格式无效。"}, status=status.HTTP_400_BAD_REQUEST)
+            choice_error = _validate_b2_writing_choice(
+                progress,
+                instance.paper.exercise_selection,
+                exam_type=instance.paper.exam_type,
+                level=instance.paper.level,
+                require_choice=True,
+            )
+            if choice_error:
+                return Response({"message": choice_error}, status=status.HTTP_400_BAD_REQUEST)
 
             instance.answers = answers
             instance.writing_text = str(request.data.get("writing_text", instance.writing_text))

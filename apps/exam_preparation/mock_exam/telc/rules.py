@@ -108,6 +108,47 @@ def build_payload(
     selected_ids = {}
     missing_parts = []
     for key, queryset, serializer_class in definitions(exam_type=exam_type, level=level):
+        if key == "writing" and level == ExerciseBase.Level.B2:
+            writing_selection = selection.get(key) if selection else None
+            if selection and isinstance(writing_selection, list):
+                if (
+                    len(writing_selection) != 2
+                    or any(not isinstance(item, int) or isinstance(item, bool) for item in writing_selection)
+                    or len(set(writing_selection)) != 2
+                ):
+                    missing_parts.append(key)
+                    continue
+                exercises_by_id = {
+                    exercise.pk: exercise
+                    for exercise in queryset.filter(pk__in=writing_selection)
+                }
+                exercises = [exercises_by_id.get(exercise_id) for exercise_id in writing_selection]
+                if any(exercise is None for exercise in exercises):
+                    missing_parts.append(key)
+                    continue
+            elif selection:
+                exercise = queryset.filter(pk=writing_selection).first()
+                exercises = [exercise] if exercise else []
+            else:
+                exercises = list(queryset.order_by("?")[:2])
+            if len(exercises) != 2 and not (selection and not isinstance(writing_selection, list) and exercises):
+                missing_parts.append(key)
+                continue
+            serialized = [
+                serializer_class(
+                    exercise,
+                    context={
+                        "request": request,
+                        "show_listening_script": show_listening_scripts,
+                    },
+                ).data
+                for exercise in exercises
+            ]
+            selected_ids[key] = [exercise.pk for exercise in exercises] if len(exercises) == 2 else exercises[0].pk
+            parts[key] = serialized[0]
+            if len(exercises) == 2:
+                parts["writing_options"] = serialized
+            continue
         exercise = queryset.filter(pk=selection[key]).first() if selection else queryset.order_by("?").first()
         if exercise is None:
             missing_parts.append(key)

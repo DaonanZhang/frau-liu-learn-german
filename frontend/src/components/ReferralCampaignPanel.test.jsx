@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,8 +17,14 @@ function renderPanel() {
 
 function snapshot(overrides = {}) {
   return {
-    enabled: true, eligible: true, locked: false, campaign: { name: "秋季推广", tag: "autumn" }, code: "ABC123",
-    effective_count: 0, nodes: [], milestones: { science_3: { status: "not_earned" }, vlog_5: { status: "not_earned" } }, history: [], ...overrides,
+    enabled: true,
+    eligible: true,
+    locked: false,
+    campaign: { name: "秋季推广", tag: "autumn" },
+    code: "ABC123",
+    effective_count: 0,
+    history: [],
+    ...overrides,
   };
 }
 
@@ -35,332 +41,246 @@ describe("ReferralCampaignPanel", () => {
     expect(await screen.findByText("ABC123")).toBeInTheDocument();
   });
 
-  it("never renders a fabricated code for malformed data", async () => {
-    fetchReferralCampaign.mockResolvedValue({ enabled: true, eligible: true, locked: false, campaign: null, code: "", nodes: null, milestones: null, history: null });
+  it("does not render malformed campaign data", async () => {
+    fetchReferralCampaign.mockResolvedValue({ enabled: true, eligible: true, locked: false, campaign: null, code: "", history: null });
     renderPanel();
-    expect(await screen.findByText(/暂不可用/)).toBeInTheDocument();
+    expect(await screen.findByText("推广信息暂不可用。")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /复制/ })).not.toBeInTheDocument();
   });
 
-  it("renders the locked comic banner and navigates directly to the existing purchase page", async () => {
+  it("keeps disabled and locked states separate", async () => {
+    fetchReferralCampaign.mockResolvedValueOnce(snapshot({ enabled: false }));
+    const disabled = renderPanel();
+    expect(await screen.findByText("活动暂未开放")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /解锁/ })).not.toBeInTheDocument();
+    disabled.unmount();
+
     fetchReferralCampaign.mockResolvedValue(snapshot({ eligible: false, locked: true, code: "SHOULD-NOT-LEAK" }));
     const LocationProbe = () => <output>{useLocation().pathname}</output>;
     render(<MemoryRouter><ReferralCampaignPanel /><LocationProbe /></MemoryRouter>);
-    expect(await screen.findByRole("heading", { name: "暂未解锁推广系统" })).toBeInTheDocument();
-    expect(screen.getByText("获得备考季权限后即可解锁推广系统。")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "解锁备考季" })).toBeInTheDocument();
+    expect(screen.getByText("购买备考季后，即可获得专属推荐码并参与邀请奖励。")).toBeInTheDocument();
+    expect(screen.queryByText("暂未解锁推广系统")).not.toBeInTheDocument();
     expect(screen.queryByText("推广活动")).not.toBeInTheDocument();
     expect(screen.queryByText("SHOULD-NOT-LEAK")).not.toBeInTheDocument();
-    expect(document.querySelector(".referral-panel__locked-student")).toHaveAttribute("src", "/images/exam-referral/locked-student.png");
-    expect(document.querySelector(".referral-panel__locked-books")).toHaveAttribute("src", "/images/exam-referral/locked-books.png");
-    expect(document.querySelector("img[src*='visual-reference-only']")).not.toBeInTheDocument();
+    expect(document.querySelectorAll(".referral-panel--locked img")).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "解锁备考季" }));
     expect(await screen.findByText("/modules/exam-preparation/purchase")).toBeInTheDocument();
   });
 
-  it("does not present disabled activity as a purchase lock", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ enabled: false }));
-    renderPanel();
-    expect(await screen.findByText("活动暂未开放")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /解锁/ })).not.toBeInTheDocument();
-  });
-
-  it.each([0, 3, 5, 12])("renders %i true referrals across six accessible progress nodes", async (count) => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: count, milestones: { science_3: { status: count >= 3 ? "earned" : "not_earned", generation: 1 }, vlog_5: { status: count >= 5 ? "earned" : "not_earned", generation: 1 } } }));
-    renderPanel();
-    expect(await screen.findByRole("button", { name: /节点 1/ })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /节点/ })).toHaveLength(6);
-    expect(document.querySelectorAll(".referral-panel__node--milestone")).toHaveLength(2);
-    expect(document.querySelectorAll(".referral-panel__node.is-complete")).toHaveLength(Math.min(count, 6));
-    expect(screen.getAllByRole("button", { name: /节点/ })[5]).toHaveAttribute("aria-label", expect.stringContaining("后续"));
-    expect(screen.queryByText(/已成功推广 .* 人/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/每成功推广 1 人，备考季 \+30 天/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/奖励自动发放/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/永久权限或/)).not.toBeInTheDocument();
-  });
-
-  it.each([[0, 0], [3, 2], [5, 4], [6, 5]])("maps %i referrals to continuous line fill step %i", async (count, completedConnections) => {
+  it.each([0, 3, 5, 12])("renders exactly six accessible progress nodes and the real count (%i)", async (count) => {
     fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: count }));
     renderPanel();
-    await screen.findByRole("button", { name: /节点 1/ });
-    expect(document.querySelector(".referral-panel__track-line")).toBeInTheDocument();
-    expect(document.querySelector(".referral-panel__track-fill")).toHaveClass(`referral-panel__track-fill--${completedConnections}`);
+    expect(await screen.findByRole("heading", { name: "邀请好友，共享好课" })).toBeInTheDocument();
+    expect(screen.getByText("邀请好友下单，双方均享丰富福利")).toBeInTheDocument();
+    expect(screen.getByText("好友使用推荐码下单，立减 5 元")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "邀请进度与奖励" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: `${count} 位成功邀请用户` })).toBeInTheDocument();
+    const progress = screen.getByRole("list", { name: `${count} 位成功邀请用户` });
+    expect(within(progress).getAllByRole("listitem")).toHaveLength(6);
+    expect(document.querySelectorAll(".referral-panel__node")).toHaveLength(6);
+    expect(document.querySelectorAll(".referral-panel__node--milestone")).toHaveLength(2);
+    expect(document.querySelectorAll(".referral-panel__node--follow-up")).toHaveLength(1);
+    const currentCount = document.querySelector(".referral-panel__current-count");
+    const liveCount = currentCount.querySelector("[aria-live]");
+    expect(liveCount).toHaveTextContent(`当前已成功邀请：${count} 人`);
+    expect(liveCount).not.toHaveTextContent("赶快分享给好友，解锁丰厚备考福利吧！");
+    expect(currentCount).toHaveTextContent("赶快分享给好友，解锁丰厚备考福利吧！");
+    expect(screen.getByText("赶快分享给好友，解锁丰厚备考福利吧！")).toBeInTheDocument();
+    expect(screen.getByText(String(count), { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("解锁科普季")).toBeInTheDocument();
+    expect(screen.getByText("解锁 Vlog季")).toBeInTheDocument();
+    expect(screen.getByText("每推荐 1 人成功下单备考季，您的备考季自动延长 1 个月（可叠加）。")).toBeInTheDocument();
+    expect(screen.getByText("推荐达 3 人，额外赠送「科普季」权限。")).toBeInTheDocument();
+    expect(screen.getByText("推荐达 5 人，额外再赠送「Vlog季」权限。")).toBeInTheDocument();
+    expect(screen.getByText("奖励规则：")).toBeInTheDocument();
+    expect(within(progress).getAllByRole("listitem")).toHaveLength(6);
+    expect(screen.queryByRole("img", { name: /漫画奖励|科普季|Vlog 季/ })).not.toBeInTheDocument();
   });
 
-  it("renders the real promotion code as an invitation ticket with both actions", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ code: "BK1-TLPEHL37W" }));
+  it.each([[0, "0%"], [1, "0%"], [3, "40%"], [5, "80%"], [6, "100%"], [12, "100%"]])("fills the progress line from effective_count (%i)", async (count, width) => {
+    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: count }));
     renderPanel();
-    expect(await screen.findByText("我的专属推广码")).toBeInTheDocument();
-    expect(screen.getByText("BK1-TLPEHL37W").tagName).toBe("CODE");
-    expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "邀请好友" })).toBeInTheDocument();
-    expect(document.querySelector(".referral-panel__code-ticket svg")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "邀请进度与奖励" });
+    expect(document.querySelector(".referral-panel__track-fill")).toHaveStyle({ width });
   });
 
-  it("selects the first reward by default even before the first referral", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: 0 }));
+  it.each([
+    [0, 0, []],
+    [1, 1, [1]],
+    [2, 2, [1, 2]],
+    [3, 3, [1, 2, 3]],
+    [4, 4, [1, 2, 3, 4]],
+    [5, 5, [1, 2, 3, 4, 5]],
+    [12, 5, [1, 2, 3, 4, 5]],
+  ])("shows completion markers for every completed numbered node (%i referrals)", async (count, markerCount, markedNodes) => {
+    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: count }));
     renderPanel();
-    const nodeOne = await screen.findByRole("button", { name: "节点 1：未完成" });
-    expect(nodeOne).toHaveAttribute("aria-expanded", "true");
-    expect(nodeOne).toHaveAttribute("aria-current", "step");
-    expect(nodeOne).not.toHaveClass("is-complete");
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "邀请进度与奖励" });
+    const numberedNodes = [...document.querySelectorAll(".referral-panel__step:not(.referral-panel__step--follow-up) .referral-panel__node")];
+    expect(document.querySelectorAll(".referral-panel__completion-mark")).toHaveLength(markerCount);
+    markedNodes.forEach((node) => expect(numberedNodes[node - 1].querySelector(".referral-panel__completion-mark")).toBeInTheDocument());
+    [1, 2, 3, 4, 5].filter((node) => !markedNodes.includes(node)).forEach((node) => expect(numberedNodes[node - 1].querySelector(".referral-panel__completion-mark")).not.toBeInTheDocument());
+    expect(document.querySelector(".referral-panel__step--follow-up .referral-panel__completion-mark")).not.toBeInTheDocument();
   });
 
-  it("shows a persistent shared reward card after clicking or using keyboard on a node", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: 3, milestones: { science_3: { status: "earned" }, vlog_5: { status: "not_earned" } } }));
-    renderPanel();
-    const nodeThree = await screen.findByRole("button", { name: /节点 3/ });
-    fireEvent.click(nodeThree);
-    expect(nodeThree).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("region", { name: "节点 3 奖励详情" })).toHaveTextContent("赠送科普季");
-    expect(screen.getByRole("img", { name: "备考季 +30 天漫画奖励" })).toHaveAttribute("src", "/images/exam-referral/reward_30_days.png");
-    expect(screen.getByRole("img", { name: "科普季" })).toHaveAttribute("src", "/images/1.png");
-    expect(screen.getByRole("region", { name: "节点 3 奖励详情" })).not.toHaveTextContent("未达成");
-    fireEvent.click(nodeThree);
-    expect(nodeThree).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("region", { name: "节点 3 奖励详情" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /节点 5/ }));
-    expect(screen.getByRole("region", { name: "节点 5 奖励详情" })).toHaveTextContent("赠送 Vlog 季");
-    expect(screen.getByRole("img", { name: "Vlog 季" })).toHaveAttribute("src", "/images/2.png");
-  });
-
-  it("renders a CSS-native circular node and the supplied reward illustration", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: 3 }));
-    renderPanel();
-    const nodeThree = await screen.findByRole("button", { name: /节点 3/ });
-    expect(nodeThree.querySelector("img")).not.toBeInTheDocument();
-    expect(nodeThree.querySelector(".referral-panel__node-label")).toHaveTextContent("3");
-    fireEvent.click(nodeThree);
-    expect(screen.getByRole("img", { name: "备考季 +30 天漫画奖励" })).toHaveAttribute("src", "/images/exam-referral/reward_30_days.png");
-  });
-
-  it("marks completed nodes with a non-color completion indicator", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: 2 }));
-    renderPanel();
-    const completedNode = await screen.findByRole("button", { name: /节点 1.*已完成/ });
-    expect(completedNode).toHaveAttribute("aria-label", expect.stringContaining("已完成"));
-    expect(completedNode.querySelector(".referral-panel__completion-mark")).toHaveTextContent("✓");
-    expect(completedNode).toHaveAccessibleName("节点 1：已完成");
-  });
-
-  it("keeps the selected reward card open after Escape and outside pointer interaction", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot());
-    renderPanel();
-    const nodeOne = await screen.findByRole("button", { name: /节点 1/ });
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toBeInTheDocument();
-    fireEvent.pointerDown(document.body, { pointerType: "mouse" });
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toBeInTheDocument();
-    expect(nodeOne).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("shows repeat count in the follow-up reward card after five referrals", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: 8 }));
-    renderPanel();
-    const followUpNode = await screen.findByRole("button", { name: /后续/ });
-    expect(followUpNode).toHaveAccessibleName("后续节点：已完成");
-    fireEvent.click(followUpNode);
-    expect(screen.getByRole("region", { name: "后续奖励详情" })).toHaveTextContent("已获得后续奖励 3 次");
-  });
-
-  it("previews cards on focus and fine-pointer hover without replacing the clicked selection", async () => {
-    Object.defineProperty(window, "matchMedia", { configurable: true, value: vi.fn().mockReturnValue({ matches: true }) });
-    fetchReferralCampaign.mockResolvedValue(snapshot());
-    renderPanel();
-    const nodeOne = await screen.findByRole("button", { name: /节点 1/ });
-    const nodeTwo = screen.getByRole("button", { name: /节点 2/ });
-    fireEvent.click(nodeOne);
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toHaveTextContent("备考季 +30 天");
-    expect(screen.getByRole("img", { name: "备考季 +30 天漫画奖励" })).toHaveAttribute("src", "/images/exam-referral/reward_30_days.png");
-    fireEvent.focus(nodeTwo);
-    expect(screen.getByRole("region", { name: "节点 2 奖励详情" })).toBeInTheDocument();
-    expect(nodeTwo).toHaveAttribute("aria-expanded", "true");
-    expect(nodeOne).toHaveAttribute("aria-expanded", "false");
-    fireEvent.blur(nodeTwo);
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toBeInTheDocument();
-    expect(nodeOne).toHaveAttribute("aria-expanded", "true");
-    expect(nodeTwo).toHaveAttribute("aria-expanded", "false");
-    fireEvent.pointerEnter(nodeTwo, { pointerType: "mouse" });
-    expect(screen.getByRole("region", { name: "节点 2 奖励详情" })).toBeInTheDocument();
-    expect(nodeTwo).toHaveAttribute("aria-expanded", "true");
-    expect(nodeOne).toHaveAttribute("aria-expanded", "false");
-    fireEvent.pointerLeave(nodeTwo, { pointerType: "mouse" });
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toBeInTheDocument();
-    expect(nodeOne).toHaveAttribute("aria-expanded", "true");
-    expect(nodeTwo).toHaveAttribute("aria-expanded", "false");
-  });
-
-  it("does not preview cards for coarse pointers", async () => {
-    Object.defineProperty(window, "matchMedia", { configurable: true, value: vi.fn().mockReturnValue({ matches: false }) });
-    fetchReferralCampaign.mockResolvedValue(snapshot());
-    renderPanel();
-    const nodeOne = await screen.findByRole("button", { name: /节点 1/ });
-    const nodeTwo = screen.getByRole("button", { name: /节点 2/ });
-    fireEvent.click(nodeOne);
-    fireEvent.pointerEnter(nodeTwo, { pointerType: "touch" });
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toBeInTheDocument();
-  });
-
-  it("previews a card while a touch pointer is held and restores after release or cancel", async () => {
-    Object.defineProperty(window, "matchMedia", { configurable: true, value: vi.fn().mockReturnValue({ matches: false }) });
-    fetchReferralCampaign.mockResolvedValue(snapshot());
-    renderPanel();
-    const nodeOne = await screen.findByRole("button", { name: /节点 1/ });
-    const nodeTwo = screen.getByRole("button", { name: /节点 2/ });
-    fireEvent.click(nodeOne);
-    fireEvent.pointerDown(nodeTwo, { pointerType: "touch" });
-    expect(screen.getByRole("region", { name: "节点 2 奖励详情" })).toBeInTheDocument();
-    fireEvent.pointerCancel(nodeTwo, { pointerType: "touch" });
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toBeInTheDocument();
-    fireEvent.pointerDown(nodeTwo, { pointerType: "touch" });
-    fireEvent.pointerUp(nodeTwo, { pointerType: "touch" });
-    expect(screen.getByRole("region", { name: "节点 1 奖励详情" })).toBeInTheDocument();
-  });
-
-  it("renders active follow-up semantics for referrals after five", async () => {
+  it("shows and hides the follow-up tooltip for mouse, keyboard, and touch interactions", async () => {
     fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: 6 }));
     renderPanel();
-    const followUpNode = await screen.findByRole("button", { name: /后续/ });
-    expect(followUpNode).toHaveAttribute("aria-label", expect.stringContaining("已完成"));
-    fireEvent.click(followUpNode);
-    expect(screen.getByRole("region", { name: "后续奖励详情" })).toHaveTextContent("此后每推广一人");
-    expect(screen.getByRole("img", { name: "备考季 +30 天漫画奖励" })).toHaveAttribute("src", "/images/exam-referral/reward_30_days.png");
+    const followUp = await screen.findByRole("button", { name: "后续奖励：已完成" });
+    const tooltip = document.getElementById("referral-follow-up-tooltip");
+    expect(followUp).toHaveClass("referral-panel__node--follow-up", "is-complete");
+    expect(followUp).toHaveAttribute("aria-describedby", "referral-follow-up-tooltip");
+    expect(followUp).toHaveAttribute("aria-expanded", "false");
+    expect(tooltip).toHaveAttribute("hidden");
+
+    fireEvent.focus(followUp);
+    expect(tooltip).not.toHaveAttribute("hidden");
+    fireEvent.blur(followUp);
+    expect(tooltip).toHaveAttribute("hidden");
+
+    fireEvent.click(followUp);
+    expect(tooltip).not.toHaveAttribute("hidden");
+    expect(followUp).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("shows milestone reward names without milestone status copy", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ milestones: { science_3: { status: "not_earned" }, vlog_5: { status: "earned" } } }));
+  it("renders the promotion code and both copy actions", async () => {
+    fetchReferralCampaign.mockResolvedValue(snapshot({ code: "BK1-TLPEHL37W" }));
     renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: /节点 3/ }));
-    expect(screen.getByRole("region", { name: "节点 3 奖励详情" })).toHaveTextContent("赠送科普季");
-    expect(screen.queryByText("未达成")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /节点 5/ }));
-    expect(screen.getByRole("region", { name: "节点 5 奖励详情" })).toHaveTextContent("赠送 Vlog 季");
-    expect(screen.queryByText("已获得")).not.toBeInTheDocument();
+    expect(await screen.findByText("专属推荐码")).toBeInTheDocument();
+    expect(screen.getByText("BK1-TLPEHL37W").tagName).toBe("CODE");
+    expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "一键复制完整文案" })).toBeInTheDocument();
+    expect(screen.getByText("快速分享文案")).toBeInTheDocument();
   });
 
-  it("copies, shares with fallback, and keeps referral history private", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: 6, history: [
-      { id: 1, event_type: "referral_qualified", payload: { days: 30, effective_count: 6, name: "PRIVATE NAME", order_no: "PRIVATE ORDER" }, created_at: null },
-      { id: 2, event_type: "referral_milestone_granted", payload: { threshold: 3, kind: "science_3", reward_type: "entitlement", user: "PRIVATE NAME" }, created_at: "2026-01-01" },
-      { id: 3, event_type: "referral_refunded", payload: { progress_removed: true, days_removed: 5, effective_count: 4, access_expires_at: "2026-01-31T00:00:00Z", milestone_changes: [
-        { threshold: 3, kind: "science_3", outcome: "revoked", reward_type: "entitlement", user: "PRIVATE NAME" },
-        { threshold: 5, kind: "vlog_5", outcome: "revocation_pending", reward_type: "coupon" },
-      ], order_no: "PRIVATE ORDER" }, created_at: "2026-01-02" },
-      { id: 4, event_type: "referral_milestone_granted", payload: { threshold: 5, kind: "vlog_5", reward_type: "coupon" }, created_at: "2026-01-03" },
-      { id: 5, event_type: "referral_refunded", payload: { effective_count: 2, milestone_changes: [
-        { threshold: 3, kind: "science_3", outcome: "revoked", reward_type: "coupon" },
-      ] }, created_at: "2026-01-04" },
-      { id: 6, event_type: "referral_refunded", payload: { effective_count: 1, milestone_changes: [
-        { threshold: 5, kind: "vlog_5", outcome: "non_reversible", reward_type: "coupon" },
-      ] }, created_at: "2026-01-05" },
-      { id: 7, event_type: "referral_refunded", payload: { effective_count: 0, milestone_changes: [
-        { threshold: 3, kind: "science_3", outcome: "unknown_outcome", reward_type: "entitlement", secret: "PRIVATE CHANGE" },
-      ] }, created_at: "2026-01-06" },
-    ] }));
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockResolvedValue() } });
+  it("copies the exact code and invitation text without opening native share", async () => {
+    fetchReferralCampaign.mockResolvedValue(snapshot({ code: "  ABC123  " }));
+    const share = vi.fn();
+    Object.defineProperty(navigator, "share", { configurable: true, value: share });
+    const writeText = vi.fn().mockResolvedValue();
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    renderPanel();
+
+    fireEvent.click(await screen.findByRole("button", { name: "复制" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("ABC123"));
+    expect(screen.getByRole("button", { name: "复制，已复制" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "一键复制完整文案" }));
+    await waitFor(() => expect(writeText).toHaveBeenLastCalledWith("强烈推荐大家试试【符号刘德语备考一站式平台】！\n🌐 网站：www.frauliu.com (中国IP) / www.frauliu.cn (海外IP)\n我正在用它高效复习备考！\n🎁 输入我的专属分享码: 【ABC123】 即刻享受立减 5 元的专属折扣！\n快来和我一起上岸吧！Viel Erfolg bei der Prüfung!"));
+    expect(share).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "一键复制完整文案，已复制" })).toBeInTheDocument();
+  });
+
+  it("reports clipboard failures without showing success", async () => {
+    fetchReferralCampaign.mockResolvedValue(snapshot());
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
     renderPanel();
     fireEvent.click(await screen.findByRole("button", { name: "复制" }));
-    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith("ABC123"));
-    expect(screen.getByRole("status")).toHaveTextContent(/已复制/);
-    expect(screen.queryByText("每成功推广 1 人，备考季 +30 天")).not.toBeInTheDocument();
-    expect(screen.queryByText(/PRIVATE NAME/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/PRIVATE ORDER/)).not.toBeInTheDocument();
-    const history = within(screen.getByRole("list", { name: "推广记录" }));
-    expect(history.getByText(/备考季 \+30 天/)).toBeInTheDocument();
-    expect(history.getByText(/当前有效推广人数：6/)).toBeInTheDocument();
-    expect(history.getByText("已达成 3 人里程碑，科普季永久权限已自动发放")).toBeInTheDocument();
-    expect(history.getByText("已达成 5 人里程碑，Vlog 季¥10 替代券已自动发放")).toBeInTheDocument();
-    expect(history.getByText(/推广进度已回退.*5 天.*2026/)).toBeInTheDocument();
-    expect(history.getByText(/当前有效推广人数：4/)).toBeInTheDocument();
-    expect(history.getByText(/科普季永久权限已撤销/)).toBeInTheDocument();
-    expect(history.getByText(/Vlog 季.*订单中.*订单结束/)).toBeInTheDocument();
-    expect(history.getByText(/未使用的科普季 ¥10 替代券已撤销/)).toBeInTheDocument();
-    expect(history.getByText(/Vlog 季 ¥10 替代券已使用，无法追回.*里程碑已兑现/)).toBeInTheDocument();
-    expect(history.queryByText(/PRIVATE CHANGE|unknown_outcome|PRIVATE NAME|PRIVATE ORDER/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/奖励自动发放/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/徽章|推广达人|佩戴|领取/)).not.toBeInTheDocument();
+    await waitFor(() => expect(document.querySelector(".referral-panel__feedback")).toHaveTextContent("复制失败，请手动复制推广码"));
+    expect(screen.getByRole("button", { name: "复制" })).toBeInTheDocument();
+    expect(document.querySelectorAll(".referral-panel__copy-feedback.is-visible")).toHaveLength(0);
   });
 
-  it("renders only recognized refund milestone outcomes from safe fields", async () => {
-    const refundNotice = (id, change) => ({
-      id, event_type: "referral_refunded", created_at: "2026-02-01T00:00:00Z",
-      payload: { effective_count: 0, milestone_changes: [change], private_order: "ORDER SECRET" },
-    });
+  it("restarts copy feedback and clears its timer on unmount", async () => {
+    fetchReferralCampaign.mockResolvedValue(snapshot());
+    const writeText = vi.fn().mockResolvedValue();
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const view = renderPanel();
+    const copyButton = await screen.findByRole("button", { name: "复制" });
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(copyButton);
+      await act(async () => { await Promise.resolve(); });
+      expect(copyButton).toHaveAttribute("aria-label", "复制，已复制");
+      act(() => { vi.advanceTimersByTime(1000); });
+      fireEvent.click(copyButton);
+      await act(async () => { await Promise.resolve(); });
+      act(() => { vi.advanceTimersByTime(1000); });
+      expect(copyButton).toHaveAttribute("aria-label", "复制，已复制");
+      act(() => { vi.advanceTimersByTime(800); });
+      expect(copyButton).toHaveAttribute("aria-label", "复制");
+      view.unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders only safe history fields and does not leak payload data", async () => {
     fetchReferralCampaign.mockResolvedValue(snapshot({ history: [
-      refundNotice(11, { threshold: 3, kind: "science_3", outcome: "revoked", reward_type: "entitlement" }),
-      refundNotice(12, { threshold: 5, kind: "vlog_5", outcome: "revoked", reward_type: "coupon" }),
-      refundNotice(13, { threshold: 3, kind: "science_3", outcome: "revocation_pending", reward_type: "coupon" }),
-      refundNotice(14, { threshold: 5, kind: "vlog_5", outcome: "non_reversible", reward_type: "coupon" }),
-      refundNotice(15, { threshold: 3, kind: "science_3", outcome: "unknown", reward_type: "entitlement", private: "CHANGE SECRET" }),
-      refundNotice(16, { threshold: 3, kind: "vlog_5", outcome: "revoked", reward_type: "coupon" }),
+      { id: 1, event_type: "referral_qualified", payload: { days: 30, effective_count: 6, name: "PRIVATE NAME", order_no: "PRIVATE ORDER" }, created_at: null },
+      { id: 2, event_type: "referral_milestone_granted", payload: { threshold: 3, kind: "science_3", reward_type: "entitlement", user: "PRIVATE NAME" }, created_at: "2026-01-01" },
+      { id: 3, event_type: "referral_refunded", payload: { progress_removed: true, days_removed: 5, effective_count: 4, access_expires_at: "2026-01-31T00:00:00Z", milestone_changes: [{ threshold: 3, kind: "science_3", outcome: "revoked", reward_type: "entitlement" }], order_no: "PRIVATE ORDER" }, created_at: "2026-01-02" },
     ] }));
+    renderPanel();
+    const history = within(await screen.findByRole("list", { name: "推广记录" }));
+    expect(history.getByText(/备考季 \+30 天/)).toBeInTheDocument();
+    expect(history.getByText("已达成 3 人里程碑，科普季永久权限已自动发放")).toBeInTheDocument();
+    expect(history.getByText(/推广进度已回退.*5 天.*2026/)).toBeInTheDocument();
+    expect(history.queryByText(/PRIVATE NAME|PRIVATE ORDER/)).not.toBeInTheDocument();
+  });
+
+  it("renders only the four allowed refund milestone outcomes", async () => {
+    fetchReferralCampaign.mockResolvedValue(snapshot({ history: [{
+      id: 20,
+      event_type: "referral_refunded",
+      created_at: "2026-02-01T00:00:00Z",
+      payload: {
+        effective_count: 0,
+        milestone_changes: [
+          { threshold: 3, kind: "science_3", outcome: "revoked", reward_type: "entitlement" },
+          { threshold: 5, kind: "vlog_5", outcome: "revoked", reward_type: "coupon" },
+          { threshold: 3, kind: "science_3", outcome: "revocation_pending", reward_type: "coupon" },
+          { threshold: 5, kind: "vlog_5", outcome: "non_reversible", reward_type: "coupon" },
+          { threshold: 3, kind: "science_3", outcome: "unknown", reward_type: "entitlement", secret: "PRIVATE OUTCOME" },
+          { threshold: 3, kind: "vlog_5", outcome: "revoked", reward_type: "coupon", secret: "PRIVATE KIND" },
+          { threshold: 5, kind: "science_3", outcome: "revoked", reward_type: "entitlement", secret: "PRIVATE THRESHOLD" },
+        ],
+        private_order: "PRIVATE ORDER",
+      },
+    }] }));
     renderPanel();
     const history = within(await screen.findByRole("list", { name: "推广记录" }));
     expect(history.getByText(/科普季永久权限已撤销/)).toBeInTheDocument();
     expect(history.getByText(/未使用的Vlog 季 ¥10 替代券已撤销/)).toBeInTheDocument();
     expect(history.getByText(/科普季 ¥10 替代券正在订单中，待订单结束后处理/)).toBeInTheDocument();
     expect(history.getByText(/Vlog 季 ¥10 替代券已使用，无法追回，该里程碑已兑现/)).toBeInTheDocument();
-    expect(history.queryByText(/CHANGE SECRET|ORDER SECRET|unknown/)).not.toBeInTheDocument();
-    expect(history.queryByText(/Vlog 季永久权限已撤销/)).not.toBeInTheDocument();
+    expect(history.queryByText(/PRIVATE OUTCOME|PRIVATE KIND|PRIVATE THRESHOLD|PRIVATE ORDER|unknown/)).not.toBeInTheDocument();
+    expect(history.queryByText(/Vlog 季永久权限已撤销|科普季 ¥10 替代券已撤销/)).not.toBeInTheDocument();
   });
 
-  it("uses native share and falls back to clipboard after a share failure", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot());
-    const share = vi.fn().mockRejectedValue(new Error("unsupported"));
-    Object.defineProperty(navigator, "share", { configurable: true, value: share });
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockResolvedValue() } });
-    renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "邀请好友" }));
-    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("ABC123") })));
-    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(expect.stringContaining("ABC123")));
-  });
-
-  it("shares the campaign name and code natively", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot());
-    const share = vi.fn().mockResolvedValue();
-    Object.defineProperty(navigator, "share", { configurable: true, value: share });
-    renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "邀请好友" }));
-    await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({
-      title: "秋季推广", text: expect.stringContaining("秋季推广：使用我的推广码 ABC123"),
-    })));
-  });
-
-  it("does not report a user-cancelled native share as an error", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot());
-    Object.defineProperty(navigator, "share", { configurable: true, value: vi.fn().mockRejectedValue({ name: "AbortError" }) });
-    const writeText = vi.fn();
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    renderPanel();
-    fireEvent.click(await screen.findByRole("button", { name: "邀请好友" }));
-    await waitFor(() => expect(navigator.share).toHaveBeenCalled());
-    expect(writeText).not.toHaveBeenCalled();
-    expect(screen.getByRole("status")).toBeEmptyDOMElement();
-  });
-
-  it("keeps touch targets, responsive breakpoints, and motion rules explicit", () => {
+  it("keeps touch targets, breakpoints, and reduced-motion rules explicit", () => {
     expect(panelStyles).toContain("@media (max-width: 768px)");
     expect(panelStyles).toContain("@media (max-width: 480px)");
     expect(panelStyles).toContain("min-height: 44px");
-    expect(panelStyles).toContain("@media (hover: hover) and (pointer: fine)");
     expect(panelStyles).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(panelStyles).toMatch(/background:\s*#fff/);
     expect(panelStyles).toMatch(/grid-template-columns:\s*repeat\(6,/);
-    expect(panelStyles).toContain(".referral-panel__track-line");
-    expect(panelStyles).toContain("background: #e5e1f0");
-    expect(panelStyles).toContain("background: #8d9de5");
     expect(panelStyles).toMatch(/border-radius:\s*50%/);
-    expect(panelStyles).toMatch(/\.referral-panel__node\.is-complete::after\s*\{[^}]*border:\s*3px solid #69bf8d/s);
+    expect(panelStyles).toContain("background: #2d8955");
     expect(panelStyles).toMatch(/:focus-visible/);
-    expect(panelStyles).toMatch(/position:\s*absolute/);
-    expect(panelStyles).toMatch(/\.referral-panel--locked\s*\{[^}]*grid-template-columns:/s);
-    expect(panelStyles).toMatch(/@media \(max-width: 480px\)[\s\S]*\.referral-panel--locked\s*\{[^}]*flex-direction:\s*column/s);
-    expect(panelStyles).toContain("#fffdf9");
-    expect(panelStyles).toContain("#28243c");
-    expect(panelStyles).toMatch(/\.referral-panel__reward-card\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
-    expect(panelStyles).toMatch(/\.referral-panel__season-cover\s*\{[^}]*width:\s*min\(100%, 24rem\)/s);
-    expect(panelStyles).not.toMatch(/transition:\s*all\b/);
-    expect(panelStyles).toMatch(/@media \(hover: hover\) and \(pointer: fine\)\s*\{[^}]*\.referral-panel button:not\(\.referral-panel__node\):hover/s);
+    expect(panelStyles).toMatch(/\.referral-panel__completion-mark\s*\{[^}]*position:\s*absolute/s);
+    expect(panelStyles).toMatch(/\.referral-panel__completion-mark\s*\{[^}]*color:\s*#fff/s);
+    expect(panelStyles).toMatch(/@media \(max-width: 480px\)[\s\S]*\.referral-panel__completion-mark/);
+    expect(panelStyles).not.toMatch(/\.referral-panel__action-content\.is-copied\s*\{[^}]*visibility:\s*hidden/s);
+    expect(panelStyles).toMatch(/\.referral-panel__action-content\.is-copied\s*\{[^}]*animation:\s*referral-copy-action 1800ms/s);
+    expect(panelStyles).toContain("@keyframes referral-copy-action");
+    expect(panelStyles).toContain(".referral-panel__copy-feedback.is-visible { animation: referral-copy-feedback 1800ms");
+    expect(panelStyles).toMatch(/\.referral-panel__action-content\.is-copied\s*\{ animation: none; opacity: 0; \}/);
+    expect(panelStyles).toMatch(/\.referral-panel button\.referral-panel__code-copy,\s*\.referral-panel button\.referral-panel__share-button\s*\{[^}]*border-color:\s*#b6d4bf;[^}]*background:\s*#f4fbf6;[^}]*color:\s*#205b40/s);
+    expect(panelStyles).toMatch(/\.referral-panel__code-copy \.referral-panel__copy-feedback,\s*\.referral-panel__share-button \.referral-panel__copy-feedback\s*\{\s*color:\s*#226a45;\s*\}/s);
+    expect(panelStyles).toMatch(/@media \(hover: hover\) and \(pointer: fine\)[\s\S]*\.referral-panel button:hover \{ border-color: #80b491; background: #f2fbf4; \}/);
+    expect(panelStyles).not.toMatch(/\.referral-panel \.referral-panel__code-copy:hover\s*\{[^}]*#174f32/s);
+    expect(panelStyles).not.toMatch(/\.referral-panel \.referral-panel__code-copy:hover \.referral-panel__copy-feedback[^}]*#fff/s);
+    expect(panelStyles).not.toContain("reward_30_days");
+    expect(panelStyles).not.toContain("season-cover");
+    expect(panelStyles).not.toContain("locked-student.png");
+    expect(panelStyles).not.toContain("locked-books.png");
+    expect(panelStyles).not.toContain("locked-cloud.svg");
+    expect(panelStyles).not.toContain("locked-sparkles.svg");
+    expect(panelStyles).not.toContain("locked-lock.svg");
+    expect(panelStyles).not.toContain("referral-panel__locked-student");
+    expect(panelStyles).not.toContain("referral-panel__locked-books");
+    expect(panelStyles).not.toContain("referral-panel__locked-cloud");
   });
 });

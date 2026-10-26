@@ -913,6 +913,7 @@ export default function TelcMockExamPage() {
   const [activePart, setActivePart] = useState(READING_PART_KEYS[0]);
   const [answers, setAnswers] = useState({});
   const [writingText, setWritingText] = useState("");
+  const [writingChoiceId, setWritingChoiceId] = useState(null);
   const [writingAssessment, setWritingAssessment] = useState(() => ({ ...EMPTY_WRITING_ASSESSMENT }));
   const [audioStep, setAudioStep] = useState(0);
   const [audioStepStartedAt, setAudioStepStartedAt] = useState(0);
@@ -934,6 +935,18 @@ export default function TelcMockExamPage() {
   const [questionFavoritePending, setQuestionFavoritePending] = useState({});
   const [resultModalOpen, setResultModalOpen] = useState(false);
   const [wasEarlySubmitted, setWasEarlySubmitted] = useState(false);
+  const writingOptions = exam?.parts?.writing_options || [];
+  const hasWritingChooser = String(currentScope.level || "").toUpperCase() === "B2" && writingOptions.length === 2;
+  const hasWritingChoiceId = writingChoiceId !== null && writingChoiceId !== undefined && writingChoiceId !== "";
+  const matchedWritingExercise = hasWritingChoiceId
+    ? writingOptions.find((candidate) => String(candidate.id) === String(writingChoiceId)) || null
+    : null;
+  const writingExercise = hasWritingChooser
+    ? matchedWritingExercise
+    : exam?.parts?.writing;
+  const hasWritingChoice = hasWritingChooser ? Boolean(matchedWritingExercise) : Boolean(writingExercise);
+  const writingReady = Boolean(writingExercise);
+  const writingChoiceIdForProgress = hasWritingChoice ? writingChoiceId : null;
   const audioSequence = useMemo(() => audioSequenceForLevel(currentScope.level), [currentScope.level]);
   const currentAudioAction = audioSequence[audioStep] || null;
   const currentAudioExercise = currentAudioAction?.kind === "audio" ? exam?.parts?.[currentAudioAction.partKey] : null;
@@ -947,13 +960,13 @@ export default function TelcMockExamPage() {
   const currentAudioSource = audioMode === "blob" ? currentBackupAudioSource : currentAudioUrl;
 
   const persist = useCallback((next = {}) => {
-    const snapshot = { exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, listeningRemainingMs, attemptId, isFavorite, wasEarlySubmitted, ...next };
+    const snapshot = { exam, phase, deadline, activePart, answers, writingText, writingChoiceId, writingAssessment, audioStep, audioStepStartedAt, listeningRemainingMs, attemptId, isFavorite, wasEarlySubmitted, ...next };
     if (snapshot.exam) {
       const serialized = JSON.stringify(snapshot);
       try { sessionStorage.setItem(sessionKey, serialized); } catch { /* best effort */ }
       try { localStorage.setItem(sessionKey, serialized); } catch { /* best effort */ }
     }
-  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, listeningRemainingMs, attemptId, isFavorite, wasEarlySubmitted, sessionKey]);
+  }, [exam, phase, deadline, activePart, answers, writingText, writingChoiceId, writingAssessment, audioStep, audioStepStartedAt, listeningRemainingMs, attemptId, isFavorite, wasEarlySubmitted, sessionKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -965,6 +978,7 @@ export default function TelcMockExamPage() {
           if (cancelled) return;
           setPersistedScope(persistedExamScope(saved, routeScope));
           setExam(saved.exam); setAnswers(saved.answers || {}); setWritingText(saved.writing_text || "");
+          setWritingChoiceId(saved.progress?.writing_choice_id ?? null);
           setWritingAssessment(normalizeWritingAssessment(saved.writing_assessment, saved.writing_grade));
           setAttemptId(saved.id); setIsFavorite(saved.is_favorite); setIsSavedReview(true);
           setWasEarlySubmitted(!!saved.progress?.early_submitted);
@@ -987,6 +1001,7 @@ export default function TelcMockExamPage() {
           setPersistedScope(savedScope);
           const progress = saved.progress || {};
           setExam(saved.exam); setAnswers(saved.answers || {}); setWritingText(saved.writing_text || "");
+          setWritingChoiceId(progress.writing_choice_id ?? null);
           setWritingAssessment(normalizeWritingAssessment(saved.writing_assessment, saved.writing_grade));
           setAttemptId(saved.id); setIsFavorite(!!saved.is_favorite);
           setPhase(progress.phase || "reading"); setDeadline(Number(progress.deadline) || Date.now());
@@ -1014,6 +1029,7 @@ export default function TelcMockExamPage() {
             setNow(Date.now());
             setActivePart(restored.activePart || READING_PART_KEYS[0]); setAnswers(restored.answers || {});
             setWritingText(restored.writingText || "");
+            setWritingChoiceId(restored.writingChoiceId ?? null);
             setWritingAssessment(normalizeWritingAssessment(restored.writingAssessment, restored.writingGrade));
             setAudioStep(restored.audioStep || 0); setAudioStepStartedAt(restored.audioStepStartedAt || Date.now());
             setListeningRemainingMs(Number(restored.listeningRemainingMs) || null);
@@ -1040,6 +1056,7 @@ export default function TelcMockExamPage() {
           setPersistedScope(savedScope);
           const progress = saved.progress || {};
           setExam(saved.exam); setAnswers(saved.answers || {}); setWritingText(saved.writing_text || "");
+          setWritingChoiceId(progress.writing_choice_id ?? null);
           setWritingAssessment(normalizeWritingAssessment(saved.writing_assessment, saved.writing_grade));
           setAttemptId(saved.id); setIsFavorite(!!saved.is_favorite);
           setPhase(progress.phase || "reading"); setDeadline(Number(progress.deadline) || Date.now());
@@ -1062,7 +1079,7 @@ export default function TelcMockExamPage() {
         const nextDeadline = Number(progress.deadline) || Date.now() + READING_SECONDS * 1000;
         setNow(Date.now());
         setExam(data); setPhase("reading"); setDeadline(nextDeadline); setActivePart(READING_PART_KEYS[0]);
-        setAnswers({}); setWritingText(""); setWritingAssessment({ ...EMPTY_WRITING_ASSESSMENT });
+        setAnswers({}); setWritingText(""); setWritingChoiceId(null); setWritingAssessment({ ...EMPTY_WRITING_ASSESSMENT });
         setAudioStep(0); setAudioStepStartedAt(0); setWasEarlySubmitted(false);
         setListeningRemainingMs(null);
         setAttemptId(data.attempt_id); setIsFavorite(false); setIsSavedReview(false); setFavoriteMessage("");
@@ -1070,7 +1087,7 @@ export default function TelcMockExamPage() {
         localStorage.setItem(activeMockExamKey(user?.id, createdScope), String(data.attempt_id));
         const initialSnapshot = JSON.stringify({ exam: data, phase: "reading", deadline: nextDeadline,
           activePart: READING_PART_KEYS[0], answers: {}, writingText: "",
-          writingAssessment: { ...EMPTY_WRITING_ASSESSMENT }, audioStep: 0,
+          writingChoiceId: null, writingAssessment: { ...EMPTY_WRITING_ASSESSMENT }, audioStep: 0,
           audioStepStartedAt: 0, listeningRemainingMs: null, attemptId: data.attempt_id, isFavorite: false, wasEarlySubmitted: false });
         const createdSessionKey = mockExamSessionKey(user?.id, createdScope);
         sessionStorage.setItem(createdSessionKey, initialSnapshot);
@@ -1095,7 +1112,7 @@ export default function TelcMockExamPage() {
   useEffect(() => {
     if (!exam || isSavedReview) return;
     persist();
-  }, [exam, phase, deadline, activePart, answers, writingText, writingAssessment, audioStep, audioStepStartedAt, listeningRemainingMs, attemptId, isFavorite, wasEarlySubmitted, isSavedReview, persist]);
+  }, [exam, phase, deadline, activePart, answers, writingText, writingChoiceId, writingAssessment, audioStep, audioStepStartedAt, listeningRemainingMs, attemptId, isFavorite, wasEarlySubmitted, isSavedReview, persist]);
 
   useEffect(() => {
     if (!attemptId || isSavedReview || submissionStartedRef.current) return undefined;
@@ -1106,7 +1123,7 @@ export default function TelcMockExamPage() {
           writing_text: writingText,
           writing_assessment: writingAssessment,
           is_favorite: isFavorite,
-          progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, listening_remaining_ms: listeningRemainingMs, early_submitted: wasEarlySubmitted },
+          progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, listening_remaining_ms: listeningRemainingMs, early_submitted: wasEarlySubmitted, writing_choice_id: writingChoiceIdForProgress },
         });
       } catch {
         if (!submissionStartedRef.current) {
@@ -1115,13 +1132,13 @@ export default function TelcMockExamPage() {
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [attemptId, isSavedReview, answers, writingText, writingAssessment, phase, deadline, activePart, audioStep, audioStepStartedAt, listeningRemainingMs, isFavorite, wasEarlySubmitted]);
+  }, [attemptId, isSavedReview, answers, writingText, writingAssessment, writingChoiceIdForProgress, phase, deadline, activePart, audioStep, audioStepStartedAt, listeningRemainingMs, isFavorite, wasEarlySubmitted]);
 
   useEffect(() => {
     if (phase !== "results" || !exam?.parts) return undefined;
     let cancelled = false;
     Promise.all(Object.entries(PART_FAVORITE_CONFIG).map(async ([partKey, config]) => {
-      const exercise = exam.parts[partKey];
+      const exercise = partKey === "writing" ? writingExercise : exam.parts[partKey];
       if (!exercise?.id) return [];
       const data = await config.fetch(exercise.id);
       return (data?.results || []).map((state) => [answerKey(partKey, state[config.target]), !!state.is_favorited]);
@@ -1131,7 +1148,7 @@ export default function TelcMockExamPage() {
       if (!cancelled) setFavoriteMessage("题目收藏状态加载失败，请稍后重试");
     });
     return () => { cancelled = true; };
-  }, [phase, exam]);
+  }, [phase, exam, writingExercise]);
 
   useEffect(() => {
     const active = !["loading", "error", "results", "writing_review"].includes(phase);
@@ -1326,10 +1343,10 @@ export default function TelcMockExamPage() {
         writing_text: writingText,
         writing_assessment: writingAssessment,
         is_favorite: isFavorite,
-        progress: { phase, deadline, active_part: activePart, audio_step: nextStep, audio_step_started_at: startedAt, listening_remaining_ms: listeningRemainingMs },
+        progress: { phase, deadline, active_part: activePart, audio_step: nextStep, audio_step_started_at: startedAt, listening_remaining_ms: listeningRemainingMs, writing_choice_id: writingChoiceIdForProgress },
       }).catch(() => setFavoriteMessage("听力播放进度保存失败，请检查网络"));
     }
-  }, [audioStep, persist, attemptId, isSavedReview, answers, writingText, writingAssessment, isFavorite, phase, deadline, activePart, listeningRemainingMs]);
+  }, [audioStep, persist, attemptId, isSavedReview, answers, writingText, writingAssessment, writingChoiceIdForProgress, isFavorite, phase, deadline, activePart, listeningRemainingMs]);
 
   const handleAudioEnded = useCallback(async (event) => {
     const audioElement = event.currentTarget;
@@ -1363,6 +1380,12 @@ export default function TelcMockExamPage() {
   }, [phase, currentAudioAction, audioStepStartedAt, playCurrentAudio, advanceAudioStep]);
 
   function setAnswer(key, value) { setAnswers((previous) => ({ ...previous, [key]: value })); }
+  function chooseWritingExercise(exercise) {
+    if (!hasWritingChooser || hasWritingChoice || !exercise?.id) return;
+    setWritingChoiceId(exercise.id);
+    setActivePart("writing");
+    persist({ writingChoiceId: exercise.id, activePart: "writing" });
+  }
   async function finishReadingEarly() {
     if (await confirmMockExamAction("结束阅读并进入听力部分", "进入后不能返回修改阅读答案。")) enterListening();
   }
@@ -1396,7 +1419,7 @@ export default function TelcMockExamPage() {
         await submitSavedMockExam(attemptId, {
           answers, writing_text: writingText, writing_assessment: finalWritingAssessment,
           is_favorite: isFavorite,
-          progress: { phase: "results", deadline: 0, active_part: READING_PART_KEYS[0], audio_step: audioStep, audio_step_started_at: audioStepStartedAt, early_submitted: earlySubmitted },
+          progress: { phase: "results", deadline: 0, active_part: READING_PART_KEYS[0], audio_step: audioStep, audio_step_started_at: audioStepStartedAt, early_submitted: earlySubmitted, writing_choice_id: writingChoiceIdForProgress },
         });
         const completed = await fetchSavedMockExam(attemptId);
         if (completed?.is_completed && completed?.exam) {
@@ -1419,7 +1442,7 @@ export default function TelcMockExamPage() {
   function newExam() {
     if (attemptId) clearAnnotationScope(mockAnnotationScope(attemptId));
     sessionStorage.removeItem(sessionKey); localStorage.removeItem(sessionKey); localStorage.removeItem(activeAttemptKey);
-    setExam(null); setAttemptId(null); setIsFavorite(false); setIsSavedReview(false); setWasEarlySubmitted(false);
+    setExam(null); setAttemptId(null); setIsFavorite(false); setIsSavedReview(false); setWasEarlySubmitted(false); setWritingChoiceId(null);
     createRequestIdRef.current = createRequestId();
     if (savedExamParam || attemptParam) navigate(mockExamPath, { replace: true });
     else setLoadKey((value) => value + 1);
@@ -1456,7 +1479,7 @@ export default function TelcMockExamPage() {
         writing_assessment: writingAssessment,
         is_completed: phase === "results",
         is_favorite: true,
-        progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, listening_remaining_ms: listeningRemainingMs, early_submitted: wasEarlySubmitted },
+        progress: { phase, deadline, active_part: activePart, audio_step: audioStep, audio_step_started_at: audioStepStartedAt, listening_remaining_ms: listeningRemainingMs, early_submitted: wasEarlySubmitted, writing_choice_id: writingChoiceIdForProgress },
       });
       setAttemptId(saved.id); setIsFavorite(true);
       localStorage.setItem(activeAttemptKey, String(saved.id));
@@ -1471,8 +1494,8 @@ export default function TelcMockExamPage() {
   async function toggleQuestionFavorite(partKey, itemId) {
     if (phase !== "results") return;
     const config = PART_FAVORITE_CONFIG[partKey];
-    const exercise = exam.parts[partKey];
-    const item = config?.items(exercise).find((candidate) => candidate.id === itemId);
+    const exercise = partKey === "writing" ? writingExercise : exam.parts[partKey];
+    const item = config && exercise ? config.items(exercise).find((candidate) => candidate.id === itemId) : null;
     if (!config || !item) return;
     const key = answerKey(partKey, itemId);
     const nextValue = !questionFavorites[key];
@@ -1541,19 +1564,22 @@ export default function TelcMockExamPage() {
   if (phase === "collection") {
     phaseContent = <div className="telc-mock-exam-state telc-mock-exam-state--collection"><span className="telc-mock-exam-kicker">第一部分已收卷</span><h1>答案已锁定</h1><p>听力考试将在倒计时结束后自动开始，请准备好耳机并保持页面开启。</p><div className="telc-mock-exam-collection-timer"><strong className="telc-mock-exam-big-time">{formatTime(remainingSeconds)}</strong><button className="telc-mock-exam-submit-early" onClick={submitExamEarly}>提前交卷</button></div><button className="telc-mock-exam-primary" onClick={enterListening}>立即进入听力</button></div>;
   } else if (phase === "writing_review") {
-    const example = exam.parts.writing?.example_texts?.[0];
-    const assessmentComplete = isWritingAssessmentComplete(writingAssessment);
+    const example = writingExercise?.example_texts?.[0];
+    const unselectedWriting = hasWritingChooser && !hasWritingChoice;
+    const assessmentComplete = unselectedWriting || (writingReady && isWritingAssessmentComplete(writingAssessment));
     phaseContent = (
       <div className="telc-mock-exam-review-backdrop" role="dialog" aria-modal="true" aria-labelledby="writing-review-title">
         <section className="telc-mock-exam-writing-review">
           <div className="telc-mock-exam-writing-review__body">
             <div className="telc-mock-exam-writing-review__head"><div><span>Schreiben · 自评</span><h1 id="writing-review-title">对照范文评估你的写作</h1></div></div>
-            <div className="telc-mock-exam-writing-review__compare">
-              <article><h2>Meine Antwort</h2><div>{textBlocks(writingText || "（未作答）")}</div></article>
-              <article><h2>Beispieltext</h2><MockTextRegion as="div" regionId="writing:example">{textBlocks(example?.example_text || "暂无范文")}</MockTextRegion></article>
-            </div>
-            <div className="telc-mock-exam-rubric"><h2>评分方法</h2><MockTextRegion as="p" regionId="writing:assessment:instructions">三个维度分别按 5、3、1、0 分计分，维度总分乘以 3，写作满分为 45 分。主题偏离时写作计 0 分。</MockTextRegion></div>
-            <fieldset className="telc-mock-exam-topic-check">
+            {writingReady ? <>
+              <div className="telc-mock-exam-writing-review__compare">
+                <article><h2>Meine Antwort</h2><div>{textBlocks(writingText || "（未作答）")}</div></article>
+                <article><h2>Beispieltext</h2><MockTextRegion as="div" regionId="writing:example">{textBlocks(example?.example_text || "暂无范文")}</MockTextRegion></article>
+              </div>
+              <div className="telc-mock-exam-rubric"><h2>评分方法</h2><MockTextRegion as="p" regionId="writing:assessment:instructions">三个维度分别按 5、3、1、0 分计分，维度总分乘以 3，写作满分为 45 分。主题偏离时写作计 0 分。</MockTextRegion></div>
+            </> : <div className="telc-mock-exam-writing-empty"><p>未选择写作题目</p></div>}
+            {writingReady ? <fieldset className="telc-mock-exam-topic-check">
               <legend><MockTextRegion as="span" regionId="writing:assessment:topic">文章是否围绕题目要求和给定情境展开？</MockTextRegion></legend>
               <label className={writingAssessment.topic_relevant === true ? "is-selected" : ""}>
                 <input type="radio" name="writing-topic" checked={writingAssessment.topic_relevant === true}
@@ -1565,8 +1591,8 @@ export default function TelcMockExamPage() {
                   onChange={() => setWritingAssessment({ ...EMPTY_WRITING_ASSESSMENT, topic_relevant: false })} />
                 <strong>否</strong><span>主题偏离，写作计 0 分</span>
               </label>
-            </fieldset>
-            {writingAssessment.topic_relevant === true ? <div className="telc-mock-exam-assessment-list">
+            </fieldset> : null}
+            {writingReady && writingAssessment.topic_relevant === true ? <div className="telc-mock-exam-assessment-list">
               {WRITING_CRITERIA.map((criterion) => (
                 <fieldset className="telc-mock-exam-grade-picker" key={criterion.key}>
                   <legend><MockTextRegion as="span" regionId={`writing:assessment:${criterion.key}:title`}>{criterion.title}</MockTextRegion></legend>
@@ -1586,7 +1612,7 @@ export default function TelcMockExamPage() {
             <button
               className="telc-mock-exam-writing-review__submit"
               disabled={!assessmentComplete}
-              onClick={finishSelfAssessment}
+              onClick={() => (unselectedWriting ? completeExam({ ...EARLY_SUBMISSION_WRITING_ASSESSMENT }, true) : finishSelfAssessment())}
               style={{
                 backgroundColor: assessmentComplete ? "#f2bd61" : "#d8ddda",
                 color: assessmentComplete ? "#2c2a22" : "#68756f",
@@ -1712,9 +1738,38 @@ export default function TelcMockExamPage() {
         </button>)}
       </nav>
 
-      <ExercisePart partKey={activePart} exercise={exam.parts[activePart]} answers={answers} setAnswer={setAnswer} setAnswers={setAnswers}
-        disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
-        favoriteFor={favoriteFor} questionNumbers={questionNumbers} sectionRef={exercisePartRef} examLabel={`${currentScope.examType} ${currentScope.level}`} examLevel={currentScope.level} />
+      {activePart === "writing" && hasWritingChooser && !hasWritingChoice && !isResults ? (
+        <section ref={exercisePartRef} className="telc-mock-exam-paper telc-mock-exam-writing-chooser">
+          <div className="telc-mock-exam-paper__heading">
+            <div><span>Schreiben</span><h2>Wählen Sie eine Aufgabe</h2></div>
+            <span className="telc-mock-exam-paper__badge">{currentScope.examType} {currentScope.level}</span>
+          </div>
+          <p className="telc-mock-exam-writing-chooser__intro">Wählen Sie eine der beiden Schreibaufgaben. Danach können Sie die Auswahl nicht mehr ändern.</p>
+          <div className="telc-mock-exam-writing-chooser__options">
+            {writingOptions.map((option, index) => (
+              <article className="telc-mock-exam-writing-choice-card" key={option.id}>
+                <h3>{option.exercise_base?.title || `Aufgabe ${index + 1}`}</h3>
+                <div className="telc-mock-exam-source-text">
+                  <h4>Anleitung</h4>
+                  <MockTextRegion as="p" regionId={`writing:choice:${option.id}:request`}>{textBlocks(option.request_text)}</MockTextRegion>
+                  <h4>Aufgabe</h4>
+                  <MockTextRegion as="p" regionId={`writing:choice:${option.id}:task`}>{textBlocks(option.task_text)}</MockTextRegion>
+                </div>
+                <button type="button" className="telc-mock-exam-primary" onClick={() => chooseWritingExercise(option)}>Wählen</button>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : isResults && activePart === "writing" && hasWritingChooser && !hasWritingChoice ? (
+        <section ref={exercisePartRef} className="telc-mock-exam-paper telc-mock-exam-writing-empty">
+          <div className="telc-mock-exam-paper__heading"><div><span>Schreiben</span><h2>写作</h2></div><span className="telc-mock-exam-paper__badge">{currentScope.examType} {currentScope.level}</span></div>
+          <p>未选择写作题目</p>
+        </section>
+      ) : (
+        <ExercisePart partKey={activePart} exercise={activePart === "writing" ? writingExercise : exam.parts[activePart]} answers={answers} setAnswer={setAnswer} setAnswers={setAnswers}
+          disabled={isResults} review={isResults} writingText={writingText} setWritingText={setWritingText}
+          favoriteFor={favoriteFor} questionNumbers={questionNumbers} sectionRef={exercisePartRef} examLabel={`${currentScope.examType} ${currentScope.level}`} examLevel={currentScope.level} />
+      )}
 
       {activePartIndex >= 0 ? (
         <nav className="telc-mock-exam-bottom-nav" aria-label="前后部分导航">
@@ -1729,7 +1784,7 @@ export default function TelcMockExamPage() {
         <TelcMockExamAnswerSheet rows={visibleAnswerSheetRows} answers={answers} onAnswer={setAnswer} review={isResults} />
       ) : null}
 
-      {!isResults ? <footer className="telc-mock-exam-footer"><div><strong>上交答题卡</strong></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
+      {!isResults ? <footer className="telc-mock-exam-footer"><div><strong>{phase === "writing" && hasWritingChooser && !hasWritingChoice ? "请先选择一道写作题" : "上交答题卡"}</strong></div>{phase === "reading" ? <button onClick={finishReadingEarly}>完成本部分，进入听力</button> : phase === "listening" ? <button onClick={finishListeningEarly}>完成本部分，进入写作</button> : hasWritingChooser && !hasWritingChoice ? null : <button onClick={submitWriting}>提交写作并自评</button>}</footer> : null}
     </div>
   );
   }

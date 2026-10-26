@@ -2713,3 +2713,183 @@ describe("mock exam annotation scope acceptance", () => {
     expect(screen.getByRole("button", { name: "AHeadline" })).toBeInTheDocument();
   });
 });
+
+describe("TELC B2 writing choice", () => {
+  function writingOption(id, title, example) {
+    return {
+      id,
+      exercise_base: { title, exam_type: "telc" },
+      request_text: `Anleitung ${id}`,
+      task_text: `Aufgabe ${id}`,
+      example_texts: [{ example_text: example }],
+    };
+  }
+
+  function b2Exam() {
+    const first = writingOption(501, "Thema eins", "范文一");
+    const second = writingOption(502, "Thema zwei", "范文二");
+    return {
+      exam_type: "TELC",
+      level: "B2",
+      selection: { writing: [501, 502] },
+      parts: {
+        writing_options: [first, second],
+        writing: first,
+      },
+    };
+  }
+
+  function saveB2Snapshot(overrides = {}) {
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B2:7", JSON.stringify({
+      exam: b2Exam(),
+      phase: "writing",
+      deadline: Date.now() + 30 * 60 * 1000,
+      activePart: "writing",
+      answers: {},
+      writingText: "",
+      writingChoiceId: null,
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: 0,
+      attemptId: 31,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+      ...overrides,
+    }));
+  }
+
+  function renderB2() {
+    return render(<MemoryRouter initialEntries={["/modules/exam-preparation/telc/b2/mock-exam"]}>
+      <Routes><Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<TelcMockExamPage />} /></Routes>
+    </MemoryRouter>);
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    vi.clearAllMocks();
+    updateSavedMockExam.mockResolvedValue({});
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows two B2 choices without a textarea and keeps the writing timer running", async () => {
+    saveB2Snapshot();
+    renderB2();
+
+    await act(async () => { await Promise.resolve(); });
+    expect(mockExamStyleSource).toContain(".telc-mock-exam-writing-choice-card { display: flex; flex-direction: column;");
+    expect(mockExamStyleSource).toContain(".telc-mock-exam-writing-choice-card h3 { margin: 0 0 0.8rem;");
+    expect(mockExamStyleSource).toContain(".telc-mock-exam-writing-choice-card h4 { margin: 0.8rem 0 0.25rem; color: #526b63; font-size: 0.95rem;");
+    expect(mockExamStyleSource).toContain(".telc-mock-exam-writing-choice-card .telc-mock-exam-source-text { flex: 1;");
+    expect(mockExamStyleSource).toContain(".telc-mock-exam-writing-chooser__options { grid-template-columns: 1fr; }");
+    expect(screen.getAllByRole("button", { name: "Wählen" })).toHaveLength(2);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "提交写作并自评" })).not.toBeInTheDocument();
+    expect(screen.getByText("30:00")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByText("29:59")).toBeInTheDocument();
+  });
+
+  it("treats an invalid persisted B2 choice as unselected and allows a valid choice", async () => {
+    saveB2Snapshot({ writingChoiceId: 999 });
+    renderB2();
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getAllByRole("button", { name: "Wählen" })).toHaveLength(2);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Wählen" })[1]);
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(screen.getByText("Aufgabe 502")).toBeInTheDocument();
+  });
+
+  it("locks the selected B2 choice, persists it locally, and autosaves its progress id", async () => {
+    saveB2Snapshot();
+    renderB2();
+
+    await act(async () => { await Promise.resolve(); });
+    const choices = screen.getAllByRole("button", { name: "Wählen" });
+    fireEvent.click(choices[1]);
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(screen.getByText("Aufgabe 502")).toBeInTheDocument();
+    expect(screen.queryByText("Aufgabe 501")).not.toBeInTheDocument();
+    expect(JSON.parse(sessionStorage.getItem("exam-preparation-written-mock-v1:TELC:B2:7")).writingChoiceId).toBe(502);
+    await act(async () => { vi.advanceTimersByTime(500); await Promise.resolve(); });
+    expect(updateSavedMockExam).toHaveBeenCalled();
+    expect(updateSavedMockExam.mock.calls.at(-1)[1].progress.writing_choice_id).toBe(502);
+  });
+
+  it("restores the selected B2 exercise from backend progress and local snapshots", async () => {
+    const exam = b2Exam();
+    fetchSavedMockExam.mockResolvedValueOnce({ id: 41, exam, answers: {}, writing_text: "", writing_assessment: {}, is_favorite: false,
+      progress: { phase: "writing_review", deadline: 0, active_part: "writing", writing_choice_id: 502 } });
+    const backendMount = render(<MemoryRouter initialEntries={["/modules/exam-preparation/telc/b2/mock-exam?attempt=41"]}>
+      <Routes><Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<TelcMockExamPage />} /></Routes>
+    </MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByText("范文二")).toBeInTheDocument();
+    expect(screen.queryByText("范文一")).not.toBeInTheDocument();
+
+    backendMount.unmount();
+    localStorage.clear();
+    sessionStorage.clear();
+    saveB2Snapshot({ phase: "writing_review", deadline: 0, writingChoiceId: 502 });
+    renderB2();
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByText("范文二")).toBeInTheDocument();
+    expect(screen.queryByText("范文一")).not.toBeInTheDocument();
+  });
+
+  it("completes an unselected writing review as an early zero-score submission", async () => {
+    saveB2Snapshot({ phase: "writing_review", deadline: 0 });
+    submitSavedMockExam.mockResolvedValueOnce({});
+    fetchSavedMockExam.mockResolvedValueOnce({ is_completed: false });
+    renderB2();
+    await act(async () => { await Promise.resolve(); });
+
+    const submit = screen.getByRole("button", { name: "查看得分" });
+    expect(submit).toBeEnabled();
+    await act(async () => { fireEvent.click(submit); await Promise.resolve(); });
+    expect(submitSavedMockExam).toHaveBeenCalled();
+    const payload = submitSavedMockExam.mock.calls[0][1];
+    expect(payload.progress.early_submitted).toBe(true);
+    expect(payload.progress.writing_choice_id).toBeNull();
+  });
+
+  it("shows a neutral writing result after early submission without a selected task", async () => {
+    saveB2Snapshot({ phase: "results", deadline: 0, activePart: "writing", wasEarlySubmitted: true });
+    renderB2();
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByText("未选择写作题目")).toBeInTheDocument();
+    expect(screen.queryByText("Aufgabe 501")).not.toBeInTheDocument();
+    expect(screen.queryByText("Aufgabe 502")).not.toBeInTheDocument();
+  });
+
+  it("shows only the selected B2 writing task in results", async () => {
+    saveB2Snapshot({ phase: "results", deadline: 0, activePart: "writing", writingChoiceId: 502 });
+    renderB2();
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByText("Aufgabe 502")).toBeInTheDocument();
+    expect(screen.queryByText("Aufgabe 501")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["B1", "exam-preparation-written-mock-v1:TELC:B1:7", { exam_type: "TELC", level: "B1", parts: { writing: writingOption(601, "B1", "B1范文") } }],
+    ["legacy B2", "exam-preparation-written-mock-v1:TELC:B2:7", { exam_type: "TELC", level: "B2", parts: { writing: writingOption(602, "B2", "B2范文") } }],
+  ])("keeps %s single-writing papers on the textarea flow", async (_label, key, exam) => {
+    sessionStorage.setItem(key, JSON.stringify({ exam, phase: "writing", deadline: Date.now() + 1_800_000, activePart: "writing", answers: {}, writingText: "", writingAssessment: {}, audioStep: 0, audioStepStartedAt: 0, attemptId: null, isFavorite: false, wasEarlySubmitted: false }));
+    const route = key.includes(":B2:") ? "b2" : "b1";
+    render(<MemoryRouter initialEntries={[`/modules/exam-preparation/telc/${route}/mock-exam`]}>
+      <Routes><Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<TelcMockExamPage />} /></Routes>
+    </MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Wählen" })).not.toBeInTheDocument();
+  });
+});

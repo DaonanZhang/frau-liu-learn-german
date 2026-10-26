@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchReferralCampaign } from "../api/referrals.js";
 import { examPreparationPurchasePath } from "../utils/examPreparationScope.js";
@@ -6,7 +6,6 @@ import "./ReferralCampaignPanel.css";
 
 const milestoneNames = { science_3: "科普季", vlog_5: "Vlog 季" };
 const milestoneKinds = { 3: "science_3", 5: "vlog_5" };
-const rewardIllustrationPath = "/images/exam-referral/reward_30_days.png";
 
 async function copyCode(code) {
   if (!navigator.clipboard?.writeText) {
@@ -85,8 +84,27 @@ export default function ReferralCampaignPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [selectedNode, setSelectedNode] = useState(1);
-  const [previewNode, setPreviewNode] = useState(null);
+  const [copiedAction, setCopiedAction] = useState(null);
+  const [showFollowUpTooltip, setShowFollowUpTooltip] = useState(false);
+  const feedbackTimerRef = useRef(null);
+  const mountedRef = useRef(true);
+  const copiedActionKeyRef = useRef(0);
+  const code = typeof snapshot?.code === "string" ? snapshot.code.trim() : "";
+  const invitationText = `强烈推荐大家试试【符号刘德语备考一站式平台】！
+🌐 网站：www.frauliu.com (中国IP) / www.frauliu.cn (海外IP)
+我正在用它高效复习备考！
+🎁 输入我的专属分享码: 【${code}】 即刻享受立减 5 元的专属折扣！
+快来和我一起上岸吧！Viel Erfolg bei der Prüfung!`;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,71 +121,44 @@ export default function ReferralCampaignPanel() {
 
   useEffect(() => { load(); }, [load]);
 
+  function showCopied(action) {
+    if (!mountedRef.current) return;
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+    }
+    setCopiedAction({ action, key: ++copiedActionKeyRef.current });
+    feedbackTimerRef.current = setTimeout(() => {
+      feedbackTimerRef.current = null;
+      if (mountedRef.current) {
+        setCopiedAction(null);
+      }
+    }, 1800);
+  }
+
   async function handleCopy() {
     try {
-      await copyCode(snapshot.code);
-      setFeedback("已复制推广码");
+      await copyCode(code);
+      showCopied("copy");
+      setFeedback("");
     } catch {
+      setCopiedAction(null);
       setFeedback("复制失败，请手动复制推广码");
     }
   }
 
   async function handleShare() {
-    const text = `${snapshot.campaign.name}：使用我的推广码 ${snapshot.code}`;
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: snapshot.campaign.name, text });
-        setFeedback("分享已打开");
-        return;
-      } catch (shareError) {
-        if (shareError?.name === "AbortError") {
-          return;
-        }
-      }
-    }
     try {
-      await copyCode(text);
-      setFeedback("分享内容已复制");
+      await copyCode(invitationText);
+      showCopied("share");
+      setFeedback("");
     } catch {
+      setCopiedAction(null);
       setFeedback("分享失败，请稍后重试");
     }
   }
 
   function handleUnlock() {
     navigate(examPreparationPurchasePath(null));
-  }
-
-  function handleNodeSelect(node) {
-    setSelectedNode(node);
-    setPreviewNode(null);
-  }
-
-  function canPreviewPointer(event) {
-    return event.pointerType !== "touch" && window.matchMedia?.("(hover: hover) and (pointer: fine)").matches === true;
-  }
-
-  function handlePointerEnter(event, node) {
-    if (canPreviewPointer(event)) {
-      setPreviewNode(node);
-    }
-  }
-
-  function handlePointerLeave(event) {
-    if (canPreviewPointer(event)) {
-      setPreviewNode(null);
-    }
-  }
-
-  function handleTouchPreview(event, node) {
-    if (event.pointerType === "touch") {
-      setPreviewNode(node);
-    }
-  }
-
-  function clearTouchPreview(event) {
-    if (event.pointerType === "touch") {
-      setPreviewNode(null);
-    }
   }
 
   if (loading) {
@@ -182,130 +173,114 @@ export default function ReferralCampaignPanel() {
   if (snapshot.locked === true || snapshot.eligible === false) {
     return (
       <section className="referral-panel referral-panel--locked" aria-labelledby="referral-title">
-        <img
-          className="referral-panel__locked-student"
-          src="/images/exam-referral/locked-student.png"
-          alt=""
-        />
         <div className="referral-panel__locked-content">
-          <div className="referral-panel__locked-cloud">
-            <img
-              className="referral-panel__locked-sparkles"
-              src="/images/exam-referral/locked-sparkles.svg"
-              alt=""
-            />
-            <h2 id="referral-title">暂未解锁推广系统</h2>
-          </div>
-          <p>获得备考季权限后即可解锁推广系统。</p>
+          <span className="referral-panel__locked-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <rect x="5" y="10" width="14" height="10" rx="2" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+              <circle cx="12" cy="15" r="1" />
+            </svg>
+          </span>
+          <h2 id="referral-title">解锁备考季</h2>
+          <p>购买备考季后，即可获得专属推荐码并参与邀请奖励。</p>
           <button className="referral-panel__locked-cta" type="button" onClick={handleUnlock}>
-            <img src="/images/exam-referral/locked-lock.svg" alt="" />
-            <span>解锁备考季</span>
+            解锁备考季
           </button>
         </div>
-        <img
-          className="referral-panel__locked-books"
-          src="/images/exam-referral/locked-books.png"
-          alt=""
-        />
       </section>
     );
   }
 
   const campaignName = typeof snapshot.campaign?.name === "string" ? snapshot.campaign.name : "";
-  const code = typeof snapshot.code === "string" ? snapshot.code.trim() : "";
   if (snapshot.enabled !== true || snapshot.eligible !== true || !campaignName || !code) {
     return <section className="referral-panel" aria-labelledby="referral-title"><h2 id="referral-title">推广活动</h2><p>推广信息暂不可用。</p></section>;
   }
   const count = Number.isFinite(Number(snapshot.effective_count)) ? Math.max(0, Math.floor(Number(snapshot.effective_count))) : 0;
   const history = Array.isArray(snapshot.history) ? snapshot.history : [];
   const nodes = [1, 2, 3, 4, 5, "++"];
-  const displayedNode = previewNode ?? selectedNode;
-  const selectedNodeNumber = displayedNode === "++" ? "后续" : displayedNode;
-  const selectedNodeLabel = selectedNodeNumber === "后续" ? "后续奖励详情" : `节点 ${selectedNodeNumber} 奖励详情`;
-  const completedConnectionCount = Math.min(Math.max(count - 1, 0), 5);
-  const rewardCardClassName = `referral-panel__reward-card${[1, 2, 4].includes(displayedNode) ? " referral-panel__reward-card--single" : ""}`;
+  const progressPercent = Math.min(Math.max(count - 1, 0), 5) * 20;
   return (
     <section className="referral-panel" aria-labelledby="referral-title">
-      <header className="referral-panel__header"><h2 id="referral-title">{campaignName}</h2></header>
+      <header className="referral-panel__header">
+        <h2 id="referral-title">邀请好友，共享好课</h2>
+        <p>邀请好友下单，双方均享丰富福利</p>
+      </header>
       <div className="referral-panel__code">
-        <div className="referral-panel__code-label">
-          <span className="referral-panel__code-ticket" aria-hidden="true">
-            <svg viewBox="0 0 24 24" focusable="false">
-              <path d="M4 7.5A1.5 1.5 0 0 1 5.5 6h13A1.5 1.5 0 0 1 20 7.5v2a2.5 2.5 0 0 0 0 5v2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 16.5v-2a2.5 2.5 0 0 0 0-5v-2Z" />
-              <path d="M13 8.5v1m0 2v1m0 2v1" />
-            </svg>
-          </span>
-          <span>我的专属推广码</span>
+        <div className="referral-panel__code-heading">
+          <h3>专属推荐码</h3>
+          <p>好友使用推荐码下单，立减 5 元</p>
         </div>
         <div className="referral-panel__code-row">
-          <code>{code}</code>
-          <div className="referral-panel__code-actions">
-            <button className="referral-panel__code-copy" type="button" onClick={handleCopy}>
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <rect x="8" y="8" width="11" height="11" rx="2" />
-                <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" />
-              </svg>
-              <span>复制</span>
-            </button>
-            <button className="referral-panel__code-share" type="button" onClick={handleShare}>
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <circle cx="18" cy="5" r="2.5" />
-                <circle cx="6" cy="12" r="2.5" />
-                <circle cx="18" cy="19" r="2.5" />
-                <path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5" />
-              </svg>
-              <span>邀请好友</span>
-            </button>
-          </div>
+          <div className="referral-panel__code-frame"><code>{code}</code></div>
+          <button className="referral-panel__code-copy" type="button" onClick={handleCopy} aria-label={copiedAction?.action === "copy" ? "复制，已复制" : "复制"}>
+            <span className={copiedAction?.action === "copy" ? "referral-panel__action-content is-copied" : "referral-panel__action-content"}>复制</span>
+            <span key={copiedAction?.action === "copy" ? copiedAction.key : "copy-feedback"} className={`referral-panel__copy-feedback${copiedAction?.action === "copy" ? " is-visible" : ""}`} aria-hidden={copiedAction?.action !== "copy"}>已复制</span>
+          </button>
+        </div>
+        <div className="referral-panel__share-copy">
+          <h3>快速分享文案</h3>
+          <p>{invitationText}</p>
+          <button className="referral-panel__share-button" type="button" onClick={handleShare} aria-label={copiedAction?.action === "share" ? "一键复制完整文案，已复制" : "一键复制完整文案"}>
+            <span className={copiedAction?.action === "share" ? "referral-panel__action-content is-copied" : "referral-panel__action-content"}>一键复制完整文案</span>
+            <span key={copiedAction?.action === "share" ? copiedAction.key : "share-feedback"} className={`referral-panel__copy-feedback${copiedAction?.action === "share" ? " is-visible" : ""}`} aria-hidden={copiedAction?.action !== "share"}>已复制</span>
+          </button>
         </div>
       </div>
-      <div className="referral-panel__progress is-open">
-        <div className="referral-panel__track" role="list" aria-label={`${count} 位成功推广用户`}>
+      <section className="referral-panel__progress" aria-labelledby="referral-progress-title">
+        <h3 id="referral-progress-title">邀请进度与奖励</h3>
+        <div className="referral-panel__track" role="list" aria-label={`${count} 位成功邀请用户`}>
           <span className="referral-panel__track-line" aria-hidden="true">
-            <span className={`referral-panel__track-fill referral-panel__track-fill--${completedConnectionCount}`} />
+            <span className="referral-panel__track-fill" style={{ width: `${progressPercent}%` }} />
           </span>
           {nodes.map((node) => {
             const isFollowUp = node === "++";
             const isComplete = isFollowUp ? count > 5 : count >= node;
             const isMilestone = node === 3 || node === 5;
-            const nodeLabel = isFollowUp ? "后续节点" : `节点 ${node}`;
+            const nodeLabel = isFollowUp ? "后续奖励" : `节点 ${node}`;
             return (
-              <div className="referral-panel__step" key={node} role="listitem">
-                <button
-                  type="button"
-                  className={`referral-panel__node${isComplete ? " is-complete" : ""}${isMilestone ? " referral-panel__node--milestone" : ""}${isFollowUp ? " referral-panel__node--follow-up" : ""}${displayedNode === node ? " is-selected" : ""}`}
-                  aria-label={`${nodeLabel}：${isComplete ? "已完成" : "未完成"}`}
-                  aria-expanded={displayedNode === node}
-                  aria-current={displayedNode === node ? "step" : undefined}
-                  onClick={() => handleNodeSelect(node)}
-                  onFocus={() => setPreviewNode(node)}
-                  onBlur={() => setPreviewNode(null)}
-                  onPointerEnter={(event) => handlePointerEnter(event, node)}
-                  onPointerLeave={handlePointerLeave}
-                  onPointerDown={(event) => handleTouchPreview(event, node)}
-                  onPointerUp={clearTouchPreview}
-                  onPointerCancel={clearTouchPreview}
-                >
-                  <span className="referral-panel__node-label" aria-hidden="true">{node}</span>
-                  {isComplete ? <span className="referral-panel__completion-mark" aria-hidden="true">✓</span> : null}
-                </button>
+              <div className={`referral-panel__step${isFollowUp ? " referral-panel__step--follow-up" : ""}`} key={node} role="listitem" aria-label={`${nodeLabel}：${isComplete ? "已完成" : "未完成"}`}>
+                {isFollowUp ? (
+                  <>
+                    <button
+                      className={`referral-panel__node referral-panel__node--follow-up${isComplete ? " is-complete" : ""}`}
+                      type="button"
+                      aria-label={`${nodeLabel}：${isComplete ? "已完成" : "未完成"}`}
+                      aria-describedby="referral-follow-up-tooltip"
+                      aria-expanded={showFollowUpTooltip}
+                      onMouseEnter={() => setShowFollowUpTooltip(true)}
+                      onMouseLeave={() => setShowFollowUpTooltip(false)}
+                      onFocus={() => setShowFollowUpTooltip(true)}
+                      onBlur={() => setShowFollowUpTooltip(false)}
+                      onClick={() => setShowFollowUpTooltip(true)}
+                    >
+                      {node}
+                    </button>
+                  </>
+                ) : (
+                  <span className={`referral-panel__node${isComplete ? " is-complete" : ""}${isMilestone ? " referral-panel__node--milestone" : ""}`} aria-hidden="true">
+                    {node}
+                    {isComplete ? <span className="referral-panel__completion-mark" aria-hidden="true">✓</span> : null}
+                  </span>
+                )}
+                {node === 3 ? <span className="referral-panel__milestone-label">解锁科普季</span> : null}
+                {node === 5 ? <span className="referral-panel__milestone-label">解锁 Vlog季</span> : null}
               </div>
             );
           })}
         </div>
-        <aside className={rewardCardClassName} role="region" aria-label={selectedNodeLabel}>
-          <div className="referral-panel__reward-images">
-            <img className="referral-panel__reward-illustration" src={rewardIllustrationPath} alt="备考季 +30 天漫画奖励" />
-          </div>
-          <div className="referral-panel__reward-copy">
-            {displayedNode !== "++" ? <strong className="referral-panel__visually-hidden">备考季 +30 天</strong> : null}
-            {(displayedNode === 3 || displayedNode === 5) ? <img className="referral-panel__season-cover" src={displayedNode === 3 ? "/images/1.png" : "/images/2.png"} alt={displayedNode === 3 ? "科普季" : "Vlog 季"} /> : null}
-            {displayedNode === 3 ? <span>赠送科普季</span> : null}
-            {displayedNode === 5 ? <span>赠送 Vlog 季</span> : null}
-            {displayedNode === "++" ? <><strong>此后每推广一人，仍可获得备考季继续 +30 天哦！</strong>{count > 5 ? <small>已获得后续奖励 {count - 5} 次</small> : null}</> : null}
-          </div>
-        </aside>
-      </div>
+        <div className="referral-panel__current-count">
+          <div className="referral-panel__current-count-value" aria-live="polite" aria-atomic="true">当前已成功邀请：<strong>{count}</strong> 人</div>
+          <p className="referral-panel__current-count-prompt">赶快分享给好友，解锁丰厚备考福利吧！</p>
+        </div>
+        <div className="referral-panel__rules">
+          <h4>奖励规则：</h4>
+          <ul>
+            <li>每推荐 1 人成功下单备考季，您的备考季自动延长 1 个月（可叠加）。</li>
+            <li>推荐达 3 人，额外赠送「科普季」权限。</li>
+            <li>推荐达 5 人，额外再赠送「Vlog季」权限。</li>
+          </ul>
+        </div>
+      </section>
       {history.some((item) => historyText(item)) ? <ol className="referral-panel__history" aria-label="推广记录">{history.map((item) => ({ item, text: historyText(item) })).filter(({ text }) => text).map(({ item, text }) => <li key={item.id ?? `${item.event_type}-${item.created_at ?? "unknown"}`}><span>{text}</span><time>{item.created_at && !Number.isNaN(Date.parse(item.created_at)) ? new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(item.created_at)) : "日期未知"}</time></li>)}</ol> : null}
       <div className="referral-panel__feedback" role="status" aria-live="polite">{feedback}</div>
     </section>

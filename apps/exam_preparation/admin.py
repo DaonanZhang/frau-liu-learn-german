@@ -8,6 +8,8 @@ from apps.exam_preparation.models import (
     ClozeMatchingExercise,
     ClozeMatchingOption,
     ExerciseBase,
+    ExamPreparationGuide,
+    ExamPreparationGuideLike,
     ListeningAnswerOption,
     ListeningExercise,
     ListeningQuestion,
@@ -35,6 +37,21 @@ from apps.exam_preparation.models import (
     WritingExampleText,
     WritingExercise,
 )
+
+
+@admin.register(ExamPreparationGuide)
+class ExamPreparationGuideAdmin(admin.ModelAdmin):
+    list_display = ("title", "is_published", "published_at", "view_count", "like_count", "updated_at")
+    list_filter = ("is_published", "published_at")
+    search_fields = ("title", "summary", "body_markdown")
+    readonly_fields = ("view_count", "like_count", "created_at", "updated_at")
+
+
+@admin.register(ExamPreparationGuideLike)
+class ExamPreparationGuideLikeAdmin(admin.ModelAdmin):
+    list_display = ("guide", "user", "created_at")
+    search_fields = ("guide__title", "user__telephone")
+    readonly_fields = ("guide", "user", "created_at")
 
 
 @admin.register(MockExamPaper)

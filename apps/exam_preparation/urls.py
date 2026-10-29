@@ -11,6 +11,7 @@ from apps.exam_preparation.views import (
     ClozeMatchingExerciseViewSet,
     ClozeMatchingOptionViewSet,
     ExerciseBaseViewSet,
+    ExamPreparationGuideViewSet,
     FavoriteQuestionViewSet,
     ListeningAnswerOptionViewSet,
     ListeningExerciseViewSet,
@@ -48,6 +49,7 @@ router.register(r"mock-exams", MockExamViewSet, basename="exam-prep-mock-exams")
 router.register(r"mock-exam-shares", MockExamShareViewSet, basename="exam-prep-mock-exam-shares")
 router.register(r"saved-mock-exams", SavedMockExamViewSet, basename="exam-prep-saved-mock-exams")
 router.register(r"exercise-bases", ExerciseBaseViewSet, basename="exam-prep-exercise-bases")
+router.register(r"guides", ExamPreparationGuideViewSet, basename="exam-prep-guides")
 router.register(r"listening-exercises", ListeningExerciseViewSet, basename="exam-prep-listening-exercises")
 router.register(r"listening-questions", ListeningQuestionViewSet, basename="exam-prep-listening-questions")
 router.register(r"listening-answer-options", ListeningAnswerOptionViewSet, basename="exam-prep-listening-answer-options")

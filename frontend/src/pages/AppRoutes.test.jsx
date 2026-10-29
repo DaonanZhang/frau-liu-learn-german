@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { addExamPreparationLevelRoutes, examPreparationLevelHomeRoutes } from "../App.jsx";
+import ExamPreparationTipsPage from "./ExamPreparationTipsPage.jsx";
 
 const authMock = vi.hoisted(() => ({ useAuth: vi.fn(() => ({ user: null })) }));
 vi.mock("../api/auth/useAuth.js", () => ({ useAuth: authMock.useAuth }));
@@ -25,7 +26,7 @@ describe("exam preparation route migration", () => {
     });
   });
 
-  it.each([["b1", "B1"], ["b2", "B2"]])("renders the %s home from its actual route config", (pathLevel, level) => {
+  it.each([["b1", "B1"], ["b2", "B2"], ["c1", "C1"]])("renders the %s home from its actual route config", (pathLevel, level) => {
     const routes = addExamPreparationLevelRoutes(examPreparationLevelHomeRoutes());
     const { container } = render(
       <MemoryRouter initialEntries={[`/modules/exam-preparation/${pathLevel}`]}>
@@ -34,10 +35,12 @@ describe("exam preparation route migration", () => {
     );
     expect(container.querySelector(`[data-exam-level="${level}"]`)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: `备考季 · ${level}` })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /进入听力模块/ })).toHaveAttribute(
-      "href",
-      `/modules/exam-preparation/${pathLevel}/hoeren`,
-    );
+    if (level === "C1") {
+      expect(screen.getByRole("link", { name: /Unsere Tipps/ })).toHaveAttribute("href", `/modules/exam-preparation/${pathLevel}/tips`);
+    } else {
+      expect(screen.getByRole("link", { name: /进入听力模块/ })).toHaveAttribute("href", `/modules/exam-preparation/${pathLevel}/hoeren`);
+      expect(screen.getByRole("link", { name: /Unsere Tipps/ })).toHaveAttribute("href", `/modules/exam-preparation/${pathLevel}/tips`);
+    }
   });
 
   it("keeps the module root as the level selector", () => {
@@ -50,6 +53,33 @@ describe("exam preparation route migration", () => {
     expect(screen.getByRole("heading", { name: "选择考试级别" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /B1/ })).toHaveAttribute("href", "/modules/exam-preparation/b1");
     expect(screen.getByRole("link", { name: /B2/ })).toHaveAttribute("href", "/modules/exam-preparation/b2");
+    expect(screen.getByRole("link", { name: /C1/ })).toHaveAttribute("href", "/modules/exam-preparation/c1");
+  });
+
+  it("renders tips with the level context and matching back link", () => {
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/c1/tips"]}>
+        <Routes><Route path="/modules/exam-preparation/:level/tips" element={<ExamPreparationTipsPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("heading", { name: "Unsere Tipps" })).toBeInTheDocument();
+    expect(screen.getByText("TELC C1")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /返回 TELC C1/ })).toHaveAttribute("href", "/modules/exam-preparation/c1");
+  });
+
+  it("redirects direct C1 specialty routes back to the C1 home", async () => {
+    const routes = addExamPreparationLevelRoutes([
+      { path: "/modules/exam-preparation/hoeren", element: <p>specialty content</p> },
+      { path: "/modules/exam-preparation", element: <p>selector</p> },
+      { path: "/modules/exam-preparation/c1", element: <p>C1 home</p> },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/c1/hoeren"]}>
+        <Routes>{routes.map((route) => <Route key={route.path} path={route.path} element={<>{route.element}<Location /></>} />)}</Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("C1 home")).toBeInTheDocument();
+    expect(screen.queryByText("specialty content")).not.toBeInTheDocument();
   });
 
   it("redirects legacy detail routes to B1 and preserves the query", async () => {

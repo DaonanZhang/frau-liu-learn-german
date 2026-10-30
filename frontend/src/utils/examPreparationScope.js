@@ -1,9 +1,17 @@
 const EXAM_TYPE = "TELC";
+const TELC_C1_HS_MODULE_NAME = "TELC C1 HS";
 
 export function examPreparationScope(levelParam) {
   const level = String(levelParam || "").toUpperCase();
   if (level !== "B1" && level !== "B2" && level !== "C1") return null;
   return { examType: EXAM_TYPE, level, levelPath: level.toLowerCase() };
+}
+
+export function examPreparationModuleName(scopeOrLevel) {
+  const level = typeof scopeOrLevel === "object" ? scopeOrLevel?.level : scopeOrLevel;
+  const scope = examPreparationScope(level);
+  if (!scope) return "";
+  return scope.level === "C1" ? TELC_C1_HS_MODULE_NAME : `${scope.examType} ${scope.level}`;
 }
 
 export function examPreparationScopeQuery(scope) {

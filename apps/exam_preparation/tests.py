@@ -16,6 +16,8 @@ from apps.exam_preparation.models import (
     ClozeMatchingOption,
     ClozeMatchingBlankAnswer,
     ExerciseBase,
+    ExamPreparationGuide,
+    ExamPreparationGuideLike,
     ListeningExercise,
     ListeningQuestion,
     MockExamPaper,
@@ -44,9 +46,78 @@ from apps.exam_preparation.models import (
 )
 from apps.exam_preparation.serializers import (
     ClozeChoiceBlankDetailSerializer,
+    ExamPreparationGuideSerializer,
     ListeningQuestionDetailSerializer,
     ReadingUnderstandingQuestionDetailSerializer,
 )
+
+
+class ExamPreparationGuideAuthorTests(SimpleTestCase):
+    def test_new_guides_default_to_frau_liu_and_expose_author_in_api(self):
+        guide = ExamPreparationGuide(
+            title="TELC B1 Lesen Teil 1",
+            body_markdown="Guide body",
+        )
+
+        self.assertEqual(guide.author, "Frau Liu")
+        self.assertEqual(ExamPreparationGuideSerializer(guide).data["author"], "Frau Liu")
+
+
+class ExamPreparationGuideEngagementApiTests(APITestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138991",
+            password="test-password",
+        )
+        module, _ = Module.objects.get_or_create(
+            key="exam_preparation",
+            defaults={"name": "备考季", "is_active": True},
+        )
+        Entitlement.objects.create(
+            user=self.user,
+            module=module,
+            plan=Entitlement.Plan.MONTH_1,
+            status=Entitlement.Status.ACTIVE,
+        )
+        self.guide = ExamPreparationGuide.objects.create(
+            title="TELC B1 Lesen Teil 1",
+            body_markdown="# Guide body",
+            badges=["TELC B1", "Lesen"],
+            summary="Guide summary",
+            is_published=True,
+            published_at=timezone.now(),
+        )
+        self.detail_url = reverse("exam-prep-guides-detail", args=[self.guide.pk])
+        self.like_url = reverse("exam-prep-guides-like", args=[self.guide.pk])
+        self.client.force_authenticate(self.user)
+
+    def test_retrieve_increments_views_and_exposes_detail_content(self):
+        response = self.client.get(self.detail_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["view_count"], 1)
+        self.assertEqual(response.data["author"], "Frau Liu")
+        self.assertEqual(response.data["body_markdown"], "# Guide body")
+        self.guide.refresh_from_db()
+        self.assertEqual(self.guide.view_count, 1)
+
+    def test_like_is_unique_per_user_and_delete_is_idempotent(self):
+        first_like = self.client.post(self.like_url)
+        repeated_like = self.client.post(self.like_url)
+
+        self.assertEqual(first_like.status_code, status.HTTP_200_OK)
+        self.assertEqual(repeated_like.status_code, status.HTTP_200_OK)
+        self.assertEqual(repeated_like.data["like_count"], 1)
+        self.assertTrue(repeated_like.data["is_liked"])
+        self.assertEqual(ExamPreparationGuideLike.objects.filter(guide=self.guide, user=self.user).count(), 1)
+
+        first_unlike = self.client.delete(self.like_url)
+        repeated_unlike = self.client.delete(self.like_url)
+
+        self.assertEqual(first_unlike.data["like_count"], 0)
+        self.assertFalse(first_unlike.data["is_liked"])
+        self.assertEqual(repeated_unlike.data["like_count"], 0)
+        self.assertEqual(ExamPreparationGuideLike.objects.filter(guide=self.guide, user=self.user).count(), 0)
 
 
 class QuestionLevelExplanationSerializerTests(SimpleTestCase):

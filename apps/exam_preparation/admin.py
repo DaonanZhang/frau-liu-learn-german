@@ -41,9 +41,9 @@ from apps.exam_preparation.models import (
 
 @admin.register(ExamPreparationGuide)
 class ExamPreparationGuideAdmin(admin.ModelAdmin):
-    list_display = ("title", "is_published", "published_at", "view_count", "like_count", "updated_at")
+    list_display = ("title", "author", "is_published", "published_at", "view_count", "like_count", "updated_at")
     list_filter = ("is_published", "published_at")
-    search_fields = ("title", "summary", "body_markdown")
+    search_fields = ("title", "author", "summary", "body_markdown")
     readonly_fields = ("view_count", "like_count", "created_at", "updated_at")
 
 

@@ -1,0 +1,318 @@
+.exam-guide-detail-page {
+  display: flex;
+  width: min(100%, 58rem);
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-inline: auto;
+}
+
+.exam-guide-detail-page__state {
+  margin: 0;
+  padding: 2.5rem 1rem;
+  border: 1px dashed #cfdad6;
+  border-radius: 1rem;
+  background: #fafcfb;
+  color: #68746f;
+  text-align: center;
+}
+
+.exam-guide-detail {
+  overflow: hidden;
+  border: 1px solid #e0e6e3;
+  border-radius: clamp(1rem, 3vw, 1.5rem);
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(34, 66, 57, 0.09);
+}
+
+.exam-guide-detail__header {
+  padding: clamp(1rem, 4vw, 2.25rem) clamp(1rem, 5vw, 3rem) 0;
+}
+
+.exam-guide-detail__byline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #596862;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+
+.exam-guide-detail__byline img {
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 3px 10px rgba(32, 65, 55, 0.15);
+}
+
+.exam-guide-detail__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.48rem;
+  margin-top: 1.25rem;
+}
+
+.exam-guide-detail__badges span {
+  padding: 0.32rem 0.68rem;
+  border: 1px solid #d6e3de;
+  border-radius: 999px;
+  background: #f2f7f5;
+  color: #35695a;
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.exam-guide-detail h1 {
+  margin: 1rem 0 1.35rem;
+  color: #20322c;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  line-height: 1.16;
+  letter-spacing: -0.025em;
+}
+
+.exam-guide-detail__cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: clamp(0.7rem, 2vw, 1rem);
+  object-fit: cover;
+  background: #edf2ef;
+}
+
+.exam-guide-detail__summary {
+  margin: 1.25rem 0 0;
+  color: #7a8581;
+  font-size: clamp(0.98rem, 2vw, 1.08rem);
+  line-height: 1.8;
+}
+
+.exam-guide-markdown {
+  padding: clamp(1.25rem, 5vw, 3rem);
+  color: #34443f;
+  font-size: 1rem;
+  line-height: 1.82;
+}
+
+.exam-guide-markdown > :first-child {
+  margin-top: 0;
+}
+
+.exam-guide-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.exam-guide-markdown h2,
+.exam-guide-markdown h3,
+.exam-guide-markdown h4 {
+  margin: 2rem 0 0.85rem;
+  color: #263a33;
+  line-height: 1.35;
+}
+
+.exam-guide-markdown h2 {
+  font-size: clamp(1.35rem, 3vw, 1.7rem);
+}
+
+.exam-guide-markdown h3 {
+  font-size: clamp(1.15rem, 2.5vw, 1.35rem);
+}
+
+.exam-guide-markdown p,
+.exam-guide-markdown ul,
+.exam-guide-markdown ol,
+.exam-guide-markdown blockquote,
+.exam-guide-markdown pre {
+  margin: 0.8rem 0 1.15rem;
+}
+
+.exam-guide-markdown ul,
+.exam-guide-markdown ol {
+  padding-left: 1.45rem;
+}
+
+.exam-guide-markdown li + li {
+  margin-top: 0.45rem;
+}
+
+.exam-guide-markdown blockquote {
+  padding: 0.9rem 1rem;
+  border-left: 4px solid #80a99c;
+  border-radius: 0 0.7rem 0.7rem 0;
+  background: #f4f8f6;
+  color: #536660;
+}
+
+.exam-guide-markdown blockquote > :first-child {
+  margin-top: 0;
+}
+
+.exam-guide-markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.exam-guide-markdown code {
+  padding: 0.12em 0.35em;
+  border-radius: 0.35rem;
+  background: #eef3f1;
+  font-size: 0.9em;
+}
+
+.exam-guide-markdown pre {
+  overflow-x: auto;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: #26332f;
+  color: #f5f7f6;
+}
+
+.exam-guide-markdown pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.exam-guide-markdown__table-wrap {
+  overflow-x: auto;
+  margin: 1.2rem 0;
+  border: 1px solid #dde5e1;
+  border-radius: 0.75rem;
+}
+
+.exam-guide-markdown table {
+  width: 100%;
+  min-width: 31rem;
+  border-collapse: collapse;
+}
+
+.exam-guide-markdown th,
+.exam-guide-markdown td {
+  padding: 0.72rem 0.8rem;
+  border-bottom: 1px solid #e4eae7;
+  text-align: left;
+  vertical-align: top;
+}
+
+.exam-guide-markdown th {
+  background: #f2f6f4;
+  color: #2e4b41;
+}
+
+.exam-guide-markdown tr:last-child td {
+  border-bottom: 0;
+}
+
+.exam-guide-detail__actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem clamp(1rem, 5vw, 3rem);
+  border-top: 1px solid #e5ebe8;
+  background: #fafcfb;
+}
+
+.exam-guide-detail__metrics {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #68766f;
+  font-size: 0.9rem;
+}
+
+.exam-guide-like-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  margin-left: auto;
+  padding: 0.6rem 1.05rem;
+  border: 1px solid #b8ccc5;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #35695a;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.exam-guide-like-button.is-liked {
+  border-color: #e59aac;
+  background: #fff1f4;
+  color: #b43c59;
+}
+
+.exam-guide-like-button.is-celebrating {
+  animation: exam-guide-like-pop 480ms ease-out;
+}
+
+.exam-guide-like-button.is-celebrating::after {
+  position: absolute;
+  top: -0.4rem;
+  right: 0.2rem;
+  color: #c63f60;
+  content: "+1 ♥";
+  font-size: 0.78rem;
+  font-weight: 800;
+  pointer-events: none;
+  animation: exam-guide-like-rise 700ms ease-out forwards;
+}
+
+.exam-guide-like-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.exam-guide-detail__like-error {
+  position: static;
+  flex: 0 0 100%;
+  margin: -0.25rem 0 0;
+  color: #a43434;
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+@keyframes exam-guide-like-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes exam-guide-like-rise {
+  0% { opacity: 0; transform: translateY(0); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-1.4rem); }
+}
+
+@media (max-width: 620px) {
+  .exam-guide-detail__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .exam-guide-detail__metrics {
+    justify-content: space-between;
+  }
+
+  .exam-guide-like-button {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .exam-guide-detail__like-error {
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .exam-guide-like-button,
+  .exam-guide-like-button.is-celebrating,
+  .exam-guide-like-button.is-celebrating::after {
+    animation: none;
+    transition: none;
+  }
+}

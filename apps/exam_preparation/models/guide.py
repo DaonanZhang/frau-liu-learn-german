@@ -5,6 +5,7 @@ from django.db import models
 
 
 class ExamPreparationGuide(models.Model):
+    author = models.CharField(max_length=100, default="Frau Liu", verbose_name="author")
     cover_url = models.URLField(blank=True, default="", verbose_name="cover URL")
     badges = models.JSONField(
         default=list,

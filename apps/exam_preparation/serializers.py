@@ -121,6 +121,7 @@ class ExamPreparationGuideSerializer(serializers.ModelSerializer):
         model = ExamPreparationGuide
         fields = [
             "id",
+            "author",
             "cover_url",
             "badges",
             "summary",

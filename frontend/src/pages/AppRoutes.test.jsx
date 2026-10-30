@@ -10,12 +10,30 @@ import ExamPreparationTipsPage from "./ExamPreparationTipsPage.jsx";
 const authMock = vi.hoisted(() => ({ useAuth: vi.fn(() => ({ user: null })) }));
 vi.mock("../api/auth/useAuth.js", () => ({ useAuth: authMock.useAuth }));
 
+const guideApiMock = vi.hoisted(() => ({
+  fetchGuides: vi.fn(() => Promise.resolve({ results: [], count: 0 })),
+  fetchGuideDetail: vi.fn(),
+  setGuideLiked: vi.fn(),
+}));
+vi.mock("../api/exam_preparation/guides.js", () => ({
+  ...guideApiMock,
+  guideMatchesLevel: () => false,
+}));
+
 function Location() {
   const location = useLocation();
   return <output>{location.pathname}{location.search}{location.hash}</output>;
 }
 
 describe("exam preparation route migration", () => {
+  it("registers a level-aware guide detail route", () => {
+    const appSource = readFileSync(resolve("src/App.jsx"), "utf8");
+
+    expect(appSource).toContain(
+      '{ path: "/modules/exam-preparation/tips/:guideId", element: <ExamPreparationGuideDetailPage /> }',
+    );
+  });
+
   it("resolves every listening selection description from the active level", () => {
     const appSource = readFileSync(resolve("src/App.jsx"), "utf8");
 
@@ -34,7 +52,8 @@ describe("exam preparation route migration", () => {
       </MemoryRouter>,
     );
     expect(container.querySelector(`[data-exam-level="${level}"]`)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: `备考季 · ${level}` })).toBeInTheDocument();
+    const heading = level === "C1" ? "TELC C1 HS" : `备考季 · ${level}`;
+    expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
     if (level === "C1") {
       expect(screen.getByRole("link", { name: /Unsere Tipps/ })).toHaveAttribute("href", `/modules/exam-preparation/${pathLevel}/tips`);
     } else {
@@ -63,8 +82,8 @@ describe("exam preparation route migration", () => {
       </MemoryRouter>,
     );
     expect(screen.getByRole("heading", { name: "Unsere Tipps" })).toBeInTheDocument();
-    expect(screen.getByText("TELC C1")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /返回 TELC C1/ })).toHaveAttribute("href", "/modules/exam-preparation/c1");
+    expect(screen.getByText("TELC C1 HS")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /返回 TELC C1 HS/ })).toHaveAttribute("href", "/modules/exam-preparation/c1");
   });
 
   it("redirects direct C1 specialty routes back to the C1 home", async () => {
@@ -80,6 +99,21 @@ describe("exam preparation route migration", () => {
     );
     expect(await screen.findByText("C1 home")).toBeInTheDocument();
     expect(screen.queryByText("specialty content")).not.toBeInTheDocument();
+  });
+
+  it("allows C1 guide detail routes through the level gate", async () => {
+    const routes = addExamPreparationLevelRoutes([
+      { path: "/modules/exam-preparation/tips/:guideId", element: <p>guide detail</p> },
+      { path: "/modules/exam-preparation/c1", element: <p>C1 home</p> },
+    ]);
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/c1/tips/15"]}>
+        <Routes>{routes.map((route) => <Route key={route.path} path={route.path} element={route.element} />)}</Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("guide detail")).toBeInTheDocument();
+    expect(screen.queryByText("C1 home")).not.toBeInTheDocument();
   });
 
   it("redirects legacy detail routes to B1 and preserves the query", async () => {

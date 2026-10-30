@@ -13,7 +13,11 @@ import {
 import { clearAnnotationScope, mockAnnotationScope } from "../utils/examTextAnnotations.js";
 import ExamPreparationContentSearch from "../components/examPreparation/ExamPreparationContentSearch.jsx";
 import "./ExamPreparationModulePage.css";
-import { examPreparationPurchasePath, examPreparationScope } from "../utils/examPreparationScope.js";
+import {
+  examPreparationModuleName,
+  examPreparationPurchasePath,
+  examPreparationScope,
+} from "../utils/examPreparationScope.js";
 
 const SKILL_CARDS = [
   {
@@ -191,7 +195,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
               className={`exam-level-selection__card exam-level-selection__card--${level.toLowerCase()}`}
               to={`/modules/exam-preparation/${level.toLowerCase()}`}
             >
-              <span className="exam-level-selection__title">TELC {level}</span>
+              <span className="exam-level-selection__title">{examPreparationModuleName(level)}</span>
               <span className="exam-level-selection__action">
                 进入备考季 <span aria-hidden="true">→</span>
               </span>
@@ -210,7 +214,9 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
       </Link>
       <section className="exam-module-hero">
         <div className="exam-module-hero__content">
-          <h1 className="exam-module-hero__title">备考季 · {scope.level}</h1>
+          <h1 className="exam-module-hero__title">
+            {scope.level === "C1" ? examPreparationModuleName(scope) : `备考季 · ${scope.level}`}
+          </h1>
           <p className="exam-module-hero__copy">
             {EXAM_PREPARATION_MODULE.description}
           </p>

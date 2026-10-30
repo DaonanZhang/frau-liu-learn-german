@@ -291,7 +291,7 @@ describe("exam preparation level entry", () => {
     expect(Swal.fire).not.toHaveBeenCalled();
   });
 
-  it("offers TELC B1, B2, and C1 as links to their level homes", () => {
+  it("uses the TELC C1 HS module name while keeping B1 and B2 unchanged", () => {
     fetchSavedMockExams.mockClear();
     render(
       <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
@@ -300,8 +300,14 @@ describe("exam preparation level entry", () => {
     );
     expect(screen.getByRole("link", { name: /TELC B1/ })).toHaveAttribute("href", "/modules/exam-preparation/b1");
     expect(screen.getByRole("link", { name: /TELC B2/ })).toHaveAttribute("href", "/modules/exam-preparation/b2");
-    expect(screen.getByRole("link", { name: /TELC C1/ })).toHaveAttribute("href", "/modules/exam-preparation/c1");
+    expect(screen.getByRole("link", { name: /TELC C1 HS/ })).toHaveAttribute("href", "/modules/exam-preparation/c1");
     expect(fetchSavedMockExams).not.toHaveBeenCalled();
+  });
+
+  it("shows the TELC C1 HS module name on the C1 home", () => {
+    renderPage("c1");
+
+    expect(screen.getByRole("heading", { name: "TELC C1 HS" })).toBeInTheDocument();
   });
 
   it.each(["b1", "b2", "c1"])("shows the tips entry for %s", (level) => {

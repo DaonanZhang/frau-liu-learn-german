@@ -172,19 +172,13 @@ class BaseExamPreparationViewSet(ModelViewSet):
 
 
 class ExamPreparationGuideViewSet(ReadOnlyModelViewSet):
-    permission_classes = [IsAuthenticated, HasValidEntitlement, IsAdminOrReadOnly]
+    permission_classes = [IsAuthenticated]
     queryset = ExamPreparationGuide.objects.filter(is_published=True)
     serializer_class = ExamPreparationGuideSerializer
-    required_module_key = "exam_preparation"
     filterset_fields = ["is_published"]
     search_fields = ["title", "summary", "body_markdown"]
     ordering_fields = ["id", "published_at", "view_count", "like_count", "created_at"]
     ordering = ["-published_at", "-id"]
-
-    def get_permissions(self):
-        if self.action == "like":
-            return [IsAuthenticated(), HasValidEntitlement()]
-        return super().get_permissions()
 
     def retrieve(self, request, *args, **kwargs):
         guide = self.get_object()

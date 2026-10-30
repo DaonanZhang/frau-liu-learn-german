@@ -69,16 +69,6 @@ class ExamPreparationGuideEngagementApiTests(APITestCase):
             telephone="13800138991",
             password="test-password",
         )
-        module, _ = Module.objects.get_or_create(
-            key="exam_preparation",
-            defaults={"name": "备考季", "is_active": True},
-        )
-        Entitlement.objects.create(
-            user=self.user,
-            module=module,
-            plan=Entitlement.Plan.MONTH_1,
-            status=Entitlement.Status.ACTIVE,
-        )
         self.guide = ExamPreparationGuide.objects.create(
             title="TELC B1 Lesen Teil 1",
             body_markdown="# Guide body",
@@ -87,9 +77,16 @@ class ExamPreparationGuideEngagementApiTests(APITestCase):
             is_published=True,
             published_at=timezone.now(),
         )
+        self.list_url = reverse("exam-prep-guides-list")
         self.detail_url = reverse("exam-prep-guides-detail", args=[self.guide.pk])
         self.like_url = reverse("exam-prep-guides-like", args=[self.guide.pk])
         self.client.force_authenticate(self.user)
+
+    def test_authenticated_user_without_entitlement_can_list_guides(self):
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
 
     def test_retrieve_increments_views_and_exposes_detail_content(self):
         response = self.client.get(self.detail_url)

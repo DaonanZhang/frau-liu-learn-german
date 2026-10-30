@@ -277,7 +277,7 @@ describe("exam preparation level entry", () => {
     Swal.fire.mockReset();
   });
 
-  it("lets a regular user enter the TELC B2 module", () => {
+  it("keeps the TELC B2 level card as a normal link", () => {
     render(
       <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
         <Routes>
@@ -287,13 +287,11 @@ describe("exam preparation level entry", () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(screen.getByRole("link", { name: /TELC B2/ }));
-
-    expect(screen.getByTestId("location")).toHaveTextContent(/^\/modules\/exam-preparation$/);
-    expect(Swal.fire).toHaveBeenCalledWith({ icon: "info", title: "Coming soon" });
+    expect(screen.getByRole("link", { name: /TELC B2/ })).toHaveAttribute("href", "/modules/exam-preparation/b2");
+    expect(Swal.fire).not.toHaveBeenCalled();
   });
 
-  it("offers TELC B1 and TELC B2 as links to their level homes", () => {
+  it("uses the TELC C1 HS module name while keeping B1 and B2 unchanged", () => {
     fetchSavedMockExams.mockClear();
     render(
       <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
@@ -302,7 +300,44 @@ describe("exam preparation level entry", () => {
     );
     expect(screen.getByRole("link", { name: /TELC B1/ })).toHaveAttribute("href", "/modules/exam-preparation/b1");
     expect(screen.getByRole("link", { name: /TELC B2/ })).toHaveAttribute("href", "/modules/exam-preparation/b2");
+    expect(screen.getByRole("link", { name: /TELC C1 HS/ })).toHaveAttribute("href", "/modules/exam-preparation/c1");
     expect(fetchSavedMockExams).not.toHaveBeenCalled();
+  });
+
+  it("shows the TELC C1 HS module name on the C1 home", () => {
+    renderPage("c1");
+
+    expect(screen.getByRole("heading", { name: "TELC C1 HS" })).toBeInTheDocument();
+  });
+
+  it.each(["b1", "b2", "c1"])("shows the tips entry for %s", (level) => {
+    renderPage(level);
+    expect(screen.getByRole("link", { name: /Unsere Tipps/ })).toHaveAttribute("href", `/modules/exam-preparation/${level}/tips`);
+  });
+
+  it("keeps only tips linked on C1 and gives all five specialties Coming soon buttons", () => {
+    fetchSavedMockExams.mockClear();
+    renderPage("c1");
+    expect(fetchSavedMockExams).not.toHaveBeenCalled();
+    const skills = screen.getByRole("region", { name: "专项入口列表" });
+    const tips = within(skills).getByRole("link", { name: /Unsere Tipps/ });
+    expect(tips).toHaveAttribute("href", "/modules/exam-preparation/c1/tips");
+    expect(within(skills).getAllByRole("link")).toHaveLength(1);
+    const comingSoonButtons = within(skills).getAllByRole("button");
+    expect(comingSoonButtons).toHaveLength(5);
+    ["Hören", "Lesen", "Sprachbausteine", "Schreiben", "Sprechen"].forEach((name) => {
+      expect(within(skills).getByRole("button", { name: new RegExp(name) })).toBeInTheDocument();
+    });
+    comingSoonButtons.forEach((button) => {
+      expect(within(button).getByText("Coming soon")).toBeInTheDocument();
+      Swal.fire.mockClear();
+      fireEvent.click(button);
+      expect(Swal.fire).toHaveBeenCalledTimes(1);
+      expect(Swal.fire).toHaveBeenCalledWith({ icon: "info", title: "Coming soon" });
+    });
+    const mockEntry = screen.getByLabelText("笔试模拟考试");
+    fireEvent.click(within(mockEntry).getByRole("button", { name: "Coming soon" }));
+    expect(Swal.fire).toHaveBeenCalledWith({ icon: "info", title: "Coming soon" });
   });
 
   it("keeps the active level on skill links in the reused level home", () => {

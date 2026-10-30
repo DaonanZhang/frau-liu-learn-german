@@ -46,7 +46,7 @@
 
 .exam-level-selection__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 15.5rem));
+  grid-template-columns: repeat(3, minmax(0, 15.5rem));
   justify-content: center;
   gap: clamp(0.8rem, 2.5vw, 1.4rem);
 }
@@ -84,6 +84,10 @@
 
 .exam-level-selection__card--b2 {
   background: linear-gradient(145deg, #eef3f7 0%, #d9ebe5 100%);
+}
+
+.exam-level-selection__card--c1 {
+  background: linear-gradient(145deg, #f1eef7 0%, #e1e7f2 100%);
 }
 
 .exam-level-selection__card:hover {
@@ -129,6 +133,12 @@
 
   .exam-level-selection__card {
     padding: 0.9rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .exam-level-selection__grid {
+    grid-template-columns: repeat(2, minmax(0, 15.5rem));
   }
 }
 
@@ -252,6 +262,12 @@
   box-shadow: 0 12px 28px rgba(57, 66, 62, 0.1);
 }
 
+.exam-module-mock.is-coming-soon {
+  border-color: #d3d6d4;
+  background: linear-gradient(125deg, #777f7c, #a0a7a4);
+  box-shadow: 0 12px 28px rgba(57, 66, 62, 0.1);
+}
+
 .exam-module-mock__icon {
   display: grid;
   place-items: center;
@@ -334,6 +350,28 @@
   box-shadow: 0 20px 38px rgba(80, 61, 38, 0.11);
 }
 
+.exam-module-card--coming-soon {
+  width: 100%;
+  border-color: #d7dadd;
+  background: linear-gradient(180deg, #f2f3f4, #e8eaec);
+  color: #737a80;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.exam-module-card--coming-soon .exam-module-card__kicker {
+  border-color: #d9dcdf;
+  background: #e5e7e9;
+  color: #747b81;
+}
+
+.exam-module-card--coming-soon .exam-module-card__title,
+.exam-module-card--coming-soon .exam-module-card__description,
+.exam-module-card--coming-soon .exam-module-card__progress {
+  color: #737a80;
+}
+
 .exam-module-card--muted {
   opacity: 0.84;
 }
@@ -383,6 +421,28 @@
   color: #2d2925;
   font-size: clamp(1.55rem, 2vw, 1.82rem);
   line-height: 1.12;
+}
+
+.exam-module-card__title-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  border: 1px solid #efd8b9;
+  border-radius: 0.8rem;
+  background: #fff8ee;
+  color: #b77a32;
+}
+
+.exam-module-card__title-icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
 
 .exam-module-card__description {

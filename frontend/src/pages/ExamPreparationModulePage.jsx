@@ -13,9 +13,22 @@ import {
 import { clearAnnotationScope, mockAnnotationScope } from "../utils/examTextAnnotations.js";
 import ExamPreparationContentSearch from "../components/examPreparation/ExamPreparationContentSearch.jsx";
 import "./ExamPreparationModulePage.css";
-import { examPreparationPurchasePath, examPreparationScope } from "../utils/examPreparationScope.js";
+import {
+  examPreparationModuleName,
+  examPreparationPurchasePath,
+  examPreparationScope,
+} from "../utils/examPreparationScope.js";
 
 const SKILL_CARDS = [
+  {
+    key: "tips",
+    title: "Unsere Tipps",
+    label: "备考建议",
+    description: "",
+    to: "/modules/exam-preparation/tips",
+    cta: "查看 Tipps",
+    progress: "TELC 备考",
+  },
   {
     key: "listening",
     title: "Hören",
@@ -87,7 +100,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
     .sort((left, right) => right.getTime() - left.getTime())[0];
 
   useEffect(() => {
-    if (!scope || !hasFullAccess) return undefined;
+    if (!scope || scope.level === "C1" || !hasFullAccess) return undefined;
     let cancelled = false;
     fetchSavedMockExams("active", 1, 3, scope)
       .then((data) => {
@@ -176,13 +189,13 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
       <section className="exam-level-selection" aria-labelledby="exam-level-selection-title">
         <h1 id="exam-level-selection-title">选择考试级别</h1>
         <div className="exam-level-selection__grid">
-          {["B1", "B2"].map((level) => (
+          {["B1", "B2", "C1"].map((level) => (
             <Link
               key={level}
               className={`exam-level-selection__card exam-level-selection__card--${level.toLowerCase()}`}
               to={`/modules/exam-preparation/${level.toLowerCase()}`}
             >
-              <span className="exam-level-selection__title">TELC {level}</span>
+              <span className="exam-level-selection__title">{examPreparationModuleName(level)}</span>
               <span className="exam-level-selection__action">
                 进入备考季 <span aria-hidden="true">→</span>
               </span>
@@ -201,7 +214,9 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
       </Link>
       <section className="exam-module-hero">
         <div className="exam-module-hero__content">
-          <h1 className="exam-module-hero__title">备考季 · {scope.level}</h1>
+          <h1 className="exam-module-hero__title">
+            {scope.level === "C1" ? examPreparationModuleName(scope) : `备考季 · ${scope.level}`}
+          </h1>
           <p className="exam-module-hero__copy">
             {EXAM_PREPARATION_MODULE.description}
           </p>
@@ -240,7 +255,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
         <ExamPreparationContentSearch scope={scope} />
       ) : null}
 
-      <section className={`exam-module-mock${hasFullAccess ? "" : " is-locked"}`} aria-label="笔试模拟考试">
+      <section className={`exam-module-mock${scope.level === "C1" ? " is-coming-soon" : hasFullAccess ? "" : " is-locked"}`} aria-label="笔试模拟考试">
         <div className="exam-module-mock__icon" aria-hidden="true">
           <svg viewBox="0 0 48 48" focusable="false">
             <path d="M11 7.5h20a4 4 0 0 1 4 4v12.25" />
@@ -257,8 +272,8 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
             {hasFullAccess && activeMockExams.length ? (
               <button type="button" onClick={continueLatestMockExam} className="exam-module-mock__button is-secondary">继续考试</button>
             ) : null}
-            <button type="button" onClick={openMockExam} className="exam-module-mock__button">
-              {hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
+            <button type="button" onClick={scope.level === "C1" ? () => Swal.fire({ icon: "info", title: "Coming soon" }) : openMockExam} className="exam-module-mock__button">
+              {scope.level === "C1" ? "Coming soon" : hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
             </button>
           </div>
         </div>
@@ -293,13 +308,25 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
                 </div>
                 <div className="exam-module-card__title-row">
                   <h2 className="exam-module-card__title">{card.title}</h2>
+                  {card.key === "tips" ? (
+                    <span className="exam-module-card__title-icon" aria-hidden="true" title="独立备考建议模块">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M9 18h6M10 21h4M8.5 14.5a6 6 0 1 1 7 0c-.9.8-1.5 1.6-1.5 2.5h-4c0-.9-.6-1.7-1.5-2.5Z" />
+                        <path d="M12 2v2M4.9 4.9l1.4 1.4M2 12h2M19.1 4.9l-1.4 1.4M20 12h2" />
+                      </svg>
+                    </span>
+                  ) : null}
                 </div>
               </div>
-              <p className="exam-module-card__description">
-                {card.descriptionByLevel?.[scope.level] || card.description}
-              </p>
+              {(card.descriptionByLevel?.[scope.level] || card.description) ? (
+                <p className="exam-module-card__description">
+                  {card.descriptionByLevel?.[scope.level] || card.description}
+                </p>
+              ) : null}
               <div className="exam-module-card__footer">
-                {card.to ? (
+                {scope.level === "C1" && card.key !== "tips" ? (
+                  <span className="exam-module-card__badge">Coming soon</span>
+                ) : card.to ? (
                   <span className="exam-module-card__cta">{card.cta || "进入"}</span>
                 ) : (
                   <span className="exam-module-card__badge">即将开放</span>
@@ -307,6 +334,14 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
               </div>
             </>
           );
+
+          if (scope.level === "C1" && card.key !== "tips") {
+            return (
+              <button key={card.key} type="button" onClick={() => Swal.fire({ icon: "info", title: "Coming soon" })} className="exam-module-card exam-module-card--link exam-module-card--coming-soon">
+                {content}
+              </button>
+            );
+          }
 
           if (card.to) {
             return (

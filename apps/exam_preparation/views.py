@@ -7,6 +7,7 @@ import uuid
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -16,7 +17,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.viewsets import ModelViewSet, ViewSet
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet, ViewSet
 
 from apps.accounts.permissions import (
     HasValidEntitlement,
@@ -38,6 +39,8 @@ from apps.exam_preparation.models import (
     ClozeMatchingExercise,
     ClozeMatchingOption,
     ExerciseBase,
+    ExamPreparationGuide,
+    ExamPreparationGuideLike,
     ListeningAnswerOption,
     ListeningExercise,
     ListeningQuestion,
@@ -77,6 +80,7 @@ from apps.exam_preparation.serializers import (
     ClozeMatchingExerciseSerializer,
     ClozeMatchingOptionSerializer,
     ExerciseBaseSerializer,
+    ExamPreparationGuideSerializer,
     ListeningAnswerOptionSerializer,
     ListeningExerciseDetailSerializer,
     ListeningExerciseSerializer,
@@ -165,6 +169,44 @@ class BaseExamPreparationViewSet(ModelViewSet):
             )
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
+
+
+class ExamPreparationGuideViewSet(ReadOnlyModelViewSet):
+    permission_classes = [IsAuthenticated, HasValidEntitlement, IsAdminOrReadOnly]
+    queryset = ExamPreparationGuide.objects.filter(is_published=True)
+    serializer_class = ExamPreparationGuideSerializer
+    required_module_key = "exam_preparation"
+    filterset_fields = ["is_published"]
+    search_fields = ["title", "summary", "body_markdown"]
+    ordering_fields = ["id", "published_at", "view_count", "like_count", "created_at"]
+    ordering = ["-published_at", "-id"]
+
+    def get_permissions(self):
+        if self.action == "like":
+            return [IsAuthenticated(), HasValidEntitlement()]
+        return super().get_permissions()
+
+    def retrieve(self, request, *args, **kwargs):
+        guide = self.get_object()
+        ExamPreparationGuide.objects.filter(pk=guide.pk).update(view_count=F("view_count") + 1)
+        guide.refresh_from_db()
+        return Response(self.get_serializer(guide).data)
+
+    @action(detail=True, methods=["post", "delete"], url_path="like")
+    def like(self, request, pk=None):
+        with transaction.atomic():
+            guide = ExamPreparationGuide.objects.select_for_update().get(pk=pk, is_published=True)
+            if request.method == "POST":
+                _, created = ExamPreparationGuideLike.objects.get_or_create(guide=guide, user=request.user)
+                if created:
+                    guide.like_count += 1
+                    guide.save(update_fields=["like_count", "updated_at"])
+            else:
+                deleted, _ = ExamPreparationGuideLike.objects.filter(guide=guide, user=request.user).delete()
+                if deleted:
+                    guide.like_count = max(0, guide.like_count - 1)
+                    guide.save(update_fields=["like_count", "updated_at"])
+        return Response(self.get_serializer(guide).data)
 
 
 class BaseUserExerciseStateViewSet(BaseExamPreparationViewSet):

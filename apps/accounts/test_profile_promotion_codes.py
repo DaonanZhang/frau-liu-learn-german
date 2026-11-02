@@ -382,6 +382,7 @@ class ProfilePromotionCampaignReportApiTests(APITestCase):
         internal = self._promotion(
             "GROUP010", "同机构-甲", "机构甲", PromotionCodeRecord.SourceKind.INTERNAL_REWARD,
         )
+        legacy_without_organization = self._promotion("GROUP011", "无组织历史博主", "")
         in_month = timezone.make_aware(datetime(2026, 10, 15, 12))
         outside_month = timezone.make_aware(datetime(2026, 9, 15, 12))
         coupons = []
@@ -390,13 +391,20 @@ class ProfilePromotionCampaignReportApiTests(APITestCase):
             (p3, self.other_superuser, in_month), (p4, self.user, in_month),
             (old, self.user, outside_month), (duplicate_name, self.user, in_month),
             (purchase_only, self.user, outside_month), (referral, self.user, in_month),
-            (internal, self.user, in_month),
+            (internal, self.user, in_month), (legacy_without_organization, self.user, in_month),
         ):
             coupon = UserCoupon.objects.create(user=user, promotion_code=promotion, discount_amount=Decimal("5.00"))
             UserCoupon.objects.filter(pk=coupon.pk).update(issued_at=issued_at)
             coupons.append(coupon)
 
-        def add_purchase(index: int, coupon, promotion, user, amount: str) -> None:
+        def add_purchase(
+            index: int,
+            coupon,
+            promotion,
+            user,
+            amount: str,
+            organization_snapshot: str | None = None,
+        ) -> None:
             payment = AlipayWebsitePayment.objects.create(
                 merchant_order_no=f"grouped-order-{index}", subject=offer.title,
                 total_amount=Decimal(amount), status=AlipayWebsitePayment.Status.PAID,
@@ -408,15 +416,20 @@ class ProfilePromotionCampaignReportApiTests(APITestCase):
                 promotion_discount_amount=Decimal("5.00"), final_amount=Decimal(amount) - Decimal("5.00"),
                 selection_source=PaymentDiscountApplication.SelectionSource.MANUAL,
                 campaign_name_snapshot=promotion.campaign_name,
-                campaign_organization_snapshot=promotion.organization_name,
+                campaign_organization_snapshot=(
+                    promotion.organization_name
+                    if organization_snapshot is None
+                    else organization_snapshot
+                ),
                 status=PaymentDiscountApplication.Status.APPLIED, applied_at=in_month,
             )
 
-        add_purchase(1, coupons[0], p1, self.user, "39.90")
-        add_purchase(2, coupons[2], p3, self.other_superuser, "29.90")
+        add_purchase(1, coupons[0], p1, self.user, "39.90", organization_snapshot="")
+        add_purchase(2, coupons[2], p3, self.other_superuser, "29.90", organization_snapshot="旧机构乙")
         add_purchase(3, coupons[6], purchase_only, self.user, "19.90")
         add_purchase(4, coupons[7], referral, self.user, "9.90")
         add_purchase(5, coupons[8], internal, self.user, "8.90")
+        add_purchase(6, coupons[9], legacy_without_organization, self.user, "18.90")
         self.client.force_authenticate(user=self.admin)
 
         response = self.client.get(self.url, {"month": "2026-10", "all_campaigns": "true"})
@@ -441,10 +454,13 @@ class ProfilePromotionCampaignReportApiTests(APITestCase):
         self.assertEqual(by_org["机构甲"]["purchases"][0]["merchant_order_no"], "grouped-order-1")
         self.assertEqual(by_org["机构乙"]["campaign_names"], ["同机构-甲"])
         self.assertEqual(by_org["机构乙"]["paid_orders"], 1)
+        self.assertNotIn("旧机构乙", by_org)
         self.assertEqual(by_org["仅兑换机构"]["paid_orders"], 0)
         self.assertEqual(by_org["仅兑换机构"]["coupon_redemptions"], 1)
         self.assertEqual(by_org["仅购买机构"]["coupon_redemptions"], 0)
         self.assertEqual(by_org["仅购买机构"]["paid_orders"], 1)
+        self.assertEqual(by_org["无组织历史博主"]["coupon_redemptions"], 1)
+        self.assertEqual(by_org["无组织历史博主"]["paid_orders"], 1)
         self.assertNotIn("无活动机构", by_org)
 
         all_time = self.client.get(self.url, {"month": "all", "all_campaigns": "true"})
@@ -452,7 +468,7 @@ class ProfilePromotionCampaignReportApiTests(APITestCase):
         self.assertEqual(all_time.data["month"], "all")
         self.assertEqual(
             {r["organization_name"] for r in all_time.data["reports"]},
-            {"机构甲", "机构乙", "仅兑换机构", "仅购买机构"},
+            {"机构甲", "机构乙", "仅兑换机构", "仅购买机构", "无组织历史博主"},
         )
         all_time_by_org = {item["organization_name"]: item for item in all_time.data["reports"]}
         self.assertEqual(all_time_by_org["机构甲"]["coupon_redemptions"], 4)

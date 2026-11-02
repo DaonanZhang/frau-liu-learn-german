@@ -139,13 +139,16 @@ def get_promotion_campaign_report(
 
     redeemed = PromotionCodeRecord.objects.filter(
         campaign_name__icontains=campaign_name,
+        source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
         status=PromotionCodeRecord.Status.CONSUMED,
     )
     redemptions = UserCoupon.objects.filter(
         promotion_code__campaign_name__icontains=campaign_name,
+        promotion_code__source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
     ).select_related("user", "promotion_code")
     paid = PaymentDiscountApplication.objects.filter(
         campaign_name_snapshot__icontains=campaign_name,
+        promotion_code__source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
         status=PaymentDiscountApplication.Status.APPLIED,
     ).select_related("user", "offer", "payment", "promotion_code")
     if month_start is not None:
@@ -266,9 +269,12 @@ def get_all_promotion_campaign_reports(*, month_text: str) -> dict[str, object]:
             "purchases": [],
         })
 
+    def organization_for(promotion: PromotionCodeRecord) -> str:
+        return promotion.organization_name.strip() or promotion.campaign_name.strip()
+
     for coupon in redemptions.order_by("issued_at", "id"):
         promotion = coupon.promotion_code
-        report = report_for(promotion.organization_name)
+        report = report_for(organization_for(promotion))
         if report is None:
             continue
         report["campaign_names"].add(promotion.campaign_name)
@@ -281,10 +287,13 @@ def get_all_promotion_campaign_reports(*, month_text: str) -> dict[str, object]:
         })
 
     for application in purchases.order_by("applied_at", "id"):
-        report = report_for(application.campaign_organization_snapshot)
+        promotion = application.promotion_code
+        report = report_for(organization_for(promotion))
         if report is None:
             continue
-        report["campaign_names"].add(application.campaign_name_snapshot)
+        report["campaign_names"].add(
+            application.campaign_name_snapshot.strip() or promotion.campaign_name.strip()
+        )
         report["paid_orders"] += 1
         report["paying_users"].add(application.user_id)
         report["original_amount"] += application.original_amount

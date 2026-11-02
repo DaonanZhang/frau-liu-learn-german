@@ -7,6 +7,12 @@
  * - Auto refreshes access token once on 401, then retries the request once.
  */
 
+import {
+  isDeviceSessionExpired,
+  markDeviceSessionExpired,
+  recoverDeviceSession,
+} from "./auth/deviceSession.js";
+
 function getCookie(name) {
   const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
   return match ? decodeURIComponent(match[2]) : null;
@@ -68,7 +74,8 @@ async function refreshAccessToken() {
   return data.access;
 }
 
-export async function apiFetch(path, options = {}, retried = false) {
+export async function apiFetch(path, options = {}, retryState = {}) {
+  const { refreshed = false, sessionRecovered = false } = retryState;
   const {
     method = "GET",
     headers = {},
@@ -84,6 +91,12 @@ export async function apiFetch(path, options = {}, retried = false) {
 
   // Attach JWT if available
   const accessToken = getAccessToken();
+  if (accessToken && isDeviceSessionExpired()) {
+    throw new ApiError("Device session expired", {
+      status: 403,
+      data: { code: "device_session_inactive" },
+    });
+  }
   if (accessToken && !finalHeaders.Authorization) {
     finalHeaders.Authorization = `Bearer ${accessToken}`;
   }
@@ -119,7 +132,7 @@ export async function apiFetch(path, options = {}, retried = false) {
   const data = isJson ? await res.json().catch(() => null) : await res.text().catch(() => null);
 
   // If unauthorized once, try refresh and retry once
-  if (res.status === 401 && !retried) {
+  if (res.status === 401 && !refreshed) {
     try {
       const newAccess = await refreshAccessToken();
       return apiFetch(
@@ -131,11 +144,28 @@ export async function apiFetch(path, options = {}, retried = false) {
             Authorization: `Bearer ${newAccess}`,
           },
         },
-        true
+        { refreshed: true, sessionRecovered },
       );
     } catch {
       throw new ApiError("Unauthorized", { status: 401, data });
     }
+  }
+
+  if (
+    res.status === 403 &&
+    data?.code === "device_session_inactive"
+  ) {
+    if (!sessionRecovered) {
+      await recoverDeviceSession();
+      return apiFetch(path, options, { refreshed, sessionRecovered: true });
+    }
+
+    const error = new ApiError("Device session recovery failed", {
+      status: 403,
+      data,
+    });
+    markDeviceSessionExpired(error);
+    throw error;
   }
 
   if (!res.ok) {

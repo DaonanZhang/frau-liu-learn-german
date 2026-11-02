@@ -128,7 +128,11 @@ function getTopicTags(video) {
 export default function VideoStudyPage() {
   const { videoId } = useParams();
   const location = useLocation();
-  const { user } = useAuth();
+  const {
+    user,
+    deviceSessionExpired = false,
+    reloadAfterSessionExpiry,
+  } = useAuth();
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
 
@@ -272,8 +276,12 @@ export default function VideoStudyPage() {
   }, [isMobile]);
 
   useEffect(() => {
+    if (deviceSessionExpired) {
+      setVideoNoteLoading(false);
+      return;
+    }
     loadVideoNote(videoId).catch(() => {});
-  }, [loadVideoNote, videoId]);
+  }, [deviceSessionExpired, loadVideoNote, videoId]);
 
   function clampMobileFabOffset(nextX, nextY) {
     if (typeof window === "undefined") {
@@ -707,6 +715,13 @@ export default function VideoStudyPage() {
   useEffect(() => {
     let aborted = false;
 
+    if (deviceSessionExpired) {
+      setLoadingVideo(false);
+      return () => {
+        aborted = true;
+      };
+    }
+
     async function loadVideo() {
       try {
         setLoadingVideo(true);
@@ -730,7 +745,7 @@ export default function VideoStudyPage() {
     return () => {
       aborted = true;
     };
-  }, [videoId]);
+  }, [deviceSessionExpired, videoId]);
 
   useEffect(() => {
     const videoElement = videoRef.current;
@@ -1087,7 +1102,16 @@ export default function VideoStudyPage() {
                 </div>
               ) : null}
 
-              {playerErrorText ? (
+              {deviceSessionExpired ? (
+                <div className="vs-playerPlaceholder">
+                  <div className="vs-sessionExpired" role="alert">
+                    <p>登录状态已过期，请重新登录后继续观看</p>
+                    <button type="button" onClick={reloadAfterSessionExpiry}>
+                      重新登录
+                    </button>
+                  </div>
+                </div>
+              ) : playerErrorText ? (
                 <div className="vs-playerPlaceholder">
                   <div className="vs-playerPlaceholderText">Failed to load video: {playerErrorText}</div>
                 </div>
@@ -1214,7 +1238,7 @@ export default function VideoStudyPage() {
         </section>
 
         {/* Middle: subtitles */}
-        {shouldShowSubtitlePanel ? (
+        {shouldShowSubtitlePanel && !deviceSessionExpired ? (
           <SubtitlePanel
             videoId={videoId}
             videoTitle={leftTitle}

@@ -1,6 +1,12 @@
 const MAX_ERRORS = 20;
 const MAX_VALUE_LENGTH = 2000;
 const errorBuffer = [];
+const EXPECTED_DEVICE_SESSION_CODES = new Set([
+  "device_session_inactive",
+  "device_activity_closed",
+  "concurrent_session_limit",
+  "login_session_invalid",
+]);
 
 function truncate(value) {
   return String(value || "").slice(0, MAX_VALUE_LENGTH);
@@ -23,6 +29,14 @@ function serializeValue(value) {
 }
 
 function capture(type, values) {
+  const isExpectedDeviceSessionEvent = values.some((value) => {
+    const code = value?.data?.code ?? value?.code;
+    return EXPECTED_DEVICE_SESSION_CODES.has(String(code || ""));
+  });
+  if (isExpectedDeviceSessionEvent) {
+    return;
+  }
+
   errorBuffer.push({
     type,
     message: values.map(serializeValue).join(" "),

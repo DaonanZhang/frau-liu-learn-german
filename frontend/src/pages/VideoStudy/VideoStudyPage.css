@@ -109,6 +109,45 @@
   color: #6b7280;
 }
 
+.vs-sessionExpired {
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  max-width: 32rem;
+  padding: 1.25rem;
+  color: #374151;
+  text-align: center;
+}
+
+.vs-sessionExpired p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.vs-sessionExpired button {
+  min-height: 44px;
+  padding: 0.65rem 1.15rem;
+  border: 0;
+  border-radius: 0.65rem;
+  background: #315da8;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+@media (max-width: 480px) {
+  .vs-sessionExpired {
+    width: 100%;
+    padding: 1rem;
+  }
+
+  .vs-sessionExpired button {
+    width: 100%;
+  }
+}
+
 .vs-descCard {
   padding: 1rem;
 }

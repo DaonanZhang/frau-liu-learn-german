@@ -49,6 +49,7 @@ export default function PromotionCampaignReportCard() {
   const [activeCampaignIndex, setActiveCampaignIndex] = useState(-1);
   const [month, setMonth] = useState(currentMonth);
   const [allTime, setAllTime] = useState(false);
+  const [allCampaigns, setAllCampaigns] = useState(false);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -109,14 +110,15 @@ export default function PromotionCampaignReportCard() {
   async function handleSubmit(event) {
     event.preventDefault();
     const normalizedCampaignName = campaignName.trim();
-    if (!normalizedCampaignName || !month || loading) return;
+    if ((!allCampaigns && !normalizedCampaignName) || (!allTime && !month) || loading) return;
     setLoading(true);
     setError("");
     setReport(null);
     try {
       setReport(await fetchPromotionCampaignReport({
-        campaignName: normalizedCampaignName,
+        campaignName: allCampaigns ? "" : normalizedCampaignName,
         month: allTime ? "all" : month,
+        allCampaigns,
       }));
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -125,10 +127,81 @@ export default function PromotionCampaignReportCard() {
     }
   }
 
-  const purchases = Array.isArray(report?.purchases) ? report.purchases : [];
-  const isEmpty = report
-    && Number(report.coupon_redemptions) === 0
-    && Number(report.paid_orders) === 0;
+  const reports = allCampaigns
+    ? (Array.isArray(report?.reports) ? report.reports : [])
+    : report ? [report] : [];
+  const isEmpty = report && (allCampaigns
+    ? reports.length === 0
+    : Number(report.coupon_redemptions) === 0 && Number(report.paid_orders) === 0);
+
+  function renderReportContent(item, index, grouped = false) {
+    const purchases = Array.isArray(item?.purchases) ? item.purchases : [];
+    const titleId = `campaign-purchases-title-${index}`;
+    return (
+      <div
+        key={index}
+        className={`profile-campaignReport__content${grouped ? " profile-campaignReport__group" : ""}`}
+      >
+        {grouped ? <h3 className="profile-campaignReport__groupTitle">{(item.campaign_names || []).join(" / ")}</h3> : null}
+        <div className="profile-campaignReport__summary">
+          {SUMMARY_ITEMS.map(([key, label]) => (
+            <div key={key} className="profile-campaignReport__metric">
+              <span>{label}</span>
+              <strong>{item[key]}</strong>
+            </div>
+          ))}
+          {AMOUNT_ITEMS.map(([key, label]) => (
+            <div key={key} className="profile-campaignReport__metric is-amount">
+              <span>{label}</span>
+              <strong>¥{item[key]}</strong>
+            </div>
+          ))}
+        </div>
+
+        <section className="profile-campaignReport__purchases" aria-labelledby={titleId}>
+          <div className="profile-campaignReport__sectionHeader">
+            <h3 id={titleId}>购买明细</h3>
+            <span>{purchases.length} 笔</span>
+          </div>
+          {purchases.length === 0 ? (
+            <div className="profile-stateText">暂无购买记录</div>
+          ) : (
+            <div className="profile-campaignReport__tableWrap">
+              <table className="profile-campaignReport__table">
+                <thead>
+                  <tr>
+                    <th>用户</th>
+                    <th>商品</th>
+                    <th>订单</th>
+                    <th>原价</th>
+                    <th>优惠</th>
+                    <th>实付</th>
+                    <th>购买时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchases.map((purchase) => (
+                    <tr key={purchase.merchant_order_no}>
+                      <td data-label="用户">{purchase.telephone}</td>
+                      <td data-label="商品">
+                        <strong>{purchase.offer_title}</strong>
+                        <small>{purchase.offer_code}</small>
+                      </td>
+                      <td data-label="订单">{purchase.merchant_order_no}</td>
+                      <td data-label="原价">¥{purchase.original_amount}</td>
+                      <td data-label="优惠">¥{purchase.promotion_discount}</td>
+                      <td data-label="实付">¥{purchase.final_amount}</td>
+                      <td data-label="购买时间">{formatDateTime(purchase.applied_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
+    );
+  }
 
   return (
     <section className="profile-card profile-campaignReport" aria-labelledby="campaign-report-title">
@@ -136,66 +209,88 @@ export default function PromotionCampaignReportCard() {
         合作博主优惠码统计
       </h2>
       <form className="profile-campaignReport__form" onSubmit={handleSubmit}>
-        <label className="profile-label">
+        <div className="profile-label">
           合作博主
-          <div
-            className="profile-campaignReport__combobox"
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) {
-                setCampaignsOpen(false);
-                setActiveCampaignIndex(-1);
-              }
-            }}
-          >
-            <input
-              className="profile-input"
-              role="combobox"
-              aria-expanded={campaignsOpen}
-              aria-controls="promotion-campaign-options"
-              aria-autocomplete="list"
-              aria-activedescendant={activeCampaignIndex >= 0
-                ? `promotion-campaign-option-${activeCampaignIndex}`
-                : undefined}
-              autoComplete="off"
-              placeholder="输入或选择合作博主"
-              value={campaignName}
-              onFocus={() => setCampaignsOpen(true)}
-              onChange={(event) => {
-                setCampaignName(event.target.value);
-                setCampaignsOpen(true);
-                setActiveCampaignIndex(-1);
+          <div className="profile-campaignReport__campaignControl">
+            <div
+              className="profile-campaignReport__combobox"
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  setCampaignsOpen(false);
+                  setActiveCampaignIndex(-1);
+                }
               }}
-              onKeyDown={handleCampaignKeyDown}
-              required
-            />
-            {campaignsOpen ? (
-              <div
-                id="promotion-campaign-options"
-                className="profile-campaignReport__options"
-                role="listbox"
-              >
-                {campaignsLoading ? <div className="profile-campaignReport__optionState">正在加载…</div> : null}
-                {!campaignsLoading && filteredCampaigns.length === 0 ? (
-                  <div className="profile-campaignReport__optionState">没有匹配的合作博主</div>
-                ) : null}
-                {filteredCampaigns.map((name, index) => (
-                  <button
-                    id={`promotion-campaign-option-${index}`}
-                    key={name}
-                    type="button"
-                    role="option"
-                    aria-selected={index === activeCampaignIndex}
-                    className={index === activeCampaignIndex ? "is-active" : ""}
-                    onClick={() => selectCampaign(name)}
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            >
+              <input
+                className="profile-input"
+                role="combobox"
+                aria-expanded={campaignsOpen}
+                aria-controls="promotion-campaign-options"
+                aria-autocomplete="list"
+                aria-label="合作博主"
+                aria-activedescendant={activeCampaignIndex >= 0
+                  ? `promotion-campaign-option-${activeCampaignIndex}`
+                  : undefined}
+                autoComplete="off"
+                placeholder="输入或选择合作博主"
+                value={campaignName}
+                onFocus={() => setCampaignsOpen(true)}
+                onChange={(event) => {
+                  setCampaignName(event.target.value);
+                  setCampaignsOpen(true);
+                  setActiveCampaignIndex(-1);
+                }}
+                onKeyDown={handleCampaignKeyDown}
+                required={!allCampaigns}
+                disabled={allCampaigns}
+              />
+              {campaignsOpen ? (
+                <div
+                  id="promotion-campaign-options"
+                  className="profile-campaignReport__options"
+                  role="listbox"
+                >
+                  {campaignsLoading ? <div className="profile-campaignReport__optionState">正在加载…</div> : null}
+                  {!campaignsLoading && filteredCampaigns.length === 0 ? (
+                    <div className="profile-campaignReport__optionState">没有匹配的合作博主</div>
+                  ) : null}
+                  {filteredCampaigns.map((name, index) => (
+                    <button
+                      id={`promotion-campaign-option-${index}`}
+                      key={name}
+                      type="button"
+                      role="option"
+                      aria-selected={index === activeCampaignIndex}
+                      className={index === activeCampaignIndex ? "is-active" : ""}
+                      onClick={() => selectCampaign(name)}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <label className="profile-campaignReport__allCampaigns">
+              <input
+                type="checkbox"
+                checked={allCampaigns}
+                disabled={loading}
+                onChange={(event) => {
+                  setAllCampaigns(event.target.checked);
+                  setReport(null);
+                  setError("");
+                  if (event.target.checked) {
+                    setCampaignName("");
+                    setCampaignsOpen(false);
+                    setActiveCampaignIndex(-1);
+                  }
+                }}
+              />
+              全部统计
+            </label>
           </div>
           {campaignsError ? <small className="profile-campaignReport__loadError">合作博主列表加载失败，仍可直接输入。</small> : null}
-        </label>
+        </div>
         <div className="profile-label">
           统计时间
           <div className="profile-campaignReport__periodControl">
@@ -225,66 +320,7 @@ export default function PromotionCampaignReportCard() {
 
       {error ? <div className="profile-errorText">{error}</div> : null}
       {isEmpty ? <div className="profile-stateText">暂无兑换或购买记录</div> : null}
-      {report && !isEmpty ? (
-        <>
-          <div className="profile-campaignReport__summary">
-            {SUMMARY_ITEMS.map(([key, label]) => (
-              <div key={key} className="profile-campaignReport__metric">
-                <span>{label}</span>
-                <strong>{report[key]}</strong>
-              </div>
-            ))}
-            {AMOUNT_ITEMS.map(([key, label]) => (
-              <div key={key} className="profile-campaignReport__metric is-amount">
-                <span>{label}</span>
-                <strong>¥{report[key]}</strong>
-              </div>
-            ))}
-          </div>
-
-          <section className="profile-campaignReport__purchases" aria-labelledby="campaign-purchases-title">
-            <div className="profile-campaignReport__sectionHeader">
-              <h3 id="campaign-purchases-title">购买明细</h3>
-              <span>{purchases.length} 笔</span>
-            </div>
-            {purchases.length === 0 ? (
-              <div className="profile-stateText">暂无购买记录</div>
-            ) : (
-              <div className="profile-campaignReport__tableWrap">
-                <table className="profile-campaignReport__table">
-                  <thead>
-                    <tr>
-                      <th>用户</th>
-                      <th>商品</th>
-                      <th>订单</th>
-                      <th>原价</th>
-                      <th>优惠</th>
-                      <th>实付</th>
-                      <th>购买时间</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {purchases.map((purchase) => (
-                      <tr key={purchase.merchant_order_no}>
-                        <td data-label="用户">{purchase.telephone}</td>
-                        <td data-label="商品">
-                          <strong>{purchase.offer_title}</strong>
-                          <small>{purchase.offer_code}</small>
-                        </td>
-                        <td data-label="订单">{purchase.merchant_order_no}</td>
-                        <td data-label="原价">¥{purchase.original_amount}</td>
-                        <td data-label="优惠">¥{purchase.promotion_discount}</td>
-                        <td data-label="实付">¥{purchase.final_amount}</td>
-                        <td data-label="购买时间">{formatDateTime(purchase.applied_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        </>
-      ) : null}
+      {report && !isEmpty ? reports.map((item, index) => renderReportContent(item, index, allCampaigns)) : null}
     </section>
   );
 }

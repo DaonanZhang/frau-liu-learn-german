@@ -11,6 +11,7 @@ describe("examPreparationScope", () => {
   it.each([
     ["b1", { examType: "TELC", level: "B1", levelPath: "b1" }],
     ["B2", { examType: "TELC", level: "B2", levelPath: "b2" }],
+    ["c1", { examType: "TELC", level: "C1", levelPath: "c1" }],
   ])("normalizes %s to the API and path scope", (level, expected) => {
     expect(examPreparationScope(level)).toEqual(expected);
   });
@@ -22,6 +23,8 @@ describe("examPreparationScope", () => {
   it("reads only a supported TELC level from favorite query params", () => {
     expect(examPreparationScopeFromSearchParams(new URLSearchParams("exam_type=TELC&level=B2")))
       .toEqual({ examType: "TELC", level: "B2", levelPath: "b2" });
+    expect(examPreparationScopeFromSearchParams(new URLSearchParams("exam_type=TELC&level=C1")))
+      .toEqual({ examType: "TELC", level: "C1", levelPath: "c1" });
     expect(examPreparationScopeFromSearchParams(new URLSearchParams("exam_type=GOETHE&level=B2")))
       .toBeNull();
     expect(examPreparationScopeFromSearchParams(new URLSearchParams("exam_type=TELC&level=B3")))
@@ -41,6 +44,8 @@ describe("examPreparationScope", () => {
   it("accepts only exact level-home return paths", () => {
     expect(examPreparationReturnPath("/modules/exam-preparation/b2", "/modules/exam-preparation"))
       .toBe("/modules/exam-preparation/b2");
+    expect(examPreparationReturnPath("/modules/exam-preparation/c1", "/modules/exam-preparation"))
+      .toBe("/modules/exam-preparation/c1");
     expect(examPreparationReturnPath("https://evil.example/", "/modules/exam-preparation"))
       .toBe("/modules/exam-preparation");
     expect(examPreparationReturnPath("/modules/exam-preparation/b2?x=1", "/modules/exam-preparation"))

@@ -78,6 +78,7 @@ export default function ClozeMatchingPage() {
   const [draggedOptionKey, setDraggedOptionKey] = useState("");
   const [dragSourceBlankKey, setDragSourceBlankKey] = useState("");
   const [activeDropBlankKey, setActiveDropBlankKey] = useState("");
+  const [activeBlankKey, setActiveBlankKey] = useState("");
   const [isPoolDropActive, setIsPoolDropActive] = useState(false);
   const [touchDragPosition, setTouchDragPosition] = useState(null);
   const touchDragRef = useRef(null);
@@ -167,6 +168,17 @@ export default function ClozeMatchingPage() {
     () => options.filter((option) => !assignedOptionKeys.has(option.option_key)),
     [options, assignedOptionKeys]
   );
+  const c1ExampleBlank = scope?.level === "C1"
+    ? blankAnswers.find((blank) => Number(blank.blank_number) === 0) || blankAnswers[0]
+    : null;
+  const c1ExampleBlankKey = c1ExampleBlank?.blank_key || "";
+  const c1ExampleOptionKey = c1ExampleBlank?.correct_option?.option_key || "";
+  const activeC1BlankKey = activeBlankKey || c1ExampleBlankKey || blankAnswers[0]?.blank_key || "";
+  const visiblePoolOptions = scope?.level === "C1"
+    ? poolOptions.filter((option) => activeC1BlankKey === c1ExampleBlankKey
+      ? option.option_key === c1ExampleOptionKey
+      : option.option_key !== c1ExampleOptionKey)
+    : poolOptions;
 
   const {
     annotationLayout,
@@ -178,6 +190,9 @@ export default function ClozeMatchingPage() {
   function assignOptionToBlank(blankKey, optionKey, sourceBlankKey = "") {
     if (!blankKey || !optionKey) {
       return;
+    }
+    if (scope?.level === "C1") {
+      if ((blankKey === c1ExampleBlankKey) !== (optionKey === c1ExampleOptionKey)) return;
     }
     setAnswers((previous) => {
       const nextAnswers = { ...previous };
@@ -337,10 +352,10 @@ export default function ClozeMatchingPage() {
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
     >
       <div className="cloze-page">
-        <div className="cloze-shell">
+        <div className={`cloze-shell${scope?.level === "C1" ? " cloze-shell--c1" : ""}`}>
         <div className="cloze-topbar">
-          <Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/sprachbausteine/cloze-matching`} className="cloze-topbar__back">
-            ← Zurück zu Sprachbausteine
+          <Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/${scope?.level === "C1" ? "lesen" : "sprachbausteine"}${scope?.level === "C1" ? "" : "/cloze-matching"}`} className="cloze-topbar__back">
+            {scope?.level === "C1" ? "← Zurück zu Lesen" : "← Zurück zu Sprachbausteine"}
           </Link>
           <span className="cloze-topbar__meta">
             {exercise?.exercise_base?.level || scope?.level} · {exercise?.exercise_base?.external_id || "001"}
@@ -403,7 +418,7 @@ export default function ClozeMatchingPage() {
               handleDragEnd();
             }}
           >
-            {poolOptions.map((option) => (
+            {visiblePoolOptions.map((option) => (
               <button
                 key={option.id}
                 type="button"
@@ -423,6 +438,14 @@ export default function ClozeMatchingPage() {
                 onPointerCancel={(event) => {
                   handlePointerDragEnd(event, true);
                 }}
+                onClick={scope?.level === "C1" ? () => {
+                  const targetBlankKey = activeC1BlankKey;
+                  if (targetBlankKey) {
+                    assignOptionToBlank(targetBlankKey, option.option_key);
+                    setActiveBlankKey(blankAnswers.find((blank) => blank.blank_key !== targetBlankKey)?.blank_key || targetBlankKey);
+                  }
+                } : undefined}
+                aria-label={scope?.level === "C1" ? `选择“${option.option_text}”并填入当前空格` : undefined}
               >
                 <span>
                   {option.option_text}
@@ -501,6 +524,8 @@ export default function ClozeMatchingPage() {
                           setSaveStateText("");
                           handleDragEnd();
                         }}
+                        onClick={scope?.level === "C1" ? () => setActiveBlankKey(blankKey) : undefined}
+                        aria-label={scope?.level === "C1" ? `空格 ${blank?.blank_number || ""}；点击选为填入位置` : undefined}
                       >
                         {selectedKey ? (
                           <button

@@ -1,5 +1,5 @@
 import { Link, Navigate, useParams } from "react-router-dom";
-import { examPreparationTypeDescription, SPEAKING_TYPES } from "./examPreparationTypeContent.js";
+import { examPreparationTypeDescription, SPEAKING_TYPES, examPreparationTypesForLevel } from "./examPreparationTypeContent.js";
 import "./ExamPreparationSpeakingPage.css";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
 
@@ -19,10 +19,12 @@ export default function ExamPreparationSpeakingPage() {
           <p className="exam-speaking-hero__eyebrow">Sprechen</p>
           <h1 className="exam-speaking-hero__title">口语模块</h1>
           <p className="exam-speaking-hero__copy">
-            Vorbereitungszeit: 20 Min. 在单独的准备室，可查阅空白纸张做笔记，但不能使用手机或词典。
+            {scope.level === "C1" ? "练习主题展示、概述与讨论，参考范文并跟读音频。" : "Vorbereitungszeit: 20 Min. 在单独的准备室，可查阅空白纸张做笔记，但不能使用手机或词典。"}
           </p>
           <p className="exam-speaking-hero__copy">
-            {scope.level === "B2"
+            {scope.level === "C1"
+              ? "第一部分包括主题展示和回应，第二部分围绕引语展开讨论。"
+              : scope.level === "B2"
               ? "随后完成做Pre、主题讨论和共同策划三个部分。"
               : "随后完成互相认识、主题讨论和共同策划三个部分。"}
           </p>
@@ -30,7 +32,7 @@ export default function ExamPreparationSpeakingPage() {
       </section>
 
       <section className="exam-speaking-type-grid" aria-label="口语题型列表">
-        {SPEAKING_TYPES.map((item) => (
+        {examPreparationTypesForLevel(SPEAKING_TYPES, scope.level).map((item) => (
           <Link key={item.key} to={item.to.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`)} className="exam-speaking-type exam-speaking-type--link">
             <div className="exam-speaking-type__top">
               <h2 className="exam-speaking-type__title">{item.title}</h2>

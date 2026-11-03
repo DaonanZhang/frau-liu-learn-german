@@ -191,6 +191,28 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     );
   }
 
+  it.each([
+    [1, "The C1 presentation sample.", "sample-1a.mp3"],
+    [2, "The C1 summary sample.", "sample-1b.mp3"],
+  ])("renders C1 Teil %s answer audio turns for shadowing", async (teil, text, audioUrl) => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      id: 70 + teil,
+      exercise_base: { level: "C1", title: "C1 practice", exam_type: "TELC", exercise_type: `SPEAKING_TEIL${teil}` },
+      instruction: "Üben Sie die Antwort.",
+      content: {
+        teil: teil === 1 ? "1A" : "1B",
+        outline: ["Point one"],
+        sample_de: text,
+        dialogue: [{ sequence: 1, role: "TN1", text, audio_url: audioUrl }],
+      },
+    });
+    renderPage(teil, 70 + teil);
+
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `record c1-teil-${teil}-${70 + teil}-1` })).toHaveAttribute("data-audio-url", audioUrl);
+    expect(screen.getByRole("button", { name: "Prüfen" })).toBeInTheDocument();
+  });
+
   it("hides only the task text for TELC B2 Sprechen Teil 1", async () => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue({
       ...teil1Exercise,

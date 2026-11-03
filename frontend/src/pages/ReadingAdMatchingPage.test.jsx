@@ -56,11 +56,13 @@ function selectText(element, start, end) {
   document.dispatchEvent(new Event("selectionchange"));
 }
 
-function renderPage() {
+function renderPage(level = "") {
+  const initialPath = level ? `/reading/ad/${level}/77` : "/reading/ad/77";
   return render(
-    <MemoryRouter initialEntries={["/reading/ad/77"]}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route path="/reading/ad/:exerciseId" element={<ReadingAdMatchingPage />} />
+        <Route path="/reading/ad/:level/:exerciseId" element={<ReadingAdMatchingPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -126,5 +128,23 @@ describe("ReadingAdMatchingPage annotations", () => {
     expect(sessionStorage.getItem(unrelatedScope)).not.toBeNull();
     expect(screen.queryByText(/Erklärung:/)).not.toBeInTheDocument();
     expect(screen.getAllByRole("radio")[0]).not.toBeChecked();
+  });
+
+  it("lets C1 learners check with an unanswered question", async () => {
+    fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
+      ...detail,
+      exercise_base: { ...detail.exercise_base, level: "C1" },
+      items: [
+        ...detail.items,
+        { ...detail.items[0], id: 22, item_number: 2, item_text: "Situation zwei" },
+      ],
+    });
+    renderPage("c1");
+
+    expect(await screen.findByText("Situation eins")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prüfen" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(await screen.findByText("未作答")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
   });
 });

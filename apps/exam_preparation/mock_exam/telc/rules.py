@@ -25,6 +25,19 @@ from apps.exam_preparation.serializers import (
 from apps.exam_preparation.mock_exam.telc import scoring
 
 
+def _listening_queryset(teil, level):
+    if level == ExerciseBase.Level.C1:
+        return ListeningExercise.objects.filter(
+            exercise_base__exercise_type=getattr(ExerciseBase.ExerciseType, f"LISTENING_TEIL{teil}")
+        )
+    listening_types = {
+        "1": ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP,
+        "2": ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE,
+        "3": ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE,
+    }
+    return ListeningExercise.objects.filter(listening_type=listening_types[teil])
+
+
 def definitions(*, exam_type="TELC", level=ExerciseBase.Level.B1):
     configured = (
         (
@@ -62,23 +75,17 @@ def definitions(*, exam_type="TELC", level=ExerciseBase.Level.B1):
         ),
         (
             "listening_teil1",
-            ListeningExercise.objects.filter(
-                listening_type=ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP
-            ).select_related("exercise_base").prefetch_related("questions__answer_options"),
+            _listening_queryset("1", level).select_related("exercise_base").prefetch_related("questions__answer_options"),
             ListeningExerciseDetailSerializer,
         ),
         (
             "listening_teil2",
-            ListeningExercise.objects.filter(
-                listening_type=ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE
-            ).select_related("exercise_base").prefetch_related("questions__answer_options"),
+            _listening_queryset("2", level).select_related("exercise_base").prefetch_related("questions__answer_options"),
             ListeningExerciseDetailSerializer,
         ),
         (
             "listening_teil3",
-            ListeningExercise.objects.filter(
-                listening_type=ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE
-            ).select_related("exercise_base").prefetch_related("questions__answer_options"),
+            _listening_queryset("3", level).select_related("exercise_base").prefetch_related("questions__answer_options"),
             ListeningExerciseDetailSerializer,
         ),
         (
@@ -87,6 +94,12 @@ def definitions(*, exam_type="TELC", level=ExerciseBase.Level.B1):
             WritingExerciseDetailSerializer,
         ),
     )
+    if level == ExerciseBase.Level.C1:
+        by_key = {item[0]: item for item in configured}
+        configured = tuple(by_key[key] for key in (
+            "cloze_matching", "reading_ad_matching", "reading_understanding", "cloze_choice",
+            "listening_teil1", "listening_teil2", "listening_teil3", "writing",
+        ))
     exam_filter = Q(exercise_base__exam_type__iexact=exam_type) | Q(
         exercise_base__exam_type__iexact=f"{exam_type} {level}"
     )
@@ -108,7 +121,7 @@ def build_payload(
     selected_ids = {}
     missing_parts = []
     for key, queryset, serializer_class in definitions(exam_type=exam_type, level=level):
-        if key == "writing" and level == ExerciseBase.Level.B2:
+        if key == "writing" and level in {ExerciseBase.Level.B2, ExerciseBase.Level.C1}:
             writing_selection = selection.get(key) if selection else None
             if selection and isinstance(writing_selection, list):
                 if (
@@ -171,8 +184,9 @@ def build_payload(
         "durations": {
             "reading_and_cloze": 90 * 60,
             "collection_pause": 60,
-            "listening": 30 * 60,
-            "writing": 30 * 60,
+            "listening": (40 if level == ExerciseBase.Level.C1 else 30) * 60,
+            "writing": (70 if level == ExerciseBase.Level.C1 else 30) * 60,
+            **({"writing_words_min": 350} if level == ExerciseBase.Level.C1 else {}),
         },
         "parts": parts,
     }, selected_ids, []

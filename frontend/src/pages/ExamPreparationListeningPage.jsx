@@ -19,7 +19,7 @@ export default function ExamPreparationListeningPage() {
           <p className="exam-listening-hero__eyebrow">Hören</p>
           <h1 className="exam-listening-hero__title">听力模块</h1>
           <p className="exam-listening-hero__copy">
-            训练 {scope.examType} {scope.level} 听力的三个部分，在规定播放次数内捕捉关键信息。
+            {scope.level === "C1" ? "训练短对话说话人匹配、听力选择题和演讲笔记补全。" : `训练 ${scope.examType} ${scope.level} 听力的三个部分，在规定播放次数内捕捉关键信息。`}
           </p>
         </div>
       </section>

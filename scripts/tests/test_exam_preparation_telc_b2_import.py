@@ -68,6 +68,56 @@ class TelcB2ImporterTests(TestCase):
         self.assertEqual(exercise.request_text, "Anzeige")
         self.assertEqual(exercise.words_limit, 150)
 
+    def test_b1_writing_imports_optional_chinese_columns_and_is_idempotent(self):
+        path = self.write_workbook(
+            "b1_writing_020.xlsx",
+            {
+                "exercise": [{
+                    "ID": "020", "Title": "Beschwerde", "request": "Anzeige", "考试类型": "TELC",
+                    "是否真题": True, "time_limit": 30, "words_limit": 100,
+                    "task": "Schreiben Sie.", "Example_Text": "Beispiel",
+                    "Example_Text_ZH": "范文", "request_zh": "题目", "要求中文": "要求",
+                }],
+            },
+        )
+
+        shared.import_writing(path)
+        shared.import_writing(path)
+
+        exercise = shared.WritingExercise.objects.get(exercise_base__level="B1", exercise_base__external_id="20")
+        example = exercise.example_texts.get()
+        self.assertEqual(example.translation_zh, "范文")
+        self.assertEqual(exercise.content["request_translation_zh"], "题目")
+        self.assertEqual(exercise.content["task_translation_zh"], "要求")
+        self.assertEqual(exercise.example_texts.count(), 1)
+
+    def test_legacy_writing_import_preserves_existing_chinese_translations(self):
+        path = self.write_workbook(
+            "b2_writing_021.xlsx",
+            {
+                "exercise": [{
+                    "ID": "021", "Title": "Beschwerde", "Anzeige": "Anzeige", "考试类型": "TELC",
+                    "是否真题": True, "time_limit": 30, "words_limit_min": 150,
+                    "task": "Schreiben Sie.", "Example_Text": "Beispiel",
+                }],
+            },
+        )
+        telc_b2.import_writing(path)
+        exercise = shared.WritingExercise.objects.get(exercise_base__level="B2", exercise_base__external_id="21")
+        exercise.content = {"request_translation_zh": "原题目", "task_translation_zh": "原要求", "other": "保留"}
+        exercise.save(update_fields=["content"])
+        example = exercise.example_texts.get()
+        example.translation_zh = "原范文"
+        example.save(update_fields=["translation_zh"])
+
+        telc_b2.import_writing(path)
+
+        exercise.refresh_from_db()
+        self.assertEqual(exercise.content, {
+            "request_translation_zh": "原题目", "task_translation_zh": "原要求", "other": "保留",
+        })
+        self.assertEqual(exercise.example_texts.get().translation_zh, "原范文")
+
     def test_reading_teil3_uses_the_canonical_instruction(self):
         path = self.write_workbook(
             "b2_reading_ad_matching_003.xlsx",

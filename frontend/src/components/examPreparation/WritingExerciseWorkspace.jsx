@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AnnotatableTextRegion } from "./ExamTextAnnotations.jsx";
 
 export function StoredLineBreaks({ text, fallback = "" }) {
@@ -18,6 +19,8 @@ function wordCount(text) {
 export default function WritingExerciseWorkspace({
   exercise,
   isTelcB2,
+  isTelcC1 = false,
+  showTranslations = true,
   value,
   onChange,
   disabled = false,
@@ -34,7 +37,7 @@ export default function WritingExerciseWorkspace({
 }) {
   return (
     <div className="writing-detail-content">
-      <section
+      {!isTelcC1 ? <section
         ref={requestRef}
         className={[
           "writing-detail-request-panel",
@@ -65,9 +68,21 @@ export default function WritingExerciseWorkspace({
             <AnnotatableTextRegion className="writing-detail-request-panel__body" as="p" regionId={requestRegionId}>
               <StoredLineBreaks text={exercise?.request_text} fallback="请阅读题目要求并完成写作。" />
             </AnnotatableTextRegion>
+            {showTranslations && !isTelcB2 && !isTelcC1 && exercise?.content?.request_translation_zh ? <p className="writing-detail-translation-zh">{exercise.content.request_translation_zh}</p> : null}
           </>
         )}
-      </section>
+      </section> : null}
+
+      {isTelcC1 ? (
+        <section className="writing-detail-c1-quotes" aria-label="引语">
+          {(Array.isArray(exercise?.content?.quotes) ? exercise.content.quotes : []).map((quote, index) => (
+            <article key={`${index}-${quote.text}`} className="writing-detail-c1-quote">
+              <p>{quote.text}</p>
+              {showTranslations && quote.translation_zh ? <p>{quote.translation_zh}</p> : null}
+            </article>
+          ))}
+        </section>
+      ) : null}
 
       {metaPanel}
 
@@ -77,6 +92,7 @@ export default function WritingExerciseWorkspace({
           <AnnotatableTextRegion as="p" regionId={promptRegionId}>
             <StoredLineBreaks text={exercise?.task_text} fallback="请根据题目要求完成写作。" />
           </AnnotatableTextRegion>
+          {showTranslations && !isTelcB2 && !isTelcC1 && exercise?.content?.task_translation_zh ? <p className="writing-detail-translation-zh">{exercise.content.task_translation_zh}</p> : null}
         </article>
 
         <article
@@ -101,6 +117,31 @@ export default function WritingExerciseWorkspace({
           />
         </article>
       </section>
+
+      {isTelcC1 && Array.isArray(exercise?.content?.vocabulary_pages) && exercise.content.vocabulary_pages.length ? (
+        <VocabularyPages pages={exercise.content.vocabulary_pages} />
+      ) : null}
     </div>
+  );
+}
+
+function VocabularyPages({ pages }) {
+  const [pageIndex, setPageIndex] = useState(0);
+  const page = pages[pageIndex] || {};
+  const entries = Array.isArray(page) ? page : Array.isArray(page.entries) ? page.entries : [];
+  return (
+    <aside className="writing-detail-vocabulary" aria-label="词汇表">
+      <strong>{page.title || "词汇表"}</strong>
+      <div>
+        {entries.map((entry, index) => (
+          <p key={`${entry.word || entry.term || index}`}><span>{entry.word || entry.term || entry.de || ""}</span>{entry.translation_zh || entry.translation || entry.zh ? ` · ${entry.translation_zh || entry.translation || entry.zh}` : ""}</p>
+        ))}
+      </div>
+      <footer>
+        <button type="button" onClick={() => setPageIndex((current) => Math.max(0, current - 1))} disabled={pageIndex === 0} aria-label="上一页">←</button>
+        <span>{pageIndex + 1} / {pages.length}</span>
+        <button type="button" onClick={() => setPageIndex((current) => Math.min(pages.length - 1, current + 1))} disabled={pageIndex >= pages.length - 1} aria-label="下一页">→</button>
+      </footer>
+    </aside>
   );
 }

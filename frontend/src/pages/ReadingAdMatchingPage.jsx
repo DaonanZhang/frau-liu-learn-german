@@ -21,14 +21,14 @@ import "./ReadingAdMatchingPage.css";
 const FALLBACK_INSTRUCTION =
   "Lesen sie die Situationen 1-10 und die Anzeigen a-l. Finden sie für jede die passende Anzeige. Sie können jede Anzeige nur einmal benutzen. Markieren sie Ihre Lösungen für die Aufgaben 1–10 auf dem Antwortbogen. Wenn Sie zu einer Situation keine Anzeige finden, markieren Sie x.";
 
-function ReadingAdMatchingActions({ isChecked, items, answeredCount, handleCheck, onReset }) {
+function ReadingAdMatchingActions({ isChecked, items, answeredCount, handleCheck, onReset, allowUnanswered = false }) {
   const { clearAnnotations } = useExamTextAnnotations();
 
   return (
     <div className="reading-ad-actions">
       <ExamActionButton
         className="reading-ad-check-btn"
-        disabled={isChecked || !items.length || answeredCount !== items.length}
+        disabled={isChecked || !items.length || (!allowUnanswered && answeredCount !== items.length)}
         onClick={handleCheck}
         label="Prüfen"
         icon="check"
@@ -229,7 +229,9 @@ export default function ReadingAdMatchingPage() {
             <span className="reading-ad-instruction__label">Anleitung</span>
           </div>
           <AnnotatableTextRegion regionId="task" as="p">
-            {exercise?.instruction || FALLBACK_INSTRUCTION}
+            {scope?.level === "C1"
+              ? "Lesen Sie die Situationen und Anzeigen. Eine Anzeige kann mehrfach gewählt werden; Fragen können unbeantwortet bleiben."
+              : exercise?.instruction || FALLBACK_INSTRUCTION}
           </AnnotatableTextRegion>
         </section>
 
@@ -239,6 +241,8 @@ export default function ReadingAdMatchingPage() {
           answers={answers}
           review={isChecked}
           annotationsEnabled
+          allowRepeated={scope?.level === "C1"}
+          showAllAds={scope?.level === "C1"}
           onAnswer={(itemId, adKey) => {
             setAnswers((previous) => ({ ...previous, [itemId]: adKey }));
           }}
@@ -253,6 +257,7 @@ export default function ReadingAdMatchingPage() {
           isChecked={isChecked}
           items={items}
           answeredCount={answeredCount}
+          allowUnanswered={scope?.level === "C1"}
           handleCheck={handleCheck}
           onReset={() => {
             setAnswers({});

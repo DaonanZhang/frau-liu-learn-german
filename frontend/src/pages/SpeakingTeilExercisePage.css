@@ -161,3 +161,17 @@
   .speaking-detail-carousel-nav--top { margin-bottom: 0.65rem; }
   .speaking-detail-section-nav { justify-content: flex-start; margin-right: -1.05rem; margin-left: -1.05rem; padding-right: 1.05rem; padding-left: 1.05rem; }
 }
+.speaking-detail-c1-layout--teil-1 {
+  display: grid;
+  grid-template-columns: minmax(15rem, .8fr) minmax(0, 1.2fr);
+  gap: 1rem;
+}
+.speaking-detail-c1-layout--teil-1 > .speaking-detail-task,
+.speaking-detail-c1-layout--teil-1 > .speaking-detail-example { margin: 0; }
+.speaking-detail-c1-outline { margin-top: 1rem; padding: 1rem; border-radius: .9rem; background: #f5f3ed; }
+.speaking-detail-c1-outline h3 { margin: 0 0 .6rem; }
+.speaking-detail-c1-outline p { margin: .35rem 0; }
+.speaking-detail-c1-quote { margin: 1rem 0 0; padding: 1.15rem; border-left: 4px solid #c6a875; background: #f7f2e8; font: 700 1.25rem/1.65 Georgia, "Noto Serif", serif; }
+.speaking-detail-c1-quote p { margin: 0; }
+.speaking-detail-c1-quote p + p { margin-top: .75rem; font-size: .98rem; font-weight: 400; color: #68706d; }
+@media (max-width: 760px) { .speaking-detail-c1-layout--teil-1 { grid-template-columns: minmax(0, 1fr); } }

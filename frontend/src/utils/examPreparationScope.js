@@ -2,7 +2,7 @@ const EXAM_TYPE = "TELC";
 
 export function examPreparationScope(levelParam) {
   const level = String(levelParam || "").toUpperCase();
-  if (level !== "B1" && level !== "B2") return null;
+  if (!["B1", "B2", "C1"].includes(level)) return null;
   return { examType: EXAM_TYPE, level, levelPath: level.toLowerCase() };
 }
 
@@ -32,7 +32,7 @@ export function examPreparationPurchasePath(scope) {
 }
 
 export function examPreparationReturnPath(value, fallback = "/modules/exam-preparation") {
-  return value === "/modules/exam-preparation/b1" || value === "/modules/exam-preparation/b2"
+  return ["/modules/exam-preparation/b1", "/modules/exam-preparation/b2", "/modules/exam-preparation/c1"].includes(value)
     ? value
     : fallback;
 }

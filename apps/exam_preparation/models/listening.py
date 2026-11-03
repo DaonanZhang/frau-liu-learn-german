@@ -27,6 +27,7 @@ class ListeningExercise(models.Model):
     audio_file_identifier = models.CharField(max_length=255, blank=True, default="", verbose_name="audio file identifier")
     audio_file_url = models.CharField(max_length=500, blank=True, default="", verbose_name="audio file URL")
     script = models.TextField(blank=True, default="", verbose_name="script")
+    content = models.JSONField(default=dict, blank=True, verbose_name="exercise content")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")
 

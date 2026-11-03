@@ -14,6 +14,49 @@
   gap: 1rem;
 }
 
+.cloze-shell--c1 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  align-items: start;
+}
+
+.cloze-shell--c1 > :nth-child(-n + 4),
+.cloze-shell--c1 > .cloze-actions,
+.cloze-shell--c1 > .cloze-feedback-card {
+  grid-column: 1 / -1;
+}
+
+.cloze-shell--c1 .cloze-pool-panel,
+.cloze-shell--c1 .cloze-text-panel {
+  min-width: 0;
+  max-height: min(68vh, 48rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.cloze-shell--c1 .cloze-pool-panel {
+  grid-column: 2;
+  grid-row: 5;
+}
+
+.cloze-shell--c1 .cloze-text-panel {
+  grid-column: 1;
+  grid-row: 5;
+}
+
+@media (max-width: 760px) {
+  .cloze-shell--c1 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cloze-shell--c1 .cloze-pool-panel,
+  .cloze-shell--c1 .cloze-text-panel {
+    grid-column: 1;
+    grid-row: auto;
+    max-height: none;
+  }
+}
+
 .cloze-topbar,
 .cloze-hero,
 .cloze-instruction,

@@ -2920,3 +2920,188 @@ describe("TELC B2 writing choice", () => {
     ]();
   });
 });
+
+describe("TELC C1 mock exam", () => {
+  const sessionKey = "exam-preparation-written-mock-v1:TELC:C1:7";
+  const exam = {
+    exam_type: "TELC",
+    level: "C1",
+    parts: {
+      cloze_matching: {
+        exercise_base: { title: "C1 Lesen 1", exam_type: "TELC", exercise_type: "CLOZE_MATCHING" },
+        content_with_placeholders: "{{blank_0}} {{blank_1}}.",
+        options: [{ id: 1, option_key: "beispiel", option_text: "Das vollständige Beispielsatzende." }, { id: 2, option_key: "A", option_text: "genau hier" }],
+        blank_answers: [
+          { id: 10, blank_key: "blank_0", blank_number: 0, correct_option: { option_key: "beispiel", option_text: "Das vollständige Beispielsatzende." } },
+          { id: 11, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "A", option_text: "genau hier" } },
+        ],
+      },
+      reading_ad_matching: {
+        exercise_base: { title: "C1 Lesen 2", exam_type: "TELC" },
+        ads: ["A", "B", "C", "D", "E"].map((ad_key, index) => ({ id: index + 1, ad_key, ad_text_markdown: `Absatz ${ad_key}` })),
+        items: [
+          { id: 21, item_number: 1, item_text: "Welche Anzeige passt?", correct_ad: { ad_key: "B" } },
+          { id: 22, item_number: 2, item_text: "Welche Anzeige passt auch?", correct_ad: { ad_key: "A" } },
+        ],
+      },
+      reading_understanding: {
+        exercise_base: { title: "C1 Lesen 3", exam_type: "TELC" }, text_markdown: "Lesetext",
+        questions: [{ id: 31, question_number: 1, question_text: "Aussage", answer_options: [
+          { id: 1, option_key: "a", option_text: "Richtig", is_correct: true },
+          { id: 2, option_key: "b", option_text: "Falsch" },
+          { id: 3, option_key: "c", option_text: "Nicht im Text" },
+        ] }],
+      },
+      cloze_choice: { exercise_base: { title: "C1 Sprachbausteine 1", exam_type: "TELC" }, content_with_placeholders: "Ich {{blank_1}}.", blanks: [] },
+      listening_teil1: { exercise_base: { title: "C1 Hören 1", exam_type: "TELC" }, content: { format: "speaker_matching", statements: [{ statement: "Wer hat das gesagt?", speaker: "Sprecher A" }] }, questions: [] },
+      listening_teil2: { exercise_base: { title: "C1 Hören 2", exam_type: "TELC" }, content: { format: "multiple_choice", questions: [{ question_number: 1, question: "Welche Aussage stimmt?", options: [{ text: "Antwort A", is_correct: true }, { text: "Antwort B" }] }] }, questions: [] },
+      listening_teil3: { exercise_base: { title: "C1 Hören 3", exam_type: "TELC" }, content: { format: "presentation_notes", slides: [{ number: "1", text: "Vortrag über Lernen", answers: [{ blank_id: "a", answer: "Lernen" }] }] }, questions: [] },
+      writing: {
+        id: 90, exercise_base: { title: "C1 Schreiben", exam_type: "TELC" }, request_text: "Thema", task_text: "Schreiben Sie einen Text.", words_limit: 350,
+        content: { quotes: [{ text: "Ein deutsches Zitat.", translation_zh: "中文引语翻译" }, { text: "Noch ein Zitat.", translation_zh: "第二条中文翻译" }], vocabulary_pages: [{ title: "Wörter", entries: [{ word: "der Beitrag", translation_zh: "贡献" }] }] },
+      },
+    },
+  };
+
+  function renderC1(phase = "reading", activePart = "cloze_matching", examValue = exam) {
+    sessionStorage.setItem(sessionKey, JSON.stringify({
+      exam: examValue, phase, deadline: Date.now() + 60_000, activePart, answers: {}, writingText: "",
+      writingAssessment: {}, audioStep: phase === "listening" ? 6 : 0, audioStepStartedAt: 0, attemptId: null,
+      isFavorite: false, wasEarlySubmitted: false,
+    }));
+    return render(<MemoryRouter initialEntries={["/modules/exam-preparation/telc/c1/mock-exam"]}>
+      <Routes><Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<TelcMockExamPage />} /></Routes>
+    </MemoryRouter>);
+  }
+
+  it("restricts blank zero to the complete example sentence and saves both answer keys", async () => {
+    const { container } = renderC1();
+    await screen.findByText("C1 Lesen 1");
+    expect(container.querySelector(".telc-c1-cloze-matching")).toBeInTheDocument();
+    const options = container.querySelectorAll(".telc-c1-cloze-matching .telc-mock-cloze-matching-pool__option");
+    expect(options).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "第 0 题，答案 beispiel" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "第 0 题，答案 A" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "第 1 题，答案 beispiel" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "第 1 题，答案 A" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Das vollständige Beispielsatzende.").closest("button"));
+    fireEvent.click(container.querySelector('[data-telc-mock-cloze-blank="blank_1"]'));
+    expect(JSON.parse(sessionStorage.getItem(sessionKey)).answers).toEqual({});
+
+    fireEvent.click(screen.getByText("Das vollständige Beispielsatzende.").closest("button"));
+    fireEvent.click(container.querySelector('[data-telc-mock-cloze-blank="blank_0"]'));
+    expect(container.querySelector('[data-telc-mock-cloze-blank="blank_0"]')).toHaveTextContent("Das vollständige Beispielsatzende.");
+    fireEvent.click(screen.getByText("genau hier").closest("button"));
+    fireEvent.click(container.querySelector('[data-telc-mock-cloze-blank="blank_1"]'));
+    await waitFor(() => expect(JSON.parse(sessionStorage.getItem(sessionKey)).answers).toEqual({
+      "cloze_matching:10": "beispiel",
+      "cloze_matching:11": "A",
+    }));
+  });
+
+  it("uses the C1 reading order and lets two questions reuse an A–E paragraph", async () => {
+    const { container } = renderC1();
+    expect(await screen.findByRole("heading", { level: 1, name: "Lesen & Sprachbausteine" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lesen · Teil 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lesen · Teil 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Lesen · Teil 3" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 2" }));
+    expect(await screen.findByText("Welche Anzeige passt?")).toBeInTheDocument();
+    expect(container.querySelectorAll(".reading-ad-card")).toHaveLength(5);
+    expect(container.querySelectorAll(".reading-ad-option")).toHaveLength(5);
+    fireEvent.click(container.querySelector('.reading-ad-question-card input[value="A"]'));
+    fireEvent.click(container.querySelectorAll(".reading-ad-pagination__item")[1]);
+    expect(container.querySelector('.reading-ad-question-card input[type="radio"]:checked')).toBeNull();
+    expect(screen.getByRole("button", { name: "完成本部分，进入听力" })).toBeInTheDocument();
+    fireEvent.click(container.querySelector('.reading-ad-question-card input[value="A"]'));
+    await waitFor(() => expect(JSON.parse(sessionStorage.getItem(sessionKey)).answers).toMatchObject({
+      "reading_ad_matching:21": "A",
+      "reading_ad_matching:22": "A",
+    }));
+    expect(screen.getByRole("button", { name: "完成本部分，进入听力" })).toBeInTheDocument();
+  });
+
+  it("renders speaker matching and presentation notes from their C1 content formats", async () => {
+    renderC1("listening", "listening_teil1");
+    expect(await screen.findByText("Wer hat das gesagt?")).toBeInTheDocument();
+    expect(screen.getByLabelText("Sprecher A")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hören · Teil 3" }));
+    expect(await screen.findAllByText("Vortrag über Lernen")).toHaveLength(2);
+    expect(screen.getByRole("textbox")).toBeInTheDocument();
+  });
+
+  it("shows translated C1 quotes, the 350-word target, and the vocabulary panel while writing", async () => {
+    renderC1("writing", "writing");
+    expect(await screen.findByText("Ein deutsches Zitat.")).toBeInTheDocument();
+    expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
+    expect(screen.getByText("第二条中文翻译")).toBeInTheDocument();
+    expect(screen.getByText("至少 350 词")).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "词汇表" })).toBeInTheDocument();
+  });
+
+  it("requires C1 candidates to choose one of the two writing tasks", async () => {
+    const second = {
+      ...exam.parts.writing,
+      id: 91,
+      exercise_base: { ...exam.parts.writing.exercise_base, title: "C1 Schreiben 2" },
+      content: {
+        ...exam.parts.writing.content,
+        quotes: [{ text: "Zweites Thema.", translation_zh: "第二个主题" }],
+      },
+    };
+    const choiceExam = {
+      ...exam,
+      parts: { ...exam.parts, writing_options: [exam.parts.writing, second] },
+    };
+
+    renderC1("writing", "writing", choiceExam);
+
+    expect(await screen.findByRole("heading", { name: "Wählen Sie eine Aufgabe" })).toBeInTheDocument();
+    expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
+    expect(screen.getByText("第二个主题")).toBeInTheDocument();
+    const buttons = screen.getAllByRole("button", { name: "Wählen" });
+    fireEvent.click(buttons[1]);
+    expect(await screen.findByText("Zweites Thema.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Wählen Sie eine Aufgabe" })).not.toBeInTheDocument();
+  });
+
+  it("shows the C1 written-exam maximum and pass line in results", async () => {
+    renderC1("results", "writing");
+
+    expect(await screen.findByText(/\/ 166$/)).toBeInTheDocument();
+    expect(screen.getByText(/通过线为 99\.6 分/)).toBeInTheDocument();
+    expect(screen.getByText("0 / 48")).toBeInTheDocument();
+  });
+});
+
+describe("B1 writing translation visibility", () => {
+  it("keeps the example translation hidden while writing and reveals it after submission", async () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
+      exam: {
+        exam_type: "TELC", level: "B1",
+        parts: { writing: {
+          id: 701,
+          exercise_base: { title: "Schreiben", exam_type: "TELC" },
+          request_text: "Thema", task_text: "Schreiben Sie eine E-Mail.", words_limit: 100,
+          content: { request_translation_zh: "题目翻译", task_translation_zh: "要求翻译" },
+          example_texts: [{ example_text: "Sehr geehrte Damen und Herren", translation_zh: "尊敬的女士们、先生们" }],
+        } },
+      },
+      phase: "writing", deadline: Date.now() + 60_000, activePart: "writing", answers: {}, writingText: "",
+      writingAssessment: {}, audioStep: 0, audioStepStartedAt: 0, attemptId: null, isFavorite: false, wasEarlySubmitted: false,
+    }));
+    render(<MemoryRouter initialEntries={["/modules/exam-preparation/telc/b1/mock-exam"]}>
+      <Routes><Route path="/modules/exam-preparation/telc/:level/mock-exam" element={<TelcMockExamPage />} /></Routes>
+    </MemoryRouter>);
+
+    expect(await screen.findByRole("textbox")).toBeInTheDocument();
+    expect(screen.queryByText("尊敬的女士们、先生们")).not.toBeInTheDocument();
+    expect(screen.queryByText("题目翻译")).not.toBeInTheDocument();
+    expect(screen.queryByText("要求翻译")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "提交写作并自评" }));
+    expect(await screen.findByText("尊敬的女士们、先生们")).toBeInTheDocument();
+  });
+});

@@ -23,7 +23,7 @@ import {
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
-import { isTelcB2Writing, writingWordLimitLabel } from "./writingDisplay.js";
+import { isTelcB2Writing, isTelcC1Writing, writingWordLimitLabel } from "./writingDisplay.js";
 import "./ExamPreparationWritingDetailPage.css";
 
 function formatTime(totalSeconds) {
@@ -97,6 +97,7 @@ export default function ExamPreparationWritingDetailPage() {
   const guideDialogRef = useRef(null);
   const guideInitializationKeyRef = useRef("");
   const isTelcB2 = isTelcB2Writing(exercise);
+  const isTelcC1 = isTelcC1Writing(exercise);
   const guideSeenField = isTelcB2
     ? "has_seen_b2_schreiben_guide"
     : "has_seen_schreiben_guide";
@@ -111,7 +112,7 @@ export default function ExamPreparationWritingDetailPage() {
         const detail = await fetchWritingExerciseDetail(exerciseId, scope);
         if (!aborted) {
           setExercise(detail || null);
-          const timeLimitSeconds = (detail?.time_limit_minutes || 30) * 60;
+          const timeLimitSeconds = (detail?.time_limit_minutes || (scope?.level === "C1" ? 70 : 30)) * 60;
           setRemainingSeconds(timeLimitSeconds);
           const stateData = await fetchWritingExerciseStates(exerciseId);
           if (aborted) {
@@ -215,7 +216,7 @@ export default function ExamPreparationWritingDetailPage() {
   }, [guideStep]);
 
   const wordCount = useMemo(() => countWords(draftText), [draftText]);
-  const wordTargetLabel = isTelcB2
+  const wordTargetLabel = isTelcB2 || isTelcC1
     ? writingWordLimitLabel(exercise)
     : `${exercise?.words_limit || 80} 词`;
   const exampleTexts = useMemo(
@@ -254,7 +255,7 @@ export default function ExamPreparationWritingDetailPage() {
   }
 
   async function handleCheck() {
-    const timeLimitSeconds = (exercise?.time_limit_minutes || 30) * 60;
+    const timeLimitSeconds = (exercise?.time_limit_minutes || (isTelcC1 ? 70 : 30)) * 60;
     const timeSpentSeconds = Math.max(0, timeLimitSeconds - remainingSeconds);
     setTimerStarted(false);
     setSubmittedTimeSpentSeconds(timeSpentSeconds);
@@ -357,6 +358,7 @@ export default function ExamPreparationWritingDetailPage() {
         <WritingExerciseWorkspace
           exercise={exercise}
           isTelcB2={isTelcB2}
+          isTelcC1={isTelcC1}
           value={draftText}
           onChange={(event) => {
             if (isChecked) {
@@ -373,7 +375,7 @@ export default function ExamPreparationWritingDetailPage() {
           metaPanel={(
             <section className="writing-detail-meta-panel">
               <div className="writing-detail-meta-chip">
-                {isTelcB2 ? wordTargetLabel : `最多 ${wordTargetLabel}`}
+                {isTelcB2 || isTelcC1 ? wordTargetLabel : `最多 ${wordTargetLabel}`}
               </div>
               <div className="writing-detail-meta-actions">
                 {isTelcB2 ? (
@@ -412,6 +414,31 @@ export default function ExamPreparationWritingDetailPage() {
           )}
         />
 
+        {!isTelcB2 && !isTelcC1 && exampleTexts.length ? (
+          <section className="writing-detail-b1-examples" aria-label="范文及中文对照">
+            {exampleTexts.map((example, index) => (
+              <article key={example.id} className="writing-detail-review-card writing-detail-review-card--example">
+                <div className="writing-detail-review-card__titleRow">
+                  <div className="writing-detail-review-card__exampleHeading">
+                    <h2>{exampleTexts.length > 1 ? `Mustertext ${index + 1}` : "Mustertext"}</h2>
+                    {example.note ? <AnnotatableTextRegion as="span" regionId={`explanation:${example.id}`}>{example.note}</AnnotatableTextRegion> : null}
+                  </div>
+                  <ExerciseFavoriteButton
+                    isFavorited={Boolean(exampleFavoriteById[example.id])}
+                    pending={Boolean(exampleFavoritePendingById[example.id])}
+                    onClick={() => toggleExampleFavorite(example.id)}
+                    label="收藏 Mustertext"
+                  />
+                </div>
+                <AnnotatableTextRegion as="p" regionId={`reference-answer:${example.id}`}>
+                  <StoredLineBreaks text={example.example_text} />
+                </AnnotatableTextRegion>
+                {example.translation_zh ? <p className="writing-detail-translation-zh">{example.translation_zh}</p> : null}
+              </article>
+            ))}
+          </section>
+        ) : null}
+
         {isChecked ? (
           <section className="writing-detail-review-grid">
             <article className="writing-detail-review-card writing-detail-review-card--user">
@@ -426,7 +453,7 @@ export default function ExamPreparationWritingDetailPage() {
               <p><StoredLineBreaks text={draftText} fallback="你还没有输入内容。" /></p>
             </article>
 
-            {exampleTexts.map((example, index) => (
+            {(isTelcB2 || isTelcC1 ? exampleTexts : []).map((example, index) => (
               <article key={example.id} className="writing-detail-review-card writing-detail-review-card--example">
                 <div className="writing-detail-review-card__titleRow">
                   <div className="writing-detail-review-card__exampleHeading">
@@ -475,7 +502,7 @@ export default function ExamPreparationWritingDetailPage() {
                   setIsChecked(false);
                   setTimerStarted(false);
                   setSubmittedTimeSpentSeconds(null);
-                  setRemainingSeconds((exercise?.time_limit_minutes || 30) * 60);
+                  setRemainingSeconds((exercise?.time_limit_minutes || (isTelcC1 ? 70 : 30)) * 60);
                 }}
               />
             ) : null}

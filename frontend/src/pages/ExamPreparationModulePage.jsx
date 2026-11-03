@@ -66,6 +66,14 @@ const SKILL_CARDS = [
   },
 ];
 
+const C1_SKILL_CONTENT = {
+  listening: "听短对话、选择题和主题展示录音，按题目要求记录关键信息。",
+  reading: "完成选词填空、分类广告匹配和长文理解。",
+  sprachbausteine: "通过语法选择题练习词汇搭配与上下文理解。",
+  writing: "阅读两条引语并完成一篇不少于 350 词的文章，限时 70 分钟。",
+  speaking: "围绕主题作简短展示并讨论引语，练习组织观点和回应搭档。",
+};
+
 const MOCK_PHASE_LABELS = { reading: "阅读与语言模块", collection: "第一部分收卷", listening: "听力", writing: "写作", writing_review: "写作自评" };
 
 export default function ExamPreparationModulePage({ level: levelProp } = {}) {
@@ -176,7 +184,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
       <section className="exam-level-selection" aria-labelledby="exam-level-selection-title">
         <h1 id="exam-level-selection-title">选择考试级别</h1>
         <div className="exam-level-selection__grid">
-          {["B1", "B2"].map((level) => (
+          {["B1", "B2", "C1"].map((level) => (
             <Link
               key={level}
               className={`exam-level-selection__card exam-level-selection__card--${level.toLowerCase()}`}
@@ -296,7 +304,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
                 </div>
               </div>
               <p className="exam-module-card__description">
-                {card.descriptionByLevel?.[scope.level] || card.description}
+                {scope.level === "C1" ? C1_SKILL_CONTENT[card.key] : card.descriptionByLevel?.[scope.level] || card.description}
               </p>
               <div className="exam-module-card__footer">
                 {card.to ? (

@@ -397,3 +397,32 @@
   .telc-mock-exam-timer.is-urgent, .telc-mock-exam-spinner, .telc-mock-exam-result-modal, .telc-mock-exam-result-celebration span, .telc-mock-exam-result-celebration i { animation: none; }
   .telc-mock-exam-submit-early, .telc-mock-exam-primary, .telc-mock-exam-utility, .telc-mock-exam-part-nav button, .telc-mock-exam-bottom-nav button, .telc-mock-exam-option, .telc-mock-cloze-matching-pool__option, .telc-mock-cloze-matching-slot { transition: none; }
 }
+
+.telc-c1-listening { display: grid; gap: 1rem; }
+.telc-c1-presentation-notes { display: grid; gap: 0.8rem; }
+.telc-c1-presentation-notes__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.8fr); align-items: center; gap: 0.65rem 1rem; padding: 0.9rem; border: 1px solid var(--exam-border); border-radius: 0.85rem; background: #fbfcfb; }
+.telc-c1-presentation-notes__row input { width: 100%; min-height: 2.8rem; padding: 0.6rem 0.7rem; border: 1px solid #bac9c2; border-radius: 0.6rem; font: inherit; }
+.telc-c1-presentation-notes__row small { grid-column: 1 / -1; color: #577067; }
+.telc-c1-presentation-notes__row.is-correct { border-color: #8bc6a7; background: #edf8f1; }
+.telc-c1-presentation-notes__row.is-wrong { border-color: #e2b5ad; background: #fff5f3; }
+.telc-c1-writing-quotes { display: grid; gap: 0.8rem; margin-bottom: 1rem; }
+.telc-c1-writing-quotes article { padding: 1rem 1.1rem; border-left: 4px solid #d9aa55; border-radius: 0.7rem; background: #fff9eb; }
+.telc-c1-writing-quotes blockquote { margin: 0; line-height: 1.7; }
+.telc-c1-writing-quotes p { margin: 0.65rem 0 0; color: #63746d; line-height: 1.65; }
+@media (max-width: 760px) {
+  .telc-c1-presentation-notes__row { grid-template-columns: 1fr; }
+  .telc-c1-presentation-notes__row small { grid-column: 1; }
+  .telc-c1-writing-quotes article { padding: 0.85rem; }
+}
+
+.telc-c1-cloze-matching { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); align-items: start; gap: 1rem; }
+.telc-c1-cloze-matching > .telc-mock-cloze-matching-pool,
+.telc-c1-cloze-matching > .telc-mock-cloze-matching-text { position: static; top: auto; max-height: min(70vh, 54rem); overflow-y: auto; overscroll-behavior: contain; }
+.telc-c1-cloze-matching > .telc-mock-cloze-matching-pool { min-width: 0; }
+.telc-c1-cloze-matching > .telc-mock-cloze-matching-text { min-width: 0; margin: 0; }
+
+@media (max-width: 1100px) {
+  .telc-c1-cloze-matching { grid-template-columns: 1fr; }
+  .telc-c1-cloze-matching > .telc-mock-cloze-matching-pool,
+  .telc-c1-cloze-matching > .telc-mock-cloze-matching-text { max-height: none; }
+}

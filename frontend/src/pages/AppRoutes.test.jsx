@@ -25,7 +25,7 @@ describe("exam preparation route migration", () => {
     });
   });
 
-  it.each([["b1", "B1"], ["b2", "B2"]])("renders the %s home from its actual route config", (pathLevel, level) => {
+  it.each([["b1", "B1"], ["b2", "B2"], ["c1", "C1"]])("renders the %s home from its actual route config", (pathLevel, level) => {
     const routes = addExamPreparationLevelRoutes(examPreparationLevelHomeRoutes());
     const { container } = render(
       <MemoryRouter initialEntries={[`/modules/exam-preparation/${pathLevel}`]}>

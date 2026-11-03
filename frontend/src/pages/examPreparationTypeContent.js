@@ -7,6 +7,7 @@ export const LISTENING_TYPES = [
     description: "听 5 段日常生活中的短对话或独白，录音只播放一次，判断给出的陈述是正确（+）还是错误（-）。共 5 道正误判断题。",
     descriptionByLevel: {
       B2: "听一段新闻，录音播放一次，判断 5 个陈述句的正误。共 5 道正误判断题。",
+      C1: "听八位说话人的观点，为每道题匹配对应说话人。",
     },
     to: "/modules/exam-preparation/hoeren/short-text-prep",
     cta: "进入这一题型",
@@ -17,6 +18,7 @@ export const LISTENING_TYPES = [
     description: "听一段较长的访谈或对话，录音播放两次，判断 10 个陈述句的正误。共 10 道正误判断题。",
     descriptionByLevel: {
       B2: "听一段较长的访谈，录音播放一次，判断 10 个陈述句的正误。共 10 道正误判断题。",
+      C1: "听一段录音并完成选择题。",
     },
     to: "/modules/exam-preparation/hoeren/short-text-once",
     cta: "进入这一题型",
@@ -25,6 +27,7 @@ export const LISTENING_TYPES = [
     key: "dialog-twice",
     title: "Teil 3",
     description: "听 5 段广播或公共场所的短广播、通知，录音只播放一次，判断 5 个陈述句的正误。共 5 道正误判断题。",
+    descriptionByLevel: { C1: "听一段主题展示录音，并根据内容完成笔记题。" },
     to: "/modules/exam-preparation/hoeren/dialog-twice",
     cta: "进入这一题型",
   },
@@ -55,6 +58,12 @@ export const READING_TYPES = [
     to: "/modules/exam-preparation/lesen/ad-matching",
     cta: "进入这一题型",
   },
+];
+
+const C1_READING_TYPES = [
+  { ...READING_TYPES[0], title: "Teil 1", to: "/modules/exam-preparation/lesen/cloze-matching", description: "从备选词语中选择合适表达，完成短文中的空格。" },
+  { ...READING_TYPES[2], title: "Teil 2", description: "阅读 A–E 五篇文章，为每个问题选择对应文章；同一文章可以多次选择。" },
+  { ...READING_TYPES[1], title: "Teil 3", description: "阅读长文并完成理解题。" },
 ];
 
 export const SPRACHBAUSTEINE_TYPES = [
@@ -101,6 +110,24 @@ export const SPEAKING_TYPES = [
   },
 ];
 
+const C1_SPEAKING_TYPES = SPEAKING_TYPES.map((item, index) => ({
+  ...item,
+  title: ["Teil 1A", "Teil 1B", "Teil 2"][index],
+  description: [
+    "根据提纲准备主题展示，并回答搭档的问题。",
+    "概述搭档的展示并提出追问。",
+    "讨论引语，说明观点并结合个人经历。",
+  ][index],
+}));
+
 export function examPreparationTypeDescription(item, level) {
   return item.descriptionByLevel?.[String(level || "").toUpperCase()] || item.description;
+}
+
+export function examPreparationTypesForLevel(types, level) {
+  const normalized = String(level || "").toUpperCase();
+  if (normalized === "C1" && types === READING_TYPES) return C1_READING_TYPES;
+  if (normalized === "C1" && types === SPEAKING_TYPES) return C1_SPEAKING_TYPES;
+  if (normalized === "C1" && types === SPRACHBAUSTEINE_TYPES) return SPRACHBAUSTEINE_TYPES.slice(0, 1);
+  return types;
 }

@@ -116,7 +116,7 @@ class ListeningExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers
     is_locked = serializers.SerializerMethodField()
     show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
-    locked_content_fields = ("audio_file_identifier", "audio_file_url", "script")
+    locked_content_fields = ("audio_file_identifier", "audio_file_url", "script", "content")
 
     class Meta:
         model = ListeningExercise
@@ -129,6 +129,7 @@ class ListeningExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers
             "audio_file_identifier",
             "audio_file_url",
             "script",
+            "content",
             "created_at",
             "updated_at",
         ]
@@ -203,6 +204,7 @@ class ListeningExerciseDetailSerializer(serializers.ModelSerializer):
             "audio_file_identifier",
             "audio_file_url",
             "script",
+            "content",
             "created_at",
             "updated_at",
             "questions",
@@ -648,7 +650,7 @@ class WritingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.M
     is_locked = serializers.SerializerMethodField()
     show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
-    locked_content_fields = ("request_text", "task_text")
+    locked_content_fields = ("request_text", "task_text", "content")
 
     class Meta:
         model = WritingExercise
@@ -661,6 +663,7 @@ class WritingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.M
             "time_limit_minutes",
             "words_limit",
             "task_text",
+            "content",
             "created_at",
             "updated_at",
         ]
@@ -682,6 +685,7 @@ class WritingExampleTextDetailSerializer(serializers.ModelSerializer):
             "label",
             "note",
             "example_text",
+            "translation_zh",
             "sort_order",
             "created_at",
             "updated_at",
@@ -702,6 +706,7 @@ class WritingExerciseDetailSerializer(serializers.ModelSerializer):
             "time_limit_minutes",
             "words_limit",
             "task_text",
+            "content",
             "created_at",
             "updated_at",
             "example_texts",

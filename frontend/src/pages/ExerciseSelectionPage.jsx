@@ -71,7 +71,7 @@ export default function ExerciseSelectionPage({
       <section className="exercise-selection-hero">
         <div>
           <p className="exercise-selection-hero__eyebrow">{eyebrow}</p>
-          <h1 className="exercise-selection-hero__title">{title}</h1>
+          <h1 className="exercise-selection-hero__title">{typeof title === "function" ? title(scope) : title}</h1>
           <p className="exercise-selection-hero__copy">
             {typeof description === "function" ? description(scope) : description}
           </p>

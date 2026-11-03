@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from apps.exam_preparation.models import (
     ClozeChoiceOption,
     ClozeMatchingBlankAnswer,
+    ListeningExercise,
     ListeningAnswerOption,
     ReadingAdMatchingItem,
     ReadingTitleMatchingItem,
@@ -110,7 +111,102 @@ def _correct_counts(instance):
     return reading_correct, cloze_correct, listening_correct
 
 
+def _c1_correct_counts(instance):
+    selection = instance.paper.exercise_selection
+    answers = instance.answers
+
+    def selected(part_key, item_id):
+        return answers.get(f"{part_key}:{item_id}")
+
+    reading_correct = sum(
+        selected("cloze_matching", answer_id) == option_key
+        for answer_id, option_key in ClozeMatchingBlankAnswer.objects.filter(
+            exercise_id=selection.get("cloze_matching"),
+            blank_number__gt=0,
+        ).values_list("id", "correct_option__option_key")
+    )
+    reading_correct += sum(
+        selected("reading_understanding", question_id) == option_key
+        for question_id, option_key in ReadingUnderstandingAnswerOption.objects.filter(
+            question__exercise_id=selection.get("reading_understanding"),
+            is_correct=True,
+        ).values_list("question_id", "option_key")
+    )
+    reading_correct += sum(
+        selected("reading_ad_matching", item_id) == ad_key
+        for item_id, ad_key in ReadingAdMatchingItem.objects.filter(
+            exercise_id=selection.get("reading_ad_matching")
+        ).values_list("id", "correct_ad__ad_key")
+    )
+    cloze_correct = sum(
+        selected("cloze_choice", blank_id) == option_key
+        for blank_id, option_key in ClozeChoiceOption.objects.filter(
+            blank__exercise_id=selection.get("cloze_choice"),
+            is_correct=True,
+        ).values_list("blank_id", "option_key")
+    )
+
+    listening_scores = {"listening_teil1": 0, "listening_teil2": 0, "listening_teil3": 0}
+    teil1 = ListeningExercise.objects.filter(pk=selection.get("listening_teil1")).first()
+    for index, statement in enumerate((teil1.content if teil1 else {}).get("statements", []), start=1):
+        item_id = statement.get("id") or f"statement-{index}"
+        listening_scores["listening_teil1"] += int(
+            selected("listening_teil1", item_id) == statement.get("speaker")
+        )
+    listening_scores["listening_teil2"] = sum(
+        selected("listening_teil2", question_id) == option_key
+        for question_id, option_key in ListeningAnswerOption.objects.filter(
+            question__listening_exercise_id=selection.get("listening_teil2"),
+            is_correct=True,
+        ).values_list("question_id", "option_key")
+    )
+    teil3 = ListeningExercise.objects.filter(pk=selection.get("listening_teil3")).first()
+    for slide_index, slide in enumerate((teil3.content if teil3 else {}).get("slides", []), start=1):
+        slide_number = slide.get("number") or slide_index
+        for answer_index, answer in enumerate(slide.get("answers", []), start=1):
+            item_id = f"note-{slide_number}-{answer.get('blank_id') or answer_index}"
+            expected = str(answer.get("answer") or "").strip().casefold()
+            actual = str(selected("listening_teil3", item_id) or "").strip().casefold()
+            listening_scores["listening_teil3"] += int(bool(expected) and actual == expected)
+    return reading_correct, cloze_correct, listening_scores
+
+
+def _calculate_c1_result(instance):
+    reading_correct, cloze_correct, listening_scores = _c1_correct_counts(instance)
+    writing_raw = Decimal(str(writing_assessment_score(
+        instance.writing_assessment or legacy_writing_assessment(instance.writing_grade)
+    )))
+    writing_score = (writing_raw * Decimal(48) / Decimal(45)).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    reading_score = Decimal(reading_correct) * Decimal(2)
+    cloze_score = Decimal(cloze_correct)
+    listening_correct = sum(listening_scores.values())
+    listening_score = (
+        Decimal(listening_scores["listening_teil1"])
+        + Decimal(listening_scores["listening_teil2"] + listening_scores["listening_teil3"]) * Decimal(2)
+    )
+    total_score = reading_score + cloze_score + listening_score + writing_score
+    percentage = ((total_score / Decimal(166)) * 100).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    return {
+        "score_breakdown": {
+            "reading_correct": reading_correct,
+            "reading_score": float(reading_score),
+            "cloze_correct": cloze_correct,
+            "cloze_score": float(cloze_score),
+            "listening_correct": listening_correct,
+            "listening_score": float(listening_score),
+            "writing_score": float(writing_score),
+        },
+        "total_score": total_score,
+        "score_percentage": percentage,
+        "is_passed": total_score >= Decimal("99.6"),
+    }
+
+
 def calculate_result(instance):
+    if str(instance.paper.level).upper() == "C1":
+        return _calculate_c1_result(instance)
     reading_correct, cloze_correct, listening_correct = _correct_counts(instance)
     writing_score = Decimal(str(writing_assessment_score(
         instance.writing_assessment or legacy_writing_assessment(instance.writing_grade)

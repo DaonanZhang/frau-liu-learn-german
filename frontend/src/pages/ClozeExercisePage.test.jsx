@@ -761,4 +761,54 @@ describe("Cloze exercise layout", () => {
     fireEvent.drop(slot);
     expect(JSON.parse(sessionStorage.getItem(scope)).regions).toEqual(marked.regions);
   });
+
+  it("limits C1 blank zero to its data-defined example sentence and reveals it after checking", async () => {
+    const exampleSentence = "Zuvor hatte er den Vertrag sorgfältig gelesen.";
+    fetchClozeMatchingExerciseDetail.mockResolvedValue({
+      id: 24,
+      exercise_base: { title: "C1 Lesen Teil 1", external_id: "24", level: "C1", exercise_type: "CLOZE_MATCHING" },
+      content_with_placeholders: "{{blank_0}} Danach {{blank_1}} weiter.",
+      options: [
+        { id: 1, option_key: "beispiel", option_text: exampleSentence },
+        { id: 2, option_key: "wrong", option_text: "eine falsche Antwort" },
+        { id: 3, option_key: "right", option_text: "die richtige Antwort" },
+      ],
+      blank_answers: [
+        { id: 240, blank_key: "blank_0", blank_number: 0, correct_option: { option_key: "beispiel" } },
+        { id: 241, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "right" } },
+      ],
+    });
+    fetchClozeMatchingBlankStates.mockResolvedValue({ results: [] });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/matching/c1/24"]}>
+        <Routes>
+          <Route path="/matching/:level/:exerciseId" element={<ClozeMatchingPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const exampleOption = await screen.findByRole("button", { name: `选择“${exampleSentence}”并填入当前空格` });
+    expect(screen.queryByRole("button", { name: /falsche Antwort/ })).not.toBeInTheDocument();
+    fireEvent.click(exampleOption);
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"]')).toHaveTextContent(exampleSentence);
+
+    const wrongOption = screen.getByRole("button", { name: /falsche Antwort/ });
+    fireEvent.dragStart(wrongOption);
+    fireEvent.dragOver(container.querySelector('[data-cloze-blank-key="blank_0"]'));
+    fireEvent.drop(container.querySelector('[data-cloze-blank-key="blank_0"]'));
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"]')).toHaveTextContent(exampleSentence);
+    fireEvent.click(wrongOption);
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).toHaveTextContent("eine falsche Antwort");
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"] .cloze-drop-slot__chip'))
+      .toHaveClass("cloze-drop-slot__chip--correct");
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]').closest(".cloze-blank-inline").querySelector(".cloze-inline-feedback"))
+      .toHaveClass("cloze-inline-feedback--answer");
+    expect(await screen.findByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"]')).not.toHaveTextContent(exampleSentence);
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).not.toHaveTextContent("eine falsche Antwort");
+  });
 });

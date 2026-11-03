@@ -102,6 +102,7 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
             label="Beispieltext 1",
             note="Formell",
             example_text="Sehr geehrte Frau Müller, leider kann ich nicht kommen.",
+            translation_zh="尊敬的 Müller 女士，很遗憾我无法前来。",
             sort_order=0,
         )
         self.example_two = WritingExampleText.objects.create(
@@ -112,6 +113,12 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
         )
         self.state_url = reverse("exam-prep-user-writing-example-text-states-list")
         self.favorite_questions_url = reverse("exam-prep-favorite-questions-list")
+
+    def test_b1_example_translation_is_exposed_in_writing_detail(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.get(reverse("exam-prep-writing-exercises-detail", args=[self.exercise.pk]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["example_texts"][0]["translation_zh"], "尊敬的 Müller 女士，很遗憾我无法前来。")
 
     def test_examples_can_be_favorited_independently_and_listed(self):
         self.client.force_authenticate(self.user)
@@ -981,7 +988,7 @@ class MockExamApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["message"], "该考试类型暂不支持模拟考试。")
 
-    def test_mock_creation_rejects_levels_without_exam_rules(self):
+    def test_mock_creation_reports_missing_c1_bank_parts(self):
         Entitlement.objects.create(
             user=self.user,
             module=self.module,
@@ -996,8 +1003,8 @@ class MockExamApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["message"], "该考试类型或等级暂不支持模拟考试。")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["message"], "题库尚不足以生成完整的模拟考试。")
 
     def test_repeated_create_request_is_idempotent(self):
         Entitlement.objects.create(

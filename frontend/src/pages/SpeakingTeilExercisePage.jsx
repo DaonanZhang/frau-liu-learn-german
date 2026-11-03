@@ -26,6 +26,12 @@ function isTelcB2Exercise(exercise) {
     && String(base.exam_type || "").trim().toUpperCase() === "TELC";
 }
 
+function isTelcC1Exercise(exercise) {
+  const base = exercise?.exercise_base || {};
+  return String(base.level || "").trim().toUpperCase() === "C1"
+    && String(base.exam_type || "").trim().toUpperCase() === "TELC";
+}
+
 function stableContentKey(value, fallback = "") {
   if (value == null) return fallback;
   if (typeof value !== "object") return String(value);
@@ -512,6 +518,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
   const [showAll, setShowAll] = useState(false);
   const [favorites, setFavorites] = useState({});
   const [favoritePending, setFavoritePending] = useState({});
+  const [c1Checked, setC1Checked] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -519,6 +526,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
       .then(([data, stateData]) => {
         if (!active) return;
         setExercise(data);
+        setC1Checked(false);
         const content = data?.content || {};
         const stateResults = stateData?.results || [];
         const statesByKey = new Map(stateResults.map((item) => [item.turn_key, item]));
@@ -560,13 +568,14 @@ export default function SpeakingTeilExercisePage({ teil }) {
   const topics = Array.isArray(content.topics) ? content.topics : [];
   const base = exercise?.exercise_base || {};
   const isB2Telc = isTelcB2Exercise(exercise);
+  const isC1Telc = isTelcC1Exercise(exercise);
   const examinerTurns = isB2Telc && Number(teil) === 2
     ? dialogue.filter(isExaminerTurn)
     : [];
   const sortableDialogue = isB2Telc && Number(teil) === 2
     ? dialogue.filter((turn) => !isExaminerTurn(turn))
     : dialogue;
-  const taskTitle = isB2Telc && Number(teil) === 1 ? "Präsentation" : TITLES[teil];
+  const taskTitle = isC1Telc ? ["Teil 1A", "Teil 1B", "Teil 2"][Number(teil) - 1] : isB2Telc && Number(teil) === 1 ? "Präsentation" : TITLES[teil];
   const hideB2Task = isB2Telc;
   const isB2Teil3 = isB2Telc && Number(teil) === 3;
   const directTeil3Dialogue = useMemo(() => {
@@ -659,23 +668,34 @@ export default function SpeakingTeilExercisePage({ teil }) {
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
     >
     <div className="speaking-detail-page">
-      <div className="speaking-detail-topbar"><Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/sprechen/teil-${teil}`} className="speaking-detail-back">← Zurück zu Sprechen Teil {teil}</Link></div>
+      <div className="speaking-detail-topbar"><Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/sprechen/teil-${teil}`} className="speaking-detail-back">← Zurück zu Sprechen {isC1Telc ? taskTitle : ["Teil 1", "Teil 2", "Teil 3"][Number(teil) - 1]}</Link></div>
       <header className="speaking-detail-hero">
-        <p className="speaking-detail-hero__eyebrow">Sprechen · Teil {teil}</p>
+        <p className="speaking-detail-hero__eyebrow">Sprechen · {taskTitle}</p>
         <div className="speaking-detail-hero__title-row"><h1>{base.title || taskTitle}</h1>{base.exam_type ? <span className="speaking-detail-title-badge">{base.exam_type}</span> : null}</div>
         <div className="speaking-detail-badges"><span>{base.level || scope?.level}</span>{base.is_real_exam ? <span className="speaking-detail-badge--exam">真题</span> : null}</div>
       </header>
+      <div className={isC1Telc ? `speaking-detail-c1-layout speaking-detail-c1-layout--teil-${teil}` : undefined}>
       <section className="speaking-detail-card speaking-detail-task">
         <p className="speaking-detail-card__eyebrow">Aufgabe</p><h2>{taskTitle}</h2>
         <AnnotatableTextRegion as="p" className="speaking-detail-task__instruction" regionId="task">{exercise.instruction}</AnnotatableTextRegion>
         {content.task && !hideB2Task ? <AnnotatableTextRegion as="p" className="speaking-detail-task__text" regionId="material:task">{content.task}</AnnotatableTextRegion> : null}
-        {Number(teil) === 1 && topics.length ? <div className="speaking-detail-topic-list">{topics.map((topic) => <AnnotatableTextRegion as="span" key={topic} regionId={materialAnnotationId(topic, "topic")}>{topic}</AnnotatableTextRegion>)}</div> : null}
+        {Number(teil) === 1 && topics.length ? <div className="speaking-detail-topic-list">{topics.map((topic) => <AnnotatableTextRegion as="span" key={stableContentKey(topic, topic.de || "topic")} regionId={materialAnnotationId(topic, "topic")}>{typeof topic === "string" ? topic : `${topic.de || ""}${topic.zh ? ` · ${topic.zh}` : ""}`}</AnnotatableTextRegion>)}</div> : null}
         {Number(teil) === 2 && cards.length ? <div className="speaking-detail-opinion-grid">{cards.map((card) => <AnnotatableTextRegion as="article" className="speaking-detail-opinion" key={stableContentKey(card, "card")} regionId={materialAnnotationId(card, "card")}><span>{card.participant}</span><h3>{card.title}</h3><p>{card.content}</p></AnnotatableTextRegion>)}</div> : null}
+        {isC1Telc && Number(teil) === 1 ? <div className="speaking-detail-c1-outline"><h3>提纲</h3><AnnotatableTextRegion as="div" regionId="material:outline">{Array.isArray(content.outline) ? content.outline.map((point, index) => <p key={index}>{typeof point === "string" ? point : point.text || point.title}</p>) : content.outline}</AnnotatableTextRegion></div> : null}
+        {isC1Telc && Number(teil) === 3 && Array.isArray(content.quotes) ? <div className="speaking-detail-c1-quotes">{content.quotes.map((quote, index) => <blockquote className="speaking-detail-c1-quote" key={`${index}-${quote.text}`}><p>{quote.text}</p>{quote.translation_zh ? <p>{quote.translation_zh}</p> : null}</blockquote>)}</div> : null}
       </section>
-      {Number(teil) === 1 ? (
+      {isC1Telc ? (
+        <section className="speaking-detail-card speaking-detail-example speaking-detail-c1-answer">
+          {dialogue.length ? <div className="speaking-detail-dialogue speaking-detail-dialogue--flush">{dialogue.map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} showPractice recorderId={`c1-teil-${teil}-${exerciseId}-${turn.sequence}`} favoriteProps={favoriteForTurn(turn)} annotationRegionId={turnAnnotationId(turn)} />)}</div> : <article className="speaking-detail-c1-sample"><h3>Beispielantwort</h3><AnnotatableTextRegion as="p" regionId="reference-answer:de">{content.sample_de}</AnnotatableTextRegion>{content.sample_zh ? <AnnotatableTextRegion as="p" regionId="reference-answer:zh">{content.sample_zh}</AnnotatableTextRegion> : null}</article>}
+          <div className="speaking-detail-actions">
+            {c1Checked ? <SpeakingResetAction onReset={() => setC1Checked(false)} /> : <ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" onClick={() => setC1Checked(true)} />}
+          </div>
+        </section>
+      ) : null}
+      {!isC1Telc && Number(teil) === 1 ? (
         <section className="speaking-detail-card speaking-detail-example"><div className="speaking-detail-dialogue speaking-detail-dialogue--flush">{dialogue.map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} showPractice recorderId={`teil-1-${exerciseId}-${turn.sequence}`} annotationRegionId={turnAnnotationId(turn)} />)}</div></section>
       ) : null}
-      {Number(teil) === 2 ? (
+      {!isC1Telc && Number(teil) === 2 ? (
         <section className="speaking-detail-card speaking-detail-example">
           {examinerTurns.length ? (
             <div className="speaking-detail-dialogue speaking-detail-dialogue--flush speaking-detail-examiner-turns">
@@ -696,7 +716,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
           <div className="speaking-detail-actions"><ExamActionButton className="speaking-detail-check-btn" label="Prüfen" icon="check" disabled={Boolean(checked.all) || !sortableDialogue.length || (orders.all || []).length !== sortableDialogue.length} onClick={() => checkSection("all", sortableDialogue)} />{checked.all ? <SpeakingResetAction onReset={() => resetSection("all")} /> : null}</div>
         </section>
       ) : null}
-      {isB2Teil3 ? (
+      {!isC1Telc && isB2Teil3 ? (
         <section className="speaking-detail-card speaking-detail-example">
           <div className="speaking-detail-dialogue speaking-detail-dialogue--flush">
             {directTeil3Dialogue.map(({ turn, topic, sectionIndex }) => (
@@ -712,7 +732,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
           </div>
         </section>
       ) : null}
-      {Number(teil) === 3 && !isB2Teil3 && currentSection ? (
+      {!isC1Telc && Number(teil) === 3 && !isB2Teil3 && currentSection ? (
         <section className="speaking-detail-card speaking-detail-example">
           <div className="speaking-detail-carousel-header">
             <h2 className="speaking-detail-carousel-title">
@@ -748,6 +768,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
           {showAll ? <div className="speaking-detail-full-dialogue"><h3>Vollständiger Dialog</h3>{sections.map((section) => { const key = sectionKey(section); return <section key={key}><AnnotatableTextRegion as="h4" regionId={`explanation:section:${key}`}>{section.type}</AnnotatableTextRegion><div className="speaking-detail-dialogue">{(section.turns || []).map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} annotationRegionId={explanationAnnotationId(turn, key, "full")} />)}</div></section>; })}</div> : null}
         </section>
       ) : null}
+      </div>
     </div>
     </ExamTextAnnotationProvider>
   );

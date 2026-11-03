@@ -310,6 +310,35 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(screen.getByRole("button", { name: /计时中：29:59/ })).toBeInTheDocument();
   });
 
+  it("keeps B1 sample and Chinese translations visible before and after checking, while Wiederholen clears the draft", async () => {
+    fetchWritingExerciseDetail.mockResolvedValue({
+      id: 41,
+      exercise_base: { external_id: "41", level: "B1", exam_type: "TELC", exercise_type: "WRITING" },
+      request_text: "Schreiben Sie eine E-Mail.",
+      task_text: "Nennen Sie einen Grund.",
+      time_limit_minutes: 30,
+      words_limit: 80,
+      content: {
+        request_translation_zh: "请写一封电子邮件。",
+        task_translation_zh: "请说明一个理由。",
+      },
+      example_texts: [{ id: 501, example_text: "Liebe Anna, ich kann leider nicht kommen.", translation_zh: "亲爱的安娜，很遗憾我不能来。" }],
+    });
+    renderPage();
+
+    expect(await screen.findByText("请写一封电子邮件。")).toBeInTheDocument();
+    expect(screen.getByText("请说明一个理由。")).toBeInTheDocument();
+    expect(screen.getByText("Liebe Anna, ich kann leider nicht kommen.")).toBeInTheDocument();
+    expect(screen.getByText("亲爱的安娜，很遗憾我不能来。")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Liebe Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(screen.getByRole("textbox")).toHaveValue("Liebe Anna");
+    fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(screen.getByText("亲爱的安娜，很遗憾我不能来。")).toBeInTheDocument();
+  });
+
   it("keeps the existing guide interactive without registering its controls", async () => {
     useAuth.mockReturnValue({
       user: { id: 7, has_seen_schreiben_guide: false },

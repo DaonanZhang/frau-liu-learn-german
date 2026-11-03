@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   LISTENING_TYPES,
   READING_TYPES,
+  SPEAKING_TYPES,
+  SPRACHBAUSTEINE_TYPES,
   examPreparationTypeDescription,
+  examPreparationTypesForLevel,
 } from "./examPreparationTypeContent.js";
 
 describe("TELC B2 exam preparation entry copy", () => {
@@ -22,5 +25,13 @@ describe("TELC B2 exam preparation entry copy", () => {
       "阅读 12 个简短的宣传文字，为 10 种具体生活情境匹配对应的文章。共 10 道配对题。",
     );
     expect(examPreparationTypeDescription(READING_TYPES[2], "B1")).toContain("分类广告");
+  });
+
+  it("maps C1 reading, speaking, and grammar cards to their TELC parts", () => {
+    expect(examPreparationTypesForLevel(READING_TYPES, "C1").map((item) => item.title)).toEqual(["Teil 1", "Teil 2", "Teil 3"]);
+    const c1Speaking = examPreparationTypesForLevel(SPEAKING_TYPES, "C1");
+    expect(c1Speaking.map((item) => item.title)).toEqual(["Teil 1A", "Teil 1B", "Teil 2"]);
+    expect(c1Speaking[1].description).toContain("概述搭档的展示并提出追问");
+    expect(examPreparationTypesForLevel(SPRACHBAUSTEINE_TYPES, "C1")).toHaveLength(1);
   });
 });

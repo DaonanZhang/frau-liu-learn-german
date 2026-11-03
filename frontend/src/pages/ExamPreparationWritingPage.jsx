@@ -4,7 +4,7 @@ import { fetchWritingExercises } from "../api/exam_preparation/writingExercises.
 import { useAuth } from "../api/auth/useAuth.js";
 import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
-import { writingCardContent, writingWordLimitLabel } from "./writingDisplay.js";
+import { isTelcC1Writing, writingCardContent, writingWordLimitLabel } from "./writingDisplay.js";
 import "./ExamPreparationWritingPage.css";
 
 export default function ExamPreparationWritingPage() {
@@ -59,7 +59,7 @@ export default function ExamPreparationWritingPage() {
           <p className="writing-hero__eyebrow">Schreiben</p>
           <h1 className="writing-hero__title">写作模块</h1>
           <p className="writing-hero__copy">
-            考试时间 30 分钟。根据朋友或机构发来的电子邮件完成回复，必须涵盖题目给出的 4 个提示要点（Leitpunkte），并注意书信格式、恰当语体与逻辑连贯性。
+            {scope.level === "C1" ? "根据两条引语完成一篇不少于 350 词的文章，限时 70 分钟。" : "考试时间 30 分钟。根据朋友或机构发来的电子邮件完成回复，必须涵盖题目给出的 4 个提示要点（Leitpunkte），并注意书信格式、恰当语体与逻辑连贯性。"}
           </p>
         </div>
       </section>
@@ -71,7 +71,7 @@ export default function ExamPreparationWritingPage() {
         <section className="writing-list-grid" aria-label="写作练习列表">
           {exercises.map((exercise, index) => {
             const { title, preview } = writingCardContent(exercise);
-            const timeLimit = exercise?.time_limit_minutes ? `${exercise.time_limit_minutes} 分钟` : "不限时";
+            const timeLimit = exercise?.time_limit_minutes ? `${exercise.time_limit_minutes} 分钟` : isTelcC1Writing(exercise) ? "70 分钟" : "不限时";
             const wordsLimit = writingWordLimitLabel(exercise);
             const isLocked = Boolean(exercise?.is_locked);
             const showFreeTrialBadge = Boolean(exercise?.show_free_trial_badge);

@@ -289,11 +289,11 @@ describe("exam preparation level entry", () => {
 
     fireEvent.click(screen.getByRole("link", { name: /TELC B2/ }));
 
-    expect(screen.getByTestId("location")).toHaveTextContent(/^\/modules\/exam-preparation$/);
-    expect(Swal.fire).toHaveBeenCalledWith({ icon: "info", title: "Coming soon" });
+    expect(screen.getByTestId("location")).toHaveTextContent(/^\/modules\/exam-preparation\/b2$/);
+    expect(Swal.fire).not.toHaveBeenCalled();
   });
 
-  it("offers TELC B1 and TELC B2 as links to their level homes", () => {
+  it("offers TELC B1, B2 and C1 as links to their level homes", () => {
     fetchSavedMockExams.mockClear();
     render(
       <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
@@ -302,6 +302,7 @@ describe("exam preparation level entry", () => {
     );
     expect(screen.getByRole("link", { name: /TELC B1/ })).toHaveAttribute("href", "/modules/exam-preparation/b1");
     expect(screen.getByRole("link", { name: /TELC B2/ })).toHaveAttribute("href", "/modules/exam-preparation/b2");
+    expect(screen.getByRole("link", { name: /TELC C1/ })).toHaveAttribute("href", "/modules/exam-preparation/c1");
     expect(fetchSavedMockExams).not.toHaveBeenCalled();
   });
 

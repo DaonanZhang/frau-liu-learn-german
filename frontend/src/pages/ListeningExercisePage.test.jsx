@@ -98,6 +98,37 @@ describe("listening exercise audio loading", () => {
     expect(screen.queryByText("音频加载中…")).not.toBeInTheDocument();
   });
 
+  it("renders and checks TELC C1 speaker matching statements", async () => {
+    fetchListeningExerciseDetail.mockResolvedValueOnce(createListeningExercise({
+      exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL1" },
+      content: { format: "speaker_matching", statements: [{ statement: "Aussage eins", speaker: "Person A" }] },
+      questions: [],
+    }));
+    renderExercise("short_text_true_false_with_prep", "c1");
+
+    expect(await screen.findByText("Aussage eins")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Person A"));
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(screen.getByText("Richtig")).toBeInTheDocument();
+  });
+
+  it("renders TELC C1 presentation notes from slides and their answer fields", async () => {
+    fetchListeningExerciseDetail.mockResolvedValueOnce(createListeningExercise({
+      exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL3" },
+      content: { format: "presentation_notes", slides: [{ number: "1", text: "Wichtige Folie", answers: [{ blank_id: "1", answer: "Beispiel" }] }] },
+      questions: [],
+    }));
+    renderExercise("dialog_true_false_twice", "c1");
+
+    expect(await screen.findByText("Wichtige Folie")).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText("1"), { target: { value: "Beispiel" } });
+    });
+    expect(screen.getByLabelText("1")).toHaveValue("Beispiel");
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(screen.getByText("Beispiel")).toBeInTheDocument();
+  });
+
   it("retries an initial stream load error without autoplaying a practice recording", async () => {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     const { container } = renderExercise("short_text_true_false_once");

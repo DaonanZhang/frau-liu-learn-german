@@ -66,6 +66,7 @@ export function examPreparationLevelHomeRoutes() {
     { path: "/modules/exam-preparation", element: <ExamPreparationModulePage /> },
     { path: "/modules/exam-preparation/b1", element: <ExamPreparationModulePage level="b1" /> },
     { path: "/modules/exam-preparation/b2", element: <ExamPreparationModulePage level="b2" /> },
+    { path: "/modules/exam-preparation/c1", element: <ExamPreparationModulePage level="c1" /> },
   ];
 }
 
@@ -98,7 +99,7 @@ function InvalidExamPreparationRoute() {
 export function addExamPreparationLevelRoutes(routes) {
   return routes.flatMap((route) => {
     const prefix = "/modules/exam-preparation";
-    if ([`${prefix}/b1`, `${prefix}/b2`, `${prefix}/*`].includes(route.path)) {
+    if ([`${prefix}/b1`, `${prefix}/b2`, `${prefix}/c1`, `${prefix}/*`].includes(route.path)) {
       return [route];
     }
     if (!route.path?.startsWith(`${prefix}/`)) return [route];
@@ -265,6 +266,22 @@ const router = createBrowserRouter([
       },
       { path: "/modules/exam-preparation/lesen", element: <ExamPreparationReadingPage /> },
       {
+        path: "/modules/exam-preparation/lesen/cloze-matching",
+        element: (
+          <ExerciseSelectionPage
+            backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/lesen`}
+            backLabel="← Zurück zu Lesen"
+            eyebrow="Lesen"
+            title="Teil 1"
+            description="从备选词语中选择合适表达，完成短文中的空格。"
+            fetchExercises={fetchClozeMatchingExercises}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/lesen/cloze-matching/${exercise.id}`}
+            cardDescription="Öffne diese Aufgabe und setze die passenden Wörter in den Text ein."
+          />
+        ),
+      },
+      { path: "/modules/exam-preparation/lesen/cloze-matching/:exerciseId", element: <ClozeMatchingPage /> },
+      {
         path: "/modules/exam-preparation/lesen/title-matching",
         element: (
           <ExerciseSelectionPage
@@ -326,7 +343,7 @@ const router = createBrowserRouter([
               backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/sprechen`}
               backLabel="← Zurück zu Sprechen"
               eyebrow="Sprechen"
-              title={`Teil ${teil}`}
+              title={(scope) => scope.level === "C1" ? ["Teil 1A", "Teil 1B", "Teil 2"][teil - 1] : `Teil ${teil}`}
               description={(scope) => examPreparationTypeDescription(SPEAKING_TYPES[teil - 1], scope.level)}
               fetchExercises={(scope) => fetchSpeakingTeilExercises(teil, scope)}
               buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/sprechen/teil-${teil}/${exercise.id}`}

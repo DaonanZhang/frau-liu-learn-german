@@ -80,6 +80,7 @@ export default function ListeningExercisePage({
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
   const [answers, setAnswers] = useState({});
+  const [c1Notes, setC1Notes] = useState({});
   const [isChecked, setIsChecked] = useState(false);
   const [favoritedByQuestionId, setFavoritedByQuestionId] = useState({});
   const [favoritePendingByQuestionId, setFavoritePendingByQuestionId] = useState({});
@@ -90,6 +91,8 @@ export default function ListeningExercisePage({
   const [duration, setDuration] = useState(0);
   const isTeil2 = listeningType === "short_text_true_false_once";
   const isTelcB2 = scope?.examType === "TELC" && scope.level === "B2";
+  const isTelcC1 = scope?.examType === "TELC" && scope.level === "C1";
+  const c1Format = exercise?.content?.format;
   const audioUrls = useMemo(() => [exercise?.audio_file_url].filter(Boolean), [exercise?.audio_file_url]);
   const { sources: audioSources, statuses: audioStatuses } = useReliableAudioSources(audioUrls);
   const audioUrl = exercise?.audio_file_url || "";
@@ -118,6 +121,7 @@ export default function ListeningExercisePage({
         const detail = await fetchListeningExerciseDetail(exerciseId, scope);
         if (!aborted) {
           setExercise(detail || null);
+          setC1Notes({});
           const stateData = await fetchListeningQuestionStates(exerciseId);
           if (aborted) {
             return;
@@ -197,9 +201,34 @@ export default function ListeningExercisePage({
   }
 
   const questions = useMemo(() => {
+    if (isTelcC1 && c1Format === "speaker_matching") {
+      const statements = Array.isArray(exercise?.content?.statements) ? exercise.content.statements : [];
+      const speakers = [...new Set(statements.map((item) => item.speaker).filter(Boolean))];
+      return statements.map((item, index) => ({
+        id: `statement-${index}`,
+        question_number: index + 1,
+        question_text: item.statement,
+        correct_speaker: item.speaker,
+        answer_options: speakers.map((speaker, optionIndex) => ({
+          id: `${index}-${optionIndex}`,
+          option_key: String.fromCharCode(65 + optionIndex),
+          option_text: speaker,
+          is_correct: speaker === item.speaker,
+        })),
+      }));
+    }
     return Array.isArray(exercise?.questions) ? exercise.questions : [];
-  }, [exercise]);
-  const instruction = isTelcB2 && listeningType === "short_text_true_false_with_prep"
+  }, [exercise, c1Format, isTelcC1]);
+  const c1Slides = isTelcC1 && c1Format === "presentation_notes" && Array.isArray(exercise?.content?.slides)
+    ? exercise.content.slides
+    : [];
+  const instruction = isTelcC1 && c1Format === "speaker_matching"
+    ? "Hören Sie die kurzen Gespräche und ordnen Sie jede Aussage der passenden Person zu."
+    : isTelcC1 && c1Format === "multiple_choice"
+      ? "Hören Sie den Beitrag und wählen Sie für jede Frage die passende Antwort."
+      : isTelcC1 && c1Format === "presentation_notes"
+        ? "Hören Sie die Präsentation und ergänzen Sie die fehlenden Angaben in den Folien."
+        : isTelcB2 && listeningType === "short_text_true_false_with_prep"
     ? TELC_B2_TEIL1_INSTRUCTION
     : isTelcB2 && listeningType === "short_text_true_false_once"
       ? TELC_B2_LISTENING_TEIL2_INSTRUCTION
@@ -330,6 +359,7 @@ export default function ListeningExercisePage({
   }
 
   async function toggleFavorite(question) {
+    if (isTelcC1 && c1Format === "speaker_matching") return;
     const nextValue = !favoritedByQuestionId[question.id];
     setFavoritePendingByQuestionId((previous) => ({ ...previous, [question.id]: true }));
     try {
@@ -355,6 +385,9 @@ export default function ListeningExercisePage({
 
   async function handleCheck() {
     setIsChecked(true);
+
+    if (isTelcC1 && c1Format === "speaker_matching") return;
+    if (c1Slides.length) return;
 
     try {
       await Promise.all(
@@ -599,6 +632,21 @@ export default function ListeningExercisePage({
           </div>
 
           <div className="listening-exercise-question-list">
+            {c1Slides.length ? c1Slides.map((slide, slideIndex) => (
+              <article className="listening-exercise-question-card listening-exercise-c1-slide" key={`${slide.number}-${slideIndex}`}>
+                <h3>Folie {slide.number}</h3>
+                <p>{slide.text}</p>
+                {(slide.answers || []).map((answer, answerIndex) => {
+                  const key = `${slideIndex}-${answerIndex}`;
+                  const correct = String(answer.answer || "").trim().toLocaleLowerCase();
+                  const entered = String(c1Notes[key] || "").trim().toLocaleLowerCase();
+                  return <label className="listening-exercise-c1-note" key={key}><span>{answer.blank_id}</span><input type="text" value={c1Notes[key] || ""} disabled={isChecked} onChange={(event) => {
+                    const value = event.target.value;
+                    setC1Notes((previous) => ({ ...previous, [key]: value }));
+                  }} />{isChecked ? <strong className={entered === correct ? "is-correct" : "is-wrong"}>{answer.answer}</strong> : null}</label>;
+                })}
+              </article>
+            )) : null}
             {questions.map((question) => {
               const selectedOption = (question.answer_options || []).find(
                 (option) => option.option_key === answers[question.id]
@@ -676,13 +724,13 @@ export default function ListeningExercisePage({
                         <strong className="listening-exercise-feedback__title">
                           {isQuestionCorrect ? "Richtig" : "Falsch"}
                         </strong>
-                        <ExerciseFavoriteButton
+                        {!isTelcC1 || c1Format !== "speaker_matching" ? <ExerciseFavoriteButton
                           isFavorited={Boolean(favoritedByQuestionId[question.id])}
                           pending={Boolean(favoritePendingByQuestionId[question.id])}
                           onClick={() => {
                             toggleFavorite(question);
                           }}
-                        />
+                        /> : null}
                       </div>
                       <p className="listening-exercise-feedback__line">
                         Richtige Antwort: {correctOption?.option_text || "-"}
@@ -709,7 +757,7 @@ export default function ListeningExercisePage({
           <div className="listening-exercise-actions">
             <ExamActionButton
               className="listening-exercise-check-btn"
-              disabled={isChecked || !questions.length || answeredCount !== questions.length}
+              disabled={isChecked || (c1Slides.length ? c1Slides.some((slide, slideIndex) => (slide.answers || []).some((_, answerIndex) => !String(c1Notes[`${slideIndex}-${answerIndex}`] || "").trim())) : !questions.length || answeredCount !== questions.length)}
               onClick={handleCheck}
               label="Prüfen"
               icon="check"
@@ -718,6 +766,7 @@ export default function ListeningExercisePage({
               <ListeningResetButton
                 onReset={() => {
                   setAnswers({});
+                  setC1Notes({});
                   setIsChecked(false);
                   setErrorText("");
                 }}

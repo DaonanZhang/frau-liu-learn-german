@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthLayout from "../components/AuthLayout.jsx";
+import LegalDocumentModal from "../components/LegalDocumentModal.jsx";
 import { registerUser } from "../api/auth/auth";
 
 const COUNTRY_CODE_OPTIONS = [
@@ -29,6 +30,8 @@ export default function ActivatePage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [hasAcceptedLegal, setHasAcceptedLegal] = useState(false);
+  const [activeLegalDocument, setActiveLegalDocument] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const normalizedEmail = useMemo(() => email.trim().toLowerCase(), [email]);
@@ -37,8 +40,9 @@ export default function ActivatePage() {
       phone.trim().length === 11 &&
       EMAIL_PATTERN.test(normalizedEmail) &&
       password.trim().length >= 6 &&
+      hasAcceptedLegal &&
       !loading,
-    [phone, normalizedEmail, password, loading]
+    [phone, normalizedEmail, password, hasAcceptedLegal, loading]
   );
 
   const onRegister = async (e) => {
@@ -154,10 +158,41 @@ export default function ActivatePage() {
           </div>
         </label>
 
+        <div className="auth-legalConsent">
+          <input
+            id="registration-legal-consent"
+            type="checkbox"
+            aria-label="我已阅读并同意本用户协议及隐私政策"
+            checked={hasAcceptedLegal}
+            onChange={(event) => setHasAcceptedLegal(event.target.checked)}
+          />
+          <div className="auth-legalConsentText">
+            <label htmlFor="registration-legal-consent">我已阅读并同意</label>
+            <button
+              type="button"
+              onClick={() => setActiveLegalDocument("terms")}
+            >
+              本用户协议
+            </button>
+            <span>及</span>
+            <button
+              type="button"
+              onClick={() => setActiveLegalDocument("privacy")}
+            >
+              隐私政策
+            </button>
+          </div>
+        </div>
+
         <button className="auth-btn gradient" type="submit" disabled={!canRegister}>
           {loading ? "注册中..." : "立即注册"}
         </button>
       </form>
+
+      <LegalDocumentModal
+        documentType={activeLegalDocument}
+        onClose={() => setActiveLegalDocument(null)}
+      />
     </AuthLayout>
   );
 }

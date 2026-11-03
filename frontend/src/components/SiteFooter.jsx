@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { collectBrowserInfo, submitBugReport } from "../api/bugReports.js";
 import { useAuth } from "../api/auth";
 import { getCapturedClientErrors } from "../utils/clientErrorBuffer.js";
+import LegalDocumentModal from "./LegalDocumentModal.jsx";
 import "./SiteFooter.css";
 
 export default function SiteFooter({ className = "" }) {
   const { isAuthenticated } = useAuth();
   const [isNoticeOpen, setIsNoticeOpen] = useState(false);
+  const [activeLegalDocument, setActiveLegalDocument] = useState(null);
   const [isBugReportOpen, setIsBugReportOpen] = useState(false);
   const [reportText, setReportText] = useState("");
   const [hasConsent, setHasConsent] = useState(false);
@@ -85,6 +87,26 @@ export default function SiteFooter({ className = "" }) {
         >
           版权说明
         </button>
+        <span className="site-footer__divider" aria-hidden="true">
+          |
+        </span>
+        <button
+          type="button"
+          className="site-footer__linkBtn"
+          onClick={() => setActiveLegalDocument("terms")}
+        >
+          用户服务协议
+        </button>
+        <span className="site-footer__divider" aria-hidden="true">
+          |
+        </span>
+        <button
+          type="button"
+          className="site-footer__linkBtn"
+          onClick={() => setActiveLegalDocument("privacy")}
+        >
+          隐私政策
+        </button>
         {isAuthenticated ? (
           <>
             <span className="site-footer__divider" aria-hidden="true">
@@ -120,6 +142,11 @@ export default function SiteFooter({ className = "" }) {
           {isCnDomain ? "皖公网安备34182202342348号" : "皖公网安备34182202342323号"}
         </a>
       </div>
+
+      <LegalDocumentModal
+        documentType={activeLegalDocument}
+        onClose={() => setActiveLegalDocument(null)}
+      />
 
       {isNoticeOpen ? (
         <div

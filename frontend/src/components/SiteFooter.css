@@ -40,6 +40,12 @@
   cursor: pointer;
 }
 
+.site-footer__linkBtn:focus-visible {
+  border-radius: 2px;
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: 3px;
+}
+
 .site-footer__reportBtn {
   appearance: none;
   display: inline-flex;

@@ -345,6 +345,152 @@ class ProfilePromotionCampaignReportApiTests(APITestCase):
         self.url = "/api/accounts/users/promotion-campaign-report/"
         self.campaigns_url = "/api/accounts/users/promotion-campaigns/"
 
+    def _promotion(
+        self,
+        code: str,
+        campaign: str,
+        organization: str,
+        source_kind: str = PromotionCodeRecord.SourceKind.OPERATIONAL,
+    ) -> PromotionCodeRecord:
+        return store_promotion_code(
+            code=code,
+            source_kind=source_kind,
+            campaign_name=campaign,
+            organization_name=organization,
+            discount_amount=Decimal("5.00"),
+            minimum_order_amount=Decimal("0.00"),
+            coupon_valid_days=None,
+            expires_at=None,
+            redemption_mode=PromotionCodeRecord.RedemptionMode.REUSABLE,
+        )
+
+    def test_all_campaign_report_groups_activity_by_organization(self) -> None:
+        module = Module.objects.create(key="grouped-report", name="Grouped", is_active=True)
+        offer = PurchaseOffer.objects.create(
+            code="grouped-report-offer", title="课程", module=module,
+            plan=Entitlement.Plan.LIFETIME, price_amount=Decimal("39.90"), currency="CNY",
+        )
+        p1 = self._promotion("GROUP001", "同机构-甲", "机构甲")
+        p2 = self._promotion("GROUP002", "同机构-乙", "机构甲")
+        p3 = self._promotion("GROUP003", "同机构-甲", "机构乙")
+        p4 = self._promotion("GROUP004", "仅兑换", "仅兑换机构")
+        old = self._promotion("GROUP005", "旧月份", "机构甲")
+        duplicate_name = self._promotion("GROUP006", "同机构-甲", "机构甲")
+        purchase_only = self._promotion("GROUP007", "仅购买", "仅购买机构")
+        self._promotion("GROUP008", "无活动", "无活动机构")
+        referral = self._promotion("GROUP009", "同机构-甲", "机构甲", PromotionCodeRecord.SourceKind.REFERRAL)
+        internal = self._promotion(
+            "GROUP010", "同机构-甲", "机构甲", PromotionCodeRecord.SourceKind.INTERNAL_REWARD,
+        )
+        legacy_without_organization = self._promotion("GROUP011", "无组织历史博主", "")
+        in_month = timezone.make_aware(datetime(2026, 10, 15, 12))
+        outside_month = timezone.make_aware(datetime(2026, 9, 15, 12))
+        coupons = []
+        for promotion, user, issued_at in (
+            (p1, self.user, in_month), (p2, self.user, in_month),
+            (p3, self.other_superuser, in_month), (p4, self.user, in_month),
+            (old, self.user, outside_month), (duplicate_name, self.user, in_month),
+            (purchase_only, self.user, outside_month), (referral, self.user, in_month),
+            (internal, self.user, in_month), (legacy_without_organization, self.user, in_month),
+        ):
+            coupon = UserCoupon.objects.create(user=user, promotion_code=promotion, discount_amount=Decimal("5.00"))
+            UserCoupon.objects.filter(pk=coupon.pk).update(issued_at=issued_at)
+            coupons.append(coupon)
+
+        def add_purchase(
+            index: int,
+            coupon,
+            promotion,
+            user,
+            amount: str,
+            organization_snapshot: str | None = None,
+        ) -> None:
+            payment = AlipayWebsitePayment.objects.create(
+                merchant_order_no=f"grouped-order-{index}", subject=offer.title,
+                total_amount=Decimal(amount), status=AlipayWebsitePayment.Status.PAID,
+                paid_at=in_month,
+            )
+            PaymentDiscountApplication.objects.create(
+                payment=payment, coupon=coupon, promotion_code=promotion, user=user, offer=offer,
+                original_amount=Decimal(amount), automatic_discount_amount=Decimal("0.00"),
+                promotion_discount_amount=Decimal("5.00"), final_amount=Decimal(amount) - Decimal("5.00"),
+                selection_source=PaymentDiscountApplication.SelectionSource.MANUAL,
+                campaign_name_snapshot=promotion.campaign_name,
+                campaign_organization_snapshot=(
+                    promotion.organization_name
+                    if organization_snapshot is None
+                    else organization_snapshot
+                ),
+                status=PaymentDiscountApplication.Status.APPLIED, applied_at=in_month,
+            )
+
+        add_purchase(1, coupons[0], p1, self.user, "39.90", organization_snapshot="")
+        add_purchase(2, coupons[2], p3, self.other_superuser, "29.90", organization_snapshot="旧机构乙")
+        add_purchase(3, coupons[6], purchase_only, self.user, "19.90")
+        add_purchase(4, coupons[7], referral, self.user, "9.90")
+        add_purchase(5, coupons[8], internal, self.user, "8.90")
+        add_purchase(6, coupons[9], legacy_without_organization, self.user, "18.90")
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get(self.url, {"month": "2026-10", "all_campaigns": "true"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["month"], "2026-10")
+        self.assertIs(response.data["all_campaigns"], True)
+        reports = response.data["reports"]
+        self.assertEqual(
+            [item["organization_name"] for item in reports],
+            sorted(item["organization_name"] for item in reports),
+        )
+        by_org = {item["organization_name"]: item for item in reports}
+        self.assertEqual(by_org["机构甲"]["campaign_names"], sorted(["同机构-甲", "同机构-乙"]))
+        self.assertEqual(by_org["机构甲"]["coupon_redemptions"], 3)
+        self.assertEqual(by_org["机构甲"]["redeeming_users"], 1)
+        self.assertEqual(by_org["机构甲"]["paid_orders"], 1)
+        self.assertEqual(by_org["机构甲"]["paying_users"], 1)
+        self.assertEqual(by_org["机构甲"]["original_amount"], "39.90")
+        self.assertEqual(by_org["机构甲"]["promotion_discount"], "5.00")
+        self.assertEqual(by_org["机构甲"]["final_amount"], "34.90")
+        self.assertEqual(by_org["机构甲"]["purchases"][0]["merchant_order_no"], "grouped-order-1")
+        self.assertEqual(by_org["机构乙"]["campaign_names"], ["同机构-甲"])
+        self.assertEqual(by_org["机构乙"]["paid_orders"], 1)
+        self.assertNotIn("旧机构乙", by_org)
+        self.assertEqual(by_org["仅兑换机构"]["paid_orders"], 0)
+        self.assertEqual(by_org["仅兑换机构"]["coupon_redemptions"], 1)
+        self.assertEqual(by_org["仅购买机构"]["coupon_redemptions"], 0)
+        self.assertEqual(by_org["仅购买机构"]["paid_orders"], 1)
+        self.assertEqual(by_org["无组织历史博主"]["coupon_redemptions"], 1)
+        self.assertEqual(by_org["无组织历史博主"]["paid_orders"], 1)
+        self.assertNotIn("无活动机构", by_org)
+
+        all_time = self.client.get(self.url, {"month": "all", "all_campaigns": "true"})
+        self.assertEqual(all_time.status_code, status.HTTP_200_OK)
+        self.assertEqual(all_time.data["month"], "all")
+        self.assertEqual(
+            {r["organization_name"] for r in all_time.data["reports"]},
+            {"机构甲", "机构乙", "仅兑换机构", "仅购买机构", "无组织历史博主"},
+        )
+        all_time_by_org = {item["organization_name"]: item for item in all_time.data["reports"]}
+        self.assertEqual(all_time_by_org["机构甲"]["coupon_redemptions"], 4)
+        self.assertEqual(
+            all_time_by_org["机构甲"]["campaign_names"],
+            sorted(["同机构-甲", "同机构-乙", "旧月份"]),
+        )
+        self.assertEqual(by_org["机构甲"]["coupon_redemptions"], 3)
+
+    def test_all_campaign_query_is_mutually_exclusive_and_permission_restricted(self) -> None:
+        self.client.force_authenticate(user=self.admin)
+        no_campaign = self.client.get(self.url, {"month": "2026-10"})
+        conflicting = self.client.get(self.url, {
+            "month": "2026-10", "all_campaigns": "true", "campaign_name": "活动",
+        })
+        self.assertEqual(no_campaign.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(conflicting.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.client.force_authenticate(user=self.user)
+        forbidden = self.client.get(self.url, {"month": "2026-10", "all_campaigns": "true"})
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_campaign_report_requires_superuser_telephone_110(self) -> None:
         for user in (self.user, self.other_superuser):
             with self.subTest(telephone=user.telephone):

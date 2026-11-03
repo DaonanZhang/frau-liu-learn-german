@@ -14,6 +14,8 @@ import FavoriteQuestionsPage from "./pages/FavoriteQuestionsPage.jsx";
 import ModulePage from "./pages/ModulePage.jsx";
 import VlogModulePage from "./pages/VlogModulePage.jsx";
 import ExamPreparationModulePage from "./pages/ExamPreparationModulePage.jsx";
+import ExamPreparationTipsPage from "./pages/ExamPreparationTipsPage.jsx";
+import ExamPreparationGuideDetailPage from "./pages/ExamPreparationGuideDetailPage.jsx";
 import ExamPreparationListeningPage from "./pages/ExamPreparationListeningPage.jsx";
 import ExamPreparationSpeakingPage from "./pages/ExamPreparationSpeakingPage.jsx";
 import ExamPreparationSprachbausteinePage from "./pages/ExamPreparationSprachbausteinePage.jsx";
@@ -72,7 +74,12 @@ export function examPreparationLevelHomeRoutes() {
 
 function ExamPreparationLevelGate({ children }) {
   const { level } = useParams();
-  return examPreparationScope(level) ? children : <Navigate to="/modules/exam-preparation" replace />;
+  const location = useLocation();
+  if (!examPreparationScope(level)) return <Navigate to="/modules/exam-preparation" replace />;
+  if (String(level).toUpperCase() === "C1" && !/\/tips(?:\/|$)/.test(location.pathname)) {
+    return <Navigate to="/modules/exam-preparation/c1" replace />;
+  }
+  return children;
 }
 
 function FallbackRedirect() {
@@ -145,6 +152,8 @@ const router = createBrowserRouter([
       { path: "/modules/science-season", element: <ModulePage /> },
       { path: "/modules/vlog-season", element: <VlogModulePage /> },
       ...examPreparationLevelHomeRoutes(),
+      { path: "/modules/exam-preparation/tips", element: <ExamPreparationTipsPage /> },
+      { path: "/modules/exam-preparation/tips/:guideId", element: <ExamPreparationGuideDetailPage /> },
       { path: "/modules/exam-preparation/:examType/:level/mock-exam", element: <MockExamPage /> },
       { path: "/modules/exam-preparation/:examType/:level/mock-exams", element: <MockExamRecordsPage /> },
       { path: "/modules/exam-preparation/hoeren", element: <ExamPreparationListeningPage /> },

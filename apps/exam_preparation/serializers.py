@@ -15,6 +15,7 @@ from apps.exam_preparation.models import (
     ClozeMatchingExercise,
     ClozeMatchingOption,
     ExerciseBase,
+    ExamPreparationGuide,
     ListeningAnswerOption,
     ListeningExercise,
     ListeningQuestion,
@@ -110,6 +111,38 @@ class ExerciseBaseSerializer(serializers.ModelSerializer):
         model = ExerciseBase
         fields = "__all__"
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class ExamPreparationGuideSerializer(serializers.ModelSerializer):
+    badges = serializers.ListField(child=serializers.CharField(), allow_empty=True)
+    is_liked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ExamPreparationGuide
+        fields = [
+            "id",
+            "author",
+            "cover_url",
+            "badges",
+            "summary",
+            "title",
+            "body_markdown",
+            "published_at",
+            "view_count",
+            "like_count",
+            "is_published",
+            "is_liked",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_is_liked(self, guide):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not getattr(user, "is_authenticated", False):
+            return False
+        return guide.user_likes.filter(user=user).exists()
 
 
 class ListeningExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.ModelSerializer):

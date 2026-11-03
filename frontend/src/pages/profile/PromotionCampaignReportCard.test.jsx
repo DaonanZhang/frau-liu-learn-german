@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import PromotionCampaignReportCard from "./PromotionCampaignReportCard.jsx";
@@ -88,7 +88,126 @@ describe("PromotionCampaignReportCard", () => {
     await waitFor(() => expect(mocks.fetchPromotionCampaignReport).toHaveBeenCalledWith({
       campaignName: "花虫二",
       month: "all",
+      allCampaigns: false,
     }));
+  });
+
+  it("clears and disables the campaign combobox while all campaigns is selected", () => {
+    render(<PromotionCampaignReportCard />);
+    const campaignInput = screen.getByRole("combobox", { name: "合作博主" });
+    const allCampaigns = screen.getByRole("checkbox", { name: "全部统计" });
+
+    expect(allCampaigns).not.toBeChecked();
+    fireEvent.change(campaignInput, { target: { value: "花虫二" } });
+    fireEvent.click(allCampaigns);
+    expect(campaignInput).toHaveValue("");
+    expect(campaignInput).toBeDisabled();
+    expect(campaignInput).not.toBeRequired();
+    fireEvent.click(allCampaigns);
+    expect(campaignInput).toBeEnabled();
+    expect(campaignInput).toBeRequired();
+  });
+
+  it("queries all campaigns for a selected month", async () => {
+    render(<PromotionCampaignReportCard />);
+    fireEvent.change(screen.getByLabelText("选择月份"), { target: { value: "2026-10" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "全部统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "查询" }));
+
+    await waitFor(() => expect(mocks.fetchPromotionCampaignReport).toHaveBeenCalledWith({
+      campaignName: "",
+      month: "2026-10",
+      allCampaigns: true,
+    }));
+  });
+
+  it("queries all campaigns for all time", async () => {
+    render(<PromotionCampaignReportCard />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "全部统计" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "全部时间" }));
+    fireEvent.click(screen.getByRole("button", { name: "查询" }));
+
+    await waitFor(() => expect(mocks.fetchPromotionCampaignReport).toHaveBeenCalledWith({
+      campaignName: "",
+      month: "all",
+      allCampaigns: true,
+    }));
+  });
+
+  it("clears a single-campaign result when switching to all campaigns", async () => {
+    render(<PromotionCampaignReportCard />);
+    fireEvent.change(screen.getByLabelText("合作博主"), { target: { value: "花虫二" } });
+    fireEvent.click(screen.getByRole("button", { name: "查询" }));
+    expect(await screen.findByText("科普季永久权限")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "全部统计" }));
+    expect(screen.queryByText("科普季永久权限")).not.toBeInTheDocument();
+    expect(screen.queryByText("暂无兑换或购买记录")).not.toBeInTheDocument();
+  });
+
+  it("clears an all-campaign result when switching to single campaign", async () => {
+    mocks.fetchPromotionCampaignReport.mockResolvedValueOnce({ reports: [{
+      ...report,
+      campaign_names: ["花虫二"],
+    }] });
+    const { container } = render(<PromotionCampaignReportCard />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "全部统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "查询" }));
+    expect(await screen.findByRole("heading", { name: "花虫二" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "全部统计" }));
+    expect(screen.queryByRole("heading", { name: "花虫二" })).not.toBeInTheDocument();
+    expect(container.querySelector(".profile-campaignReport__summary")).toBeNull();
+    expect(screen.queryByText("暂无兑换或购买记录")).not.toBeInTheDocument();
+  });
+
+  it("disables the all-campaigns checkbox while a report request is pending", async () => {
+    let resolveRequest;
+    mocks.fetchPromotionCampaignReport.mockReturnValueOnce(new Promise((resolve) => {
+      resolveRequest = resolve;
+    }));
+    render(<PromotionCampaignReportCard />);
+    fireEvent.change(screen.getByLabelText("合作博主"), { target: { value: "花虫二" } });
+    fireEvent.click(screen.getByRole("button", { name: "查询" }));
+    const allCampaigns = screen.getByRole("checkbox", { name: "全部统计" });
+    expect(allCampaigns).toBeDisabled();
+    await act(async () => resolveRequest(report));
+    await screen.findByText("科普季永久权限");
+    expect(allCampaigns).toBeEnabled();
+  });
+
+  it("renders each all-campaign report in its own grouped card", async () => {
+    mocks.fetchPromotionCampaignReport.mockResolvedValueOnce({
+      reports: [
+        { ...report, campaign_names: ["花虫二", "花虫二-十月"] },
+        {
+          ...report,
+          campaign_names: ["昆仑字幕组"],
+          coupon_redemptions: 2,
+          redeeming_users: 2,
+          paid_orders: 0,
+          paying_users: 0,
+          purchases: [],
+        },
+      ],
+    });
+    render(<PromotionCampaignReportCard />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "全部统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "查询" }));
+
+    expect(await screen.findByRole("heading", { name: "花虫二 / 花虫二-十月" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "昆仑字幕组" })).toBeInTheDocument();
+    expect(screen.getAllByRole("heading", { name: "购买明细" })).toHaveLength(2);
+    expect(screen.getByText("暂无购买记录")).toBeInTheDocument();
+  });
+
+  it("shows the empty message for an empty all-campaign result", async () => {
+    mocks.fetchPromotionCampaignReport.mockResolvedValueOnce({ reports: [] });
+    render(<PromotionCampaignReportCard />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "全部统计" }));
+    fireEvent.click(screen.getByRole("button", { name: "查询" }));
+
+    expect(await screen.findByText("暂无兑换或购买记录")).toBeInTheDocument();
   });
 
   it("queries one campaign keyword and month and renders summary and purchases", async () => {
@@ -101,6 +220,7 @@ describe("PromotionCampaignReportCard", () => {
     await waitFor(() => expect(mocks.fetchPromotionCampaignReport).toHaveBeenCalledWith({
       campaignName: "花虫二",
       month: "2026-10",
+      allCampaigns: false,
     }));
     expect(screen.getByText("11")).toBeInTheDocument();
     expect(screen.getByText("9")).toBeInTheDocument();

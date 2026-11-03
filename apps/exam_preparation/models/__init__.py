@@ -13,6 +13,7 @@ from .listening import (
     ListeningQuestion,
 )
 from .mock_exam import MockExamPaper, MockExamShare, SavedMockExam
+from .guide import ExamPreparationGuide, ExamPreparationGuideLike
 from .reading import (
     ReadingAdMatchingAd,
     ReadingAdMatchingExercise,
@@ -46,6 +47,8 @@ __all__ = [
     "ListeningQuestion",
     "ListeningAnswerOption",
     "SavedMockExam",
+    "ExamPreparationGuide",
+    "ExamPreparationGuideLike",
     "MockExamPaper",
     "MockExamShare",
     "ReadingTitleMatchingExercise",

@@ -129,5 +129,13 @@ class PromotionCodeHistoryQuerySerializer(serializers.Serializer):
 
 
 class PromotionCampaignReportQuerySerializer(serializers.Serializer):
-    campaign_name = serializers.CharField(max_length=128, trim_whitespace=True)
+    campaign_name = serializers.CharField(max_length=128, trim_whitespace=True, required=False)
     month = serializers.RegexField(regex=r"^(all|\d{4}-(0[1-9]|1[0-2]))$")
+    all_campaigns = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        if attrs["all_campaigns"] and "campaign_name" in attrs:
+            raise serializers.ValidationError({"campaign_name": "Not allowed with all_campaigns."})
+        if not attrs["all_campaigns"] and "campaign_name" not in attrs:
+            raise serializers.ValidationError({"campaign_name": "This field is required."})
+        return attrs

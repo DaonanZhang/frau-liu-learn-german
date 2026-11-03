@@ -22,6 +22,7 @@ from apps.accounts.serializers.user import (
 )
 from apps.accounts.services.promotion_codes import (
     create_promotion_code_batch,
+    get_all_promotion_campaign_reports,
     get_promotion_campaign_report,
     list_promotion_campaign_names,
 )
@@ -217,6 +218,34 @@ class UserViewSet(viewsets.GenericViewSet):
 
         serializer = PromotionCampaignReportQuerySerializer(data=request.query_params)
         serializer.is_valid(raise_exception=True)
+        if serializer.validated_data["all_campaigns"]:
+            report = get_all_promotion_campaign_reports(
+                month_text=serializer.validated_data["month"],
+            )
+            return Response({
+                "month": report["month"],
+                "all_campaigns": True,
+                "reports": [
+                    {
+                        **item,
+                        "campaign_names": item["campaign_names"],
+                        "original_amount": f"{item['original_amount']:.2f}",
+                        "promotion_discount": f"{item['promotion_discount']:.2f}",
+                        "final_amount": f"{item['final_amount']:.2f}",
+                        "redemptions": item["redemptions"],
+                        "purchases": [
+                            {
+                                **purchase,
+                                "original_amount": f"{purchase['original_amount']:.2f}",
+                                "promotion_discount": f"{purchase['promotion_discount']:.2f}",
+                                "final_amount": f"{purchase['final_amount']:.2f}",
+                            }
+                            for purchase in item["purchases"]
+                        ],
+                    }
+                    for item in report["reports"]
+                ],
+            })
         report = get_promotion_campaign_report(
             campaign_name=serializer.validated_data["campaign_name"],
             month_text=serializer.validated_data["month"],

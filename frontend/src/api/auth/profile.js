@@ -65,11 +65,13 @@ export function fetchPromotionCodeDetails(generationBatchId) {
   return apiFetch(`/accounts/users/promotion-codes/?${params.toString()}`, { method: "GET" });
 }
 
-export function fetchPromotionCampaignReport({ campaignName, month }) {
-  const params = new URLSearchParams({
-    campaign_name: String(campaignName || "").trim(),
-    month: String(month || "").trim(),
-  });
+export function fetchPromotionCampaignReport({ campaignName = "", month, allCampaigns = false }) {
+  const params = new URLSearchParams({ month: String(month || "").trim() });
+  if (allCampaigns) {
+    params.set("all_campaigns", "true");
+  } else {
+    params.set("campaign_name", String(campaignName).trim());
+  }
   return apiFetch(`/accounts/users/promotion-campaign-report/?${params.toString()}`, {
     method: "GET",
   });

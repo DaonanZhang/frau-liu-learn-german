@@ -135,38 +135,20 @@ def get_promotion_campaign_report(
     code: str = "",
 ) -> dict[str, object]:
     normalized_month = str(month_text or "").strip()
-    month_start = None
-    next_month = None
-    if normalized_month != "all":
-        try:
-            month_start_date = datetime.strptime(normalized_month, "%Y-%m").date().replace(day=1)
-        except ValueError as exc:
-            raise ValueError("--month must use YYYY-MM or all") from exc
-        if month_start_date.strftime("%Y-%m") != normalized_month:
-            raise ValueError("--month must use YYYY-MM or all")
-        if month_start_date.month == 12:
-            next_month_date = month_start_date.replace(year=month_start_date.year + 1, month=1)
-        else:
-            next_month_date = month_start_date.replace(month=month_start_date.month + 1)
-        current_tz = timezone.get_current_timezone()
-        month_start = timezone.make_aware(
-            datetime.combine(month_start_date, datetime.min.time()),
-            current_tz,
-        )
-        next_month = timezone.make_aware(
-            datetime.combine(next_month_date, datetime.min.time()),
-            current_tz,
-        )
+    month_start, next_month = _promotion_report_month_bounds(normalized_month)
 
     redeemed = PromotionCodeRecord.objects.filter(
         campaign_name__icontains=campaign_name,
+        source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
         status=PromotionCodeRecord.Status.CONSUMED,
     )
     redemptions = UserCoupon.objects.filter(
         promotion_code__campaign_name__icontains=campaign_name,
+        promotion_code__source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
     ).select_related("user", "promotion_code")
     paid = PaymentDiscountApplication.objects.filter(
         campaign_name_snapshot__icontains=campaign_name,
+        promotion_code__source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
         status=PaymentDiscountApplication.Status.APPLIED,
     ).select_related("user", "offer", "payment", "promotion_code")
     if month_start is not None:
@@ -231,6 +213,112 @@ def get_promotion_campaign_report(
             for application in paid.order_by("applied_at", "id")
         ],
     }
+
+
+def _promotion_report_month_bounds(month_text: str):
+    if month_text == "all":
+        return None, None
+    try:
+        month_start_date = datetime.strptime(month_text, "%Y-%m").date().replace(day=1)
+    except ValueError as exc:
+        raise ValueError("--month must use YYYY-MM or all") from exc
+    if month_start_date.strftime("%Y-%m") != month_text:
+        raise ValueError("--month must use YYYY-MM or all")
+    next_month_date = (
+        month_start_date.replace(year=month_start_date.year + 1, month=1)
+        if month_start_date.month == 12
+        else month_start_date.replace(month=month_start_date.month + 1)
+    )
+    current_tz = timezone.get_current_timezone()
+    return (
+        timezone.make_aware(datetime.combine(month_start_date, datetime.min.time()), current_tz),
+        timezone.make_aware(datetime.combine(next_month_date, datetime.min.time()), current_tz),
+    )
+
+
+def get_all_promotion_campaign_reports(*, month_text: str) -> dict[str, object]:
+    normalized_month = str(month_text or "").strip()
+    month_start, next_month = _promotion_report_month_bounds(normalized_month)
+    redemptions = UserCoupon.objects.filter(
+        promotion_code__source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
+    ).select_related("user", "promotion_code")
+    purchases = PaymentDiscountApplication.objects.filter(
+        status=PaymentDiscountApplication.Status.APPLIED,
+        promotion_code__source_kind=PromotionCodeRecord.SourceKind.OPERATIONAL,
+    ).select_related("user", "offer", "payment", "promotion_code")
+    if month_start is not None:
+        redemptions = redemptions.filter(issued_at__gte=month_start, issued_at__lt=next_month)
+        purchases = purchases.filter(applied_at__gte=month_start, applied_at__lt=next_month)
+
+    grouped: dict[str, dict[str, object]] = {}
+
+    def report_for(organization_name: str) -> dict[str, object] | None:
+        if not organization_name:
+            return None
+        return grouped.setdefault(organization_name, {
+            "organization_name": organization_name,
+            "campaign_names": set(),
+            "coupon_redemptions": 0,
+            "redeeming_users": set(),
+            "paid_orders": 0,
+            "paying_users": set(),
+            "original_amount": Decimal("0.00"),
+            "promotion_discount": Decimal("0.00"),
+            "final_amount": Decimal("0.00"),
+            "redemptions": [],
+            "purchases": [],
+        })
+
+    def organization_for(promotion: PromotionCodeRecord) -> str:
+        return promotion.organization_name.strip() or promotion.campaign_name.strip()
+
+    for coupon in redemptions.order_by("issued_at", "id"):
+        promotion = coupon.promotion_code
+        report = report_for(organization_for(promotion))
+        if report is None:
+            continue
+        report["campaign_names"].add(promotion.campaign_name)
+        report["coupon_redemptions"] += 1
+        report["redeeming_users"].add(coupon.user_id)
+        report["redemptions"].append({
+            "promotion_code": promotion.code,
+            "telephone": getattr(coupon.user, "telephone", "") or "",
+            "issued_at": coupon.issued_at,
+        })
+
+    for application in purchases.order_by("applied_at", "id"):
+        promotion = application.promotion_code
+        report = report_for(organization_for(promotion))
+        if report is None:
+            continue
+        report["campaign_names"].add(
+            application.campaign_name_snapshot.strip() or promotion.campaign_name.strip()
+        )
+        report["paid_orders"] += 1
+        report["paying_users"].add(application.user_id)
+        report["original_amount"] += application.original_amount
+        report["promotion_discount"] += application.promotion_discount_amount
+        report["final_amount"] += application.final_amount
+        report["purchases"].append({
+            "promotion_code": application.promotion_code.code,
+            "telephone": application.user.telephone,
+            "offer_code": application.offer.code,
+            "offer_title": application.offer.title,
+            "merchant_order_no": application.payment.merchant_order_no,
+            "original_amount": application.original_amount,
+            "promotion_discount": application.promotion_discount_amount,
+            "final_amount": application.final_amount,
+            "applied_at": application.applied_at,
+        })
+
+    reports = []
+    for organization_name in sorted(grouped):
+        report = grouped[organization_name]
+        report["campaign_names"] = sorted(name for name in report["campaign_names"] if name)
+        report["redeeming_users"] = len(report["redeeming_users"])
+        report["paying_users"] = len(report["paying_users"])
+        reports.append(report)
+    return {"month": normalized_month, "all_campaigns": True, "reports": reports}
 
 
 @transaction.atomic

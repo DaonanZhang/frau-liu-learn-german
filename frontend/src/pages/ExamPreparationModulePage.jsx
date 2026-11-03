@@ -22,8 +22,8 @@ import {
 const SKILL_CARDS = [
   {
     key: "tips",
-    title: "Unsere Tipps",
-    label: "备考建议",
+    title: "备考建议",
+    label: "Unsere Tipps",
     description: "",
     to: "/modules/exam-preparation/tips",
     cta: "查看 Tipps",
@@ -335,9 +335,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
                 </p>
               ) : null}
               <div className="exam-module-card__footer">
-                {scope.level === "C1" && card.key !== "tips" ? (
-                  <span className="exam-module-card__badge">Coming soon</span>
-                ) : card.to ? (
+                {card.to ? (
                   <span className="exam-module-card__cta">{card.cta || "进入"}</span>
                 ) : (
                   <span className="exam-module-card__badge">即将开放</span>
@@ -345,14 +343,6 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
               </div>
             </>
           );
-
-          if (scope.level === "C1" && card.key !== "tips") {
-            return (
-              <button key={card.key} type="button" onClick={() => Swal.fire({ icon: "info", title: "Coming soon" })} className="exam-module-card exam-module-card--link exam-module-card--coming-soon">
-                {content}
-              </button>
-            );
-          }
 
           if (card.to) {
             return (

@@ -314,28 +314,31 @@ describe("exam preparation level entry", () => {
 
   it.each(["b1", "b2", "c1"])("shows the tips entry for %s", (level) => {
     renderPage(level);
-    expect(screen.getByRole("link", { name: /Unsere Tipps/ })).toHaveAttribute("href", `/modules/exam-preparation/${level}/tips`);
+    const tips = screen.getByRole("link", { name: /备考建议/ });
+    expect(tips).toHaveAttribute("href", `/modules/exam-preparation/${level}/tips`);
+    expect(within(tips).getByRole("heading", { name: "备考建议" })).toBeInTheDocument();
+    expect(within(tips).getByText("Unsere Tipps", { selector: ".exam-module-card__kicker" })).toBeInTheDocument();
   });
 
-  it("keeps only tips linked on C1 and gives all five specialties Coming soon buttons", () => {
+  it("links all six C1 entries while keeping the mock exam Coming soon", () => {
     fetchSavedMockExams.mockClear();
     renderPage("c1");
     expect(fetchSavedMockExams).not.toHaveBeenCalled();
     const skills = screen.getByRole("region", { name: "专项入口列表" });
-    const tips = within(skills).getByRole("link", { name: /Unsere Tipps/ });
+    const tips = within(skills).getByRole("link", { name: /备考建议/ });
     expect(tips).toHaveAttribute("href", "/modules/exam-preparation/c1/tips");
-    expect(within(skills).getAllByRole("link")).toHaveLength(1);
-    const comingSoonButtons = within(skills).getAllByRole("button");
-    expect(comingSoonButtons).toHaveLength(5);
-    ["Hören", "Lesen", "Sprachbausteine", "Schreiben", "Sprechen"].forEach((name) => {
-      expect(within(skills).getByRole("button", { name: new RegExp(name) })).toBeInTheDocument();
-    });
-    comingSoonButtons.forEach((button) => {
-      expect(within(button).getByText("Coming soon")).toBeInTheDocument();
-      Swal.fire.mockClear();
-      fireEvent.click(button);
-      expect(Swal.fire).toHaveBeenCalledTimes(1);
-      expect(Swal.fire).toHaveBeenCalledWith({ icon: "info", title: "Coming soon" });
+    expect(within(skills).getAllByRole("link")).toHaveLength(6);
+    expect(within(skills).queryAllByRole("button")).toHaveLength(0);
+    [
+      ["Hören", "/modules/exam-preparation/c1/hoeren", "进入听力模块"],
+      ["Lesen", "/modules/exam-preparation/c1/lesen", "进入阅读模块"],
+      ["Sprachbausteine", "/modules/exam-preparation/c1/sprachbausteine", "进入 Sprachbausteine"],
+      ["Schreiben", "/modules/exam-preparation/c1/schreiben", "进入 Schreiben"],
+      ["Sprechen", "/modules/exam-preparation/c1/sprechen", "进入 Sprechen"],
+    ].forEach(([name, href, cta]) => {
+      const link = within(skills).getByRole("link", { name: new RegExp(name) });
+      expect(link).toHaveAttribute("href", href);
+      expect(within(link).getByText(cta)).toBeInTheDocument();
     });
     const mockEntry = screen.getByLabelText("笔试模拟考试");
     fireEvent.click(within(mockEntry).getByRole("button", { name: "Coming soon" }));

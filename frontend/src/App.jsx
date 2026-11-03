@@ -74,11 +74,7 @@ export function examPreparationLevelHomeRoutes() {
 
 function ExamPreparationLevelGate({ children }) {
   const { level } = useParams();
-  const location = useLocation();
   if (!examPreparationScope(level)) return <Navigate to="/modules/exam-preparation" replace />;
-  if (String(level).toUpperCase() === "C1" && !/\/tips(?:\/|$)/.test(location.pathname)) {
-    return <Navigate to="/modules/exam-preparation/c1" replace />;
-  }
   return children;
 }
 

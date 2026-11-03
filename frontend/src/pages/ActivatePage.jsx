@@ -172,7 +172,7 @@ export default function ActivatePage() {
               type="button"
               onClick={() => setActiveLegalDocument("terms")}
             >
-              本用户协议
+              用户协议
             </button>
             <span>及</span>
             <button

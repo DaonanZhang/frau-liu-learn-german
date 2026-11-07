@@ -136,6 +136,50 @@ describe("ReadingAdMatchingWorkspace annotations", () => {
     expect(styleSource).toMatch(/\.reading-ad-workspace--c1 \.reading-ad-question-section\s*\{\s*order:\s*-1;/);
   });
 
+  it("cleans the Version 2 prefix but hides its label by default", () => {
+    renderWorkspace({
+      exercise: {
+        ...exercise,
+        items: Array.from({ length: 6 }, (_, index) => ({
+          ...exercise.items[0],
+          id: 21 + index,
+          item_number: index + 1,
+          item_text: index === 0 ? " ( version2 )  Diese Anzeige ist passend." : `Situation ${index + 1}`,
+        })),
+      },
+      showAllAds: true,
+    });
+
+    expect(screen.getByText("Diese Anzeige ist passend.")).toBeInTheDocument();
+    expect(screen.queryByText(/\(\s*version2\s*\)/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("备用题 · Version 2")).not.toBeInTheDocument();
+  });
+
+  it("marks only version 2 questions when enabled and recognizes the legacy prefix", () => {
+    const version2Exercise = {
+      ...exercise,
+      items: [
+        { ...exercise.items[0], id: 21, item_text: "(Version2) Diese Anzeige ist passend." },
+        { ...exercise.items[0], id: 22, item_number: 2, item_text: "Normale Situation", is_version2: false },
+        { ...exercise.items[0], id: 23, item_number: 3, item_text: "Explizit markiert", is_version2: true },
+        { ...exercise.items[0], id: 24, item_number: 4, item_text: "Nicht (Version2) am Satzanfang" },
+      ],
+    };
+    renderWorkspace({ exercise: version2Exercise, showAllAds: true, showVersion2Label: true });
+
+    expect(screen.getByText("Diese Anzeige ist passend.")).toBeInTheDocument();
+    expect(screen.getByText("备用题 · Version 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "下一题 →" }));
+    expect(screen.getByText("Normale Situation")).toBeInTheDocument();
+    expect(screen.queryByText("备用题 · Version 2")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "下一题 →" }));
+    expect(screen.getByText("Explizit markiert")).toBeInTheDocument();
+    expect(screen.getByText("备用题 · Version 2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "下一题 →" }));
+    expect(screen.getByText("Nicht (Version2) am Satzanfang")).toBeInTheDocument();
+    expect(screen.queryByText("备用题 · Version 2")).not.toBeInTheDocument();
+  });
+
   it("moves to the next C1 question with a horizontal touch swipe", () => {
     const { container } = renderWorkspace({
       exercise: { ...exercise, items: [...exercise.items, { ...exercise.items[0], id: 22, item_number: 2, item_text: "Situation zwei" }] },

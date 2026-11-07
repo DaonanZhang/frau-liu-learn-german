@@ -147,4 +147,33 @@ describe("ReadingAdMatchingPage annotations", () => {
     expect(await screen.findByText("未作答")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
   });
+
+  it("shows all seven C1 practice situations and labels only the version 2 backup", async () => {
+    fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
+      ...detail,
+      exercise_base: { ...detail.exercise_base, level: "C1" },
+      items: Array.from({ length: 7 }, (_, index) => ({
+        ...detail.items[0],
+        id: 21 + index,
+        item_number: index + 1,
+        item_text: index === 6 ? "( Version2 ) Eine weitere Situation." : `Situation ${index + 1}`,
+        is_version2: index === 6,
+      })),
+    });
+    renderPage("c1");
+
+    expect(await screen.findByText("Situation 1")).toBeInTheDocument();
+    expect(document.querySelector(".reading-ad-question-card__progress")).toHaveTextContent("1 / 7");
+    expect(screen.getAllByRole("button", { name: /^[1-7]$/ })).toHaveLength(7);
+    expect(screen.queryByText("备用题 · Version 2")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "7" }));
+
+    expect(screen.getByText("Eine weitere Situation.")).toBeInTheDocument();
+    expect(screen.getByText("备用题 · Version 2")).toBeInTheDocument();
+    expect(screen.queryByText(/\(\s*Version2\s*\)/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(await screen.findByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
+    expect(await screen.findByText("Situation 1")).toBeInTheDocument();
+  });
 });

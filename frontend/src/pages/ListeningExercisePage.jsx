@@ -19,6 +19,7 @@ import ListeningTranscript from "../components/examPreparation/ListeningTranscri
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
+import { answerMatchesExpected, expectedHasMultipleAnswers } from "../utils/c1AnswerMatcher.js";
 import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../hooks/useReliableAudioSources.js";
 import { TELC_B2_LISTENING_TEIL2_INSTRUCTION } from "./examPreparationTypeContent.js";
 import "./ListeningExercisePage.css";
@@ -638,12 +639,11 @@ export default function ListeningExercisePage({
                 <p>{slide.text}</p>
                 {(slide.answers || []).map((answer, answerIndex) => {
                   const key = `${slideIndex}-${answerIndex}`;
-                  const correct = String(answer.answer || "").trim().toLocaleLowerCase();
-                  const entered = String(c1Notes[key] || "").trim().toLocaleLowerCase();
+                  const correct = answerMatchesExpected(c1Notes[key], answer.answer);
                   return <label className="listening-exercise-c1-note" key={key}><span>{answer.blank_id}</span><input type="text" value={c1Notes[key] || ""} disabled={isChecked} onChange={(event) => {
                     const value = event.target.value;
                     setC1Notes((previous) => ({ ...previous, [key]: value }));
-                  }} />{isChecked ? <strong className={entered === correct ? "is-correct" : "is-wrong"}>{answer.answer}</strong> : null}</label>;
+                  }} />{expectedHasMultipleAnswers(answer.answer) ? <small className="listening-exercise-c1-note__hint">多个答案请用分号分隔</small> : null}{isChecked ? <strong className={correct ? "is-correct" : "is-wrong"}>{answer.answer}</strong> : null}</label>;
                 })}
               </article>
             )) : null}

@@ -551,23 +551,31 @@ class SavedMockExamViewSet(ViewSet):
         if rules is None:
             return _unsupported_mock_exam_response(exam_type)
         expected_keys = {item[0] for item in _mock_exam_definitions(exam_type=exam_type, level=level)}
-        if not isinstance(selection, dict) or set(selection) != expected_keys:
+        allow_reading_variant = str(exam_type).upper() == "TELC" and str(level).upper() == ExerciseBase.Level.C1
+        allowed_keys = expected_keys | ({"reading_ad_matching_variant"} if allow_reading_variant else set())
+        if not isinstance(selection, dict) or not expected_keys.issubset(selection) or set(selection) - allowed_keys:
             return Response({"message": "试卷题目 ID 不完整。"}, status=status.HTTP_400_BAD_REQUEST)
+        if "reading_ad_matching_variant" in selection:
+            variant = selection["reading_ad_matching_variant"]
+            if not allow_reading_variant or not isinstance(variant, int) or isinstance(variant, bool) or not 0 <= variant <= 6:
+                return Response({"message": "备用题方案无效。"}, status=status.HTTP_400_BAD_REQUEST)
         try:
             normalized_selection = {}
             for key in sorted(expected_keys):
                 value = selection[key]
-                if key == "writing" and str(level).upper() == ExerciseBase.Level.B2:
+                if key == "writing" and str(level).upper() in {ExerciseBase.Level.B2, ExerciseBase.Level.C1}:
                     if (
                         not isinstance(value, list)
                         or len(value) != 2
                         or any(not isinstance(item, int) or isinstance(item, bool) for item in value)
                         or value[0] == value[1]
                     ):
-                        return Response({"message": "B2 写作题必须选择两个不同题目。"}, status=status.HTTP_400_BAD_REQUEST)
+                        return Response({"message": "写作题必须选择两个不同题目。"}, status=status.HTTP_400_BAD_REQUEST)
                     normalized_selection[key] = list(value)
                 else:
                     normalized_selection[key] = int(value)
+            if "reading_ad_matching_variant" in selection:
+                normalized_selection["reading_ad_matching_variant"] = selection["reading_ad_matching_variant"]
             selection = normalized_selection
         except (TypeError, ValueError):
             return Response({"message": "试卷题目 ID 无效。"}, status=status.HTTP_400_BAD_REQUEST)

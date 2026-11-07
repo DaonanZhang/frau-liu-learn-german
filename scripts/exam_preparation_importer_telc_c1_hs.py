@@ -22,6 +22,7 @@ from apps.exam_preparation.models import (
     WritingExercise, SpeakingTeilExercise,
     ClozeMatchingExercise, ClozeMatchingOption, ClozeMatchingBlankAnswer,
 )
+from apps.exam_preparation.models import WritingExampleText
 from apps.exam_preparation.speaking_audio import speaking_turn_audio_url
 
 RAW_ROOT = ROOT / "apps/exam_preparation/data/imports/telc/c1_hs"
@@ -34,6 +35,9 @@ KINDS = {
     "listening_teil1": ("listening_teil1", None),
     "listening_teil2": ("listening_teil2", None),
     "listening_teil3": ("listening_teil3", None),
+    "writing": ("writing", None),
+    "speaking_teil1": ("speaking_teil1", None),
+    "speaking_teil2": ("speaking_teil2", None),
 }
 SEED_PROVENANCE = {
     "type": "official_practice_test_pdf",
@@ -76,6 +80,9 @@ def kind_for(path: Path) -> str:
     for kind in KINDS:
         if path.name.lower().startswith(kind + "__"):
             return kind
+    match = re.search(r"_(Schreiben|Vortrag|Zitat)_\d+$", path.stem, re.IGNORECASE)
+    if match:
+        return {"schreiben": "writing", "vortrag": "speaking_teil1", "zitat": "speaking_teil2"}[match.group(1).casefold()]
     raise shared.ImportErrorWithContext(f"{path.name}: unknown C1 Hochschule workbook kind")
 
 
@@ -100,6 +107,9 @@ def external_id(path: Path, row: dict) -> str:
         value = path.stem.rsplit("_", 1)[-1]
         if not value.isdigit():
             raise shared.ImportErrorWithContext(f"{path.name}: missing workbook exercise ID and numeric filename suffix")
+    filename_id = re.search(r"_(\d+)$", path.stem)
+    if filename_id and _numeric_id(value) != _numeric_id(filename_id.group(1)):
+        raise shared.ImportErrorWithContext(f"{path.name}: workbook ID does not match numeric filename suffix")
     return shared.external_id_from_filename(path, value)
 
 
@@ -115,15 +125,23 @@ def preflight(paths: list[Path]) -> list[str]:
                 "reading_teil3": "READING_UNDERSTANDING", "cloze_choice": "CLOZE_CHOICE",
                 "listening_teil1": "LISTENING_TEIL1", "listening_teil2": "LISTENING_TEIL2",
                 "listening_teil3": "LISTENING_TEIL3",
+                "writing": "WRITING_PROMPT", "speaking_teil1": "SPEAKING_TEIL1",
+                "speaking_teil2": "SPEAKING_TEIL3",
             }[kind]
-            key = ("TELC", "C1", exercise_type, identifier)
-            if key in seen:
-                raise shared.ImportErrorWithContext(f"duplicate batch key {key}; first seen in {seen[key].name}")
+            keys = [("TELC", "C1", exercise_type, identifier)]
+            if kind == "speaking_teil1":
+                keys.append(("TELC", "C1", "SPEAKING_TEIL2", identifier))
+            for key in keys:
+                if key in seen:
+                    raise shared.ImportErrorWithContext(f"duplicate batch key {key}; first seen in {seen[key].name}")
             if kind == "reading_teil1":
                 _validate_reading_teil1_structure(path)
             if kind == "reading_teil2":
                 _validate_reading_teil2_structure(path)
-            seen[key] = path
+            if kind in {"writing", "speaking_teil1", "speaking_teil2"}:
+                _validate_c1_sample(path, kind, identifier)
+            for key in keys:
+                seen[key] = path
         except Exception as exc:  # noqa: BLE001
             issues.append(f"{path.name}: {exc}")
     return issues
@@ -158,7 +176,7 @@ def _normalized_copy(path: Path, kind: str) -> Path:
     return target
 
 
-def import_workbook(path: Path) -> int:
+def import_workbook(path: Path, generate_speaking_audio: bool = False) -> int:
     kind = kind_for(path)
     row, _ = workbook_meta(path)
     identifier = external_id(path, row)
@@ -168,6 +186,12 @@ def import_workbook(path: Path) -> int:
         return import_reading_teil2(path, row, identifier)
     if kind.startswith("listening_"):
         return import_listening(path, row, identifier, kind)
+    if kind == "writing":
+        return import_writing(path, row, identifier)
+    if kind == "speaking_teil1":
+        return import_speaking_teil1(path, row, identifier, generate_speaking_audio)
+    if kind == "speaking_teil2":
+        return import_speaking_teil2(path, row, identifier, generate_speaking_audio)
     normalized = _normalized_copy(path, kind)
     importer = KINDS[kind][1]
     old_infer = shared.infer_level_from_filename
@@ -183,6 +207,130 @@ def import_workbook(path: Path) -> int:
                 is_real_exam=shared.parse_bool(row.get("是否真题", "")), source_reference="",
                 imported_from_file=path.name)
     return count
+
+
+def _sheet_rows(path: Path, sheet: str) -> list[dict]:
+    frame = pd.read_excel(path, sheet_name=sheet, engine="openpyxl").fillna("")
+    return [{key: shared.clean_text(value) for key, value in row.items()} for row in frame.to_dict("records")]
+
+
+def _numeric_id(value: object) -> str:
+    return shared.normalize_link_id(value)
+
+
+def _is_vortrag_translation_header(row: dict) -> bool:
+    return (
+        row.get("exercise_id", "").strip() == "角色"
+        and row.get("Role", "").strip() == "环节"
+        and row.get("内容", "").strip() == "德语文本"
+        and row.get("translate", "").strip() == "中文翻译"
+    )
+
+
+def _speaking_example_rows(path: Path, kind: str) -> list[dict]:
+    rows = [row for row in _sheet_rows(path, "example") if any(value.strip() for value in row.values())]
+    if kind == "speaking_teil1":
+        rows = [row for row in rows if not _is_vortrag_translation_header(row)]
+    return rows
+
+
+def _validate_c1_sample(path: Path, kind: str, identifier: str) -> None:
+    meta, _ = workbook_meta(path)
+    def check_ids(rows, column, sheet):
+        if not rows or any(not _numeric_id(row.get(column)) for row in rows):
+            raise shared.ImportErrorWithContext(f"{path.name}: {sheet} sheet has missing {column}")
+        if any(_numeric_id(row[column]) != identifier for row in rows):
+            raise shared.ImportErrorWithContext(f"{path.name}: ID mismatch in {sheet} sheet")
+
+    if kind == "writing":
+        quotes = [(meta.get("Zitat A", ""), meta.get("Zitat A_translate", "")),
+                  (meta.get("Zitat B", meta.get("Zitat B ", "")), meta.get("Zitat B_translate", ""))]
+        if any(not quote.strip() or not translation.strip() for quote, translation in quotes):
+            raise shared.ImportErrorWithContext(f"{path.name}: both writing quotes and Chinese translations are required")
+        try:
+            if int(float(meta.get("time_limit", ""))) != 70 or int(float(meta.get("words_limit_min", ""))) != 350:
+                raise ValueError
+        except (TypeError, ValueError):
+            raise shared.ImportErrorWithContext(f"{path.name}: writing limits must be 70 minutes and 350 words") from None
+        texts, words = _sheet_rows(path, "text"), _sheet_rows(path, "word")
+        check_ids(texts, "ID", "text")
+        check_ids(words, "ID", "word")
+        if any(not row.get("Example_Text") or not row.get("Chinese_translation") for row in texts):
+            raise shared.ImportErrorWithContext(f"{path.name}: text sheet requires German and Chinese sample text")
+        if any(not row.get("word") or not row.get("meaning") for row in words):
+            raise shared.ImportErrorWithContext(f"{path.name}: word sheet contains an empty vocabulary entry")
+    else:
+        if kind == "speaking_teil1" and any(not meta.get(column) for column in ("task", "题目", "提纲")):
+            raise shared.ImportErrorWithContext(f"{path.name}: Vortrag requires task, topic, and outline")
+        turns = _speaking_example_rows(path, kind)
+        check_ids(turns, "exercise_id", "example")
+        turns = [turn for turn in turns if turn.get("内容")]
+        required = 2 if kind == "speaking_teil1" else 1
+        if len(turns) < required:
+            raise shared.ImportErrorWithContext(f"{path.name}: expected at least {required} non-empty dialogue turn(s)")
+        if any(not turn.get("Role") for turn in turns):
+            raise shared.ImportErrorWithContext(f"{path.name}: example sheet has a turn without Role")
+        if kind == "speaking_teil2" and (not meta.get("Zitat") or not meta.get("Zitat_translate", "")):
+            raise shared.ImportErrorWithContext(f"{path.name}: quote and Chinese translation are required")
+
+
+def import_writing(path: Path, meta: dict, identifier: str) -> int:
+    _validate_c1_sample(path, "writing", identifier)
+    texts, words = _sheet_rows(path, "text"), _sheet_rows(path, "word")
+    sample_de = "\n\n".join(row["Example_Text"] for row in texts)
+    sample_zh = "\n\n".join(row["Chinese_translation"] for row in texts)
+    vocabulary = [{"term": row["word"], "translation_zh": row["meaning"]} for row in words]
+    pages = [{"title": f"Wortschatz {index // 12 + 1}", "entries": vocabulary[index:index + 12]}
+             for index in range(0, len(vocabulary), 12)]
+    quotes = [
+        {"text": meta["Zitat A"], "translation_zh": meta["Zitat A_translate"]},
+        {"text": meta.get("Zitat B", meta.get("Zitat B ", "")), "translation_zh": meta["Zitat B_translate"]},
+    ]
+    instruction = meta.get("task", "")
+    base = _base(path, identifier, meta, ExerciseBase.Skill.WRITING, ExerciseBase.ExerciseType.WRITING_PROMPT)
+    content = {"quotes": quotes, "sample_de": sample_de, "time_limit_minutes": 70,
+               "words_limit_min": 350, "vocabulary_pages": pages}
+    exercise, _ = WritingExercise.objects.update_or_create(exercise_base=base, defaults={
+        "request_text": instruction, "task_text": instruction, "time_limit_minutes": 70,
+        "words_limit": 350, "content": content,
+    })
+    exercise.example_texts.all().delete()
+    WritingExampleText.objects.create(writing_exercise=exercise, example_text=sample_de,
+        translation_zh=sample_zh, label="C1 model response", note=meta.get("Title", ""), sort_order=1)
+    return 1
+
+
+def _speaking_payload(path: Path, meta: dict, identifier: str, kind: str, generate_speaking_audio: bool) -> int:
+    _validate_c1_sample(path, kind, identifier)
+    turns = [row for row in _speaking_example_rows(path, kind) if row.get("内容")]
+    if kind == "speaking_teil1":
+        groups = [("SPEAKING_TEIL1", turns[:1], "1A", 3),
+                  ("SPEAKING_TEIL2", turns[1:], "1B", 2)]
+    else:
+        groups = [("SPEAKING_TEIL3", turns, "2", 6)]
+    for exercise_type, source_turns, teil, minutes in groups:
+        content = {"teil": teil, "time_limit_minutes": minutes,
+                   "dialogue": [{"sequence": index, "role": turn["Role"], "text": turn["内容"],
+                                 **({"translation_zh": turn["translate"]} if turn.get("translate") else {})}
+                                for index, turn in enumerate(source_turns, start=1)]}
+        if teil == "1A":
+            content.update(topic=meta.get("题目", ""), outline=[item.strip() for item in meta.get("提纲", "").split(";") if item.strip()])
+        if teil == "2":
+            content.update(quote=meta["Zitat"], quote_translation_zh=[meta["Zitat_translate"]],
+                           quotes=[{"text": meta["Zitat"], "translation_zh": meta["Zitat_translate"]}])
+        parsed = {"level": "C1", "external_id": identifier, "title": meta.get("标题", ""),
+                  "exam_type": "TELC", "is_real_exam": shared.parse_bool(meta.get("是否真题", "")),
+                  "instruction": meta.get("task", meta.get("Task", "")), "content": content}
+        shared.save_speaking_exercise(path, parsed, exercise_type, generate_speaking_audio=generate_speaking_audio)
+    return len(groups)
+
+
+def import_speaking_teil1(path: Path, meta: dict, identifier: str, generate_speaking_audio: bool = False) -> int:
+    return _speaking_payload(path, meta, identifier, "speaking_teil1", generate_speaking_audio)
+
+
+def import_speaking_teil2(path: Path, meta: dict, identifier: str, generate_speaking_audio: bool = False) -> int:
+    return _speaking_payload(path, meta, identifier, "speaking_teil2", generate_speaking_audio)
 
 
 def _reading_teil1_rows(path: Path):
@@ -270,7 +418,7 @@ def import_reading_teil1(path: Path, meta: dict, identifier: str) -> int:
 
 def stage(source: Path) -> list[Path]:
     staged = []
-    for path in sorted(source.glob("*.xlsx")):
+    for path in sorted(source.rglob("*.xlsx")):
         kind = kind_for(path)
         kind_root = RAW_ROOT / KINDS[kind][0]
         issues = preflight([path])
@@ -293,7 +441,7 @@ def stage(source: Path) -> list[Path]:
 def _base(path, identifier, row, skill, exercise_type):
     return shared.upsert_base(
         level="C1", skill=skill, exercise_type=exercise_type, external_id=identifier,
-        title=row.get("原标题", row.get("title", row.get("标题", ""))),
+        title=row.get("原标题", row.get("title", row.get("标题", row.get("Title", "")))),
         exam_type=row.get("考试类型", ""), is_real_exam=shared.parse_bool(row.get("是否真题", "")),
         imported_from_file=path.name,
     )
@@ -344,6 +492,13 @@ def _validate_reading_teil2_structure(path: Path) -> None:
         raise shared.ImportErrorWithContext(f"{path.name}: expected non-empty text for paragraphs A–E")
     if not questions:
         raise shared.ImportErrorWithContext(f"{path.name}: reading Teil 2 contains no questions")
+    version_questions = [question for question, _ in questions
+                         if re.match(r"^\s*\(\s*version2\s*\)\s*", question, flags=re.IGNORECASE)]
+    if version_questions:
+        if len(questions) != 7:
+            raise shared.ImportErrorWithContext(f"{path.name}: a Version2 set must contain exactly seven questions")
+        if len(version_questions) != 1:
+            raise shared.ImportErrorWithContext(f"{path.name}: a Version2 set must contain exactly one Version2 question")
     for question, paragraph_id in questions:
         if paragraph_id not in set("ABCDE"):
             raise shared.ImportErrorWithContext(
@@ -486,6 +641,7 @@ def main() -> int:
     parser.add_argument("--stage", action="store_true", help="copy Drive exports into isolated C1 raw folders")
     parser.add_argument("--no-move", action="store_true")
     parser.add_argument("--import-seeds", action="store_true", help="import the embedded writing and speaking practice samples")
+    parser.add_argument("--skip-speaking-audio", action="store_true", help="import model text without generating speaking audio")
     args = parser.parse_args()
     files = [args.file] if args.file else (stage(args.source_dir) if args.stage else sorted(RAW_ROOT.glob("*/raw/*.xlsx")))
     if not files:
@@ -505,7 +661,7 @@ def main() -> int:
     failures = 0
     for path in files:
         try:
-            import_workbook(path)
+            import_workbook(path, generate_speaking_audio=not args.skip_speaking_audio)
             print(f"OK: {path.name}")
             if not args.no_move and path.parent.name == "raw":
                 processed = path.parent.parent / "processed"

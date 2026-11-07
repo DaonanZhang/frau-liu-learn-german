@@ -948,6 +948,80 @@ class MockExamApiTests(APITestCase):
             writing_ids,
         )
 
+    def test_c1_reading_ad_version2_is_a_persisted_six_item_variant(self):
+        Entitlement.objects.create(
+            user=self.user, module=self.module, season=None,
+            plan=Entitlement.Plan.MONTH_1, status=Entitlement.Status.ACTIVE,
+        )
+        self.create_question_bank(level=ExerciseBase.Level.C1, id_prefix="MOCK-C1-V2")
+        second_writing_base = ExerciseBase.objects.create(
+            exam_type="telc", level=ExerciseBase.Level.C1, skill=ExerciseBase.Skill.WRITING,
+            exercise_type=ExerciseBase.ExerciseType.WRITING_PROMPT,
+            external_id="MOCK-C1-V2-writing-2", title="Writing 2",
+        )
+        WritingExercise.objects.create(exercise_base=second_writing_base, task_text="Aufgabe 2")
+        exercise = ReadingAdMatchingExercise.objects.get(
+            exercise_base__external_id=f"MOCK-C1-V2-{ExerciseBase.ExerciseType.READING_AD_MATCHING}"
+        )
+        ads = [ReadingAdMatchingAd.objects.create(
+            exercise=exercise, ad_key=f"A{index}", ad_text_markdown=f"Anzeige {index}"
+        ) for index in range(7)]
+        items = [ReadingAdMatchingItem.objects.create(
+            exercise=exercise, item_number=index + 1,
+            item_text="  (Version2) Ersatz" if index == 6 else f"Frage {index + 1}",
+            correct_ad=ads[index],
+        ) for index in range(7)]
+
+        generated = self.client.post(self.url, {"level": "C1"}, format="json")
+
+        self.assertEqual(generated.status_code, status.HTTP_201_CREATED)
+        variant = generated.data["selection"]["reading_ad_matching_variant"]
+        self.assertIn(variant, range(7))
+        attempt = SavedMockExam.objects.get(pk=generated.data["attempt_id"])
+        self.assertEqual(attempt.paper.exercise_selection["reading_ad_matching_variant"], variant)
+        generated_items = generated.data["parts"]["reading_ad_matching"]["items"]
+        self.assertEqual(len(generated_items), 6)
+        self.assertEqual([item["item_number"] for item in generated_items], list(range(1, 7)))
+        self.assertEqual(sum(item["is_version2"] for item in generated_items), int(variant != 0))
+
+        from apps.exam_preparation.serializers import ReadingAdMatchingExerciseDetailSerializer
+        practice = ReadingAdMatchingExerciseDetailSerializer(exercise).data["items"]
+        self.assertEqual(len(practice), 7)
+        self.assertTrue(practice[-1]["is_version2"])
+
+        detail = self.client.get(reverse("exam-prep-saved-mock-exams-detail", args=[attempt.pk]))
+        self.assertEqual(
+            [item["id"] for item in detail.data["exam"]["parts"]["reading_ad_matching"]["items"]],
+            [item["id"] for item in generated_items],
+        )
+        regular_ids = [item.pk for item in items[:6]]
+        for option in range(7):
+            expected_ids = list(regular_ids)
+            if option:
+                expected_ids[option - 1] = items[6].pk
+            rebuilt = self.client.post(
+                reverse("exam-prep-saved-mock-exams-list"),
+                {"exam_type": "TELC", "level": "C1", "exercise_selection": {
+                    **generated.data["selection"], "reading_ad_matching_variant": option,
+                }},
+                format="json",
+            )
+            self.assertEqual(rebuilt.status_code, status.HTTP_201_CREATED)
+            rebuilt_detail = self.client.get(reverse("exam-prep-saved-mock-exams-detail", args=[rebuilt.data["id"]]))
+            rebuilt_items = rebuilt_detail.data["exam"]["parts"]["reading_ad_matching"]["items"]
+            self.assertEqual([item["id"] for item in rebuilt_items], expected_ids)
+            self.assertEqual([item["item_number"] for item in rebuilt_items], list(range(1, 7)))
+
+        for invalid in (True, -1, 7, 1.0, "1"):
+            invalid_response = self.client.post(
+                reverse("exam-prep-saved-mock-exams-list"),
+                {"exam_type": "TELC", "level": "C1", "exercise_selection": {
+                    **generated.data["selection"], "reading_ad_matching_variant": invalid,
+                }},
+                format="json",
+            )
+            self.assertEqual(invalid_response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_b2_generation_requires_two_writing_exercises(self):
         Entitlement.objects.create(
             user=self.user,

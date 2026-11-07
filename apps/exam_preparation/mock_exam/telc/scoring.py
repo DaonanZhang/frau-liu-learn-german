@@ -1,5 +1,6 @@
 from decimal import Decimal, ROUND_HALF_UP
 
+from apps.exam_preparation.answer_matching import answer_matches
 from apps.exam_preparation.models import (
     ClozeChoiceOption,
     ClozeMatchingBlankAnswer,
@@ -9,6 +10,7 @@ from apps.exam_preparation.models import (
     ReadingTitleMatchingItem,
     ReadingUnderstandingAnswerOption,
 )
+from apps.exam_preparation.mock_exam.telc.reading_ad_matching import selected_item_ids
 
 
 WRITING_ASSESSMENT_DIMENSIONS = (
@@ -80,11 +82,11 @@ def _correct_counts(instance):
             is_correct=True,
         ).values_list("question_id", "option_key")
     )
+    ad_items = list(ReadingAdMatchingItem.objects.filter(exercise_id=selection.get("reading_ad_matching")))
+    ad_item_ids = selected_item_ids(ad_items, selection.get("reading_ad_matching_variant", 0))
     reading_correct += sum(
-        selected("reading_ad_matching", item_id) == ad_key
-        for item_id, ad_key in ReadingAdMatchingItem.objects.filter(
-            exercise_id=selection.get("reading_ad_matching")
-        ).values_list("id", "correct_ad__ad_key")
+        selected("reading_ad_matching", item.pk) == item.correct_ad.ad_key
+        for item in ReadingAdMatchingItem.objects.filter(pk__in=ad_item_ids).select_related("correct_ad")
     )
     cloze_correct = sum(
         selected("cloze_choice", blank_id) == option_key
@@ -132,11 +134,11 @@ def _c1_correct_counts(instance):
             is_correct=True,
         ).values_list("question_id", "option_key")
     )
+    ad_items = list(ReadingAdMatchingItem.objects.filter(exercise_id=selection.get("reading_ad_matching")))
+    ad_item_ids = selected_item_ids(ad_items, selection.get("reading_ad_matching_variant", 0))
     reading_correct += sum(
-        selected("reading_ad_matching", item_id) == ad_key
-        for item_id, ad_key in ReadingAdMatchingItem.objects.filter(
-            exercise_id=selection.get("reading_ad_matching")
-        ).values_list("id", "correct_ad__ad_key")
+        selected("reading_ad_matching", item.pk) == item.correct_ad.ad_key
+        for item in ReadingAdMatchingItem.objects.filter(pk__in=ad_item_ids).select_related("correct_ad")
     )
     cloze_correct = sum(
         selected("cloze_choice", blank_id) == option_key
@@ -165,9 +167,9 @@ def _c1_correct_counts(instance):
         slide_number = slide.get("number") or slide_index
         for answer_index, answer in enumerate(slide.get("answers", []), start=1):
             item_id = f"note-{slide_number}-{answer.get('blank_id') or answer_index}"
-            expected = str(answer.get("answer") or "").strip().casefold()
-            actual = str(selected("listening_teil3", item_id) or "").strip().casefold()
-            listening_scores["listening_teil3"] += int(bool(expected) and actual == expected)
+            listening_scores["listening_teil3"] += int(answer_matches(
+                answer.get("answer"), selected("listening_teil3", item_id)
+            ))
     return reading_correct, cloze_correct, listening_scores
 
 

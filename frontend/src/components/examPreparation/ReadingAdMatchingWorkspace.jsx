@@ -8,6 +8,15 @@ function isNoMatchOption(ad) {
   return Boolean(ad?.is_no_match_option) || String(ad?.ad_key || "").trim().toLowerCase() === "x";
 }
 
+function isVersion2Item(item) {
+  if (typeof item?.is_version2 === "boolean") return item.is_version2;
+  return /^\s*\(\s*version\s*2\s*\)/i.test(String(item?.item_text || ""));
+}
+
+function cleanItemText(item) {
+  return String(item?.item_text || "").replace(/^\s*\(\s*version\s*2\s*\)\s*/i, "");
+}
+
 function TextRegion({ enabled, regionId, as = "span", children, ...props }) {
   if (enabled) {
     return (
@@ -34,6 +43,7 @@ export default function ReadingAdMatchingWorkspace({
   annotationRegionPrefix = "",
   allowRepeated = false,
   showAllAds = false,
+  showVersion2Label = false,
 }) {
   const [activeItemIndex, setActiveItemIndex] = useState(0);
   const questionTouchStart = useRef(null);
@@ -76,6 +86,7 @@ export default function ReadingAdMatchingWorkspace({
   const visibleAds = adPages[safeActiveAdPage] || [];
   const goToAdPage = (index) => setActiveAdPage(Math.max(0, Math.min(index, Math.max(0, adPages.length - 1))));
   const regionId = (id) => annotationRegionPrefix ? `${annotationRegionPrefix}:${id}` : id;
+  const isCurrentItemVersion2 = isVersion2Item(currentItem);
 
   return (
     <section className={`reading-ad-workspace${showAllAds ? " reading-ad-workspace--c1" : ""}`}>
@@ -174,6 +185,7 @@ export default function ReadingAdMatchingWorkspace({
           <article className="reading-ad-question-card">
             <div className="reading-ad-question-card__meta">
               <span className="reading-ad-question-card__label">Situation</span>
+              {showVersion2Label && isCurrentItemVersion2 ? <span className="reading-ad-question-card__version2">备用题 · Version 2</span> : null}
               <span className="reading-ad-question-card__progress">{activeItemIndex + 1} / {items.length}</span>
             </div>
             <h3 className="reading-ad-question-card__title">
@@ -182,7 +194,7 @@ export default function ReadingAdMatchingWorkspace({
                 enabled={annotationsEnabled}
                 regionId={regionId(`item:${currentItem.id}`)}
               >
-                {currentItem.item_text}
+                {cleanItemText(currentItem)}
               </TextRegion>
             </h3>
             <div className="reading-ad-option-grid">

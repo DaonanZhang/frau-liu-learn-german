@@ -195,6 +195,53 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(screen.queryByText("最多 150 词")).not.toBeInTheDocument();
   });
 
+  it("shows the C1 quotations, 350-word target, 70-minute timer, and paged vocabulary", async () => {
+    fetchWritingExerciseDetail.mockResolvedValueOnce({
+      id: 41,
+      exercise_base: { external_id: "41", level: "C1", exam_type: "TELC", exercise_type: "WRITING" },
+      request_text: "Schreiben Sie einen argumentativen Text.",
+      task_text: "Nehmen Sie zu beiden Zitaten Stellung.",
+      time_limit_minutes: 70,
+      words_limit: 350,
+      content: {
+        quotes: [
+          { text: "Wissen ist Macht.", translation_zh: "知识就是力量。" },
+          { text: "Lernen endet nie.", translation_zh: "学习永无止境。" },
+        ],
+        vocabulary_pages: [
+          { title: "Wortschatz", entries: [{ word: "die Erkenntnis", translation_zh: "认识" }] },
+          { title: "Wortschatz", entries: [{ word: "die Voraussetzung", translation_zh: "前提" }] },
+        ],
+      },
+      example_texts: [{ id: 501, example_text: "Bildung eröffnet neue Möglichkeiten." }],
+    });
+    renderPage();
+
+    expect(await screen.findByText("Wissen ist Macht.")).toBeInTheDocument();
+    expect(screen.getByText("知识就是力量。")).toBeInTheDocument();
+    expect(screen.getByText("Lernen endet nie.")).toBeInTheDocument();
+    expect(screen.getByText("学习永无止境。")).toBeInTheDocument();
+    expect(screen.getByText("最少 350 词")).toBeInTheDocument();
+    const timerButton = screen.getByRole("button", { name: "开始计时：70:00" });
+    expect(timerButton).toBeInTheDocument();
+
+    const vocabulary = screen.getByRole("complementary", { name: "词汇表" });
+    expect(vocabulary).toHaveClass("writing-detail-vocabulary");
+    expect(within(vocabulary).getByText("1 / 2")).toBeInTheDocument();
+    expect(within(vocabulary).getByText((_, element) => element?.tagName === "P" && element.textContent === "die Erkenntnis · 认识")).toBeInTheDocument();
+    fireEvent.click(within(vocabulary).getByRole("button", { name: "下一页" }));
+    expect(within(vocabulary).getByText("2 / 2")).toBeInTheDocument();
+    expect(within(vocabulary).getByText((_, element) => element?.tagName === "P" && element.textContent === "die Voraussetzung · 前提")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Bildung beeinflusst unsere Zukunft." } });
+    expect(screen.getByRole("textbox")).toHaveValue("Bildung beeinflusst unsere Zukunft.");
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(await screen.findByText("Bildung eröffnet neue Möglichkeiten.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "开始计时：70:00" })).toBeInTheDocument();
+  });
+
   it("opens the B2 guide once and saves its own completion field", async () => {
     useAuth.mockReturnValue({
       user: {

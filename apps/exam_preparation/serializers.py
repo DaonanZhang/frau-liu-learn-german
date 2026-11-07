@@ -471,6 +471,12 @@ class ReadingAdMatchingAdDetailSerializer(serializers.ModelSerializer):
 
 class ReadingAdMatchingItemDetailSerializer(serializers.ModelSerializer):
     correct_ad = ReadingAdMatchingAdDetailSerializer(read_only=True)
+    is_version2 = serializers.SerializerMethodField()
+
+    def get_is_version2(self, obj):
+        from apps.exam_preparation.mock_exam.telc.reading_ad_matching import is_version2_item_text
+
+        return is_version2_item_text(obj.item_text)
 
     class Meta:
         model = ReadingAdMatchingItem
@@ -478,6 +484,7 @@ class ReadingAdMatchingItemDetailSerializer(serializers.ModelSerializer):
             "id",
             "item_number",
             "item_text",
+            "is_version2",
             "correct_ad",
             "explanation",
             "created_at",

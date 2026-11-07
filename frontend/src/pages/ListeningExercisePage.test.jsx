@@ -121,12 +121,36 @@ describe("listening exercise audio loading", () => {
     renderExercise("dialog_true_false_twice", "c1");
 
     expect(await screen.findByText("Wichtige Folie")).toBeInTheDocument();
+    expect(screen.queryByText("多个答案请用分号分隔")).not.toBeInTheDocument();
     await act(async () => {
       fireEvent.change(screen.getByLabelText("1"), { target: { value: "Beispiel" } });
     });
     expect(screen.getByLabelText("1")).toHaveValue("Beispiel");
     fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
     expect(screen.getByText("Beispiel")).toBeInTheDocument();
+  });
+
+  it("accepts C1 alternative and optional notes and prompts only for multi-part answers", async () => {
+    fetchListeningExerciseDetail.mockResolvedValueOnce(createListeningExercise({
+      exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL3" },
+      content: { format: "presentation_notes", slides: [{ number: "1", text: "Notizen", answers: [
+        { blank_id: "1", answer: "Bücher werden weiter(hin) <or> (immer) noch" },
+        { blank_id: "2", answer: "doppelsinnig;lustig" },
+      ] }] },
+      questions: [],
+    }));
+    renderExercise("dialog_true_false_twice", "c1");
+
+    const alternative = await screen.findByLabelText("1");
+    const [firstNote, secondNote] = screen.getAllByRole("textbox").filter((input) => input.closest(".listening-exercise-c1-note"));
+    expect(screen.getByText("多个答案请用分号分隔")).toBeInTheDocument();
+    await act(async () => fireEvent.change(firstNote, { target: { value: "immer noch" } }));
+    await act(async () => fireEvent.change(secondNote, { target: { value: "lustig; doppelsinnig" } }));
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+
+    expect(alternative.closest("label").querySelector("strong")).toHaveClass("is-correct");
+    expect(secondNote.closest("label").querySelector("strong")).toHaveClass("is-correct");
+    expect(screen.getByText("Bücher werden weiter(hin) <or> (immer) noch")).toBeInTheDocument();
   });
 
   it("retries an initial stream load error without autoplaying a practice recording", async () => {

@@ -2963,9 +2963,9 @@ describe("TELC C1 mock exam", () => {
     },
   };
 
-  function renderC1(phase = "reading", activePart = "cloze_matching", examValue = exam) {
+  function renderC1(phase = "reading", activePart = "cloze_matching", examValue = exam, answers = {}) {
     sessionStorage.setItem(sessionKey, JSON.stringify({
-      exam: examValue, phase, deadline: Date.now() + 60_000, activePart, answers: {}, writingText: "",
+      exam: examValue, phase, deadline: Date.now() + 60_000, activePart, answers, writingText: "",
       writingAssessment: {}, audioStep: phase === "listening" ? 6 : 0, audioStepStartedAt: 0, attemptId: null,
       isFavorite: false, wasEarlySubmitted: false,
     }));
@@ -3029,6 +3029,27 @@ describe("TELC C1 mock exam", () => {
     fireEvent.click(screen.getByRole("button", { name: "Hören · Teil 3" }));
     expect(await screen.findAllByText("Vortrag über Lernen")).toHaveLength(2);
     expect(screen.getByRole("textbox")).toBeInTheDocument();
+  });
+
+  it("scores C1 presentation notes with the shared free-text rules and shows the multi-part hint", async () => {
+    const examWithNotes = structuredClone(exam);
+    examWithNotes.parts.listening_teil3.content.slides[0].answers = [
+      { blank_id: "1", answer: "Bücher werden weiter(hin) <or> (immer) noch" },
+      { blank_id: "2", answer: "doppelsinnig;lustig" },
+      { blank_id: "3", answer: "Lernen" },
+    ];
+    renderC1("results", "listening_teil3", examWithNotes, {
+      "listening_teil3:note-1-1": "immer noch",
+      "listening_teil3:note-1-2": "doppelsinnig",
+      "listening_teil3:note-1-3": "lernen",
+    });
+
+    const firstAnswer = await screen.findByDisplayValue("immer noch");
+    expect(screen.getByText("多个答案请用分号分隔")).toBeInTheDocument();
+    expect(firstAnswer.closest("label")).toHaveClass("is-correct");
+    expect(screen.getByDisplayValue("doppelsinnig").closest("label")).toHaveClass("is-wrong");
+    expect(screen.getByText("2 / 28 题")).toBeInTheDocument();
+    expect(screen.getByText("Richtige Antwort: Bücher werden weiter(hin) <or> (immer) noch")).toBeInTheDocument();
   });
 
   it("shows translated C1 quotes, the 350-word target, and the vocabulary panel while writing", async () => {

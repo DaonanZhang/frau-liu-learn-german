@@ -649,9 +649,10 @@
 }
 .listening-exercise-c1-note { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .75rem; margin-top: .75rem; }
 .listening-exercise-c1-note input { min-width: 0; min-height: 2.5rem; padding: .5rem .7rem; border: 1px solid #dce3df; border-radius: .55rem; }
+.listening-exercise-c1-note__hint { grid-column: 1 / -1; color: #63746d; line-height: 1.45; }
 .listening-exercise-c1-note strong.is-correct { color: #217a43; }
 .listening-exercise-c1-note strong.is-wrong { color: #ae3e37; }
-@media (max-width: 700px) {
+@media (max-width: 900px) {
   .listening-exercise-c1-note { grid-template-columns: auto minmax(0, 1fr); }
-  .listening-exercise-c1-note strong { grid-column: 1 / -1; }
+  .listening-exercise-c1-note strong { grid-column: 1 / -1; overflow-wrap: anywhere; }
 }

@@ -213,6 +213,56 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     expect(screen.getByRole("button", { name: "Prüfen" })).toBeInTheDocument();
   });
 
+  it("shows the C1 Teil 1A outline beside the sample answer", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      id: 71,
+      exercise_base: { level: "C1", title: "C1 Vortrag", exam_type: "TELC", exercise_type: "SPEAKING_TEIL1" },
+      instruction: "Halten Sie einen Vortrag.",
+      content: {
+        teil: "1A",
+        outline: ["Ausgangslage", "Mögliche Lösungen"],
+        dialogue: [{ sequence: 1, role: "TN1", text: "Zuerst möchte ich die Situation beschreiben.", audio_url: "/audio/c1-vortrag.mp3" }],
+      },
+    });
+    renderPage(1, 71);
+
+    const outline = await screen.findByRole("heading", { name: "提纲" });
+    const answer = screen.getByText("Zuerst möchte ich die Situation beschreiben.");
+    expect(outline.closest(".speaking-detail-card").parentElement).toBe(answer.closest(".speaking-detail-card").parentElement);
+    expect(answer.closest(".speaking-detail-card")).toHaveClass("speaking-detail-c1-answer");
+    expect(screen.getByText("Ausgangslage")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "record c1-teil-1-71-1" })).toHaveAttribute("data-audio-url", "/audio/c1-vortrag.mp3");
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(await screen.findByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
+  });
+
+  it("renders translated C1 Teil 2 quotation and audio controls for every model turn", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      id: 73,
+      exercise_base: { level: "C1", title: "C1 Diskussion", exam_type: "TELC", exercise_type: "SPEAKING_TEIL3" },
+      instruction: "Diskutieren Sie über das Zitat.",
+      content: {
+        quotes: [{ text: "Bildung ist die mächtigste Waffe.", translation_zh: "教育是最强大的武器。" }],
+        dialogue: [
+          { sequence: 1, role: "TN1", text: "Ich stimme diesem Zitat zu.", audio_url: "/audio/c1-diskussion-1.mp3" },
+          { sequence: 2, role: "TN2", text: "Das sehe ich etwas anders.", audio_url: "/audio/c1-diskussion-2.mp3" },
+        ],
+      },
+    });
+    const { container } = renderPage(3, 73);
+
+    expect(await screen.findByText("Bildung ist die mächtigste Waffe.")).toBeInTheDocument();
+    expect(screen.getByText("教育是最强大的武器。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "record c1-teil-3-73-1" })).toHaveAttribute("data-audio-url", "/audio/c1-diskussion-1.mp3");
+    expect(screen.getByRole("button", { name: "record c1-teil-3-73-2" })).toHaveAttribute("data-audio-url", "/audio/c1-diskussion-2.mp3");
+    expect(container.querySelector(".speaking-detail-c1-quote")).toBeInTheDocument();
+    expect(screen.queryByText("对话排序")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prüfen" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Wiederholen" }));
+    expect(await screen.findByRole("button", { name: "Prüfen" })).toBeInTheDocument();
+  });
+
   it("hides only the task text for TELC B2 Sprechen Teil 1", async () => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue({
       ...teil1Exercise,

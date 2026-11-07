@@ -63,6 +63,43 @@ class C1ImporterUnitTests(TestCase):
         self.assertIn("paragraphs A–E", importer.preflight([empty])[0])
         self.assertEqual(importer.preflight([valid]), [])
 
+    def reading_teil2_workbook(self, name, question_texts):
+        path = Path(self.temp_dir.name) / name
+        identifier = int(path.stem.rsplit("_", 1)[-1])
+        rows = [{"Fragen": question, "Absatz_ID": "ABCDE"[index % 5],
+                 "Textabsatz": f"Absatz {letter}", "Explaination": f"解释{index + 1}"}
+                for index, (question, letter) in enumerate((q, "ABCDE"[i % 5]) for i, q in enumerate(question_texts))]
+        rows.extend({"Fragen": "", "Absatz_ID": letter, "Textabsatz": f"Absatz {letter}", "Explaination": ""}
+                    for letter in "ABCDE")
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            pd.DataFrame([{"ID": identifier, "考试类型": "TELC", "是否真题": True}]).to_excel(writer, sheet_name="meta", index=False)
+            pd.DataFrame(rows).to_excel(writer, sheet_name="exercise", index=False)
+        return path
+
+    def test_reading_teil2_version2_requires_seven_questions_and_one_prefix_marker(self):
+        valid = self.reading_teil2_workbook("reading_teil2__version2_004.xlsx", [
+            "Frage 1", "Frage 2", "( vErSiOn2 )   Frage 3", "Frage 4", "Frage 5", "Frage 6", "Frage 7",
+        ])
+        two_markers = self.reading_teil2_workbook("reading_teil2__two_version2_005.xlsx", [
+            "(Version2) Frage 1", "(Version2) Frage 2", "Frage 3", "Frage 4", "Frage 5", "Frage 6", "Frage 7",
+        ])
+        wrong_count = self.reading_teil2_workbook("reading_teil2__wrong_count_006.xlsx", [
+            "(Version2) Frage 1", "Frage 2", "Frage 3", "Frage 4", "Frage 5", "Frage 6", "Frage 7", "Frage 8",
+        ])
+        self.assertEqual(importer.preflight([valid]), [])
+        two_marker_issues = importer.preflight([two_markers])
+        count_issues = importer.preflight([wrong_count])
+        self.assertTrue(two_marker_issues, "two Version2 questions should fail preflight")
+        self.assertTrue(count_issues, "a Version2 set with other than seven questions should fail preflight")
+        self.assertIn("exactly one", two_marker_issues[0])
+        self.assertIn("exactly seven", count_issues[0])
+
+    def test_version2_text_inside_question_does_not_activate_version_set(self):
+        path = self.reading_teil2_workbook("reading_teil2__inline_version2_007.xlsx", [
+            "Frage 1", "Frage 2", "Frage 3 enthält (Version2) im Satz", "Frage 4", "Frage 5", "Frage 6",
+        ])
+        self.assertEqual(importer.preflight([path]), [])
+
     def test_stage_routes_empty_reading_teil2_to_failed_and_keeps_valid_file_raw(self):
         source = Path(self.temp_dir.name) / "source"
         source.mkdir()
@@ -106,6 +143,108 @@ class C1ImporterUnitTests(TestCase):
         two = self.workbook("reading_teil3__two_003.xlsx", meta)
         self.assertIn("duplicate batch key", importer.preflight([one, two])[-1])
 
+    def test_actual_c1_filename_suffixes_are_recognized(self):
+        for name, kind in (("TELC_C1_Schreiben_046.xlsx", "writing"),
+                           ("TELC_C1_Vortrag_046.xlsx", "speaking_teil1"),
+                           ("TELC_C1_Zitat_047.xlsx", "speaking_teil2")):
+            self.assertEqual(importer.kind_for(Path(name)), kind)
+
+    def test_preflight_detects_duplicate_speaking_scoped_keys(self):
+        first = self.vortrag_workbook("TELC_C1_Vortrag_046.xlsx", 46)
+        second = self.vortrag_workbook("TELC_C1_copy_Vortrag_046.xlsx", 46)
+        issues = importer.preflight([first, second])
+        self.assertEqual(len(issues), 1)
+        self.assertIn("duplicate batch key", issues[0])
+
+    def test_stage_discovers_nested_workbooks_and_routes_writing(self):
+        source = Path(self.temp_dir.name) / "source"
+        nested = source / "incoming"
+        nested.mkdir(parents=True)
+        path = self.writing_workbook(nested / "TELC_C1_Schreiben_046.xlsx", 46)
+        with patch.object(importer, "RAW_ROOT", Path(self.temp_dir.name) / "imports"):
+            staged = importer.stage(source)
+        self.assertEqual(len(staged), 1)
+        self.assertEqual(staged[0].parent, Path(self.temp_dir.name) / "imports/writing/raw")
+
+    def writing_workbook(self, path, identifier, *, child_id=None):
+        child_id = identifier if child_id is None else child_id
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            pd.DataFrame([{"ID": identifier, "Title": "Schreiben", "task": "Schreiben Sie.",
+                           "Zitat A": "Zitat A", "Zitat A_translate": "引语甲",
+                           "Zitat B ": "Zitat B", "Zitat B_translate": "引语乙",
+                           "考试类型": "TELC", "是否真题": True,
+                           "time_limit": 70, "words_limit_min": 350}]).to_excel(writer, sheet_name="meta", index=False)
+            pd.DataFrame([{"ID": child_id, "Example_Text": "Absatz eins", "Chinese_translation": "第一段"},
+                          {"ID": child_id, "Example_Text": "Absatz zwei", "Chinese_translation": "第二段"}]).to_excel(writer, sheet_name="text", index=False)
+            pd.DataFrame([{"ID": child_id, "word": f"Wort{i}", "meaning": f"词{i}"}
+                          for i in range(1, 14)]).to_excel(writer, sheet_name="word", index=False)
+        return path
+
+    def vortrag_workbook(self, name, identifier, *, child_id=None, turn_count=3):
+        path = Path(self.temp_dir.name) / name
+        child_id = identifier if child_id is None else child_id
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            pd.DataFrame([{"ID": identifier, "标题": "Vortrag", "task": "Präsentieren Sie.",
+                           "题目": "Thema", "提纲": "Punkt eins; Punkt zwei",
+                           "考试类型": "TELC", "是否真题": True}]).to_excel(writer, sheet_name="meta", index=False)
+            pd.DataFrame([{"exercise_id": child_id, "Role": f"TN{i % 2 + 1}",
+                           "内容": f"Turn {i}", "translate": f"翻译{i}"}
+                          for i in range(1, turn_count + 1)]).to_excel(writer, sheet_name="example", index=False)
+        return path
+
+    def test_speaking_import_splits_vortrag_and_forwards_audio_setting(self):
+        path = self.vortrag_workbook("TELC_C1_Vortrag_046.xlsx", 46)
+        with patch.object(importer.shared, "save_speaking_exercise", return_value=1) as save:
+            self.assertEqual(importer.import_workbook(path, generate_speaking_audio=True), 2)
+        self.assertEqual([call.args[2] for call in save.call_args_list], [
+            "SPEAKING_TEIL1", "SPEAKING_TEIL2",
+        ])
+        first, second = [call.args[1] for call in save.call_args_list]
+        self.assertEqual(first["content"]["dialogue"], [{"sequence": 1, "role": "TN2", "text": "Turn 1", "translation_zh": "翻译1"}])
+        self.assertEqual(first["content"]["outline"], ["Punkt eins", "Punkt zwei"])
+        self.assertEqual([turn["text"] for turn in second["content"]["dialogue"]], ["Turn 2", "Turn 3"])
+        self.assertTrue(all(call.kwargs["generate_speaking_audio"] for call in save.call_args_list))
+
+    def test_vortrag_ignores_only_exact_translation_header_sentinel(self):
+        path = Path(self.temp_dir.name) / "Kostenloses Studium_Vortrag_002.xlsx"
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            pd.DataFrame([{"ID": 2, "标题": "Vortrag", "task": "Präsentieren Sie.",
+                           "题目": "Thema", "提纲": "Punkt eins; Punkt zwei",
+                           "考试类型": "TELC", "是否真题": True}]).to_excel(writer, sheet_name="meta", index=False)
+            pd.DataFrame([
+                {"exercise_id": 2, "Role": "TN1", "内容": "Turn 1", "translate": "翻译1"},
+                {"exercise_id": 2, "Role": "TN2", "内容": "Turn 2", "translate": "翻译2"},
+                {"exercise_id": 2, "Role": "TN1", "内容": "Turn 3", "translate": "翻译3"},
+                {"exercise_id": "角色", "Role": "环节", "内容": "德语文本", "translate": "中文翻译"},
+                {"exercise_id": "", "Role": "", "内容": "", "translate": ""},
+            ]).to_excel(writer, sheet_name="example", index=False)
+
+        self.assertEqual(importer.preflight([path]), [])
+        with patch.object(importer.shared, "save_speaking_exercise", return_value=1) as save:
+            self.assertEqual(importer.import_workbook(path), 2)
+        turns = [turn for call in save.call_args_list for turn in call.args[1]["content"]["dialogue"]]
+        self.assertEqual([turn["text"] for turn in turns], ["Turn 1", "Turn 2", "Turn 3"])
+        self.assertEqual([turn["role"] for turn in turns], ["TN1", "TN2", "TN1"])
+
+    def test_vortrag_rejects_other_nonempty_turn_missing_exercise_id(self):
+        path = self.vortrag_workbook("TELC_C1_Vortrag_048.xlsx", 48)
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            pd.DataFrame([{"ID": 48, "标题": "Vortrag", "task": "Präsentieren Sie.",
+                           "题目": "Thema", "提纲": "Punkt eins; Punkt zwei",
+                           "考试类型": "TELC", "是否真题": True}]).to_excel(writer, sheet_name="meta", index=False)
+            pd.DataFrame([
+                {"exercise_id": 48, "Role": "TN1", "内容": "Turn 1", "translate": "翻译1"},
+                {"exercise_id": 48, "Role": "TN2", "内容": "Turn 2", "translate": "翻译2"},
+                {"exercise_id": "", "Role": "TN1", "内容": "真实文本", "translate": ""},
+            ]).to_excel(writer, sheet_name="example", index=False)
+        issues = importer.preflight([path])
+        self.assertTrue(issues)
+        self.assertIn("missing exercise_id", issues[0])
+
+    def test_cross_sheet_id_mismatch_is_rejected(self):
+        path = self.writing_workbook(Path(self.temp_dir.name) / "TELC_C1_Schreiben_046.xlsx", 46, child_id="047")
+        self.assertTrue(any("ID mismatch" in issue for issue in importer.preflight([path])))
+
 
 class C1ImporterDatabaseTests(DjangoTestCase):
     def setUp(self):
@@ -129,6 +268,24 @@ class C1ImporterDatabaseTests(DjangoTestCase):
         self.assertEqual(exercise.ads.count(), 5)
         self.assertEqual(exercise.items.count(), 2)
         self.assertEqual(exercise.items.first().correct_ad_id, exercise.items.last().correct_ad_id)
+
+    def test_reading_teil2_imports_all_seven_versioned_items_in_source_order(self):
+        path = Path(self.temp_dir.name) / "reading_teil2__version2_004.xlsx"
+        questions = ["Frage 1", "Frage 2", "(Version2) Frage 3", "Frage 4", "Frage 5", "Frage 6", "Frage 7"]
+        rows = [{"Fragen": question, "Absatz_ID": "ABCDE"[index % 5], "Textabsatz": f"Absatz {'ABCDE'[index % 5]}",
+                 "Explaination": f"解释{index + 1}"} for index, question in enumerate(questions)]
+        rows.extend({"Fragen": "", "Absatz_ID": letter, "Textabsatz": f"Absatz {letter}", "Explaination": ""}
+                    for letter in "ABCDE")
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            pd.DataFrame([{"ID": 4, "考试类型": "TELC", "是否真题": True}]).to_excel(writer, sheet_name="meta", index=False)
+            pd.DataFrame(rows).to_excel(writer, sheet_name="exercise", index=False)
+        self.assertEqual(importer.import_workbook(path), 1)
+        exercise = ReadingAdMatchingExercise.objects.get(exercise_base__external_id="4", exercise_base__level="C1")
+        items = list(exercise.items.order_by("item_number"))
+        self.assertEqual([item.item_text for item in items], questions)
+        self.assertEqual(items[2].item_text, "(Version2) Frage 3")
+        self.assertEqual(items[2].explanation, "解释3")
+        self.assertEqual(items[2].correct_ad.ad_key, "C")
 
     def test_cloze_choice_accepts_german_correctness_values_from_drive_exports(self):
         path = Path(self.temp_dir.name) / "cloze_choice__sprachbausteine_022.xlsx"
@@ -224,3 +381,33 @@ class C1ImporterDatabaseTests(DjangoTestCase):
         self.assertGreaterEqual(len(discussion.content["dialogue"]), 7)
         self.assertGreaterEqual(sum(len(re.findall(r"\b[\wÄÖÜäöüß-]+\b", turn["text"])) for turn in discussion.content["dialogue"]), 250)
         self.assertEqual(ExerciseBase.objects.filter(level="C1", exam_type="TELC").count(), 5)
+
+    def test_writing_import_maps_quotes_sample_and_twelve_word_pages_idempotently(self):
+        path = C1ImporterUnitTests().writing_workbook(Path(self.temp_dir.name) / "TELC_C1_Schreiben_046.xlsx", 46)
+        self.assertEqual(importer.import_workbook(path), 1)
+        self.assertEqual(importer.import_workbook(path), 1)
+        exercise = WritingExercise.objects.get(exercise_base__external_id="46", exercise_base__level="C1")
+        self.assertEqual(exercise.time_limit_minutes, 70)
+        self.assertEqual(exercise.words_limit, 350)
+        self.assertEqual(len(exercise.content["quotes"]), 2)
+        self.assertEqual(exercise.content["quotes"][0]["translation_zh"], "引语甲")
+        self.assertEqual(len(exercise.content["vocabulary_pages"][0]["entries"]), 12)
+        self.assertEqual(len(exercise.content["vocabulary_pages"][-1]["entries"]), 1)
+        self.assertEqual(exercise.example_texts.count(), 1)
+        sample = exercise.example_texts.get()
+        self.assertEqual(sample.example_text, "Absatz eins\n\nAbsatz zwei")
+        self.assertEqual(sample.translation_zh, "第一段\n\n第二段")
+
+    def test_zitat_import_keeps_translation_and_all_dialogue_turns(self):
+        path = Path(self.temp_dir.name) / "TELC_C1_Zitat_047.xlsx"
+        with pd.ExcelWriter(path, engine="openpyxl") as writer:
+            pd.DataFrame([{"ID": 47, "标题": "Zitat", "Task": "Diskutieren.", "Zitat": "Zitattext",
+                           "Zitat_translate": "引语翻译", "考试类型": "TELC", "是否真题": False}]).to_excel(writer, sheet_name="meta", index=False)
+            pd.DataFrame([{"exercise_id": 47, "Role": f"TN{i % 2 + 1}", "内容": f"Beitrag {i}", "translate": f"译文{i}"}
+                          for i in range(1, 4)]).to_excel(writer, sheet_name="example", index=False)
+        self.assertEqual(importer.import_workbook(path), 1)
+        exercise = SpeakingTeilExercise.objects.get(exercise_base__external_id="47", exercise_base__exercise_type="SPEAKING_TEIL3")
+        self.assertEqual(exercise.content["quote"], "Zitattext")
+        self.assertEqual(exercise.content["quote_translation_zh"], ["引语翻译"])
+        self.assertEqual(exercise.content["quotes"][0]["translation_zh"], "引语翻译")
+        self.assertEqual([turn["text"] for turn in exercise.content["dialogue"]], ["Beitrag 1", "Beitrag 2", "Beitrag 3"])

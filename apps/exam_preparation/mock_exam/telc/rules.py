@@ -1,4 +1,5 @@
 from datetime import timedelta
+import random
 
 from django.db.models import Q
 from django.utils import timezone
@@ -23,6 +24,7 @@ from apps.exam_preparation.serializers import (
     WritingExerciseDetailSerializer,
 )
 from apps.exam_preparation.mock_exam.telc import scoring
+from apps.exam_preparation.mock_exam.telc.reading_ad_matching import is_version2_item_text, selected_item_ids
 
 
 def _listening_queryset(teil, level):
@@ -167,13 +169,24 @@ def build_payload(
             missing_parts.append(key)
             continue
         selected_ids[key] = exercise.pk
-        parts[key] = serializer_class(
+        serialized = serializer_class(
             exercise,
             context={
                 "request": request,
                 "show_listening_script": show_listening_scripts,
             },
         ).data
+        if key == "reading_ad_matching" and level == ExerciseBase.Level.C1:
+            items = list(exercise.items.all())
+            if any(is_version2_item_text(item.item_text) for item in items):
+                variant = selection.get("reading_ad_matching_variant", 0) if selection else random.randint(0, 6)
+                chosen_ids = selected_item_ids(items, variant)
+                serialized = dict(serialized)
+                selected = [item for item in serialized["items"] if item["id"] in chosen_ids]
+                selected.sort(key=lambda item: next(index for index, item_id in enumerate(chosen_ids) if item_id == item["id"]))
+                serialized["items"] = [dict(item, item_number=index) for index, item in enumerate(selected, start=1)]
+                selected_ids["reading_ad_matching_variant"] = variant
+        parts[key] = serialized
 
     if missing_parts:
         return None, None, missing_parts

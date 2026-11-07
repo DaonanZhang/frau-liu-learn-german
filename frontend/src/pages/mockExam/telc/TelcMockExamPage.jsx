@@ -27,6 +27,7 @@ import {
 import ScopedExplanation from "../../../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../../../components/examPreparation/explanationVisibility.js";
 import { examPreparationPurchasePath, examPreparationScope } from "../../../utils/examPreparationScope.js";
+import { answerMatchesExpected, expectedHasMultipleAnswers } from "../../../utils/c1AnswerMatcher.js";
 import {
   fetchClozeChoiceBlankStates,
   fetchClozeMatchingBlankStates,
@@ -910,10 +911,11 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
           const key = answerKey(partKey, question.id);
           const correct = question.correct_answer || question.answer_text || "";
           const selected = answers[key] || "";
-          const isCorrect = review && Boolean(correct) && String(selected).trim().toLocaleLowerCase() === String(correct).trim().toLocaleLowerCase();
+          const isCorrect = review && answerMatchesExpected(selected, correct);
           return <label key={key} className={`telc-c1-presentation-notes__row${isCorrect ? " is-correct" : review ? " is-wrong" : ""}`}>
             <span>{question.blank_id || question.question_number}</span>
             <input type="text" value={selected} disabled={disabled} onChange={(event) => setAnswer(key, event.target.value)} />
+            {expectedHasMultipleAnswers(correct) ? <small className="telc-c1-presentation-notes__hint">多个答案请用分号分隔</small> : null}
             {review ? <small>Richtige Antwort: {correct || "—"}</small> : null}
           </label>;
           })}
@@ -994,8 +996,7 @@ function correctCount(parts, answers, partKeys, level) {
       const questions = partKey.startsWith("listening_") ? listeningQuestions(exercise, listeningFormat) : exercise.questions || [];
       questions.forEach((question) => {
         if (partKey.startsWith("listening_") && listeningFormat === "presentation_notes") {
-          correct += String(answers[answerKey(partKey, question.id)] || "").trim().toLocaleLowerCase()
-            === String(question.correct_answer || "").trim().toLocaleLowerCase() && question.correct_answer ? 1 : 0;
+          correct += answerMatchesExpected(answers[answerKey(partKey, question.id)], question.correct_answer) ? 1 : 0;
           return;
         }
         const selected = (question.answer_options || []).find((option) => option.option_key === answers[answerKey(partKey, question.id)]);

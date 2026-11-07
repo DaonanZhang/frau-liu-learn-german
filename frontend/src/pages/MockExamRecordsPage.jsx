@@ -31,7 +31,8 @@ function formatUpdatedAt(value) {
 function formatCompletedResult(record) {
   const score = Number(record.total_score || 0);
   const formattedScore = Number.isInteger(score) ? String(score) : String(score).replace(/0+$/, "").replace(/\.$/, "");
-  return `已完成 · ${formattedScore} / 225 · ${Number(record.score_percentage || 0).toFixed(1)}% · ${record.is_passed ? "通过" : "未通过"}`;
+  const maximumScore = String(record.level || "").trim().toUpperCase() === "C1" ? 166 : 225;
+  return `已完成 · ${formattedScore} / ${maximumScore} · ${Number(record.score_percentage || 0).toFixed(1)}% · ${record.is_passed ? "通过" : "未通过"}`;
 }
 
 export default function MockExamRecordsPage() {

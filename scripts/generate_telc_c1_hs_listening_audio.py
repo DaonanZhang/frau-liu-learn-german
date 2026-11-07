@@ -19,6 +19,10 @@ import generate_telc_b2_listening_teil2_audio as b2_audio
 
 IMPORT_ROOT = ROOT / "apps/exam_preparation/data/imports/telc/c1_hs"
 OUTPUT_ROOT = ROOT / "frontend/public/resources/ExamPreparation/exam_preparation_audio"
+MODERATOR_VOICES = {
+    "mann": b2_audio.VOICE_POOLS["mann"][0],
+    "frau": b2_audio.VOICE_POOLS["frau"][0],
+}
 
 
 def source_files() -> list[Path]:
@@ -28,6 +32,120 @@ def source_files() -> list[Path]:
             for path in sorted((IMPORT_ROOT / kind / state).glob("*.xlsx")):
                 files.setdefault(path.name, path)
     return list(files.values())
+
+
+def _participant_items(value: object) -> list[str]:
+    items = []
+    start = depth = 0
+    text = str(value or "")
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(0, depth - 1)
+        elif char == "," and depth == 0:
+            items.append(text[start:index].strip())
+            start = index + 1
+    items.append(text[start:].strip())
+    return [item for item in items if item]
+
+
+def _parse_participants(value: object) -> list[tuple[str, str]]:
+    participants = []
+    for item in _participant_items(value):
+        match = re.fullmatch(r"\s*([^()]+?)\s*(?:\(([^()]*)\))?\s*", item)
+        if not match:
+            raise ValueError(f"Invalid participant declaration: {item!r}")
+        name, details = match.group(1).strip(), match.group(2) or ""
+        genders = re.findall(r"(?<!\w)(mann|frau)(?!\w)", details, flags=re.IGNORECASE)
+        if len({gender.lower() for gender in genders}) > 1:
+            raise ValueError(f"Conflicting participant genders: {item!r}")
+        if genders:
+            gender = genders[0].lower()
+        elif re.fullmatch(r"Sprecher\s+([1-8])", name, flags=re.IGNORECASE):
+            # Generic speaker labels carry no gender; alternate voices predictably.
+            number = int(re.search(r"\d+", name).group())
+            gender = "mann" if number % 2 else "frau"
+        elif re.fullmatch(r"Moderator(?:in)?(?:\s+.+)?", name, flags=re.IGNORECASE):
+            gender = "frau" if re.match(r"Moderatorin", name, flags=re.IGNORECASE) else "mann"
+        else:
+            raise ValueError(f"Invalid participant declaration: {item!r}")
+        participants.append((name, gender))
+    if not participants:
+        raise ValueError("At least one dialogue participant is required")
+    return participants
+
+
+def _assign_voices(participants: list[tuple[str, str]]) -> dict[str, str]:
+    guest_pools = {
+        gender: [voice for voice in voices if voice not in MODERATOR_VOICES.values()]
+        for gender, voices in b2_audio.VOICE_POOLS.items()
+    }
+    offsets = {gender: 0 for gender in guest_pools}
+    result = {}
+    for name, gender in participants:
+        moderator = re.match(r"^Moderator(in)?(?:\s|$)", name, flags=re.IGNORECASE)
+        if moderator:
+            host_gender = "frau" if moderator.group(1) else "mann"
+            result[name] = MODERATOR_VOICES[host_gender]
+            continue
+        pool = guest_pools.get(gender)
+        if pool is None:
+            raise ValueError(f"Unsupported participant gender: {gender!r}")
+        offset = offsets[gender]
+        if offset >= len(pool):
+            raise ValueError(f"Not enough distinct {gender} guest voices for the participant list")
+        result[name] = pool[offset]
+        offsets[gender] += 1
+    if len(result) != len(participants) or len(set(result.values())) != len(result):
+        raise ValueError("Every participant must have one distinct voice")
+    return result
+
+
+def _speaker_aliases(name: str) -> set[str]:
+    normalize = lambda value: re.sub(r"\s+", " ", value).strip().casefold()
+    aliases = {normalize(name)}
+    title = re.match(r"^(frau|herr|prof(?:essor)?\.?|dr\.?)\s+", name, flags=re.IGNORECASE)
+    cleaned = re.sub(r"^(?:frau|herr|prof(?:essor)?\.?|dr\.?)\s+", "", name, flags=re.IGNORECASE)
+    aliases.add(normalize(cleaned))
+    moderator = re.match(r"^Moderator(in)?(?:\s|$)", name, flags=re.IGNORECASE)
+    if moderator:
+        aliases.add("moderatorin" if moderator.group(1) else "moderator")
+    words = re.findall(r"[^\s]+", cleaned)
+    if len(words) > 1:
+        aliases.add(normalize(" ".join(words[-2:])))
+        aliases.add(normalize(words[-1]))
+        if title:
+            aliases.add(normalize(f"{title.group(1)} {words[-1]}"))
+    return aliases
+
+
+def _normalize_dialogue_speakers(dialogue: str, participants: list[tuple[str, str]]) -> str:
+    aliases = {}
+    ambiguous = set()
+    for name, _gender in participants:
+        for alias in _speaker_aliases(name):
+            if alias in aliases and aliases[alias] != name:
+                ambiguous.add(alias)
+            else:
+                aliases[alias] = name
+    for alias in ambiguous:
+        aliases.pop(alias, None)
+
+    normalized_lines = []
+    for line in dialogue.splitlines():
+        stripped = line.strip()
+        label = re.fullmatch(r"([^:\n]+?)\s*:\s*(.*)", stripped)
+        if label:
+            raw_speakers, text = label.groups()
+            speakers = [part.strip() for part in raw_speakers.split("/")]
+            canonical = [aliases.get(re.sub(r"\s+", " ", part).strip().casefold()) for part in speakers]
+            if canonical and all(canonical):
+                normalized_lines.append(" / ".join(canonical) + ":" + (f"\n{text}" if text else ""))
+                continue
+        plain_speaker = aliases.get(re.sub(r"\s+", " ", stripped).strip().casefold())
+        normalized_lines.append(f"{plain_speaker}:" if plain_speaker else line)
+    return "\n".join(normalized_lines)
 
 
 def read_workbook(path: Path) -> dict:
@@ -50,30 +168,16 @@ def read_workbook(path: Path) -> dict:
     if raw_id and str(int(float(raw_id))) != exercise_id:
         raise ValueError(f"{path.name}: workbook audio ID does not match filename suffix")
     participants_text = meta.get("出场人物") or meta.get("出现人物") or ""
-    participants = b2_audio.parse_participants(participants_text)
-    voices = b2_audio.assign_voices(participants)
+    participants = _parse_participants(participants_text)
+    voices = _assign_voices(participants)
     copy = str(meta.get("copy") or meta.get("script") or "")
-    if "<60''>" not in copy:
+    markers = list(re.finditer(r"<60(?:''|\"\")>", copy))
+    if not markers:
         raise ValueError(f"{path.name}: copy must contain a preparation-time marker")
-    dialogue = copy.rsplit("<60''>", 1)[1]
+    dialogue = copy[markers[-1].end():]
     dialogue = re.sub(r"<br\s*/?>", "\n", dialogue, flags=re.IGNORECASE)
     dialogue = re.sub(r"<[^>]*>", "", dialogue)
-    normalized_lines = []
-    participant_names = [name for name, _gender in participants]
-    for line in dialogue.splitlines():
-        stripped = line.strip()
-        normalized = None
-        for name in participant_names:
-            if stripped in {name, f"{name}:"}:
-                normalized = f"{name}:"
-                break
-            prefix = f"{name}:"
-            if stripped.startswith(prefix):
-                text = stripped[len(prefix):].strip()
-                normalized = f"{name}:\n{text}" if text else f"{name}:"
-                break
-        normalized_lines.append(normalized if normalized is not None else line)
-    dialogue = "\n".join(normalized_lines)
+    dialogue = _normalize_dialogue_speakers(dialogue, participants)
     turns = b2_audio.parse_dialogue(dialogue, participants)
     intro = re.sub(r"<[^>]*>", "", str(meta.get("Einleitung", ""))).strip()
     return {

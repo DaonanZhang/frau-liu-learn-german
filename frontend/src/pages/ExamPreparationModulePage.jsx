@@ -108,7 +108,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
     .sort((left, right) => right.getTime() - left.getTime())[0];
 
   useEffect(() => {
-    if (!scope || scope.level === "C1" || !hasFullAccess) return undefined;
+    if (!scope || !hasFullAccess) return undefined;
     let cancelled = false;
     fetchSavedMockExams("active", 1, 3, scope)
       .then((data) => {
@@ -263,7 +263,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
         <ExamPreparationContentSearch scope={scope} />
       ) : null}
 
-      <section className={`exam-module-mock${scope.level === "C1" ? " is-coming-soon" : hasFullAccess ? "" : " is-locked"}`} aria-label="笔试模拟考试">
+      <section className={`exam-module-mock${hasFullAccess ? "" : " is-locked"}`} aria-label="笔试模拟考试">
         <div className="exam-module-mock__icon" aria-hidden="true">
           <svg viewBox="0 0 48 48" focusable="false">
             <path d="M11 7.5h20a4 4 0 0 1 4 4v12.25" />
@@ -280,8 +280,8 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
             {hasFullAccess && activeMockExams.length ? (
               <button type="button" onClick={continueLatestMockExam} className="exam-module-mock__button is-secondary">继续考试</button>
             ) : null}
-            <button type="button" onClick={scope.level === "C1" ? () => Swal.fire({ icon: "info", title: "Coming soon" }) : openMockExam} className="exam-module-mock__button">
-              {scope.level === "C1" ? "Coming soon" : hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
+            <button type="button" onClick={openMockExam} className="exam-module-mock__button">
+              {hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
             </button>
           </div>
         </div>

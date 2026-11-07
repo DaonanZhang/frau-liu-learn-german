@@ -1,6 +1,9 @@
+from http.client import IncompleteRead
 from pathlib import Path
 import sys
+import tempfile
 from unittest import TestCase
+from unittest.mock import MagicMock, patch
 
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1]
@@ -15,6 +18,8 @@ from generate_telc_b2_listening_teil2_audio import (  # noqa: E402
     build_intro_ssml,
     parse_dialogue,
     parse_participants,
+    synthesize_ssml,
+    synthesize_turn_segments,
 )
 
 
@@ -79,3 +84,35 @@ Vielen Dank!"""
         self.assertIn('<voice name="de-DE-KatjaNeural">Hallo &amp; willkommen.', ssml)
         self.assertNotIn("Moderator:", ssml)
         self.assertNotIn("Julia:", ssml)
+
+    def test_retries_when_azure_audio_response_is_incomplete(self):
+        incomplete_response = MagicMock()
+        incomplete_response.__enter__.return_value.read.side_effect = IncompleteRead(b"partial")
+        complete_response = MagicMock()
+        complete_response.__enter__.return_value.read.return_value = b"complete audio"
+
+        with patch(
+            "generate_telc_b2_listening_teil2_audio.urlopen",
+            side_effect=[incomplete_response, complete_response],
+        ) as urlopen, patch("generate_telc_b2_listening_teil2_audio.time.sleep"):
+            result = synthesize_ssml(b"<speak>Test</speak>", region="test", key="secret")
+
+        self.assertEqual(result, b"complete audio")
+        self.assertEqual(urlopen.call_count, 2)
+
+    def test_splits_long_dialogue_before_synthesis(self):
+        turns = [(('Moderator',), "Ein längerer Satz. " * 400)]
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "generate_telc_b2_listening_teil2_audio.synthesize_ssml",
+            return_value=b"audio",
+        ) as synthesize:
+            segments = synthesize_turn_segments(
+                turns,
+                {"Moderator": "de-DE-ConradNeural"},
+                Path(directory),
+                region="test",
+                key="secret",
+            )
+
+        self.assertGreater(len(segments), 1)
+        self.assertEqual(synthesize.call_count, len(segments))

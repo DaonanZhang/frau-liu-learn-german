@@ -275,6 +275,8 @@ describe("exam preparation level entry", () => {
   beforeEach(() => {
     authMocks.useAuth.mockReturnValue({ user: entitledUser(true, "13800138000") });
     Swal.fire.mockReset();
+    fetchSavedMockExams.mockReset();
+    fetchSavedMockExams.mockResolvedValue({ count: 0, next: null, previous: null, results: [] });
   });
 
   it("keeps the TELC B2 level card as a normal link", () => {
@@ -320,10 +322,14 @@ describe("exam preparation level entry", () => {
     expect(within(tips).getByText("Unsere Tipps", { selector: ".exam-module-card__kicker" })).toBeInTheDocument();
   });
 
-  it("links all six C1 entries while keeping the mock exam Coming soon", () => {
-    fetchSavedMockExams.mockClear();
+  it("links all six C1 entries and opens the C1 mock exam", async () => {
     renderPage("c1");
-    expect(fetchSavedMockExams).not.toHaveBeenCalled();
+    await waitFor(() => expect(fetchSavedMockExams).toHaveBeenCalledWith(
+      "active",
+      1,
+      3,
+      { examType: "TELC", level: "C1", levelPath: "c1" },
+    ));
     const skills = screen.getByRole("region", { name: "专项入口列表" });
     const tips = within(skills).getByRole("link", { name: /备考建议/ });
     expect(tips).toHaveAttribute("href", "/modules/exam-preparation/c1/tips");
@@ -341,8 +347,22 @@ describe("exam preparation level entry", () => {
       expect(within(link).getByText(cta)).toBeInTheDocument();
     });
     const mockEntry = screen.getByLabelText("笔试模拟考试");
-    fireEvent.click(within(mockEntry).getByRole("button", { name: "Coming soon" }));
-    expect(Swal.fire).toHaveBeenCalledWith({ icon: "info", title: "Coming soon" });
+    fireEvent.click(within(mockEntry).getByRole("button", { name: "开始新考试" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/telc/c1/mock-exam");
+    expect(Swal.fire).not.toHaveBeenCalled();
+  });
+
+  it("keeps the C1 mock exam behind the existing purchase lock", async () => {
+    authMocks.useAuth.mockReturnValue({ user: { id: 7, telephone: "13800138000", entitlements: [] } });
+    Swal.fire.mockResolvedValue({ isConfirmed: true });
+    renderPage("c1");
+
+    fireEvent.click(screen.getByRole("button", { name: /购买以解锁/ }));
+
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(
+      "/modules/exam-preparation/purchase?return_to=%2Fmodules%2Fexam-preparation%2Fc1",
+    ));
+    expect(fetchSavedMockExams).not.toHaveBeenCalled();
   });
 
   it("keeps the active level on skill links in the reused level home", () => {

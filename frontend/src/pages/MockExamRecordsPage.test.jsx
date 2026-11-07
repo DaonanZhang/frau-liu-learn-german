@@ -99,6 +99,37 @@ describe("mock exam records pagination", () => {
     expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/telc/b1/mock-exam?attempt=22");
   });
 
+  it.each([
+    ["b1", "B1", 225],
+    ["b2", "B2", 225],
+    ["c1", "C1", 166],
+  ])("shows the %s completed score against the correct maximum", async (pathLevel, level, maximumScore) => {
+    fetchSavedMockExams.mockResolvedValue({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [{
+        ...record(44),
+        level,
+        is_completed: true,
+        total_score: 100,
+        score_percentage: 60.2,
+        is_passed: true,
+      }],
+    });
+    render(<MemoryRouter initialEntries={[`/modules/exam-preparation/telc/${pathLevel}/mock-exams`]}><Routes>
+      <Route path="/modules/exam-preparation/:examType/:level/mock-exams" element={<MockExamRecordsPage />} />
+    </Routes></MemoryRouter>);
+
+    expect(await screen.findByText(`已完成 · 100 / ${maximumScore} · 60.2% · 通过`)).toBeInTheDocument();
+    expect(fetchSavedMockExams).toHaveBeenCalledWith(
+      "history",
+      1,
+      10,
+      { examType: "TELC", level, levelPath: pathLevel },
+    );
+  });
+
   it("keeps the review link on a saved paper's persisted level", async () => {
     fetchSavedMockExams.mockResolvedValue({ count: 1, next: null, previous: null, results: [{
       ...record(44), exam_type: "telc", level: "B1", is_completed: true, is_favorite: true,

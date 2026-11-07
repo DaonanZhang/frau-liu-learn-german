@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from http.client import IncompleteRead
 import os
 import re
 import shutil
@@ -23,6 +24,7 @@ OUTPUT_DIR = (
     / "frontend/public/resources/ExamPreparation/exam_preparation_audio/telc_b2_teil2"
 )
 NARRATOR_VOICE = "de-DE-SeraphinaMultilingualNeural"
+MAX_SYNTHESIS_TEXT_CHARS = 4500
 VOICE_POOLS = {
     "frau": [
         "de-DE-KatjaNeural",
@@ -181,6 +183,9 @@ def synthesize_ssml(ssml: bytes, *, region: str, key: str) -> bytes:
         except URLError as error:
             if attempt == 2:
                 raise RuntimeError(f"Azure Speech connection failed: {error.reason}") from error
+        except IncompleteRead as error:
+            if attempt == 2:
+                raise RuntimeError("Azure Speech returned incomplete audio") from error
         time.sleep(2**attempt)
     raise RuntimeError("Azure Speech did not return audio")
 
@@ -290,18 +295,44 @@ def synthesize_turn_segments(
 ) -> list[Path]:
     segments = []
     pending: list[Turn] = []
+    pending_chars = 0
 
     def flush_pending() -> None:
+        nonlocal pending_chars
         if not pending:
             return
         path = work_dir / f"dialogue_{len(segments) + 1}.mp3"
         path.write_bytes(synthesize_ssml(build_dialogue_ssml(pending, voices), region=region, key=key))
         segments.append(path)
         pending.clear()
+        pending_chars = 0
 
-    for speakers, text in turns:
+    def split_text(text: str) -> list[str]:
+        remaining = re.sub(r"\s+", " ", text).strip()
+        chunks = []
+        while len(remaining) > MAX_SYNTHESIS_TEXT_CHARS:
+            window = remaining[: MAX_SYNTHESIS_TEXT_CHARS + 1]
+            sentence_breaks = [match.end() for match in re.finditer(r"[.!?]\s+", window)]
+            split_at = sentence_breaks[-1] if sentence_breaks else window.rfind(" ")
+            if split_at <= 0:
+                split_at = MAX_SYNTHESIS_TEXT_CHARS
+            chunks.append(remaining[:split_at].strip())
+            remaining = remaining[split_at:].strip()
+        if remaining:
+            chunks.append(remaining)
+        return chunks
+
+    split_turns = [
+        (speakers, chunk)
+        for speakers, text in turns
+        for chunk in split_text(text)
+    ]
+    for speakers, text in split_turns:
         if len(speakers) == 1:
+            if pending and pending_chars + len(text) > MAX_SYNTHESIS_TEXT_CHARS:
+                flush_pending()
             pending.append((speakers, text))
+            pending_chars += len(text)
             continue
         flush_pending()
         tracks = []

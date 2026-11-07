@@ -53,6 +53,7 @@ INSTALLED_APPS = [
 ]
 
 REST_FRAMEWORK = {
+    "EXCEPTION_HANDLER": "apps.accounts.api_exceptions.api_exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "apps.accounts.authentication.MaintenanceAwareJWTAuthentication",
     ),

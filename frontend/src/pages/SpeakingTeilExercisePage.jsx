@@ -672,6 +672,12 @@ export default function SpeakingTeilExercisePage({ teil }) {
         {Number(teil) === 1 && topics.length ? <div className="speaking-detail-topic-list">{topics.map((topic) => <AnnotatableTextRegion as="span" key={topic} regionId={materialAnnotationId(topic, "topic")}>{topic}</AnnotatableTextRegion>)}</div> : null}
         {Number(teil) === 2 && cards.length ? <div className="speaking-detail-opinion-grid">{cards.map((card) => <AnnotatableTextRegion as="article" className="speaking-detail-opinion" key={stableContentKey(card, "card")} regionId={materialAnnotationId(card, "card")}><span>{card.participant}</span><h3>{card.title}</h3><p>{card.content}</p></AnnotatableTextRegion>)}</div> : null}
       </section>
+      {isB2Telc && Number(teil) === 2 && String(content.source_text || "").trim() ? (
+        <section className="speaking-detail-card speaking-detail-introduction">
+          <p className="speaking-detail-card__eyebrow">Einleitung</p>
+          <AnnotatableTextRegion as="p" className="speaking-detail-introduction__text" regionId="material:source-text">{content.source_text}</AnnotatableTextRegion>
+        </section>
+      ) : null}
       {Number(teil) === 1 ? (
         <section className="speaking-detail-card speaking-detail-example"><div className="speaking-detail-dialogue speaking-detail-dialogue--flush">{dialogue.map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} showPractice recorderId={`teil-1-${exerciseId}-${turn.sequence}`} annotationRegionId={turnAnnotationId(turn)} />)}</div></section>
       ) : null}

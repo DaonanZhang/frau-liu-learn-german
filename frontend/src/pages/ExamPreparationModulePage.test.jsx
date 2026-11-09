@@ -323,6 +323,11 @@ describe("exam preparation level entry", () => {
   });
 
   it("links all six C1 entries and opens the C1 mock exam", async () => {
+    authMocks.useAuth.mockReturnValue({ user: entitledUser(true, "110") });
+    fetchSavedMockExams.mockResolvedValue({
+      count: 1,
+      results: [{ id: 41, exam_type: "telc", level: "C1", progress: { phase: "reading" }, updated_at: "2026-10-01T10:00:00Z" }],
+    });
     renderPage("c1");
     await waitFor(() => expect(fetchSavedMockExams).toHaveBeenCalledWith(
       "active",
@@ -330,6 +335,8 @@ describe("exam preparation level entry", () => {
       3,
       { examType: "TELC", level: "C1", levelPath: "c1" },
     ));
+    expect(await screen.findByLabelText("未完成的模拟考试")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("笔试模拟考试")).getByRole("button", { name: "继续考试" })).toBeInTheDocument();
     const skills = screen.getByRole("region", { name: "专项入口列表" });
     const tips = within(skills).getByRole("link", { name: /备考建议/ });
     expect(tips).toHaveAttribute("href", "/modules/exam-preparation/c1/tips");
@@ -352,8 +359,54 @@ describe("exam preparation level entry", () => {
     expect(Swal.fire).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["Hören", "进入听力模块", "/modules/exam-preparation/c1/hoeren"],
+    ["Lesen", "进入阅读模块", "/modules/exam-preparation/c1/lesen"],
+    ["Sprachbausteine", "进入 Sprachbausteine", "/modules/exam-preparation/c1/sprachbausteine"],
+    ["Schreiben", "进入 Schreiben", "/modules/exam-preparation/c1/schreiben"],
+    ["Sprechen", "进入 Sprechen", "/modules/exam-preparation/c1/sprechen"],
+  ])("shows Coming soon without navigating when a non-110 C1 user opens %s", (name, cta, href) => {
+    renderPage("c1");
+    const beforeLocation = screen.getByTestId("location").textContent;
+    const skills = screen.getByRole("region", { name: "专项入口列表" });
+    const entry = within(skills).getByRole("link", { name: new RegExp(name) });
+    expect(entry).toHaveAttribute("href", href);
+    expect(entry).toHaveClass("exam-module-card--link");
+
+    fireEvent.click(entry);
+
+    expect(screen.getByTestId("location").textContent).toBe(beforeLocation);
+    expect(screen.getByRole("link", { name: /备考建议/ })).toHaveAttribute(
+      "href",
+      "/modules/exam-preparation/c1/tips",
+    );
+    expect(within(entry).getByText(cta)).toBeInTheDocument();
+    expect(Swal.fire).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(Swal.fire.mock.calls[0][0])).toMatch(/Coming soon/i);
+  });
+
+  it("does not load or show unfinished C1 mock exam entries for a non-110 user", () => {
+    renderPage("c1");
+
+    expect(fetchSavedMockExams).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("未完成的模拟考试")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "继续考试" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "查看更多未完成考试" })).not.toBeInTheDocument();
+  });
+
+  it("shows Coming soon without navigating when a non-110 C1 user starts a mock exam", () => {
+    renderPage("c1");
+    const beforeLocation = screen.getByTestId("location").textContent;
+
+    fireEvent.click(screen.getByRole("button", { name: "开始新考试" }));
+
+    expect(screen.getByTestId("location").textContent).toBe(beforeLocation);
+    expect(Swal.fire).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(Swal.fire.mock.calls[0][0])).toMatch(/Coming soon/i);
+  });
+
   it("keeps the C1 mock exam behind the existing purchase lock", async () => {
-    authMocks.useAuth.mockReturnValue({ user: { id: 7, telephone: "13800138000", entitlements: [] } });
+    authMocks.useAuth.mockReturnValue({ user: { id: 7, telephone: "110", entitlements: [] } });
     Swal.fire.mockResolvedValue({ isConfirmed: true });
     renderPage("c1");
 

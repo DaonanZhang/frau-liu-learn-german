@@ -96,6 +96,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const hasFullAccess = hasModuleAccess(user, EXAM_PREPARATION_MODULE);
+  const c1ComingSoon = scope?.level === "C1" && String(user?.telephone || "").trim() !== "110";
   const activeAttemptKey = activeMockExamKey(user?.id, scope || examPreparationScope("B1"));
   const sessionKey = mockExamSessionKey(user?.id, scope || examPreparationScope("B1"));
   const [activeMockExams, setActiveMockExams] = useState([]);
@@ -108,7 +109,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
     .sort((left, right) => right.getTime() - left.getTime())[0];
 
   useEffect(() => {
-    if (!scope || !hasFullAccess) return undefined;
+    if (!scope || !hasFullAccess || c1ComingSoon) return undefined;
     let cancelled = false;
     fetchSavedMockExams("active", 1, 3, scope)
       .then((data) => {
@@ -123,7 +124,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
         }
       });
     return () => { cancelled = true; };
-  }, [hasFullAccess, scope?.level]);
+  }, [c1ComingSoon, hasFullAccess, scope?.level]);
 
   async function removeInterruptedExam(record) {
     const result = await Swal.fire({
@@ -152,6 +153,10 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
   }
 
   async function openMockExam() {
+    if (c1ComingSoon) {
+      await showComingSoon();
+      return;
+    }
     if (hasFullAccess) {
       const previousAttemptId = localStorage.getItem(activeAttemptKey);
       if (previousAttemptId) {
@@ -178,6 +183,10 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
     if (result.isConfirmed) {
       navigate(examPreparationPurchasePath(scope));
     }
+  }
+
+  function showComingSoon() {
+    return Swal.fire({ icon: "info", title: "Coming soon" });
   }
 
   function continueLatestMockExam() {
@@ -277,7 +286,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
           <h2>笔试模拟</h2>
           <p>按正式考试流程完成一套笔试，检验时间分配和答题情况。</p>
           <div className="exam-module-mock__actions">
-            {hasFullAccess && activeMockExams.length ? (
+            {!c1ComingSoon && hasFullAccess && activeMockExams.length ? (
               <button type="button" onClick={continueLatestMockExam} className="exam-module-mock__button is-secondary">继续考试</button>
             ) : null}
             <button type="button" onClick={openMockExam} className="exam-module-mock__button">
@@ -287,7 +296,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
         </div>
       </section>
 
-      {hasFullAccess && activeMockExams.length ? (
+      {!c1ComingSoon && hasFullAccess && activeMockExams.length ? (
         <section className="exam-module-interrupted" aria-label="未完成的模拟考试">
           <div className="exam-module-interrupted__heading"><h2>未完成的模拟考试</h2>{activeMockExamCount > 3 ? <Link to={`/modules/exam-preparation/${scope.examType.toLowerCase()}/${scope.levelPath}/mock-exams`}>查看更多未完成考试</Link> : null}</div>
           <div className="exam-module-interrupted__list">
@@ -346,7 +355,15 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
 
           if (card.to) {
             return (
-              <Link key={card.key} to={card.to.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`)} className="exam-module-card exam-module-card--link">
+              <Link
+                key={card.key}
+                to={card.to.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`)}
+                className="exam-module-card exam-module-card--link"
+                onClick={c1ComingSoon && card.key !== "tips" ? (event) => {
+                  event.preventDefault();
+                  showComingSoon();
+                } : undefined}
+              >
                 {content}
               </Link>
             );

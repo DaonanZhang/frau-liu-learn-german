@@ -173,12 +173,23 @@ export default function ClozeMatchingPage() {
     : null;
   const c1ExampleBlankKey = c1ExampleBlank?.blank_key || "";
   const c1ExampleOptionKey = c1ExampleBlank?.correct_option?.option_key || "";
+  const c1ExampleAnswered = Boolean(answers[c1ExampleBlankKey]);
+  const nextC1Blank = scope?.level === "C1"
+    ? blankAnswers
+      .filter((blank) => Number(blank.blank_number) >= 1)
+      .sort((left, right) => Number(left.blank_number) - Number(right.blank_number))
+      .find((blank) => !answers[blank.blank_key])
+    : null;
   const activeC1BlankKey = activeBlankKey || c1ExampleBlankKey || blankAnswers[0]?.blank_key || "";
   const visiblePoolOptions = scope?.level === "C1"
     ? poolOptions.filter((option) => activeC1BlankKey === c1ExampleBlankKey
       ? option.option_key === c1ExampleOptionKey
       : option.option_key !== c1ExampleOptionKey)
     : poolOptions;
+  const shouldPromptNextC1Blank = scope?.level === "C1"
+    && c1ExampleAnswered
+    && Boolean(nextC1Blank)
+    && !visiblePoolOptions.length;
 
   const {
     annotationLayout,
@@ -418,7 +429,8 @@ export default function ClozeMatchingPage() {
               handleDragEnd();
             }}
           >
-            {visiblePoolOptions.map((option) => (
+            {visiblePoolOptions.map((option) => {
+              const optionButton = (
               <button
                 key={option.id}
                 type="button"
@@ -451,8 +463,17 @@ export default function ClozeMatchingPage() {
                   {option.option_text}
                 </span>
               </button>
-            ))}
-            {!poolOptions.length ? (
+              );
+              return scope?.level === "C1" && option.option_key === c1ExampleOptionKey && !c1ExampleAnswered ? (
+                <div className="cloze-c1-example-guide" key={option.id}>
+                  <span className="cloze-c1-example-guide__callout">将 Beispiel 拖到标有 0 的空格中</span>
+                  {optionButton}
+                </div>
+              ) : <Fragment key={option.id}>{optionButton}</Fragment>;
+            })}
+            {shouldPromptNextC1Blank ? (
+              <span className="cloze-pool__empty">请点击下一个绿色空格继续选择</span>
+            ) : !poolOptions.length ? (
               <span className="cloze-pool__empty">Alle Optionen sind gerade in Lücken platziert.</span>
             ) : null}
           </div>
@@ -505,6 +526,7 @@ export default function ClozeMatchingPage() {
                           isChecked && isCorrect ? "cloze-select--correct" : "",
                           isChecked && selectedKey && !isCorrect ? "cloze-select--wrong" : "",
                           activeDropBlankKey === blankKey ? "cloze-drop-slot--active" : "",
+                          c1ExampleAnswered && blankKey === nextC1Blank?.blank_key ? "cloze-drop-slot--guided" : "",
                         ].filter(Boolean).join(" ")}
                         onDragOver={(event) => {
                           if (!draggedOptionKey) {
@@ -525,7 +547,7 @@ export default function ClozeMatchingPage() {
                           handleDragEnd();
                         }}
                         onClick={scope?.level === "C1" ? () => setActiveBlankKey(blankKey) : undefined}
-                        aria-label={scope?.level === "C1" ? `空格 ${blank?.blank_number || ""}；点击选为填入位置` : undefined}
+                        aria-label={scope?.level === "C1" ? `空格 ${blank?.blank_number ?? ""}；点击选为填入位置` : undefined}
                       >
                         {selectedKey ? (
                           <button
@@ -554,7 +576,7 @@ export default function ClozeMatchingPage() {
                           </button>
                         ) : (
                           <span className="cloze-drop-slot__placeholder">
-                            {blank?.blank_number || ""}
+                            {blank?.blank_number ?? ""}
                           </span>
                         )}
                       </span>
@@ -656,7 +678,7 @@ export default function ClozeMatchingPage() {
             ) : null}
           </div>
         </section>
-        {saveStateText ? <p className="cloze-state-note">{saveStateText}</p> : null}
+        {scope?.level !== "C1" && saveStateText ? <p className="cloze-state-note">{saveStateText}</p> : null}
         </div>
       </div>
     </ExamTextAnnotationProvider>

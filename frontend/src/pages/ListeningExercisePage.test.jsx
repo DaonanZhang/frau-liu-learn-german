@@ -1,9 +1,12 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchListeningExerciseDetail } from "../api/exam_preparation/listeningExercises.js";
-import { fetchListeningQuestionStates } from "../api/exam_preparation/userExerciseStates.js";
+import {
+  fetchListeningQuestionStates,
+  saveListeningQuestionState,
+} from "../api/exam_preparation/userExerciseStates.js";
 import ListeningExercisePage from "./ListeningExercisePage.jsx";
 
 vi.mock("../api/exam_preparation/listeningExercises.js", () => ({
@@ -98,34 +101,183 @@ describe("listening exercise audio loading", () => {
     expect(screen.queryByText("音频加载中…")).not.toBeInTheDocument();
   });
 
-  it("renders and checks TELC C1 speaker matching statements", async () => {
+  it("renders each TELC C1 statement as a question with speaker answers", async () => {
     fetchListeningExerciseDetail.mockResolvedValueOnce(createListeningExercise({
       exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL1" },
-      content: { format: "speaker_matching", statements: [{ statement: "Aussage eins", speaker: "Person A" }] },
-      questions: [],
+      content: { format: "speaker_matching", statements: [] },
+      questions: [
+        { id: 101, question_number: 1, question_key: "statement_1", question_text: "Aussage eins", explanation: "Diese Aussage passt zu Sprecher/in 1.", answer_options: [
+          { id: 1001, option_key: "A", option_text: "Sprecher/in 1", is_correct: true },
+          { id: 1002, option_key: "B", option_text: "Sprecher/in 2", is_correct: false },
+        ] },
+        { id: 102, question_number: 2, question_key: "statement_2", question_text: "Aussage zwei", explanation: "Diese Aussage passt zu Sprecher/in 2.", answer_options: [
+          { id: 2001, option_key: "A", option_text: "Sprecher/in 1", is_correct: false },
+          { id: 2002, option_key: "B", option_text: "Sprecher/in 2", is_correct: true },
+        ] },
+      ],
     }));
     renderExercise("short_text_true_false_with_prep", "c1");
 
-    expect(await screen.findByText("Aussage eins")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("Person A"));
+    expect(await screen.findByText(/wählen Sie zu jeder Aussage die passende Sprecherin bzw\. den passenden Sprecher aus/i)).toBeInTheDocument();
+    expect(await screen.findAllByText("Aussage eins")).toHaveLength(1);
+    expect(screen.getAllByText("Aussage zwei")).toHaveLength(1);
+    fireEvent.click(screen.getAllByRole("radio", { name: "Sprecher/in 1" })[0]);
+    fireEvent.click(screen.getAllByRole("radio", { name: "Sprecher/in 2" })[1]);
     fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
-    expect(screen.getByText("Richtig")).toBeInTheDocument();
+    expect(screen.getAllByText("Richtig")).toHaveLength(2);
+    expect(screen.getAllByText(/Diese Aussage passt zu Sprecher\/in/)).toHaveLength(2);
+    await waitFor(() => {
+      expect(saveListeningQuestionState).toHaveBeenCalledWith(expect.objectContaining({
+        question: 101,
+        answer_payload: { selected_option_key: "A" },
+        is_correct: true,
+      }));
+      expect(saveListeningQuestionState).toHaveBeenCalledWith(expect.objectContaining({
+        question: 102,
+        answer_payload: { selected_option_key: "B" },
+        is_correct: true,
+      }));
+    });
+  });
+
+  it("saves Teil 1 answers by question ID and restores them with checked state", async () => {
+    const detail = createListeningExercise({
+      exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL1" },
+      content: { format: "speaker_matching", statements: [] },
+      questions: [{ id: 101, question_number: 1, question_key: "statement_1", question_text: "Aussage eins", answer_options: [
+        { id: 1001, option_key: "A", option_text: "Sprecher/in 1", is_correct: true },
+        { id: 1002, option_key: "B", option_text: "Sprecher/in 2", is_correct: false },
+      ] }],
+    });
+    fetchListeningExerciseDetail.mockResolvedValue(detail);
+    fetchListeningQuestionStates.mockResolvedValueOnce({ results: [] });
+    renderExercise("short_text_true_false_with_prep", "c1");
+    await screen.findByText("Aussage eins");
+    fireEvent.click(screen.getByRole("radio", { name: "Sprecher/in 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+
+    await waitFor(() => expect(saveListeningQuestionState).toHaveBeenCalledWith({
+      question: 101,
+      is_favorited: false,
+      answer_payload: { selected_option_key: "A" },
+      is_correct: true,
+    }));
+
+    cleanup();
+    fetchListeningQuestionStates.mockResolvedValueOnce({ results: [{
+      question: 101,
+      answer_payload: { selected_option_key: "A" },
+    }] });
+    renderExercise("short_text_true_false_with_prep", "c1");
+    expect(await screen.findByRole("radio", { name: "Sprecher/in 1" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
+  });
+
+  it("saves Teil 3 notes by question ID and restores them with checked state", async () => {
+    const detail = createListeningExercise({
+      exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL3" },
+      content: { format: "presentation_notes", slides: [{ number: "1", text: "Notizen<br>{{blank_01}} und {{blank_02}}", answers: [
+        { blank_id: "blank_01", answer: "Beispiel" },
+        { blank_id: "blank_02", answer: "Zweiter Begriff" },
+      ] }] },
+      questions: [
+        { id: 301, question_number: 1, question_key: "blank_01", question_type: "text_input", question_text: "Lücke 1", correct_answer: "Beispiel", answer_options: [] },
+        { id: 302, question_number: 2, question_key: "blank_02", question_type: "text_input", question_text: "Lücke 2", correct_answer: "Zweiter Begriff", answer_options: [] },
+      ],
+    });
+    fetchListeningExerciseDetail.mockResolvedValue(detail);
+    fetchListeningQuestionStates.mockResolvedValueOnce({ results: [] });
+    renderExercise("dialog_true_false_twice", "c1");
+    const note = await screen.findByLabelText("Aufgabe 1");
+    await act(async () => fireEvent.change(note, { target: { value: "Beispiel" } }));
+    await act(async () => fireEvent.change(screen.getByLabelText("Aufgabe 2"), { target: { value: "Zweiter Begriff" } }));
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+
+    await waitFor(() => {
+      expect(saveListeningQuestionState).toHaveBeenCalledWith({
+        question: 301,
+        is_favorited: false,
+        answer_payload: { answer_text: "Beispiel" },
+        is_correct: true,
+      });
+      expect(saveListeningQuestionState).toHaveBeenCalledWith({
+        question: 302,
+        is_favorited: false,
+        answer_payload: { answer_text: "Zweiter Begriff" },
+        is_correct: true,
+      });
+    });
+
+    cleanup();
+    fetchListeningQuestionStates.mockResolvedValueOnce({ results: [
+      { question: 301, answer_payload: { answer_text: "Beispiel" } },
+      { question: 302, answer_payload: { answer_text: "Zweiter Begriff" } },
+    ] });
+    renderExercise("dialog_true_false_twice", "c1");
+    expect(await screen.findByDisplayValue("Beispiel")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Zweiter Begriff")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
+  });
+
+  it("saves Teil 2 through question state only", async () => {
+    fetchListeningExerciseDetail.mockResolvedValueOnce(createListeningExercise());
+    renderExercise("short_text_true_false_once", "b1");
+    fireEvent.click(await screen.findByRole("radio", { name: /Die erste Aussage/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+
+    await waitFor(() => expect(saveListeningQuestionState).toHaveBeenCalled());
+  });
+
+  it("shows TELC C1 Teil 2 option explanations after checking", async () => {
+    fetchListeningExerciseDetail.mockResolvedValueOnce(createListeningExercise({
+      exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL2" },
+      questions: [{
+        id: 41,
+        question_number: 1,
+        question_text: "Welche Aussage stimmt?",
+        explanation_scope: "option",
+        answer_options: [
+          { id: 411, option_key: "A", option_text: "Die erste Aussage.", is_correct: true, explanation: "A passt zum Gespräch." },
+          { id: 412, option_key: "B", option_text: "Die zweite Aussage.", is_correct: false, explanation: "B widerspricht dem Gespräch." },
+        ],
+      }],
+    }));
+    renderExercise("short_text_true_false_once", "c1");
+
+    fireEvent.click(await screen.findByRole("radio", { name: /Die erste Aussage/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+
+    expect(screen.getByText("A passt zum Gespräch.")).toBeInTheDocument();
+    expect(screen.getByText("B widerspricht dem Gespräch.")).toBeInTheDocument();
   });
 
   it("renders TELC C1 presentation notes from slides and their answer fields", async () => {
     fetchListeningExerciseDetail.mockResolvedValueOnce(createListeningExercise({
       exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL3" },
-      content: { format: "presentation_notes", slides: [{ number: "1", text: "Wichtige Folie", answers: [{ blank_id: "1", answer: "Beispiel" }] }] },
-      questions: [],
+      content: { format: "presentation_notes", slides: [{ number: "1", text: "<bold><central>Wichtige Folie<\\central><\\bold><br>{{blank_01}}", answers: [
+        { blank_id: "blank_01", answer: "Beispiel" },
+        { blank_id: "blank_02", answer: "Ergänzung" },
+      ] }] },
+      questions: [
+        { id: 301, question_number: 1, question_key: "blank_01", question_type: "text_input", correct_answer: "Beispiel", answer_options: [] },
+        { id: 302, question_number: 2, question_key: "blank_02", question_type: "text_input", correct_answer: "Ergänzung", answer_options: [] },
+      ],
     }));
     renderExercise("dialog_true_false_twice", "c1");
 
-    expect(await screen.findByText("Wichtige Folie")).toBeInTheDocument();
+    const title = await screen.findByText("Wichtige Folie");
+    expect(title.tagName).toBe("STRONG");
+    expect(title.closest(".presentation-notes-content__center")).toBeInTheDocument();
     expect(screen.queryByText("多个答案请用分号分隔")).not.toBeInTheDocument();
+    expect(screen.queryByText("Lücke 1")).not.toBeInTheDocument();
+    expect(screen.queryByText(/blank_01/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("1"), { target: { value: "Beispiel" } });
+      fireEvent.change(screen.getByLabelText("Aufgabe 1"), { target: { value: "Beispiel" } });
+      fireEvent.change(screen.getByLabelText("Aufgabe 2"), { target: { value: "Ergänzung" } });
     });
-    expect(screen.getByLabelText("1")).toHaveValue("Beispiel");
+    expect(screen.getByLabelText("Aufgabe 1")).toHaveValue("Beispiel");
+    expect(screen.getByLabelText("Aufgabe 2")).toHaveValue("Ergänzung");
     fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
     expect(screen.getByText("Beispiel")).toBeInTheDocument();
   });
@@ -133,16 +285,19 @@ describe("listening exercise audio loading", () => {
   it("accepts C1 alternative and optional notes and prompts only for multi-part answers", async () => {
     fetchListeningExerciseDetail.mockResolvedValueOnce(createListeningExercise({
       exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL3" },
-      content: { format: "presentation_notes", slides: [{ number: "1", text: "Notizen", answers: [
-        { blank_id: "1", answer: "Bücher werden weiter(hin) <or> (immer) noch" },
-        { blank_id: "2", answer: "doppelsinnig;lustig" },
+      content: { format: "presentation_notes", slides: [{ number: "1", text: "Notizen<br>{{blank_01}}<br>{{blank_02}}", answers: [
+        { blank_id: "blank_01", answer: "Bücher werden weiter(hin) <or> (immer) noch" },
+        { blank_id: "blank_02", answer: "doppelsinnig;lustig" },
       ] }] },
-      questions: [],
+      questions: [
+        { id: 301, question_number: 1, question_key: "blank_01", question_type: "text_input", correct_answer: "Bücher werden weiter(hin) <or> (immer) noch", answer_options: [] },
+        { id: 302, question_number: 2, question_key: "blank_02", question_type: "text_input", correct_answer: "doppelsinnig;lustig", answer_options: [] },
+      ],
     }));
     renderExercise("dialog_true_false_twice", "c1");
 
-    const alternative = await screen.findByLabelText("1");
-    const [firstNote, secondNote] = screen.getAllByRole("textbox").filter((input) => input.closest(".listening-exercise-c1-note"));
+    const alternative = await screen.findByLabelText("Aufgabe 1");
+    const [firstNote, secondNote] = screen.getAllByRole("textbox").filter((input) => input.closest(".presentation-notes-content__blank"));
     expect(screen.getByText("多个答案请用分号分隔")).toBeInTheDocument();
     await act(async () => fireEvent.change(firstNote, { target: { value: "immer noch" } }));
     await act(async () => fireEvent.change(secondNote, { target: { value: "lustig; doppelsinnig" } }));

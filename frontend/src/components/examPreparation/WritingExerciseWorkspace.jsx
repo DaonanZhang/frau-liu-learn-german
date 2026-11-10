@@ -1,6 +1,20 @@
 import { useState } from "react";
 import { AnnotatableTextRegion } from "./ExamTextAnnotations.jsx";
 
+export function TranslationVisibilityIcon({ hidden }) {
+  return (
+    <span aria-hidden="true">Aa</span>
+  );
+}
+
+export function VocabularyCollapseIcon({ expanded }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={expanded ? "m6 10 6 6 6-6" : "m6 14 6-6 6 6"} />
+    </svg>
+  );
+}
+
 export function StoredLineBreaks({ text, fallback = "" }) {
   return String(text || fallback).split(/<br\s*\/?>|\r\n?|\n/gi).map((part, index) => (
     <span key={`${index}-${part}`}>
@@ -21,6 +35,7 @@ export default function WritingExerciseWorkspace({
   isTelcB2,
   isTelcC1 = false,
   showTranslations = true,
+  showVocabulary = true,
   value,
   onChange,
   disabled = false,
@@ -118,30 +133,46 @@ export default function WritingExerciseWorkspace({
         </article>
       </section>
 
-      {isTelcC1 && Array.isArray(exercise?.content?.vocabulary_pages) && exercise.content.vocabulary_pages.length ? (
+      {showVocabulary && isTelcC1 && Array.isArray(exercise?.content?.vocabulary_pages) && exercise.content.vocabulary_pages.length ? (
         <VocabularyPages pages={exercise.content.vocabulary_pages} />
       ) : null}
     </div>
   );
 }
 
-function VocabularyPages({ pages }) {
+export function VocabularyPages({ pages }) {
   const [pageIndex, setPageIndex] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(true);
   const page = pages[pageIndex] || {};
   const entries = Array.isArray(page) ? page : Array.isArray(page.entries) ? page.entries : [];
   return (
     <aside className="writing-detail-vocabulary" aria-label="词汇表">
-      <strong>{page.title || "词汇表"}</strong>
-      <div>
-        {entries.map((entry, index) => (
-          <p key={`${entry.word || entry.term || index}`}><span>{entry.word || entry.term || entry.de || ""}</span>{entry.translation_zh || entry.translation || entry.zh ? ` · ${entry.translation_zh || entry.translation || entry.zh}` : ""}</p>
-        ))}
+      <div className="writing-detail-vocabulary__header">
+        <strong>{page.title || "词汇表"}</strong>
+        <button
+          type="button"
+          aria-label={isExpanded ? "收起词汇表" : "展开词汇表"}
+          title={isExpanded ? "收起词汇表" : "展开词汇表"}
+          aria-expanded={isExpanded}
+          onClick={() => setIsExpanded((expanded) => !expanded)}
+        >
+          <VocabularyCollapseIcon expanded={isExpanded} />
+        </button>
       </div>
-      <footer>
-        <button type="button" onClick={() => setPageIndex((current) => Math.max(0, current - 1))} disabled={pageIndex === 0} aria-label="上一页">←</button>
-        <span>{pageIndex + 1} / {pages.length}</span>
-        <button type="button" onClick={() => setPageIndex((current) => Math.min(pages.length - 1, current + 1))} disabled={pageIndex >= pages.length - 1} aria-label="下一页">→</button>
-      </footer>
+      {isExpanded ? (
+        <>
+          <div>
+            {entries.map((entry, index) => (
+              <p key={`${entry.word || entry.term || index}`}><span>{entry.word || entry.term || entry.de || ""}</span>{entry.translation_zh || entry.translation || entry.zh ? ` · ${entry.translation_zh || entry.translation || entry.zh}` : ""}</p>
+            ))}
+          </div>
+          <footer>
+            <button type="button" onClick={() => setPageIndex((current) => Math.max(0, current - 1))} disabled={pageIndex === 0} aria-label="上一页">←</button>
+            <span>{pageIndex + 1} / {pages.length}</span>
+            <button type="button" onClick={() => setPageIndex((current) => Math.min(pages.length - 1, current + 1))} disabled={pageIndex >= pages.length - 1} aria-label="下一页">→</button>
+          </footer>
+        </>
+      ) : null}
     </aside>
   );
 }

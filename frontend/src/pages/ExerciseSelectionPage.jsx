@@ -14,6 +14,7 @@ export default function ExerciseSelectionPage({
   fetchExercises,
   buildExerciseHref,
   buildCardTitle,
+  sortByExternalId = false,
   cardDescription = "Öffne diese Aufgabe und beginne direkt mit dem Training.",
   cardCta = "Übung öffnen",
   emptyMessage = "Zurzeit sind keine Aufgaben verfügbar.",
@@ -38,7 +39,20 @@ export default function ExerciseSelectionPage({
         if (!aborted) {
           const results = Array.isArray(data?.results) ? data.results : [];
           setExercises([...results].sort(
-            (left, right) => Number(Boolean(left?.is_locked)) - Number(Boolean(right?.is_locked)),
+            (left, right) => {
+              const shouldSortByExternalId = typeof sortByExternalId === "function"
+                ? sortByExternalId(scope)
+                : sortByExternalId;
+              if (!shouldSortByExternalId) {
+                return Number(Boolean(left?.is_locked)) - Number(Boolean(right?.is_locked));
+              }
+              const externalIdOrder = String(left?.exercise_base?.external_id || "").localeCompare(
+                String(right?.exercise_base?.external_id || ""),
+                "de",
+                { numeric: true, sensitivity: "base" },
+              );
+              return externalIdOrder || Number(left?.id || 0) - Number(right?.id || 0);
+            },
           ));
         }
       } catch (error) {
@@ -56,7 +70,7 @@ export default function ExerciseSelectionPage({
     return () => {
       aborted = true;
     };
-  }, [fetchExercises, scope?.level]);
+  }, [fetchExercises, scope?.level, sortByExternalId]);
 
   if (!scope) return <Navigate to="/modules/exam-preparation" replace />;
 

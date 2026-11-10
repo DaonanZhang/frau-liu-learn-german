@@ -242,7 +242,6 @@ export default function ReadingAdMatchingPage() {
           review={isChecked}
           annotationsEnabled
           allowRepeated={scope?.level === "C1"}
-          showAllAds={scope?.level === "C1"}
           showVersion2Label={scope?.level === "C1"}
           onAnswer={(itemId, adKey) => {
             setAnswers((previous) => ({ ...previous, [itemId]: adKey }));

@@ -15,6 +15,7 @@
 }
 
 .cloze-shell--c1 {
+  width: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
   align-items: start;
@@ -44,6 +45,24 @@
   grid-row: 5;
 }
 
+.cloze-shell--c1 > .cloze-actions {
+  grid-row: 6;
+  justify-content: flex-end;
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.35rem;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(245, 246, 248, 0), rgba(245, 246, 248, 0.92) 42%, rgba(245, 246, 248, 1));
+  box-shadow: none;
+}
+
+.cloze-shell--c1 .cloze-check-btn,
+.cloze-shell--c1 .cloze-reset-btn {
+  min-width: 10.5rem;
+  min-height: 3.15rem;
+}
+
 @media (max-width: 760px) {
   .cloze-shell--c1 {
     grid-template-columns: minmax(0, 1fr);
@@ -54,6 +73,21 @@
     grid-column: 1;
     grid-row: auto;
     max-height: none;
+  }
+
+  .cloze-shell--c1 > .cloze-actions {
+    grid-row: auto;
+  }
+
+  .cloze-shell--c1 .cloze-actions__buttons,
+  .cloze-shell--c1 .cloze-check-btn,
+  .cloze-shell--c1 .cloze-reset-btn {
+    width: 100%;
+  }
+
+  .cloze-shell--c1 .cloze-check-btn,
+  .cloze-shell--c1 .cloze-reset-btn {
+    min-width: 0;
   }
 }
 
@@ -233,6 +267,88 @@
   background: #fff3e8;
   border-color: rgba(207, 99, 39, 0.24);
   color: #9a4210;
+}
+
+.cloze-shell--c1 .cloze-c1-example-guide {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  padding-top: 2.1rem;
+}
+
+.cloze-shell--c1 .cloze-c1-example-guide__callout {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  max-width: min(22rem, calc(100vw - 3rem));
+  padding: 0.3rem 0.6rem;
+  border: 1px solid rgba(44, 155, 89, 0.3);
+  border-radius: 0.65rem;
+  background: #f0faf3;
+  box-shadow: 0 3px 10px rgba(38, 52, 74, 0.12);
+  color: #72500c;
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+
+.cloze-shell--c1 .cloze-pool-chip,
+.cloze-shell--c1 .cloze-drop-slot__chip {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.cloze-shell--c1 .cloze-blank-inline {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cloze-shell--c1 .cloze-drop-slot--selected {
+  min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cloze-shell--c1 .cloze-drop-slot--selected .cloze-drop-slot__chip {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.cloze-shell--c1 .cloze-drop-slot__chip > span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.cloze-shell--c1 .cloze-drop-slot--guided {
+  border-color: #2c9b59;
+  background: #e5f7eb;
+  box-shadow: 0 0 0 3px rgba(44, 155, 89, 0.2);
+}
+
+@media (max-width: 640px) {
+  .cloze-shell--c1 .cloze-c1-example-guide {
+    max-width: min(100%, calc(100vw - 3rem));
+  }
+
+  .cloze-shell--c1 .cloze-c1-example-guide__callout {
+    max-width: min(100%, calc(100vw - 3rem));
+  }
 }
 
 .cloze-pool__empty {

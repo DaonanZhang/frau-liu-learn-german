@@ -212,8 +212,10 @@ class ListeningQuestionDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "question_number",
+            "question_key",
             "question_type",
             "question_text",
+            "correct_answer",
             "explanation",
             "explanation_scope",
             "created_at",
@@ -763,15 +765,60 @@ class SpeakingTeilExerciseSerializer(TrialAwareExerciseSerializerMixin, serializ
 
     def get_content(self, exercise):
         content = exercise.content or {}
-        def with_audio(turn):
-            return {**turn, "audio_url": get_speaking_turn_audio_url(exercise, turn)}
+        def with_audio(source_exercise, turn, sequence=None):
+            result = {**turn, "audio_url": get_speaking_turn_audio_url(source_exercise, turn)}
+            if sequence is not None:
+                result["sequence"] = sequence
+            return result
 
         result = {**content}
+        base = exercise.exercise_base
+        view = self.context.get("view")
+        if (
+            getattr(view, "action", None) == "retrieve"
+            and base.exam_type == "TELC"
+            and base.level == ExerciseBase.Level.C1
+            and base.exercise_type == ExerciseBase.ExerciseType.SPEAKING_TEIL2
+        ):
+            companion = SpeakingTeilExercise.objects.select_related("exercise_base").filter(
+                exercise_base__exam_type=base.exam_type,
+                exercise_base__level=base.level,
+                exercise_base__external_id=base.external_id,
+                exercise_base__exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            ).first()
+            if companion:
+                companion_content = companion.content or {}
+                for field in ("topic", "outline"):
+                    if field in companion_content:
+                        result[field] = companion_content[field]
+                turns = []
+                for index, turn in enumerate(companion_content.get("dialogue", []), start=1):
+                    source_sequence = turn.get("sequence")
+                    turns.append({
+                        **with_audio(companion, turn, index),
+                        "turn_key": f"turn:source:{companion.pk}:{source_sequence}",
+                        "source_exercise_id": companion.pk,
+                        "source_teil": 1,
+                        "source_sequence": source_sequence,
+                    })
+                sequence_offset = len(turns)
+                for index, turn in enumerate(content.get("dialogue", []), start=1):
+                    source_sequence = turn.get("sequence")
+                    turns.append({
+                        **with_audio(exercise, turn, sequence_offset + index),
+                        "turn_key": f"turn:{source_sequence}",
+                        "source_exercise_id": exercise.pk,
+                        "source_teil": 2,
+                        "source_sequence": source_sequence,
+                    })
+                result["dialogue"] = turns
+                return result
+
         if isinstance(content.get("dialogue"), list):
-            result["dialogue"] = [with_audio(turn) for turn in content["dialogue"]]
+            result["dialogue"] = [with_audio(exercise, turn) for turn in content["dialogue"]]
         if isinstance(content.get("sections"), list):
             result["sections"] = [
-                {**section, "turns": [with_audio(turn) for turn in section.get("turns", [])]}
+                {**section, "turns": [with_audio(exercise, turn) for turn in section.get("turns", [])]}
                 for section in content["sections"]
             ]
         return result

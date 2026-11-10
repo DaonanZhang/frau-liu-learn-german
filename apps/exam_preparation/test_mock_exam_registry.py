@@ -11,6 +11,8 @@ from apps.exam_preparation.models import (
     ClozeMatchingOption,
     ExerciseBase,
     ListeningExercise,
+    ListeningQuestion,
+    ListeningAnswerOption,
     ReadingAdMatchingAd,
     ReadingAdMatchingExercise,
     ReadingAdMatchingItem,
@@ -47,11 +49,27 @@ class C1MockExamScoringTests(TestCase):
                 {"blank_id": "components", "answer": "doppelsinnig;lustig"},
             ]}]},
         )
+        alternative = ListeningQuestion.objects.create(
+            listening_exercise=listening,
+            question_number=1,
+            question_key="alternative",
+            question_type=ListeningQuestion.QuestionType.TEXT_INPUT,
+            question_text="Lücke alternative",
+            correct_answer="didaktische Spiele <or> therapeutische Spiele",
+        )
+        components = ListeningQuestion.objects.create(
+            listening_exercise=listening,
+            question_number=2,
+            question_key="components",
+            question_type=ListeningQuestion.QuestionType.TEXT_INPUT,
+            question_text="Lücke components",
+            correct_answer="doppelsinnig;lustig",
+        )
         result = calculate_result(SimpleNamespace(
             paper=SimpleNamespace(level="C1", exercise_selection={"listening_teil3": listening.pk}),
             answers={
-                "listening_teil3:note-1-alternative": "THERAPEUTISCHE SPIELE",
-                "listening_teil3:note-1-components": "doppelsinnig",
+                f"listening_teil3:{alternative.pk}": "THERAPEUTISCHE SPIELE",
+                f"listening_teil3:{components.pk}": "doppelsinnig",
             },
             writing_assessment={}, writing_grade="",
         ))
@@ -130,6 +148,18 @@ class C1MockExamScoringTests(TestCase):
                 listening_type=ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE,
                 audio_file_identifier=f"Teil{teil}_1", content=content,
             )
+        speaker_question = ListeningQuestion.objects.create(
+            listening_exercise=listening[1], question_number=1, question_key="speaker_1",
+            question_type=ListeningQuestion.QuestionType.SINGLE_CHOICE, question_text="Aussage 1",
+        )
+        ListeningAnswerOption.objects.create(
+            question=speaker_question, option_key="E", option_text="Sprecher/in 5", is_correct=True,
+        )
+        note_question = ListeningQuestion.objects.create(
+            listening_exercise=listening[3], question_number=1, question_key="a",
+            question_type=ListeningQuestion.QuestionType.TEXT_INPUT, question_text="Lücke a",
+            correct_answer="Lernen",
+        )
         instance = SimpleNamespace(
             paper=SimpleNamespace(level="C1", exercise_selection={
                 "cloze_matching": matching.id,
@@ -139,8 +169,8 @@ class C1MockExamScoringTests(TestCase):
             answers={
                 f"cloze_matching:{example_answer.id}": "beispiel",
                 f"cloze_matching:{regular_answer.id}": "A",
-                "listening_teil1:statement-1": "S1",
-                "listening_teil3:note-1-a": "lernen",
+                f"listening_teil1:{speaker_question.pk}": "E",
+                f"listening_teil3:{note_question.pk}": "lernen",
             },
             writing_assessment={
                 "topic_relevant": True,

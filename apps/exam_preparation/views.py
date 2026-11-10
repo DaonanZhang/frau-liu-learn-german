@@ -1535,14 +1535,37 @@ class FavoriteQuestionViewSet(ViewSet):
             exercise = state.exercise
             exercise_base = exercise.exercise_base
             content = exercise.content or {}
-            all_turns = content.get("dialogue") or []
-            turn = next(
-                (
-                    item for item in all_turns
-                    if str(item.get("sequence")) == str(state.turn_key).split(":")[-1]
-                ),
-                {},
-            )
+            companion_key = re.fullmatch(r"turn:source:([1-9]\d*):([1-9]\d*)", state.turn_key or "")
+            if state.turn_key.startswith("turn:source:"):
+                turn = {}
+                if (
+                    companion_key
+                    and exercise_base.exam_type == "TELC"
+                    and exercise_base.level == ExerciseBase.Level.C1
+                    and exercise_base.exercise_type == ExerciseBase.ExerciseType.SPEAKING_TEIL2
+                ):
+                    source = SpeakingTeilExercise.objects.select_related("exercise_base").filter(
+                        pk=int(companion_key.group(1)),
+                        exercise_base__exam_type=exercise_base.exam_type,
+                        exercise_base__level=exercise_base.level,
+                        exercise_base__external_id=exercise_base.external_id,
+                        exercise_base__exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+                    ).first()
+                    if source:
+                        turn = next(
+                            (item for item in (source.content or {}).get("dialogue", [])
+                             if str(item.get("sequence")) == companion_key.group(2)),
+                            {},
+                        )
+            else:
+                all_turns = content.get("dialogue") or []
+                turn = next(
+                    (
+                        item for item in all_turns
+                        if str(item.get("sequence")) == str(state.turn_key).split(":")[-1]
+                    ),
+                    {},
+                )
             teil = str(content.get("teil") or "1")
             payload = self._base_payload(
                 state,

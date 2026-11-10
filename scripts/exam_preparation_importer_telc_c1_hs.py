@@ -513,9 +513,11 @@ def import_listening(path: Path, meta: dict, identifier: str, kind: str) -> int:
     content = {"format": {"1": "speaker_matching", "2": "multiple_choice", "3": "presentation_notes"}[teil]}
     if teil == "1":
         content["statements"] = [
-            {"statement": shared.clean_text(row.get("Aussage")), "speaker": shared.clean_text(row.get("Sprecher/in")),
+            {"statement_number": index, "statement": shared.clean_text(row.get("Aussage")),
+             "speaker": shared.clean_text(row.get("Sprecher/in")),
              "explanation": shared.clean_text(row.get("Explanation"))}
-            for row in frame.to_dict("records") if shared.clean_text(row.get("Aussage"))
+            for index, row in enumerate(frame.to_dict("records"), start=1)
+            if shared.clean_text(row.get("Aussage"))
         ]
     elif teil == "2":
         questions = []
@@ -540,19 +542,102 @@ def import_listening(path: Path, meta: dict, identifier: str, kind: str) -> int:
                  getattr(ExerciseBase.ExerciseType, f"LISTENING_TEIL{teil}"))
     exercise, _ = ListeningExercise.objects.update_or_create(
         exercise_base=base,
-        defaults={"listening_type": ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE,
+        defaults={"listening_type": {
+                      "1": ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP,
+                      "2": ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE,
+                      "3": ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE,
+                  }[teil],
                   "audio_file_identifier": f"Teil{teil}_{identifier}",
                   "audio_file_url": f"/resources/ExamPreparation/exam_preparation_audio/telc_c1_hs_teil{teil}/Teil{teil}_{identifier}.mp3",
                   "script": script, "content": content},
     )
-    exercise.questions.all().delete()
-    if teil == "2":
+    question_defaults = []
+    if teil == "1":
+        statements = [statement for statement in content["statements"] if statement["speaker"]]
+        speaker_numbers = [re.search(r"\d+", statement["speaker"]) for statement in statements]
+        if len(statements) != 8 or any(match is None for match in speaker_numbers) \
+                or sorted(int(match.group()) for match in speaker_numbers) != list(range(1, 9)):
+            raise shared.ImportErrorWithContext(f"{path.name}: Teil 1 must have one statement for each speaker 1–8")
+        speaker_options = [
+            (shared.option_key_from_index(number - 1), f"Sprecher/in {number}", number)
+            for number in range(1, 9)
+        ]
+        for question_number, statement in enumerate(statements, start=1):
+            statement_speaker_number = int(re.search(r"\d+", statement["speaker"]).group())
+            question_key = f"statement_{statement['statement_number']}"
+            question, _ = ListeningQuestion.objects.update_or_create(
+                listening_exercise=exercise,
+                question_number=question_number,
+                defaults={
+                    "question_key": question_key,
+                    "question_type": ListeningQuestion.QuestionType.SINGLE_CHOICE,
+                    "question_text": statement["statement"],
+                    "correct_answer": "",
+                    "explanation": statement["explanation"],
+                    "explanation_scope": "question",
+                },
+            )
+            question_defaults.append(question_number)
+            for option_key, option_text, option_speaker_number in speaker_options:
+                ListeningAnswerOption.objects.update_or_create(
+                    question=question,
+                    option_key=option_key,
+                    defaults={
+                        "option_text": option_text,
+                        "is_correct": option_speaker_number == statement_speaker_number,
+                        "explanation": "",
+                        "sort_order": option_speaker_number,
+                    },
+                )
+            question.answer_options.exclude(option_key__in=[option[0] for option in speaker_options]).delete()
+    elif teil == "2":
         for q in content["questions"]:
-            question = ListeningQuestion.objects.create(listening_exercise=exercise, question_number=q["question_number"],
-                question_type=ListeningQuestion.QuestionType.SINGLE_CHOICE, question_text=q["question"])
+            question, _ = ListeningQuestion.objects.update_or_create(
+                listening_exercise=exercise,
+                question_number=q["question_number"],
+                defaults={
+                    "question_key": str(q["question_number"]),
+                    "question_type": ListeningQuestion.QuestionType.SINGLE_CHOICE,
+                    "question_text": q["question"],
+                    "correct_answer": "",
+                },
+            )
+            question_defaults.append(q["question_number"])
+            option_keys = []
             for index, option in enumerate(q["options"]):
-                ListeningAnswerOption.objects.create(question=question, option_key=shared.option_key_from_index(index),
-                    option_text=option["text"], is_correct=option["is_correct"], explanation=option["explanation"], sort_order=index + 1)
+                option_key = shared.option_key_from_index(index)
+                option_keys.append(option_key)
+                ListeningAnswerOption.objects.update_or_create(
+                    question=question,
+                    option_key=option_key,
+                    defaults={
+                        "option_text": option["text"],
+                        "is_correct": option["is_correct"],
+                        "explanation": option["explanation"],
+                        "sort_order": index + 1,
+                    },
+                )
+            question.answer_options.exclude(option_key__in=option_keys).delete()
+    else:
+        blank_rows = [
+            {"blank_id": answer["blank_id"], "answer": answer["answer"], "slide": str(slide["number"])}
+            for slide in content["slides"] for answer in slide["answers"]
+        ]
+        for question_number, blank in enumerate(blank_rows, start=1):
+            question, _ = ListeningQuestion.objects.update_or_create(
+                listening_exercise=exercise,
+                question_number=question_number,
+                defaults={
+                    "question_key": blank["blank_id"],
+                    "question_type": ListeningQuestion.QuestionType.TEXT_INPUT,
+                    "question_text": f"Lücke {blank['blank_id']} · Folie {blank['slide']}",
+                    "correct_answer": blank["answer"],
+                    "explanation": "",
+                },
+            )
+            question_defaults.append(question_number)
+            question.answer_options.all().delete()
+    exercise.questions.exclude(question_number__in=question_defaults).delete()
     return 1
 
 

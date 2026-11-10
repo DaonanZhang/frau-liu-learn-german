@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -20,11 +21,11 @@ vi.mock("../api/exam_preparation/userExerciseStates.js", () => ({
 }));
 
 vi.mock("../components/examPreparation/SpeakingPracticeRecorder.jsx", () => ({
-  default: ({ recordingId, audioUrl }) => <button type="button" aria-label={`record ${recordingId}`} data-audio-url={audioUrl}>record</button>,
+  default: ({ recordingId, audioUrl, trailingControl }) => <div className="shadowing-practice-buttons"><button type="button" aria-label={`record ${recordingId}`} data-audio-url={audioUrl}>record</button><button type="button" aria-label="朗读">play sample</button>{trailingControl}</div>,
 }));
 
 vi.mock("../components/examPreparation/ExerciseFavoriteButton.jsx", () => ({
-  default: ({ onClick }) => <button type="button" aria-label="收藏句子" onClick={onClick}>favorite</button>,
+  default: ({ onClick, isFavorited }) => <button type="button" aria-label="收藏句子" aria-pressed={isFavorited} onClick={onClick}>favorite</button>,
 }));
 
 function FakeHighlight(...ranges) {
@@ -203,14 +204,41 @@ describe("SpeakingTeilExercisePage text annotations", () => {
         teil: teil === 1 ? "1A" : "1B",
         outline: ["Point one"],
         sample_de: text,
-        dialogue: [{ sequence: 1, role: "TN1", text, audio_url: audioUrl }],
+        dialogue: [{ sequence: 1, role: "TN1", text, translation_zh: "不应显示的翻译", audio_url: audioUrl }],
       },
     });
-    renderPage(teil, 70 + teil);
+    const { container } = renderPage(teil, 70 + teil);
 
     expect(await screen.findByText(text)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: `record c1-teil-${teil}-${70 + teil}-1` })).toHaveAttribute("data-audio-url", audioUrl);
-    expect(screen.getByRole("button", { name: "Prüfen" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "隐藏答案" })).toHaveAttribute("title", "隐藏答案");
+    expect(screen.queryByText("不应显示的翻译")).not.toBeInTheDocument();
+    const turn = container.querySelector(".speaking-detail-turn");
+    const practice = turn.querySelector(".speaking-detail-turn__practice");
+    const controls = practice.querySelector(".shadowing-practice-buttons");
+    const recorder = within(practice).getByRole("button", { name: `record c1-teil-${teil}-${70 + teil}-1` });
+    const sampleAudio = within(controls).getByRole("button", { name: "朗读" });
+    const translationToggle = within(practice).getByRole("button", { name: "显示中文翻译" });
+    const favorite = within(practice).getByRole("button", { name: "收藏句子" });
+    expect(translationToggle).toHaveTextContent(/^Aa$/);
+    expect(translationToggle).toHaveAttribute("title", "翻译");
+    expect(translationToggle).toHaveAttribute("aria-pressed", "false");
+    expect(controls).toContainElement(translationToggle);
+    expect(sampleAudio.compareDocumentPosition(translationToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(recorder.compareDocumentPosition(translationToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(translationToggle.compareDocumentPosition(favorite) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(translationToggle);
+    expect(turn).toHaveTextContent("不应显示的翻译");
+    const hideTranslation = within(practice).getByRole("button", { name: "隐藏中文翻译" });
+    expect(hideTranslation).toHaveTextContent(/^Aa$/);
+    expect(hideTranslation).toHaveAttribute("title", "翻译");
+    expect(hideTranslation).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(hideTranslation);
+    expect(screen.queryByText("不应显示的翻译")).not.toBeInTheDocument();
+    expect(container.querySelector(".speaking-detail-c1-translation-actions")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Prüfen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Wiederholen" })).not.toBeInTheDocument();
   });
 
   it("shows the C1 Teil 1A outline beside the sample answer", async () => {
@@ -220,7 +248,8 @@ describe("SpeakingTeilExercisePage text annotations", () => {
       instruction: "Halten Sie einen Vortrag.",
       content: {
         teil: "1A",
-        outline: ["Ausgangslage", "Mögliche Lösungen"],
+        topic: "Nachhaltige Mobilität",
+        outline: ["Ausgangslage", "Mögliche Lösungen\nund ihre Folgen"],
         dialogue: [{ sequence: 1, role: "TN1", text: "Zuerst möchte ich die Situation beschreiben.", audio_url: "/audio/c1-vortrag.mp3" }],
       },
     });
@@ -230,10 +259,147 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     const answer = screen.getByText("Zuerst möchte ich die Situation beschreiben.");
     expect(outline.closest(".speaking-detail-card").parentElement).toBe(answer.closest(".speaking-detail-card").parentElement);
     expect(answer.closest(".speaking-detail-card")).toHaveClass("speaking-detail-c1-answer");
+    expect(screen.getByText("Nachhaltige Mobilität")).toBeInTheDocument();
     expect(screen.getByText("Ausgangslage")).toBeInTheDocument();
+    const outlineContent = screen.getByText((_, element) => element?.classList.contains("speaking-detail-c1-outline__content"));
+    expect(Array.from(outlineContent.querySelectorAll("p"), (point) => point.textContent)).toContain("Mögliche Lösungen\nund ihre Folgen");
     expect(screen.getByRole("button", { name: "record c1-teil-1-71-1" })).toHaveAttribute("data-audio-url", "/audio/c1-vortrag.mp3");
-    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
-    expect(await screen.findByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "隐藏提纲" })).toHaveAttribute("title", "隐藏提纲");
+    expect(screen.getByRole("button", { name: "隐藏答案" })).toHaveAttribute("title", "隐藏答案");
+    expect(screen.queryByRole("button", { name: "Prüfen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Wiederholen" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "隐藏提纲" }));
+    expect(screen.getByRole("heading", { name: "提纲" })).toBeInTheDocument();
+    expect(screen.queryByText("Ausgangslage")).not.toBeInTheDocument();
+    expect(screen.getByText("Zuerst möchte ich die Situation beschreiben.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "显示提纲" })).toHaveAttribute("title", "显示提纲");
+
+    fireEvent.click(screen.getByRole("button", { name: "显示提纲" }));
+    expect(screen.getByText("Ausgangslage")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "隐藏答案" }));
+    expect(screen.getByRole("heading", { name: "Beispielantwort" })).toBeInTheDocument();
+    expect(screen.queryByText("Zuerst möchte ich die Situation beschreiben.")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "record c1-teil-1-71-1" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "收藏句子" })).not.toBeInTheDocument();
+    expect(screen.getByText("Ausgangslage")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "显示答案" })).toHaveAttribute("title", "显示答案");
+
+    fireEvent.click(screen.getByRole("button", { name: "显示答案" }));
+    expect(screen.getByText("Zuerst möchte ich die Situation beschreiben.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "record c1-teil-1-71-1" })).toBeInTheDocument();
+    expect(screen.getByText("Ausgangslage")).toBeInTheDocument();
+  });
+
+  it("renders complete C1 Teil 1B content vertically with plain-text line breaks", async () => {
+    fetchSpeakingTurnStates.mockResolvedValue({ results: [{ turn_key: "turn:8", is_favorited: true }] });
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      id: 75,
+      exercise_base: { level: "C1", title: "C1 Vortrag", exam_type: "TELC", exercise_type: "SPEAKING_TEIL2" },
+      instruction: "Halten Sie einen Vortrag.",
+      content: {
+        teil: "1B",
+        topic: "Digitales Lernen",
+        outline: ["Vorteile", "Herausforderungen"],
+        dialogue: [
+          { sequence: 1, turn_key: "turn:source:71:4", source_teil: 1, source_exercise_id: 71, source_sequence: 4, role: "TN1", text: "Zunächst möchte ich das Thema vorstellen.<br />Danach nenne ich Vorteile.", audio_url: "/audio/c1-1b-1.mp3" },
+          { sequence: 2, turn_key: "turn:8", source_teil: 2, source_exercise_id: 75, source_sequence: 8, role: "TN2", text: "Welche Vorteile sind besonders wichtig?", audio_url: "/audio/c1-1b-2.mp3" },
+          { sequence: 3, turn_key: "turn:9", source_teil: 2, source_exercise_id: 75, source_sequence: 9, role: "TN1", text: "Vor allem die zeitliche Flexibilität.", audio_url: "/audio/c1-1b-3.mp3" },
+        ],
+      },
+    });
+    renderPage(2, 75);
+
+    const taskCard = (await screen.findByRole("heading", { name: "Teil 1a + Teil 1b" })).closest(".speaking-detail-card");
+    const answerCard = screen.getByRole("heading", { name: "Beispielantwort" }).closest(".speaking-detail-card");
+    const layout = taskCard.parentElement;
+    expect(layout).toHaveClass("speaking-detail-c1-layout--teil-2");
+    expect(layout).not.toHaveClass("speaking-detail-c1-layout--teil-1");
+    const speakingCss = readFileSync("src/pages/SpeakingTeilExercisePage.css", "utf8");
+    expect(speakingCss).toMatch(/\.speaking-detail-c1-layout--teil-2\s*\{\s*display:\s*flex;\s*flex-direction:\s*column;\s*gap:\s*1rem;\s*\}/);
+    expect(taskCard.compareDocumentPosition(answerCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(taskCard).getByText("Digitales Lernen")).toBeInTheDocument();
+    expect(within(taskCard).getByRole("heading", { name: "提纲" })).toBeInTheDocument();
+
+    const turns = Array.from(answerCard.querySelectorAll(".speaking-detail-turn"));
+    expect(turns.map((turn) => turn.querySelector(".speaking-detail-turn__role").textContent)).toEqual(["TN1", "TN2", "TN1"]);
+    const firstTurnText = turns[0].querySelector("p").textContent;
+    expect(firstTurnText).toBe("Zunächst möchte ich das Thema vorstellen.\nDanach nenne ich Vorteile.");
+    expect(firstTurnText).not.toContain("<br");
+    expect(screen.getAllByRole("button", { name: /^record c1-teil-/ }).map((button) => button.getAttribute("aria-label"))).toEqual([
+      "record c1-teil-1-71-4",
+      "record c1-teil-2-75-8",
+      "record c1-teil-2-75-9",
+    ]);
+    const favorites = within(answerCard).getAllByRole("button", { name: "收藏句子" });
+    expect(favorites).toHaveLength(3);
+    expect(favorites.map((button) => button.getAttribute("aria-pressed"))).toEqual(["false", "true", "false"]);
+    fireEvent.click(favorites[0]);
+    fireEvent.click(favorites[1]);
+    fireEvent.click(favorites[2]);
+    await waitFor(() => {
+      expect(saveSpeakingTurnState).toHaveBeenCalledWith({ exercise: 75, turn_key: "turn:source:71:4", is_favorited: true });
+      expect(saveSpeakingTurnState).toHaveBeenCalledWith({ exercise: 75, turn_key: "turn:8", is_favorited: false });
+      expect(saveSpeakingTurnState).toHaveBeenCalledWith({ exercise: 75, turn_key: "turn:9", is_favorited: true });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "隐藏提纲" }));
+    expect(within(taskCard).queryByText("Vorteile")).not.toBeInTheDocument();
+    expect(within(answerCard).getByText(/Zunächst möchte ich/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "显示提纲" }));
+    expect(within(taskCard).getByText("Vorteile")).toBeInTheDocument();
+  });
+
+  it("converts legacy breaks in displayed C1 model translations to newlines", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      id: 76,
+      exercise_base: { level: "C1", title: "C1 Diskussion", exam_type: "TELC", exercise_type: "SPEAKING_TEIL3" },
+      instruction: "Diskutieren Sie.",
+      content: {
+        dialogue: [{ sequence: 1, role: "TN1", text: "Ich stimme zu.", translation_zh: "我同意。<BR/>这是我的理由。", audio_url: "/audio/c1-teil2-1.mp3" }],
+      },
+    });
+    renderPage(3, 76);
+
+    fireEvent.click(await screen.findByRole("button", { name: "显示中文翻译" }));
+    const translation = screen.getByText((_, element) => element?.classList.contains("speaking-detail-turn__translation"));
+    expect(translation.textContent).toBe("我同意。\n这是我的理由。");
+    expect(translation.textContent).not.toContain("<BR");
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["empty string", ""],
+    ["empty array", []],
+  ])("does not render C1 outline controls for a %s outline", async (_, outline) => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      id: 74,
+      exercise_base: { level: "C1", title: "C1 Vortrag", exam_type: "TELC", exercise_type: "SPEAKING_TEIL1" },
+      instruction: "Halten Sie einen Vortrag.",
+      content: outline === undefined ? {} : { outline },
+    });
+    renderPage(1, 74);
+
+    await screen.findByRole("heading", { name: "Teil 1A" });
+    expect(screen.queryByRole("heading", { name: "提纲" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "隐藏提纲" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "显示提纲" })).not.toBeInTheDocument();
+  });
+
+  it("preserves line breaks in a string C1 outline", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      id: 72,
+      exercise_base: { level: "C1", title: "C1 Vortrag", exam_type: "TELC", exercise_type: "SPEAKING_TEIL1" },
+      instruction: "Halten Sie einen Vortrag.",
+      content: { outline: "Erster Punkt\nZweiter Punkt", sample_de: "Beispielantwort" },
+    });
+    renderPage(1, 72);
+
+    const outlineContent = await screen.findByText((_, element) => element?.classList.contains("speaking-detail-c1-outline__content"));
+    expect(outlineContent.textContent).toBe("Erster Punkt\nZweiter Punkt");
+    expect(outlineContent).toHaveClass("speaking-detail-c1-outline__content");
+    expect(screen.queryByRole("button", { name: "Prüfen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Wiederholen" })).not.toBeInTheDocument();
   });
 
   it("renders translated C1 Teil 2 quotation and audio controls for every model turn", async () => {
@@ -244,23 +410,61 @@ describe("SpeakingTeilExercisePage text annotations", () => {
       content: {
         quotes: [{ text: "Bildung ist die mächtigste Waffe.", translation_zh: "教育是最强大的武器。" }],
         dialogue: [
-          { sequence: 1, role: "TN1", text: "Ich stimme diesem Zitat zu.", audio_url: "/audio/c1-diskussion-1.mp3" },
-          { sequence: 2, role: "TN2", text: "Das sehe ich etwas anders.", audio_url: "/audio/c1-diskussion-2.mp3" },
+          { sequence: 1, role: "TN1", text: "Ich stimme diesem Zitat zu.", translation_zh: "我赞同这句引言。", audio_url: "/audio/c1-diskussion-1.mp3" },
+          { sequence: 2, role: "TN2", text: "Das sehe ich etwas anders.", translation_zh: "我的看法有些不同。", audio_url: "/audio/c1-diskussion-2.mp3" },
         ],
       },
     });
     const { container } = renderPage(3, 73);
 
     expect(await screen.findByText("Bildung ist die mächtigste Waffe.")).toBeInTheDocument();
-    expect(screen.getByText("教育是最强大的武器。")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "record c1-teil-3-73-1" })).toHaveAttribute("data-audio-url", "/audio/c1-diskussion-1.mp3");
     expect(screen.getByRole("button", { name: "record c1-teil-3-73-2" })).toHaveAttribute("data-audio-url", "/audio/c1-diskussion-2.mp3");
     expect(container.querySelector(".speaking-detail-c1-quote")).toBeInTheDocument();
     expect(screen.queryByText("对话排序")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Prüfen" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Wiederholen" }));
-    expect(await screen.findByRole("button", { name: "Prüfen" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "隐藏答案" })).toBeInTheDocument();
+    expect(screen.queryByText("我赞同这句引言。")).not.toBeInTheDocument();
+    expect(screen.queryByText("我的看法有些不同。")).not.toBeInTheDocument();
+    const answerContent = container.querySelector(".speaking-detail-c1-answer__content");
+    const turns = Array.from(answerContent.querySelectorAll(".speaking-detail-turn"));
+    const translationToggles = turns.map((turn) => within(turn.querySelector(".speaking-detail-turn__practice")).getByRole("button", { name: "显示中文翻译" }));
+    expect(translationToggles).toHaveLength(2);
+    translationToggles.forEach((toggle, index) => {
+      const practice = turns[index].querySelector(".speaking-detail-turn__practice");
+      const controls = practice.querySelector(".shadowing-practice-buttons");
+      const sampleAudio = within(controls).getByRole("button", { name: "朗读" });
+      const favorite = within(practice).getByRole("button", { name: "收藏句子" });
+      expect(toggle).toHaveTextContent(/^Aa$/);
+      expect(toggle).toHaveAttribute("aria-pressed", "false");
+      expect(toggle).toHaveAttribute("title", "翻译");
+      expect(controls).toContainElement(toggle);
+      expect(sampleAudio.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(toggle.compareDocumentPosition(favorite) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+    expect(container.querySelector(".speaking-detail-c1-translation-actions")).not.toBeInTheDocument();
+
+    fireEvent.click(translationToggles[0]);
+    expect(turns[0]).toHaveTextContent("我赞同这句引言。");
+    expect(turns[1]).not.toHaveTextContent("我的看法有些不同。");
+
+    fireEvent.click(translationToggles[1]);
+    expect(turns[0]).toHaveTextContent("我赞同这句引言。");
+    expect(turns[1]).toHaveTextContent("我的看法有些不同。");
+
+    const hideFirstTranslation = within(turns[0]).getByRole("button", { name: "隐藏中文翻译" });
+    expect(hideFirstTranslation).toHaveAttribute("title", "翻译");
+    fireEvent.click(hideFirstTranslation);
+    expect(turns[0]).not.toHaveTextContent("我赞同这句引言。");
+    expect(turns[1]).toHaveTextContent("我的看法有些不同。");
+
+    fireEvent.click(screen.getByRole("button", { name: "隐藏答案" }));
+    fireEvent.click(screen.getByRole("button", { name: "显示答案" }));
+    expect(screen.queryByText("我赞同这句引言。")).not.toBeInTheDocument();
+    expect(screen.getByText("我的看法有些不同。")).toBeInTheDocument();
+    fireEvent.click(within(screen.getByText("我的看法有些不同。").closest(".speaking-detail-turn")).getByRole("button", { name: "隐藏中文翻译" }));
+    expect(screen.queryByText("我的看法有些不同。")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Prüfen" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Wiederholen" })).not.toBeInTheDocument();
   });
 
   it("hides only the task text for TELC B2 Sprechen Teil 1", async () => {

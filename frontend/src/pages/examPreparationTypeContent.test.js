@@ -28,10 +28,25 @@ describe("TELC B2 exam preparation entry copy", () => {
   });
 
   it("maps C1 reading, speaking, and grammar cards to their TELC parts", () => {
-    expect(examPreparationTypesForLevel(READING_TYPES, "C1").map((item) => item.title)).toEqual(["Teil 1", "Teil 2", "Teil 3"]);
+    const c1Reading = examPreparationTypesForLevel(READING_TYPES, "C1");
+    expect(c1Reading.map((item) => item.title)).toEqual(["Teil 1", "Teil 2", "Teil 3"]);
+    expect(c1Reading.map((item) => item.key)).toEqual(["title-matching", "understanding", "ad-matching"]);
+    expect(c1Reading.map((item) => item.to)).toEqual([
+      "/modules/exam-preparation/lesen/cloze-matching",
+      "/modules/exam-preparation/lesen/understanding",
+      "/modules/exam-preparation/lesen/ad-matching",
+    ]);
     const c1Speaking = examPreparationTypesForLevel(SPEAKING_TYPES, "C1");
-    expect(c1Speaking.map((item) => item.title)).toEqual(["Teil 1A", "Teil 1B", "Teil 2"]);
-    expect(c1Speaking[1].description).toContain("概述搭档的展示并提出追问");
+    expect(c1Speaking.map((item) => item.title)).toEqual(["Teil 1a + Teil 1b", "Teil 2"]);
+    expect(c1Speaking.map((item) => item.to)).toEqual([
+      "/modules/exam-preparation/sprechen/teil-2",
+      "/modules/exam-preparation/sprechen/teil-3",
+    ]);
+    expect(c1Speaking[0].description).toContain("主题展示");
+    expect(c1Speaking[0].description).toContain("概述搭档的展示、提出追问");
+    expect(c1Speaking[1].description).toContain("讨论引语");
+    expect(examPreparationTypesForLevel(SPEAKING_TYPES, "B1")).toHaveLength(3);
+    expect(examPreparationTypesForLevel(SPEAKING_TYPES, "B2")).toHaveLength(3);
     expect(examPreparationTypesForLevel(SPRACHBAUSTEINE_TYPES, "C1")).toHaveLength(1);
   });
 });

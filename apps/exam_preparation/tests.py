@@ -338,6 +338,112 @@ class SpeakingTurnFavoriteApiTests(APITestCase):
         self.assertEqual(favorites.data["results"][0]["question_text"], "Hallo")
         self.assertEqual(favorites.data["results"][0]["turn_key"], "turn:1")
 
+    def test_companion_turn_favorite_resolves_source_and_keeps_current_href(self):
+        companion_base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.C1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            external_id="C1-PAIR", title="Vortrag",
+        )
+        companion = SpeakingTeilExercise.objects.create(
+            exercise_base=companion_base,
+            content={"teil": "1", "dialogue": [
+                {"sequence": 4, "role": "TN1", "text": "Mein Vortrag beginnt."},
+            ]},
+        )
+        current_base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.C1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+            external_id="C1-PAIR", title="Austausch",
+        )
+        current = SpeakingTeilExercise.objects.create(
+            exercise_base=current_base,
+            content={"teil": "2", "dialogue": [
+                {"sequence": 1, "role": "TN2", "text": "Was meinen Sie?"},
+            ]},
+        )
+        state_url = reverse("exam-prep-user-speaking-turn-states-list")
+        self.client.post(
+            state_url,
+            {"exercise": current.pk, "turn_key": f"turn:source:{companion.pk}:4", "is_favorited": True},
+            format="json",
+        )
+
+        favorites = self.client.get(reverse("exam-prep-favorite-questions-list"))
+
+        self.assertEqual(favorites.status_code, status.HTTP_200_OK)
+        favorite = favorites.data["results"][0]
+        self.assertEqual(favorite["question_text"], "Mein Vortrag beginnt.")
+        self.assertEqual(favorite["question_label"], "口语对话 · TN1")
+        self.assertEqual(favorite["target_id"], current.pk)
+        self.assertEqual(
+            favorite["href"],
+            f"/modules/exam-preparation/c1/sprechen/teil-2/{current.pk}",
+        )
+
+    def test_companion_turn_favorite_does_not_resolve_cross_scope_source(self):
+        current_base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.C1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+            external_id="C1-PAIR", title="Austausch",
+        )
+        current = SpeakingTeilExercise.objects.create(
+            exercise_base=current_base,
+            content={"teil": "2", "dialogue": [
+                {"sequence": 7, "role": "TN2", "text": "Current content."},
+            ]},
+        )
+        source_base = ExerciseBase.objects.create(
+            exam_type="GOETHE", level=ExerciseBase.Level.B2,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            external_id="OUTSIDE", title="Other",
+        )
+        source = SpeakingTeilExercise.objects.create(
+            exercise_base=source_base,
+            content={"teil": "1", "dialogue": [
+                {"sequence": 7, "role": "TN1", "text": "Do not expose me."},
+            ]},
+        )
+        response = self.client.post(
+            reverse("exam-prep-user-speaking-turn-states-list"),
+            {
+                "exercise": current.pk,
+                "turn_key": f"turn:source:{source.pk}:7",
+                "is_favorited": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        missing = self.client.post(
+            reverse("exam-prep-user-speaking-turn-states-list"),
+            {
+                "exercise": current.pk,
+                "turn_key": "turn:source:999999:7",
+                "is_favorited": True,
+            },
+            format="json",
+        )
+        malformed = self.client.post(
+            reverse("exam-prep-user-speaking-turn-states-list"),
+            {
+                "exercise": current.pk,
+                "turn_key": "turn:source:invalid:7",
+                "is_favorited": True,
+            },
+            format="json",
+        )
+        self.assertEqual(missing.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(malformed.status_code, status.HTTP_201_CREATED)
+        favorites = self.client.get(reverse("exam-prep-favorite-questions-list"))
+        self.assertEqual(
+            {favorite["question_text"] for favorite in favorites.data["results"]},
+            {""},
+        )
+
     def test_dialogue_order_result_is_persisted_and_updated(self):
         state_url = reverse("exam-prep-user-speaking-turn-states-list")
         payload = {

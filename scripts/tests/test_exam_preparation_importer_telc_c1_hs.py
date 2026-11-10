@@ -15,7 +15,8 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import exam_preparation_importer_telc_c1_hs as importer  # noqa: E402
-from apps.exam_preparation.models import ClozeChoiceExercise, ClozeMatchingExercise, ExerciseBase, ListeningExercise, ReadingAdMatchingExercise, WritingExercise, SpeakingTeilExercise
+from apps.exam_preparation.models import ClozeChoiceExercise, ClozeMatchingExercise, ExerciseBase, ListeningExercise, ListeningQuestion, ListeningAnswerOption, ReadingAdMatchingExercise, WritingExercise, SpeakingTeilExercise
+from apps.exam_preparation.serializers import ListeningQuestionDetailSerializer
 
 
 class C1ImporterUnitTests(TestCase):
@@ -253,6 +254,74 @@ class C1ImporterDatabaseTests(DjangoTestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    def test_all_listening_parts_import_as_stable_question_ids(self):
+        teil1 = Path(self.temp_dir.name) / "listening_teil1__stable_101.xlsx"
+        teil1_rows = [
+            {"Aussage": f"Aussage {index}", "Sprecher/in": f"Sprecher/in {index if index < 5 else index - 1}" if index not in (5, 10) else "",
+             "Explanation": f"Erklärung {index}"}
+            for index in range(1, 11)
+        ]
+        teil2 = Path(self.temp_dir.name) / "listening_teil2__stable_102.xlsx"
+        teil2_rows = [
+            {"question_id": question, "question": f"Frage {question}", "answer": f"Option {option}",
+             "is_correct": option == "A", "Explanation": f"Erklärung {question}-{option}"}
+            for question in (1, 2) for option in ("A", "B")
+        ]
+        teil3 = Path(self.temp_dir.name) / "listening_teil3__stable_103.xlsx"
+        teil3_rows = [
+            {"Folie_ID": "1", "Folie": "Vortragstext", "blank_ID": "blank_01", "answer": "Antwort; Alternative"},
+            {"Folie_ID": "1", "Folie": "Vortragstext", "blank_ID": "blank_02", "answer": "Begriff <or> Synonym"},
+        ]
+        for path, identifier, rows in ((teil1, 101, teil1_rows), (teil2, 102, teil2_rows), (teil3, 103, teil3_rows)):
+            with pd.ExcelWriter(path, engine="openpyxl") as writer:
+                pd.DataFrame([{"音频文件_ID": identifier, "原标题": "Hören", "copy": "Skript",
+                               "考试类型": "TELC", "是否真题": True}]).to_excel(writer, sheet_name="meta", index=False)
+                pd.DataFrame(rows).to_excel(writer, sheet_name="exercise", index=False)
+
+        for path in (teil1, teil2, teil3):
+            self.assertEqual(importer.import_workbook(path), 1)
+
+        teil1_exercise = ListeningExercise.objects.get(exercise_base__external_id="101", exercise_base__level="C1")
+        teil1_questions = list(teil1_exercise.questions.order_by("question_number"))
+        self.assertEqual(len(teil1_questions), 8)
+        self.assertEqual([question.question_key for question in teil1_questions], [f"statement_{index}" for index in range(1, 5)] + [f"statement_{index}" for index in range(6, 10)])
+        self.assertEqual([question.question_text for question in teil1_questions], [f"Aussage {index}" for index in range(1, 5)] + [f"Aussage {index}" for index in range(6, 10)])
+        self.assertTrue(all(question.answer_options.count() == 8 for question in teil1_questions))
+        self.assertTrue(all(question.answer_options.filter(is_correct=True).count() == 1 for question in teil1_questions))
+        self.assertEqual(teil1_questions[0].answer_options.get(option_key="A").option_text, "Sprecher/in 1")
+        self.assertTrue(teil1_questions[0].answer_options.get(option_key="A").is_correct)
+        self.assertFalse(teil1_questions[0].answer_options.exclude(option_key="A").filter(is_correct=True).exists())
+        self.assertEqual(teil1_questions[0].explanation, "Erklärung 1")
+        self.assertFalse(teil1_questions[0].answer_options.exclude(explanation="").exists())
+        self.assertEqual(teil1_questions[0].question_number, 1)
+
+        teil2_exercise = ListeningExercise.objects.get(exercise_base__external_id="102", exercise_base__level="C1")
+        teil2_questions = list(teil2_exercise.questions.order_by("question_number"))
+        self.assertEqual([question.question_key for question in teil2_questions], ["1", "2"])
+        self.assertEqual(teil2_questions[0].answer_options.get(option_key="A").explanation, "Erklärung 1-A")
+
+        teil3_exercise = ListeningExercise.objects.get(exercise_base__external_id="103", exercise_base__level="C1")
+        teil3_questions = list(teil3_exercise.questions.order_by("question_number"))
+        self.assertEqual([question.question_key for question in teil3_questions], ["blank_01", "blank_02"])
+        self.assertEqual([question.correct_answer for question in teil3_questions], ["Antwort; Alternative", "Begriff <or> Synonym"])
+        self.assertEqual(teil3_questions[0].question_type, ListeningQuestion.QuestionType.TEXT_INPUT)
+        self.assertEqual(teil3_exercise.content["slides"][0]["text"], "Vortragstext")
+        serialized_question = ListeningQuestionDetailSerializer(teil3_questions[0]).data
+        self.assertEqual(serialized_question["question_key"], "blank_01")
+        self.assertEqual(serialized_question["correct_answer"], "Antwort; Alternative")
+
+        original_ids = {
+            exercise_id: list(ListeningQuestion.objects.filter(listening_exercise_id=exercise_id).order_by("question_number").values_list("id", flat=True))
+            for exercise_id in (teil1_exercise.pk, teil2_exercise.pk, teil3_exercise.pk)
+        }
+        for path in (teil1, teil2, teil3):
+            self.assertEqual(importer.import_workbook(path), 1)
+        reimported_ids = {
+            exercise_id: list(ListeningQuestion.objects.filter(listening_exercise_id=exercise_id).order_by("question_number").values_list("id", flat=True))
+            for exercise_id in original_ids
+        }
+        self.assertEqual(reimported_ids, original_ids)
+
     def test_reading_teil2_imports_paragraphs_and_allows_reused_answers(self):
         path = Path(self.temp_dir.name) / "reading_teil2__valid_007.xlsx"
         rows = [{"Fragen": "Frage eins", "Absatz_ID": "A", "Textabsatz": "Absatz A", "Explaination": ""},
@@ -308,24 +377,39 @@ class C1ImporterDatabaseTests(DjangoTestCase):
         )
         self.assertEqual(exercise.blanks.get().options.filter(is_correct=True).count(), 1)
 
-    def test_listening_teil_number_is_derived_from_the_c1_kind(self):
-        path = Path(self.temp_dir.name) / "listening_teil1__sample_001.xlsx"
-        with pd.ExcelWriter(path, engine="openpyxl") as writer:
-            pd.DataFrame([{
-                "音频文件_ID": 1, "原标题": "Hören Teil 1", "copy": "Skript",
-                "考试类型": "TELC", "是否真题": True,
-            }]).to_excel(writer, sheet_name="meta", index=False)
-            pd.DataFrame([{
-                "Aussage": "Aussage A", "Sprecher/in": "Sprecher 1", "Explanation": "",
-            }]).to_excel(writer, sheet_name="exercise", index=False)
+    def test_listening_teil_imports_use_the_matching_listening_type(self):
+        listening_types = {
+            "1": ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_WITH_PREP,
+            "2": ListeningExercise.ListeningType.SHORT_TEXT_TRUE_FALSE_ONCE,
+            "3": ListeningExercise.ListeningType.DIALOG_TRUE_FALSE_TWICE,
+        }
+        exercise_rows = {
+            "1": [
+                {"Aussage": f"Aussage {index}", "Sprecher/in": f"Sprecher {index}" if index <= 8 else "", "Explanation": ""}
+                for index in range(1, 11)
+            ],
+            "2": [{"question_id": 1, "question": "Frage", "answer": "Antwort", "is_correct": True}],
+            "3": [{"Folie_ID": "1", "Folie": "Folie", "blank_ID": "1", "answer": "Antwort"}],
+        }
+        for teil, listening_type in listening_types.items():
+            identifier = f"10{teil}"
+            path = Path(self.temp_dir.name) / f"listening_teil{teil}__sample_{identifier}.xlsx"
+            with pd.ExcelWriter(path, engine="openpyxl") as writer:
+                pd.DataFrame([{
+                    "音频文件_ID": int(identifier), "原标题": f"Hören Teil {teil}", "copy": "Skript",
+                    "考试类型": "TELC", "是否真题": True,
+                }]).to_excel(writer, sheet_name="meta", index=False)
+                pd.DataFrame(exercise_rows[teil]).to_excel(writer, sheet_name="exercise", index=False)
 
-        self.assertEqual(importer.import_workbook(path), 1)
-
-        exercise = ListeningExercise.objects.get(
-            exercise_base__external_id="1", exercise_base__level="C1"
-        )
-        self.assertEqual(exercise.content["format"], "speaker_matching")
-        self.assertIn("telc_c1_hs_teil1/Teil1_1.mp3", exercise.audio_file_url)
+            with self.subTest(teil=teil):
+                self.assertEqual(importer.import_workbook(path), 1)
+                exercise = ListeningExercise.objects.get(
+                    exercise_base__external_id=identifier, exercise_base__level="C1"
+                )
+                self.assertEqual(exercise.listening_type, listening_type)
+                if teil == "1":
+                    self.assertEqual(exercise.content["format"], "speaker_matching")
+                    self.assertIn("telc_c1_hs_teil1/Teil1_101.mp3", exercise.audio_file_url)
 
     def test_reading_teil1_imports_example_as_the_dedicated_beispiel_option(self):
         path = Path(self.temp_dir.name) / "reading_teil1__example_001.xlsx"

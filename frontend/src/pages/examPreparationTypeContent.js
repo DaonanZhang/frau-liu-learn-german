@@ -1,5 +1,11 @@
 export const TELC_B2_LISTENING_TEIL2_INSTRUCTION = "Sie hören nun ein Interview. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch nur einmal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.";
 
+export const TELC_C1_LISTENING_INSTRUCTION_BY_FORMAT = {
+  speaker_matching: "Hören Sie die kurzen Gespräche und wählen Sie zu jeder Aussage die passende Sprecherin bzw. den passenden Sprecher aus.",
+  multiple_choice: "Hören Sie den Beitrag und wählen Sie für jede Frage die passende Antwort.",
+  presentation_notes: "Hören Sie die Präsentation und ergänzen Sie die fehlenden Angaben in den Folien.",
+};
+
 export const LISTENING_TYPES = [
   {
     key: "short-text-prep",
@@ -62,8 +68,8 @@ export const READING_TYPES = [
 
 const C1_READING_TYPES = [
   { ...READING_TYPES[0], title: "Teil 1", to: "/modules/exam-preparation/lesen/cloze-matching", description: "从备选词语中选择合适表达，完成短文中的空格。" },
-  { ...READING_TYPES[2], title: "Teil 2", description: "阅读 A–E 五篇文章，为每个问题选择对应文章；同一文章可以多次选择。" },
-  { ...READING_TYPES[1], title: "Teil 3", description: "阅读长文并完成理解题。" },
+  { ...READING_TYPES[1], title: "Teil 2", description: "阅读长文并完成理解题。" },
+  { ...READING_TYPES[2], title: "Teil 3", description: "阅读 A–E 五篇文章，为每个问题选择对应文章；同一文章可以多次选择。" },
 ];
 
 export const SPRACHBAUSTEINE_TYPES = [
@@ -110,15 +116,18 @@ export const SPEAKING_TYPES = [
   },
 ];
 
-const C1_SPEAKING_TYPES = SPEAKING_TYPES.map((item, index) => ({
-  ...item,
-  title: ["Teil 1A", "Teil 1B", "Teil 2"][index],
-  description: [
-    "根据提纲准备主题展示，并回答搭档的问题。",
-    "概述搭档的展示并提出追问。",
-    "讨论引语，说明观点并结合个人经历。",
-  ][index],
-}));
+const C1_SPEAKING_TYPES = [
+  {
+    ...SPEAKING_TYPES[1],
+    title: "Teil 1a + Teil 1b",
+    description: "练习主题展示，并概述搭档的展示、提出追问，将两部分内容合并练习。",
+  },
+  {
+    ...SPEAKING_TYPES[2],
+    title: "Teil 2",
+    description: "讨论引语的含义，说明观点并结合个人经历。",
+  },
+];
 
 export function examPreparationTypeDescription(item, level) {
   return item.descriptionByLevel?.[String(level || "").toUpperCase()] || item.description;

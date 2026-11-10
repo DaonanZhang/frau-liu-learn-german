@@ -18,8 +18,9 @@ import ExerciseOptionSheet from "../../../components/examPreparation/ExerciseOpt
 import ExerciseFavoriteButton from "../../../components/examPreparation/ExerciseFavoriteButton.jsx";
 import FormattedExplanation from "../../../components/examPreparation/FormattedExplanation.jsx";
 import ListeningTranscript from "../../../components/examPreparation/ListeningTranscript.jsx";
+import PresentationNotesContent from "../../../components/examPreparation/PresentationNotesContent.jsx";
 import ReadingAdMatchingWorkspace from "../../../components/examPreparation/ReadingAdMatchingWorkspace.jsx";
-import WritingExerciseWorkspace from "../../../components/examPreparation/WritingExerciseWorkspace.jsx";
+import WritingExerciseWorkspace, { TranslationVisibilityIcon, VocabularyPages } from "../../../components/examPreparation/WritingExerciseWorkspace.jsx";
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
@@ -47,7 +48,10 @@ import {
 import { clearAnnotationScope, mockAnnotationScope } from "../../../utils/examTextAnnotations.js";
 import { clozeOptionTextForOccurrence } from "../../../utils/clozePlaceholderText.js";
 import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../../../hooks/useReliableAudioSources.js";
-import { TELC_B2_LISTENING_TEIL2_INSTRUCTION } from "../../examPreparationTypeContent.js";
+import {
+  TELC_B2_LISTENING_TEIL2_INSTRUCTION,
+  TELC_C1_LISTENING_INSTRUCTION_BY_FORMAT,
+} from "../../examPreparationTypeContent.js";
 import {
   ALL_REVIEW_PART_KEYS,
   COLLECTION_SECONDS,
@@ -65,6 +69,7 @@ import {
   audioSequenceForLevel,
 } from "./telcMockExamRules.js";
 import "./TelcMockExamPage.css";
+import "../../ListeningExercisePage.css";
 import "../../ReadingAdMatchingPage.css";
 import "../../ExamPreparationWritingDetailPage.css";
 
@@ -80,12 +85,12 @@ const PART_FAVORITE_CONFIG = {
   writing: { fetch: fetchWritingExerciseStates, save: saveWritingExerciseState, target: "exercise", items: (exercise) => [exercise] },
 };
 
-const C1_READING_PART_KEYS = ["cloze_matching", "reading_ad_matching", "reading_understanding", "cloze_choice"];
+const C1_READING_PART_KEYS = ["cloze_matching", "reading_understanding", "reading_ad_matching", "cloze_choice"];
 const C1_LISTENING_PART_KEYS = ["listening_teil1", "listening_teil2", "listening_teil3"];
 const C1_PARTS = {
   cloze_matching: { section: "reading", short: "L 1", title: "Lesen · Teil 1" },
-  reading_ad_matching: { section: "reading", short: "L 2", title: "Lesen · Teil 2" },
-  reading_understanding: { section: "reading", short: "L 3", title: "Lesen · Teil 3" },
+  reading_understanding: { section: "reading", short: "L 2", title: "Lesen · Teil 2" },
+  reading_ad_matching: { section: "reading", short: "L 3", title: "Lesen · Teil 3" },
   cloze_choice: { section: "reading", short: "SB 1", title: "Sprachbausteine · Teil 1" },
   listening_teil1: { section: "listening", short: "H 1", title: "Hören · Teil 1" },
   listening_teil2: { section: "listening", short: "H 2", title: "Hören · Teil 2" },
@@ -131,32 +136,8 @@ function c1ExamParts(exam) {
   return { ...exam, parts };
 }
 
-function c1SpeakerQuestions(exercise) {
-  const statements = exercise?.content?.statements || [];
-  const speakers = [...new Set(statements.map((item) => item.speaker).filter(Boolean))];
-  const options = speakers.map((speaker) => ({ option_key: speaker, option_text: speaker }));
-  return statements.map((item, index) => ({
-    id: item.id || `statement-${index + 1}`,
-    question_number: index + 1,
-    question_text: item.statement,
-    explanation: item.explanation,
-    answer_options: options.map((option) => ({ ...option, is_correct: option.option_key === item.speaker })),
-  }));
-}
-
-function c1PresentationNotes(exercise) {
-  return (exercise?.content?.slides || []).flatMap((slide, slideIndex) => (slide.answers || []).map((answer, answerIndex) => ({
-    id: `note-${slide.number || slideIndex + 1}-${answer.blank_id || answerIndex + 1}`,
-    question_text: slide.text,
-    correct_answer: answer.answer,
-    slide_number: slide.number || slideIndex + 1,
-    blank_id: answer.blank_id,
-  })));
-}
-
-function listeningQuestions(exercise, format) {
-  if (format === "speaker_matching") return c1SpeakerQuestions(exercise);
-  if (format === "presentation_notes") return c1PresentationNotes(exercise);
+function listeningQuestions(exercise, format, c1 = false) {
+  if (c1) return exercise?.questions || [];
   if (exercise?.questions?.length) return exercise.questions;
   return (exercise?.content?.questions || []).map((question, index) => ({
     id: question.id || `question-${question.question_number || index + 1}`,
@@ -347,14 +328,34 @@ function renderMockClozeBreak(value, keyPrefix) {
   ));
 }
 
-function C1WritingPrompt({ exercise, showTranslations }) {
+function C1WritingPrompt({ exercise, showTranslations = false, showHelpers = false }) {
+  const [helpersShowTranslations, setHelpersShowTranslations] = useState(true);
   const quotes = exercise.quotes || c1WritingContent(exercise).quotes || [];
-  return quotes.length ? <section className="telc-c1-writing-quotes" aria-label="写作引语">
-    {quotes.slice(0, 2).map((quote, index) => <article key={quote.id || index}>
-      <MockTextRegion as="blockquote" regionId={`writing:quote:${index}`}>{quote.text || ""}</MockTextRegion>
-      {showTranslations && quote.translation_zh ? <p>{quote.translation_zh}</p> : null}
-    </article>)}
-  </section> : null;
+  const pages = exercise.vocabulary_pages || c1WritingContent(exercise).vocabulary_pages || [];
+  const hasQuoteTranslations = quotes.some((quote) => Boolean(quote.translation_zh));
+  const translationsVisible = showHelpers ? helpersShowTranslations : showTranslations;
+  if (!quotes.length && !(showHelpers && pages.length)) return null;
+  return <>
+    {showHelpers && (quotes.length || pages.length) ? <div className="telc-c1-writing-quotes__header">
+      <h2>{quotes.length ? "写作引语" : pages[0]?.title || "Wortschatz"}</h2>
+      {hasQuoteTranslations ? <button
+        type="button"
+        className="writing-translation-toggle"
+        aria-label={helpersShowTranslations ? "隐藏中文翻译" : "显示中文翻译"}
+        title="翻译"
+        onClick={() => setHelpersShowTranslations((visible) => !visible)}
+      >
+        <TranslationVisibilityIcon hidden={!helpersShowTranslations} />
+      </button> : null}
+    </div> : null}
+    {quotes.length ? <section className="telc-c1-writing-quotes" aria-label="写作引语">
+      {quotes.slice(0, 2).map((quote, index) => <article key={quote.id || index}>
+        <MockTextRegion as="blockquote" regionId={`writing:quote:${index}`}>{quote.text || ""}</MockTextRegion>
+        {translationsVisible && quote.translation_zh ? <p>{quote.translation_zh}</p> : null}
+      </article>)}
+    </section> : null}
+    {showHelpers && pages.length ? <VocabularyPages pages={pages} /> : null}
+  </>;
 }
 
 function MockTextRegion({ regionId, as = "span", children, ...props }) {
@@ -378,6 +379,7 @@ function ChoiceField({
   annotationQuestionId = "",
   questionNumber = "",
   questionText = "",
+  practiceLayout = false,
 }) {
   const isCorrect = review && value && value === correctKey;
   const isWrong = review && value !== correctKey;
@@ -390,13 +392,21 @@ function ChoiceField({
   const correctOption = options.find((option) => (option.option_key ?? option.ad_key) === correctKey);
   const correctText = correctOption?.option_text ?? correctOption?.ad_text_markdown ?? "";
   return (
-    <article className={`${prefix}-question-card telc-mock-exam-choice-field${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}>
-      {label ? <div className={`${prefix}-question-card__header`}><h3>
-        {questionNumber ? <><span>{questionNumber}.</span>{" "}</> : null}
-        {annotationRegionPrefix && annotationQuestionId
-          ? <MockTextRegion regionId={`${annotationRegionPrefix}:question:${annotationQuestionId}`}>{questionText || label}</MockTextRegion>
-          : questionText || label}
-      </h3>{favorite && !review ? <ExerciseFavoriteButton {...favorite} /> : null}</div> : null}
+    <article className={`${prefix}-question-card${practiceLayout ? "" : " telc-mock-exam-choice-field"}${!practiceLayout && isCorrect ? " is-correct" : ""}${!practiceLayout && isWrong ? " is-wrong" : ""}`}>
+      {label ? <div className={`${prefix}-question-card__header`}>
+        {practiceLayout ? <div className={`${prefix}-question-card__titleWrap`}>
+          {questionNumber ? <span className={`${prefix}-question-card__number`}>Aufgabe {questionNumber}</span> : null}
+          {annotationRegionPrefix && annotationQuestionId
+            ? <MockTextRegion as="h3" regionId={`${annotationRegionPrefix}:question:${annotationQuestionId}`}>{questionText || label}</MockTextRegion>
+            : <h3>{questionText || label}</h3>}
+        </div> : <h3>
+          {questionNumber ? <><span>{questionNumber}.</span>{" "}</> : null}
+          {annotationRegionPrefix && annotationQuestionId
+            ? <MockTextRegion regionId={`${annotationRegionPrefix}:question:${annotationQuestionId}`}>{questionText || label}</MockTextRegion>
+            : questionText || label}
+        </h3>}
+        {favorite && !review ? <ExerciseFavoriteButton {...favorite} /> : null}
+      </div> : null}
       <div className={`${prefix}-option-grid`}>
         {options.map((option) => {
           const optionKey = option.option_key ?? option.ad_key;
@@ -441,7 +451,7 @@ function ChoiceField({
             {favorite ? <ExerciseFavoriteButton {...favorite} /> : null}
           </div>
           <p className={`${feedbackPrefix}-feedback__line`}>
-            Richtige Antwort: {correctKey || "-"}{correctText ? ` - ${correctText}` : ""}
+            Richtige Antwort: {practiceLayout ? correctText || correctKey || "-" : <>{correctKey || "-"}{correctText ? ` - ${correctText}` : ""}</>}
           </p>
           {hasScopedExplanation(explanation, options) ? (
             <p className={`${feedbackPrefix}-feedback__line`}>
@@ -589,6 +599,7 @@ function ClozeChoiceText({ content, blanks, optionsForBlank, partKey, answers, s
 
 function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, review, favoriteFor, questionNumbers, restrictExample = false }) {
   const [selectedOptionKey, setSelectedOptionKey] = useState("");
+  const [activeBlankKey, setActiveBlankKey] = useState("");
   const [touchDrag, setTouchDrag] = useState(null);
   const blanks = exercise.blank_answers || [];
   const options = exercise.options || [];
@@ -597,12 +608,32 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
   const blankKeys = blanks.map((blank) => answerKey(partKey, blank.id));
   const usedOptionKeys = new Set(blankKeys.map((key) => answers[key]).filter(Boolean));
   const poolOptions = options.filter((option) => !usedOptionKeys.has(option.option_key));
+  const exampleBlank = blanks.find((blank) => Number(blank.blank_number) === 0 || blank.blank_key === "blank_0");
+  const exampleOptionKey = exampleBlank?.correct_option?.option_key || "";
+  const exampleAnswered = Boolean(exampleBlank && answers[answerKey(partKey, exampleBlank.id)]);
+  const nextQuestionBlank = restrictExample
+    ? blanks
+      .filter((blank) => Number(blank.blank_number) >= 1)
+      .sort((left, right) => Number(left.blank_number) - Number(right.blank_number))
+      .find((blank) => !answers[answerKey(partKey, blank.id)])
+    : null;
+  const resolvedActiveBlankKey = activeBlankKey || exampleBlank?.blank_key || blanks[0]?.blank_key || "";
+  const activeBlank = blankMap[resolvedActiveBlankKey];
+  const visiblePoolOptions = restrictExample
+    ? poolOptions.filter((option) => resolvedActiveBlankKey === exampleBlank?.blank_key
+      ? option.option_key === exampleOptionKey
+      : option.option_key !== exampleOptionKey)
+    : poolOptions;
+  const shouldPromptNextBlank = restrictExample
+    && exampleAnswered
+    && Boolean(nextQuestionBlank)
+    && !visiblePoolOptions.length;
 
   function assignOption(blank, optionKey) {
     if (disabled) return;
     if (restrictExample) {
       const isExampleBlank = Number(blank.blank_number) === 0 || blank.blank_key === "blank_0";
-      const isExampleOption = String(optionKey || "").toLowerCase() === "beispiel";
+      const isExampleOption = optionKey === exampleOptionKey;
       if (isExampleBlank !== isExampleOption) {
         setSelectedOptionKey("");
         return;
@@ -663,30 +694,54 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
             clearDragState();
           }}
           onPointerMove={handleTouchDragMove} onPointerUp={handleTouchDragEnd} onPointerCancel={clearDragState}>
-          <div className="telc-mock-cloze-matching-pool__heading"><strong>选项区</strong><span>拖动或选择一个选项后点击对应空格</span></div>
+          <div className="telc-mock-cloze-matching-pool__heading"><strong>选项区</strong><span>{restrictExample ? "拖动到对应空格中" : "拖动或选择一个选项后点击对应空格"}</span></div>
           <div className="telc-mock-cloze-matching-pool__options">
-            {poolOptions.map((option) => (
-              <button
-                key={option.option_key}
-                type="button"
-                className={`telc-mock-cloze-matching-pool__option${selectedOptionKey === option.option_key ? " is-selected" : ""}`}
-                draggable={!disabled}
-                onClick={() => setSelectedOptionKey((previous) => previous === option.option_key ? "" : option.option_key)}
-                onDragStart={(event) => {
-                  event.dataTransfer.setData("text/plain", option.option_key);
-                  event.dataTransfer.setData("application/x-telc-mock-cloze-source", "");
-                  setSelectedOptionKey(option.option_key);
-                }}
-                onDragEnd={clearDragState}
-                onPointerDown={(event) => handleTouchDragStart(event, option.option_key)}
-                onPointerMove={handleTouchDragMove}
-                onPointerUp={handleTouchDragEnd}
-                onPointerCancel={clearDragState}
-              >
-                <span>{option.option_text}</span>
-              </button>
-            ))}
-            {!poolOptions.length ? <span className="telc-mock-cloze-matching-pool__empty">所有选项均已填入空格。</span> : null}
+            {visiblePoolOptions.map((option) => {
+              const optionButton = (
+                <button
+                  key={option.option_key}
+                  type="button"
+                  className={`telc-mock-cloze-matching-pool__option${selectedOptionKey === option.option_key ? " is-selected" : ""}`}
+                  draggable={!disabled}
+                  onClick={() => {
+                    if (restrictExample) {
+                      if (!activeBlank) return;
+                      assignOption(activeBlank, option.option_key);
+                      setActiveBlankKey(blanks.find((blank) => blank.blank_key !== activeBlank.blank_key)?.blank_key || activeBlank.blank_key);
+                      return;
+                    }
+                    setSelectedOptionKey((previous) => previous === option.option_key ? "" : option.option_key);
+                  }}
+                  aria-label={restrictExample ? `选择“${option.option_text}”并填入当前空格` : undefined}
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData("text/plain", option.option_key);
+                    event.dataTransfer.setData("application/x-telc-mock-cloze-source", "");
+                    setSelectedOptionKey(option.option_key);
+                  }}
+                  onDragEnd={clearDragState}
+                  onPointerDown={(event) => handleTouchDragStart(event, option.option_key)}
+                  onPointerMove={handleTouchDragMove}
+                  onPointerUp={handleTouchDragEnd}
+                  onPointerCancel={clearDragState}
+                >
+                  <span>{option.option_text}</span>
+                </button>
+              );
+              if (restrictExample && option.option_key === exampleOptionKey) {
+                return (
+                  <span key={option.option_key} className="telc-c1-cloze-matching__example-option">
+                    {optionButton}
+                    {!exampleAnswered ? <span className="telc-c1-cloze-matching__guide">将 Beispiel 拖到标有 0 的空格中</span> : null}
+                  </span>
+                );
+              }
+              return optionButton;
+            })}
+            {shouldPromptNextBlank ? (
+              <span className="telc-mock-cloze-matching-pool__empty">请点击下一个绿色空格继续选择</span>
+            ) : !poolOptions.length ? (
+              <span className="telc-mock-cloze-matching-pool__empty">所有选项均已填入空格。</span>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -705,15 +760,20 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
             const key = answerKey(partKey, blank.id);
             const selectedKey = answers[key] || "";
             const correctKey = blank.correct_option?.option_key || "";
-            const displayNumber = displayQuestionNumber(questionNumbers, partKey, blank.id, blank.blank_number || "");
+            const displayNumber = displayQuestionNumber(questionNumbers, partKey, blank.id, blank.blank_number ?? "");
             const isCorrect = review && selectedKey === correctKey;
             const isWrong = review && selectedKey !== correctKey;
+            const isGuided = restrictExample && exampleAnswered && blank === nextQuestionBlank;
             return (
               <span key={`${key}:${index}`} className="telc-mock-cloze-matching-blank">
                 <span
                   data-telc-mock-cloze-blank={blank.blank_key}
-                  className={`telc-mock-cloze-matching-slot${selectedOptionKey ? " is-ready" : ""}${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}`}
+                  className={`telc-mock-cloze-matching-slot${selectedOptionKey ? " is-ready" : ""}${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}${isGuided ? " is-guided" : ""}`}
                   onClick={() => {
+                    if (restrictExample) {
+                      setActiveBlankKey(blank.blank_key);
+                      return;
+                    }
                     if (selectedOptionKey) assignOption(blank, selectedOptionKey);
                     else if (selectedKey) assignOption(blank, "");
                   }}
@@ -783,16 +843,21 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
 }
 
 function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor, questionNumbers, sectionRef, examLabel, examLevel }) {
+  const [writingShowTranslations, setWritingShowTranslations] = useState(true);
   if (!exercise) return <p>该部分题目加载失败。</p>;
   const partInfo = examPart(examLevel, partKey);
   const heading = exercise.exercise_base?.title || partInfo.title;
+  const c1ListeningFormat = isC1(examLevel) && partKey.startsWith("listening_")
+    ? exercise.content?.format || exercise.listening_type || "multiple_choice"
+    : "";
+  const c1ListeningIntroduction = TELC_C1_LISTENING_INSTRUCTION_BY_FORMAT[c1ListeningFormat] || "";
   const defaultIntroduction = isC1(examLevel) && partKey === "reading_title_matching"
     ? INTRODUCTION_BY_PART.cloze_matching
     : INTRODUCTION_BY_PART[partKey];
   const baseIntroduction = String(exercise.instruction || defaultIntroduction || "").trim();
   const introduction = String(examLevel || "").toUpperCase() === "B2" && partKey === "listening_teil2"
     ? TELC_B2_LISTENING_TEIL2_INSTRUCTION
-    : listeningIntroduction(partKey, exercise, questionNumbers, baseIntroduction);
+    : c1ListeningIntroduction || listeningIntroduction(partKey, exercise, questionNumbers, baseIntroduction);
 
   let body = null;
   if (partKey === "reading_title_matching") {
@@ -878,7 +943,6 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
         annotationsEnabled
         annotationRegionPrefix={partKey}
         allowRepeated={isC1(examLevel)}
-        showAllAds={isC1(examLevel)}
       />
     </>;
   } else if (partKey === "cloze_choice") {
@@ -896,43 +960,72 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
     const format = listeningContent.format || exercise.listening_type || "multiple_choice";
     const noteContent = listeningContent.content_with_placeholders || listeningContent.notes_with_placeholders || listeningContent.text_with_placeholders;
     const noteBlanks = listeningContent.blanks || exercise.blanks || [];
-    const questions = listeningQuestions(exercise, format);
-    body = <div className={`telc-c1-listening telc-c1-listening--${format}`} data-listening-format={format}>
+    const isTelcC1 = isC1(examLevel);
+    const questions = listeningQuestions(exercise, format, isTelcC1);
+    const listeningTasks = <>
       {format === "presentation_notes" && noteContent ? <div className="telc-mock-exam-source-text">
         <ClozeChoiceText content={noteContent} blanks={noteBlanks}
           optionsForBlank={(blank) => blank.options || blank.answer_options || []} partKey={partKey}
           answers={answers} setAnswer={setAnswer} disabled={disabled} review={review}
           favoriteFor={(id) => favoriteFor(partKey, id)} questionNumbers={questionNumbers} />
       </div> : null}
-      {format === "presentation_notes" && !noteContent ? <section className="telc-c1-presentation-notes">
-        {(listeningContent.slides || []).map((slide, slideIndex) => <article className="telc-c1-presentation-notes__slide" key={slide.number || slideIndex}>
-          <p>{slide.text}</p>
-          {questions.filter((question) => String(question.slide_number) === String(slide.number || slideIndex + 1)).map((question) => {
-          const key = answerKey(partKey, question.id);
-          const correct = question.correct_answer || question.answer_text || "";
-          const selected = answers[key] || "";
-          const isCorrect = review && answerMatchesExpected(selected, correct);
-          return <label key={key} className={`telc-c1-presentation-notes__row${isCorrect ? " is-correct" : review ? " is-wrong" : ""}`}>
-            <span>{question.blank_id || question.question_number}</span>
-            <input type="text" value={selected} disabled={disabled} onChange={(event) => setAnswer(key, event.target.value)} />
-            {expectedHasMultipleAnswers(correct) ? <small className="telc-c1-presentation-notes__hint">多个答案请用分号分隔</small> : null}
-            {review ? <small>Richtige Antwort: {correct || "—"}</small> : null}
-          </label>;
-          })}
+      {format === "presentation_notes" && !noteContent ? <>
+        {(listeningContent.slides || []).map((slide, slideIndex) => <article
+          className={isTelcC1 ? "listening-exercise-question-card listening-exercise-c1-slide" : "telc-c1-presentation-notes__slide"}
+          key={slide.number || slideIndex}
+        >
+          {isTelcC1 ? <h3>Folie {slide.number}</h3> : null}
+          <PresentationNotesContent
+            text={slide.text}
+            questions={questions}
+            expectedQuestionKeys={(slide.answers || []).map((answer) => answer.blank_id)}
+            values={Object.fromEntries(questions.map((question) => [
+              question.id,
+              answers[answerKey(partKey, question.id)] || "",
+            ]))}
+            disabled={disabled}
+            review={review}
+            questionNumberFor={(question) => displayQuestionNumber(
+              questionNumbers,
+              partKey,
+              question.id,
+              64 + Number(question.question_number || 1),
+            )}
+            onChange={(question, value) => setAnswer(answerKey(partKey, question.id), value)}
+            answerIsCorrect={(question, value) => answerMatchesExpected(value, question.correct_answer)}
+            hasMultipleAnswers={expectedHasMultipleAnswers}
+            correctAnswerPrefix="Richtige Antwort: "
+          />
         </article>)}
-      </section> : null}
-      {format !== "presentation_notes" || !noteContent ? questions.map((question) => {
-      const key = answerKey(partKey, question.id);
-      const displayNumber = displayQuestionNumber(questionNumbers, partKey, question.id, question.question_number);
-      const correct = (question.answer_options || []).find((option) => option.is_correct)?.option_key;
-      return <ChoiceField key={key} label={question.question_text || question.statement || question.prompt}
-        value={answers[key] || ""} options={question.answer_options || []} correctKey={correct}
-        onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review} variant="listening"
-        explanation={question.explanation} explanationScope={question.explanation_scope}
-        favorite={review ? favoriteFor(partKey, question.id) : null}
-        annotationRegionPrefix={partKey} annotationQuestionId={question.id}
-        questionNumber={displayNumber} questionText={question.question_text} />;
+      </> : null}
+      {format !== "presentation_notes" ? questions.map((question) => {
+        const key = answerKey(partKey, question.id);
+        const displayNumber = displayQuestionNumber(questionNumbers, partKey, question.id, question.question_number);
+        const correct = (question.answer_options || []).find((option) => option.is_correct)?.option_key;
+        return <ChoiceField key={key} label={question.question_text || question.statement || question.prompt}
+          value={answers[key] || ""} options={question.answer_options || []} correctKey={correct}
+          onChange={(value) => setAnswer(key, value)} disabled={disabled} review={review} variant="listening"
+          explanation={question.explanation} explanationScope={question.explanation_scope}
+          favorite={review && !(isTelcC1 && format === "speaker_matching") ? favoriteFor(partKey, question.id) : null}
+          annotationRegionPrefix={partKey} annotationQuestionId={question.id}
+          questionNumber={displayNumber} questionText={question.question_text}
+          practiceLayout={isTelcC1} />;
       }) : null}
+    </>;
+    body = <div className={`telc-c1-listening telc-c1-listening--${format}`} data-listening-format={format}>
+      {isTelcC1 ? <section className="listening-exercise-questions">
+        <div className="listening-exercise-questions__header">
+          <div>
+            <h2>Aufgaben</h2>
+            <p className="listening-exercise-questions__sub">
+              {format === "presentation_notes"
+                ? "Ergänze die fehlenden Angaben direkt in den Folien."
+                : "Wähle pro Aufgabe genau eine Antwort aus."}
+            </p>
+          </div>
+        </div>
+        <div className="listening-exercise-question-list">{listeningTasks}</div>
+      </section> : listeningTasks}
     </div>;
   } else if (partKey === "writing") {
     const isTelcB2 = String(examLevel || "").toUpperCase() === "B2";
@@ -944,7 +1037,8 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
           exercise={exercise}
           isTelcB2={isTelcB2}
           isTelcC1={isTelcC1}
-          showTranslations={isTelcC1 || review}
+          showTranslations={review ? writingShowTranslations : false}
+          showVocabulary={review}
           value={writingText}
           onChange={(event) => setWritingText(event.target.value)}
           disabled={disabled}
@@ -954,6 +1048,17 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
           metaPanel={(
             <section className="writing-detail-meta-panel">
               <div className="writing-detail-meta-chip">{wordLimit ? `${isTelcB2 ? "最少" : "至少"} ${wordLimit} 词` : "字数不限"}</div>
+              {review && isTelcC1 ? (
+                <button
+                  type="button"
+                  className="writing-translation-toggle"
+                  aria-label={writingShowTranslations ? "隐藏中文翻译" : "显示中文翻译"}
+                  title="翻译"
+                  onClick={() => setWritingShowTranslations((visible) => !visible)}
+                >
+                  <TranslationVisibilityIcon hidden={!writingShowTranslations} />
+                </button>
+              ) : null}
             </section>
           )}
         />
@@ -993,7 +1098,7 @@ function correctCount(parts, answers, partKeys, level) {
       }
     } else if (partKey === "reading_understanding" || partKey.startsWith("listening_")) {
       const listeningFormat = exercise.content?.format;
-      const questions = partKey.startsWith("listening_") ? listeningQuestions(exercise, listeningFormat) : exercise.questions || [];
+      const questions = partKey.startsWith("listening_") ? listeningQuestions(exercise, listeningFormat, isC1(level)) : exercise.questions || [];
       questions.forEach((question) => {
         if (partKey.startsWith("listening_") && listeningFormat === "presentation_notes") {
           correct += answerMatchesExpected(answers[answerKey(partKey, question.id)], question.correct_answer) ? 1 : 0;
@@ -1022,8 +1127,8 @@ function buildAnswerSheetRows(parts, level) {
   if (!parts) return [];
   const rows = [];
   let number = 1;
-  const add = (partKey, partLabel, group, items, options, correctKey) => {
-    items.forEach((item) => {
+  const add = (partKey, partLabel, group, items, options, correctKey, fixedNumberStart = null) => {
+    items.forEach((item, itemIndex) => {
       const itemOptions = typeof options === "function" ? options(item) : options;
       const isC1Example = isC1(level) && partKey === "cloze_matching"
         && (Number(item.blank_number) === 0 || item.blank_key === "blank_0");
@@ -1032,7 +1137,7 @@ function buildAnswerSheetRows(parts, level) {
         partKey,
         partLabel,
         group,
-        number: isC1Example ? 0 : number,
+        number: isC1Example ? 0 : fixedNumberStart == null ? number : fixedNumberStart + itemIndex,
         options: (itemOptions || []).map((option) => ({
           optionKey: option.option_key ?? option.ad_key,
           optionText: option.option_text ?? option.ad_text_markdown ?? "",
@@ -1052,11 +1157,11 @@ function buildAnswerSheetRows(parts, level) {
         const isExampleBlank = Number(item.blank_number) === 0 || item.blank_key === "blank_0";
         return matchingOptions.filter((option) => (String(option.option_key || "").toLowerCase() === "beispiel") === isExampleBlank);
       }, (item) => item.correct_option?.option_key);
-    const adMatching = parts.reading_ad_matching || {};
-    add("reading_ad_matching", "Lesen · Teil 2", "reading", adMatching.items || [], adMatching.ads || [], (item) => item.correct_ad?.ad_key);
     const understanding = parts.reading_understanding || {};
-    add("reading_understanding", "Lesen · Teil 3", "reading", understanding.questions || [],
+    add("reading_understanding", "Lesen · Teil 2", "reading", understanding.questions || [],
       (item) => item.answer_options || [], (item) => item.answer_options?.find((option) => option.is_correct)?.option_key);
+    const adMatching = parts.reading_ad_matching || {};
+    add("reading_ad_matching", "Lesen · Teil 3", "reading", adMatching.items || [], adMatching.ads || [], (item) => item.correct_ad?.ad_key);
   } else {
     add("reading_title_matching", "Lesen · Teil 1", "reading", titleMatching.items || [],
       titleMatching.options || [], (item) => item.correct_option?.option_key);
@@ -1077,9 +1182,10 @@ function buildAnswerSheetRows(parts, level) {
   }
   examPartKeys(level, "listening").forEach((partKey, index) => {
     const listening = parts[partKey] || {};
-    const questions = isC1(level) ? listeningQuestions(listening, listening.content?.format) : listening.questions || [];
-    add(partKey, `Hören · Teil ${index + 1}`, "listening", questions.filter((item) => item.answer_options?.length),
-      (item) => item.answer_options || [], (item) => item.answer_options?.find((option) => option.is_correct)?.option_key);
+    const questions = isC1(level) ? listeningQuestions(listening, listening.content?.format, true) : listening.questions || [];
+    add(partKey, `Hören · Teil ${index + 1}`, "listening", questions,
+      (item) => item.answer_options || [], (item) => item.answer_options?.find((option) => option.is_correct)?.option_key,
+      isC1(level) && partKey === "listening_teil3" ? 65 : null);
   });
   return rows;
 }
@@ -1803,6 +1909,7 @@ export default function TelcMockExamPage() {
   } else if (phase === "writing_review") {
     const example = exam.parts.writing?.example_texts?.[0];
     const c1Quotes = exam.parts.writing?.quotes || c1WritingContent(exam.parts.writing).quotes || [];
+    const c1VocabularyPages = exam.parts.writing?.vocabulary_pages || c1WritingContent(exam.parts.writing).vocabulary_pages || [];
     const unselectedWriting = hasWritingChooser && !hasWritingChoice;
     const assessmentComplete = unselectedWriting || (writingReady && isWritingAssessmentComplete(writingAssessment));
     phaseContent = (
@@ -1811,7 +1918,7 @@ export default function TelcMockExamPage() {
           <div className="telc-mock-exam-writing-review__body">
             <div className="telc-mock-exam-writing-review__head"><div><span>Schreiben · 自评</span><h1 id="writing-review-title">对照范文评估你的写作</h1></div></div>
             {writingReady ? <>
-              {isC1(currentScope.level) && c1Quotes.length ? <C1WritingPrompt exercise={exam.parts.writing} showTranslations /> : null}
+              {isC1(currentScope.level) && (c1Quotes.length || c1VocabularyPages.length) ? <C1WritingPrompt exercise={exam.parts.writing} showHelpers /> : null}
               <div className="telc-mock-exam-writing-review__compare">
                 <article><h2>Meine Antwort</h2><div>{textBlocks(writingText || "（未作答）")}</div></article>
                 <article><h2>Beispieltext</h2><MockTextRegion as="div" regionId="writing:example">{textBlocks(example?.example_text || "暂无范文")}</MockTextRegion>{example?.translation_zh ? <p>{example.translation_zh}</p> : null}</article>
@@ -1990,12 +2097,19 @@ export default function TelcMockExamPage() {
             <div><span>Schreiben</span><h2>Wählen Sie eine Aufgabe</h2></div>
             <span className="telc-mock-exam-paper__badge">{currentScope.examType} {currentScope.level}</span>
           </div>
-          <p className="telc-mock-exam-writing-chooser__intro">Wählen Sie eine der beiden Schreibaufgaben. Danach können Sie die Auswahl nicht mehr ändern.</p>
+          <p className="telc-mock-exam-writing-chooser__intro">{isC1(currentScope.level)
+            ? "Wählen Sie eines der folgenden zwei Themen. Schreiben Sie einen Text, in dem Sie Ihren eigenen Standpunkt dazu erarbeiten und argumentativ darlegen. Ihr Text soll mindestens 350 Wörter umlassen. Sie haben 70 Minuten Zeit"
+            : "Wählen Sie eine der beiden Schreibaufgaben. Danach können Sie die Auswahl nicht mehr ändern."}</p>
           <div className="telc-mock-exam-writing-chooser__options">
             {writingOptions.map((option, index) => (
               <article className="telc-mock-exam-writing-choice-card" key={option.id}>
-                <h3>{option.exercise_base?.title || `Aufgabe ${index + 1}`}</h3>
-                {isC1(currentScope.level) ? <C1WritingPrompt exercise={option} showTranslations /> : <div className="telc-mock-exam-source-text">
+                <h3>{isC1(currentScope.level) ? `Thema ${index + 1}` : option.exercise_base?.title || `Aufgabe ${index + 1}`}</h3>
+                {isC1(currentScope.level) ? <div className="telc-mock-exam-writing-choice-card__c1-task">
+                  <MockTextRegion as="p" regionId={`writing:choice:${option.id}:topic`}>In einer Seminararbeit sollen Sie das Thema „{option.exercise_base?.title || `Thema ${index + 1}`}“ aus unterschiedlichen Perspektiven beleuchten.</MockTextRegion>
+                  <p>Sie können die unten stehenden Zitate zur Orientierung verwenden, aber auch andere Aspekte des Themas darlegen.</p>
+                  <p>Argumentieren Sie überzeugend, führen Sie Beispiele an und gliedern Sie Ihren Text in Einleitung, Hauptteil und Schluss.</p>
+                  <C1WritingPrompt exercise={option} showTranslations={false} />
+                </div> : <div className="telc-mock-exam-source-text">
                   <h4>Aushang</h4>
                   <MockTextRegion as="p" regionId={`writing:choice:${option.id}:request`}>{textBlocks(option.request_text)}</MockTextRegion>
                   <h4>Aufgabe</h4>

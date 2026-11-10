@@ -335,6 +335,7 @@ const router = createBrowserRouter([
             buildCardTitle={(exercise, index) =>
               `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
             }
+            sortByExternalId={(scope) => scope.level === "C1"}
             cardDescription="Öffne diese Aufgabe und ordne die Situationen den passenden Anzeigen zu."
           />
         ),
@@ -348,7 +349,7 @@ const router = createBrowserRouter([
               backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/sprechen`}
               backLabel="← Zurück zu Sprechen"
               eyebrow="Sprechen"
-              title={(scope) => scope.level === "C1" ? ["Teil 1A", "Teil 1B", "Teil 2"][teil - 1] : `Teil ${teil}`}
+              title={(scope) => scope.level === "C1" ? ["Teil 1A", "Teil 1a + Teil 1b", "Teil 2"][teil - 1] : `Teil ${teil}`}
               description={(scope) => examPreparationTypeDescription(SPEAKING_TYPES[teil - 1], scope.level)}
               fetchExercises={(scope) => fetchSpeakingTeilExercises(teil, scope)}
               buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/sprechen/teil-${teil}/${exercise.id}`}

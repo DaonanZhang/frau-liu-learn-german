@@ -148,6 +148,48 @@ describe("ReadingAdMatchingPage annotations", () => {
     expect(screen.getByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
   });
 
+  it("uses the carousel-first layout and allows the same ad for multiple C1 situations", async () => {
+    fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
+      ...detail,
+      exercise_base: { ...detail.exercise_base, level: "C1" },
+      items: [
+        ...detail.items,
+        { ...detail.items[0], id: 22, item_number: 2, item_text: "Situation zwei" },
+      ],
+    });
+    renderPage("c1");
+
+    expect(await screen.findByText("Situation eins")).toBeInTheDocument();
+    const workspace = document.querySelector(".reading-ad-workspace");
+    expect(workspace).not.toHaveClass("reading-ad-workspace--c1");
+    expect(workspace.querySelector(".reading-ad-carousel-controls")).toBeInTheDocument();
+    expect(workspace.querySelector("[aria-label='Anzeige A']")).toBeInTheDocument();
+    expect(workspace.querySelector(".reading-ad-carousel").compareDocumentPosition(
+      workspace.querySelector(".reading-ad-pagination"),
+    ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(workspace.querySelector(".reading-ad-carousel").compareDocumentPosition(
+      workspace.querySelector(".reading-ad-question-card"),
+    ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("Situation zwei")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("radio")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    expect(screen.getByText("Situation zwei")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("radio")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+
+    await waitFor(() => expect(saveReadingAdMatchingItemState).toHaveBeenCalledTimes(2));
+    expect(saveReadingAdMatchingItemState).toHaveBeenCalledWith(expect.objectContaining({
+      item: 21,
+      answer_payload: { selected_ad_key: "a" },
+    }));
+    expect(saveReadingAdMatchingItemState).toHaveBeenCalledWith(expect.objectContaining({
+      item: 22,
+      answer_payload: { selected_ad_key: "a" },
+    }));
+    expect(workspace.querySelector("[aria-label='Anzeige A']")).not.toHaveClass("reading-ad-card--selected");
+  });
+
   it("shows all seven C1 practice situations and labels only the version 2 backup", async () => {
     fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
       ...detail,

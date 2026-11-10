@@ -4,8 +4,8 @@ from apps.exam_preparation.answer_matching import answer_matches
 from apps.exam_preparation.models import (
     ClozeChoiceOption,
     ClozeMatchingBlankAnswer,
-    ListeningExercise,
     ListeningAnswerOption,
+    ListeningQuestion,
     ReadingAdMatchingItem,
     ReadingTitleMatchingItem,
     ReadingUnderstandingAnswerOption,
@@ -149,27 +149,17 @@ def _c1_correct_counts(instance):
     )
 
     listening_scores = {"listening_teil1": 0, "listening_teil2": 0, "listening_teil3": 0}
-    teil1 = ListeningExercise.objects.filter(pk=selection.get("listening_teil1")).first()
-    for index, statement in enumerate((teil1.content if teil1 else {}).get("statements", []), start=1):
-        item_id = statement.get("id") or f"statement-{index}"
-        listening_scores["listening_teil1"] += int(
-            selected("listening_teil1", item_id) == statement.get("speaker")
-        )
-    listening_scores["listening_teil2"] = sum(
-        selected("listening_teil2", question_id) == option_key
-        for question_id, option_key in ListeningAnswerOption.objects.filter(
-            question__listening_exercise_id=selection.get("listening_teil2"),
-            is_correct=True,
-        ).values_list("question_id", "option_key")
-    )
-    teil3 = ListeningExercise.objects.filter(pk=selection.get("listening_teil3")).first()
-    for slide_index, slide in enumerate((teil3.content if teil3 else {}).get("slides", []), start=1):
-        slide_number = slide.get("number") or slide_index
-        for answer_index, answer in enumerate(slide.get("answers", []), start=1):
-            item_id = f"note-{slide_number}-{answer.get('blank_id') or answer_index}"
-            listening_scores["listening_teil3"] += int(answer_matches(
-                answer.get("answer"), selected("listening_teil3", item_id)
-            ))
+    for part_key in listening_scores:
+        questions = ListeningQuestion.objects.filter(
+            listening_exercise_id=selection.get(part_key),
+        ).prefetch_related("answer_options")
+        for question in questions:
+            answer = selected(part_key, question.pk)
+            if question.question_type == ListeningQuestion.QuestionType.TEXT_INPUT:
+                is_correct = answer_matches(question.correct_answer, answer)
+            else:
+                is_correct = question.answer_options.filter(is_correct=True, option_key=answer).exists()
+            listening_scores[part_key] += int(is_correct)
     return reading_correct, cloze_correct, listening_scores
 
 

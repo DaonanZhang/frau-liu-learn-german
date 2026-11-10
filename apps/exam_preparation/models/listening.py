@@ -43,6 +43,7 @@ class ListeningQuestion(models.Model):
     class QuestionType(models.TextChoices):
         SINGLE_CHOICE = "single_choice", "Single choice"
         MULTIPLE_CHOICE = "multiple_choice", "Multiple choice"
+        TEXT_INPUT = "text_input", "Text input"
 
     listening_exercise = models.ForeignKey(
         "exam_preparation.ListeningExercise",
@@ -51,8 +52,10 @@ class ListeningQuestion(models.Model):
         verbose_name="listening exercise",
     )
     question_number = models.PositiveIntegerField(verbose_name="question number")
+    question_key = models.CharField(max_length=64, blank=True, default="", verbose_name="source question key")
     question_type = models.CharField(max_length=32, choices=QuestionType.choices, verbose_name="question type")
     question_text = models.TextField(verbose_name="question text")
+    correct_answer = models.TextField(blank=True, default="", verbose_name="correct answer")
     explanation = models.TextField(blank=True, default="", verbose_name="explanation")
     explanation_scope = models.CharField(
         max_length=16,

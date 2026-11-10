@@ -2953,7 +2953,11 @@ describe("TELC C1 mock exam", () => {
         ] }],
       },
       cloze_choice: { exercise_base: { title: "C1 Sprachbausteine 1", exam_type: "TELC" }, content_with_placeholders: "Ich {{blank_1}}.", blanks: [] },
-      listening_teil1: { exercise_base: { title: "C1 Hören 1", exam_type: "TELC" }, script: "Moderator: Testtranskript", content: { format: "speaker_matching" }, questions: [
+      listening_teil1: { exercise_base: { title: "C1 Hören 1", exam_type: "TELC" }, script: "Moderator: Testtranskript", content: { format: "speaker_matching", statements: [
+        { statement_number: 1, statement: "Aussage eins", speaker: "Sprecher/in 1" },
+        { statement_number: 2, statement: "Aussage zwei", speaker: "Sprecher/in 2" },
+        ...Array.from({ length: 8 }, (_, index) => ({ statement_number: index + 3, statement: `Distraktor ${index + 3}`, speaker: "" })),
+      ] }, questions: [
         { id: 701, question_number: 1, question_key: "statement_1", question_text: "Aussage eins", explanation: "Diese Aussage passt zu Sprecher/in 1.", answer_options: [{ id: 1, option_key: "A", option_text: "Sprecher/in 1", is_correct: true }, { id: 2, option_key: "B", option_text: "Sprecher/in 2", is_correct: false }] },
         { id: 702, question_number: 2, question_key: "statement_2", question_text: "Aussage zwei", answer_options: [{ id: 3, option_key: "A", option_text: "Sprecher/in 1", is_correct: false }, { id: 4, option_key: "B", option_text: "Sprecher/in 2", is_correct: true }] },
       ] },
@@ -2997,7 +3001,9 @@ describe("TELC C1 mock exam", () => {
     expect(screen.getByRole("button", { name: "第 1 题，答案 A" })).toBeInTheDocument();
 
     fireEvent.click(exampleOption);
-    expect(container.querySelector('[data-telc-mock-cloze-blank="blank_0"]')).toHaveTextContent("Das vollständige Beispielsatzende.");
+    const filledExample = container.querySelector('[data-telc-mock-cloze-blank="blank_0"]');
+    expect(filledExample).toHaveTextContent("Das vollständige Beispielsatzende.");
+    expect(filledExample).toHaveClass("is-inline-selected");
     expect(screen.queryByText("将 Beispiel 拖到标有 0 的空格中")).not.toBeInTheDocument();
     expect(container.querySelector('[data-telc-mock-cloze-blank="blank_1"]')).toHaveClass("is-guided");
     fireEvent.click(screen.getByRole("button", { name: "选择“genau hier”并填入当前空格" }));
@@ -3015,6 +3021,7 @@ describe("TELC C1 mock exam", () => {
     expect(mockExamStyleSource).toMatch(/\.telc-c1-cloze-matching \.telc-mock-cloze-matching-pool__option\s*\{[^}]*overflow-wrap:\s*anywhere/s);
     expect(mockExamStyleSource).toMatch(/\.telc-c1-cloze-matching \.telc-mock-cloze-matching-slot__chip\s*\{[^}]*overflow-wrap:\s*anywhere/s);
     expect(mockExamStyleSource).toMatch(/\.telc-c1-cloze-matching \.telc-mock-cloze-matching-pool__options\s*\{[^}]*flex-wrap:\s*wrap/s);
+    expect(mockExamStyleSource).toMatch(/\.telc-c1-cloze-matching \.telc-mock-cloze-matching-slot\.is-inline-selected\s*\{[^}]*background:\s*transparent/s);
   });
 
   it("maps C1 Lesen Teil 2 to reading comprehension and Teil 3 to reusable A–E matching", async () => {
@@ -3026,19 +3033,26 @@ describe("TELC C1 mock exam", () => {
     fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 2" }));
     expect(await screen.findByText("Lesetext")).toBeInTheDocument();
     expect(screen.getByText("Aussage")).toBeInTheDocument();
+    const readingWorkspace = container.querySelector(".telc-c1-reading-understanding");
+    expect(readingWorkspace).toBeInTheDocument();
+    expect(readingWorkspace.querySelector(".telc-c1-reading-understanding__text")).toContainElement(screen.getByText("Lesetext"));
+    expect(readingWorkspace.querySelector(".telc-c1-reading-understanding__questions")).toContainElement(screen.getByText("Aussage").closest(".reading-understanding-question-card"));
+    expect(mockExamStyleSource).toMatch(/\.telc-c1-reading-understanding\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1\.15fr\)\s+minmax\(18rem,\s*\.85fr\)/s);
     expect(screen.queryByText("Welche Anzeige passt?")).not.toBeInTheDocument();
     expect(mockExamStyleSource).toMatch(/\.telc-mock-exam-page\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s);
 
     fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 3" }));
     expect(await screen.findByText("Welche Anzeige passt?")).toBeInTheDocument();
     const workspace = container.querySelector(".reading-ad-workspace");
-    expect(workspace).not.toHaveClass("reading-ad-workspace--c1");
+    expect(workspace).toHaveClass("reading-ad-workspace--c1");
     const adControls = workspace.querySelector(".reading-ad-carousel-controls");
     const questionPagination = workspace.querySelector(".reading-ad-pagination");
-    expect(adControls).toBeInTheDocument();
-    expect(adControls.compareDocumentPosition(questionPagination) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(adControls).not.toBeInTheDocument();
+    expect(questionPagination).toBeInTheDocument();
     expect(container.querySelectorAll(".reading-ad-question-card")).toHaveLength(1);
-    expect(container.querySelectorAll(".reading-ad-card").length).toBeLessThan(5);
+    expect(container.querySelectorAll(".reading-ad-card")).toHaveLength(5);
+    expect(screen.getByRole("heading", { name: "Lesetext" })).toBeInTheDocument();
+    expect(container.querySelector("[aria-label='Abschnitt A']")).toBeInTheDocument();
     expect(container.querySelectorAll(".reading-ad-option")).toHaveLength(5);
     fireEvent.click(container.querySelector('.reading-ad-question-card input[value="A"]'));
     fireEvent.click(container.querySelectorAll(".reading-ad-pagination__item")[1]);
@@ -3080,23 +3094,21 @@ describe("TELC C1 mock exam", () => {
 
   it("renders speaker matching and presentation notes from their C1 content formats", async () => {
     renderC1("listening", "listening_teil1");
-    expect(await screen.findByText("Aussage eins")).toBeInTheDocument();
-    expect(screen.getByText(/wählen Sie zu jeder Aussage die passende Sprecherin bzw\. den passenden Sprecher aus/i)).toBeInTheDocument();
+    const speaker1 = await screen.findByRole("combobox", { name: "Sprecher/-in 1" });
+    expect(screen.getByText(/wählen Sie für jede Sprecherin bzw\. jeden Sprecher die passende Aussage a–j aus/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Aufgaben" })).toBeInTheDocument();
-    const part1Card = screen.getByText("Aussage eins").closest(".listening-exercise-question-card");
-    expect(part1Card.querySelector(".listening-exercise-question-card__titleWrap")).toBeInTheDocument();
-    expect(part1Card.querySelector(".listening-exercise-question-card__number")).toHaveTextContent(/^Aufgabe \d+$/);
-    expect(part1Card).not.toHaveClass("telc-mock-exam-choice-field");
-    expect(screen.getAllByText("Sprecher/in 1").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Aussage eins")).toHaveLength(1);
-    expect(screen.getAllByText("Aussage zwei")).toHaveLength(1);
+    const part1Card = screen.getByRole("heading", { name: "Sprecher/-in 1" }).closest(".listening-exercise-c1-speaker-row");
+    expect(part1Card.querySelector(".listening-exercise-c1-speaker-row__number")).toHaveTextContent("47");
     expect(screen.queryByText("Moderator: Testtranskript")).not.toBeInTheDocument();
     expect(screen.queryByText("Diese Aussage passt zu Sprecher/in 1.")).not.toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("radio", { name: "Sprecher/in 1" })[0]);
-    fireEvent.click(screen.getAllByRole("radio", { name: "Sprecher/in 2" })[1]);
+    expect(screen.queryByRole("region", { name: "观点选项" })).not.toBeInTheDocument();
+    expect(screen.queryByText("选择对应观点")).not.toBeInTheDocument();
+    expect(within(speaker1).getByRole("option", { name: "a. Aussage eins" })).toBeInTheDocument();
+    fireEvent.change(speaker1, { target: { value: "a" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Sprecher/-in 2" }), { target: { value: "b" } });
     await waitFor(() => expect(JSON.parse(sessionStorage.getItem(sessionKey)).answers).toEqual({
-      "listening_teil1:701": "A",
-      "listening_teil1:702": "B",
+      "listening_teil1:701": "a",
+      "listening_teil1:702": "b",
     }));
 
     fireEvent.click(screen.getByRole("button", { name: "Hören · Teil 2" }));
@@ -3113,6 +3125,8 @@ describe("TELC C1 mock exam", () => {
     expect(title.closest(".presentation-notes-content__center")).toBeInTheDocument();
     const slide = title.closest(".listening-exercise-question-card");
     expect(slide).toHaveClass("listening-exercise-c1-slide");
+    expect(slide.closest(".listening-exercise-questions")).toHaveClass("listening-exercise-questions--presentation");
+    expect(screen.getByRole("heading", { name: "Präsentation" })).toBeInTheDocument();
     expect(within(slide).getByRole("heading", { name: "Folie 1" })).toBeInTheDocument();
     expect(screen.queryByText(/blank_01/i)).not.toBeInTheDocument();
     const note = screen.getByRole("textbox", { name: "Aufgabe 65" });
@@ -3123,16 +3137,17 @@ describe("TELC C1 mock exam", () => {
     }));
   });
 
-  it("reviews C1 statement questions with the selected speaker answer", async () => {
+  it("reviews C1 speaker questions with the selected statement answer", async () => {
     renderC1("results", "listening_teil1", exam, {
-      "listening_teil1:701": "B",
-      "listening_teil1:702": "B",
+      "listening_teil1:701": "b",
+      "listening_teil1:702": "b",
     });
 
-    expect(await screen.findByText("Aussage eins")).toBeInTheDocument();
-    expect(screen.getAllByText("Aussage eins")).toHaveLength(1);
-    expect(screen.getAllByText(/Sprecher\/in 1/).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("radio", { name: /Sprecher\/in 1/ })[0]).toBeDisabled();
+    const speaker1 = await screen.findByRole("combobox", { name: "Sprecher/-in 1" });
+    expect(within(speaker1).getByRole("option", { name: "a. Aussage eins" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sprecher/-in 1" })).toBeInTheDocument();
+    expect(speaker1).toBeDisabled();
+    expect(speaker1).toHaveValue("b");
     expect(screen.getAllByText("Falsch").length).toBeGreaterThan(0);
     expect(screen.getByText("Moderator: Testtranskript")).toBeInTheDocument();
     expect(screen.getByText("Diese Aussage passt zu Sprecher/in 1.")).toBeInTheDocument();
@@ -3235,20 +3250,20 @@ describe("TELC C1 mock exam", () => {
     expect(await screen.findByText("Ein deutsches Zitat.")).toBeInTheDocument();
     expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
     expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
-    const hideTranslation = screen.getByRole("button", { name: "隐藏中文翻译" });
-    expect(hideTranslation).toHaveTextContent("Aa");
+    const hideTranslation = screen.getByRole("button", { name: "隐藏 Zitate 1 中文翻译" });
+    expect(hideTranslation.querySelector('img[src="/images/translate_icon.png"]')).toBeInTheDocument();
     expect(hideTranslation.querySelector("svg")).not.toBeInTheDocument();
     expect(hideTranslation).toHaveAttribute("title", "翻译");
     fireEvent.click(hideTranslation);
     expect(screen.queryByText("中文引语翻译")).not.toBeInTheDocument();
-    expect(screen.queryByText("第二条中文翻译")).not.toBeInTheDocument();
+    expect(screen.getByText("第二条中文翻译")).toBeInTheDocument();
     expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
-    const showTranslation = screen.getByRole("button", { name: "显示中文翻译" });
-    expect(showTranslation).toHaveTextContent("Aa");
+    const showTranslation = screen.getByRole("button", { name: "显示 Zitate 1 中文翻译" });
+    expect(showTranslation.querySelector('img[src="/images/translate_icon.png"]')).toBeInTheDocument();
     expect(showTranslation.querySelector("svg")).not.toBeInTheDocument();
     expect(screen.getByText("Ein deutsches Zitat.")).toBeInTheDocument();
     expect(screen.getByText("der Beitrag")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "显示中文翻译" }));
+    fireEvent.click(showTranslation);
     expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
     expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
   });
@@ -3259,19 +3274,19 @@ describe("TELC C1 mock exam", () => {
     expect(await screen.findByText("Ein deutsches Zitat.")).toBeInTheDocument();
     expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
     expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
-    const hideTranslation = screen.getByRole("button", { name: "隐藏中文翻译" });
-    expect(hideTranslation).toHaveTextContent("Aa");
+    const hideTranslation = screen.getByRole("button", { name: "隐藏 Zitate 1 中文翻译" });
+    expect(hideTranslation.querySelector('img[src="/images/translate_icon.png"]')).toBeInTheDocument();
     expect(hideTranslation).toHaveAttribute("title", "翻译");
-    expect(screen.getAllByRole("button", { name: "隐藏中文翻译" }).every((button) => button.title === "翻译")).toBe(true);
+    expect(screen.getByRole("button", { name: "隐藏 Zitate 2 中文翻译" })).toHaveAttribute("title", "翻译");
     fireEvent.click(hideTranslation);
     expect(screen.queryByText("中文引语翻译")).not.toBeInTheDocument();
-    expect(screen.queryByText("第二条中文翻译")).not.toBeInTheDocument();
+    expect(screen.getByText("第二条中文翻译")).toBeInTheDocument();
     expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
     expect(screen.getByText("Ein deutsches Zitat.")).toBeInTheDocument();
     expect(screen.getByText("der Beitrag")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "显示中文翻译" }));
-    const showTranslation = screen.getByRole("button", { name: "隐藏中文翻译" });
-    expect(showTranslation).toHaveTextContent("Aa");
+    fireEvent.click(screen.getByRole("button", { name: "显示 Zitate 1 中文翻译" }));
+    const showTranslation = screen.getByRole("button", { name: "隐藏 Zitate 1 中文翻译" });
+    expect(showTranslation.querySelector('img[src="/images/translate_icon.png"]')).toBeInTheDocument();
     expect(showTranslation.querySelector("svg")).not.toBeInTheDocument();
     expect(showTranslation).toHaveAttribute("title", "翻译");
     expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
@@ -3322,7 +3337,7 @@ describe("TELC C1 mock exam", () => {
     const { container } = renderC1("results", "writing");
 
     expect(await screen.findByText("Ein deutsches Zitat.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "隐藏中文翻译" }));
+    fireEvent.click(screen.getByRole("button", { name: "隐藏 Zitate 1 中文翻译" }));
     expect(screen.queryByText("中文引语翻译")).not.toBeInTheDocument();
     expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
   });

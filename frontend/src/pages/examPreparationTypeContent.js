@@ -1,7 +1,7 @@
 export const TELC_B2_LISTENING_TEIL2_INSTRUCTION = "Sie hören nun ein Interview. Dazu sollen Sie 10 Aufgaben lösen. Sie hören das Gespräch nur einmal. Entscheiden Sie beim Hören, ob die Aussagen richtig oder falsch sind.";
 
 export const TELC_C1_LISTENING_INSTRUCTION_BY_FORMAT = {
-  speaker_matching: "Hören Sie die kurzen Gespräche und wählen Sie zu jeder Aussage die passende Sprecherin bzw. den passenden Sprecher aus.",
+  speaker_matching: "Hören Sie die kurzen Gespräche und wählen Sie für jede Sprecherin bzw. jeden Sprecher die passende Aussage a–j aus.",
   multiple_choice: "Hören Sie den Beitrag und wählen Sie für jede Frage die passende Antwort.",
   presentation_notes: "Hören Sie die Präsentation und ergänzen Sie die fehlenden Angaben in den Folien.",
 };
@@ -13,7 +13,7 @@ export const LISTENING_TYPES = [
     description: "听 5 段日常生活中的短对话或独白，录音只播放一次，判断给出的陈述是正确（+）还是错误（-）。共 5 道正误判断题。",
     descriptionByLevel: {
       B2: "听一段新闻，录音播放一次，判断 5 个陈述句的正误。共 5 道正误判断题。",
-      C1: "听八位说话人的观点，为每道题匹配对应说话人。",
+      C1: "听八位说话人的观点，为每位说话人从 a–j 中选择对应观点。",
     },
     to: "/modules/exam-preparation/hoeren/short-text-prep",
     cta: "进入这一题型",
@@ -69,7 +69,7 @@ export const READING_TYPES = [
 const C1_READING_TYPES = [
   { ...READING_TYPES[0], title: "Teil 1", to: "/modules/exam-preparation/lesen/cloze-matching", description: "从备选词语中选择合适表达，完成短文中的空格。" },
   { ...READING_TYPES[1], title: "Teil 2", description: "阅读长文并完成理解题。" },
-  { ...READING_TYPES[2], title: "Teil 3", description: "阅读 A–E 五篇文章，为每个问题选择对应文章；同一文章可以多次选择。" },
+  { ...READING_TYPES[2], title: "Teil 3", description: "阅读一篇由 A–E 五个段落组成的文章，为每个问题选择对应段落；同一段落可以多次选择。" },
 ];
 
 export const SPRACHBAUSTEINE_TYPES = [

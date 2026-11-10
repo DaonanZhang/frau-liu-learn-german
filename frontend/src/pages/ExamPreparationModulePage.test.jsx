@@ -345,7 +345,7 @@ describe("exam preparation level entry", () => {
     [
       ["Hören", "/modules/exam-preparation/c1/hoeren", "进入听力模块"],
       ["Lesen", "/modules/exam-preparation/c1/lesen", "进入阅读模块"],
-      ["Sprachbausteine", "/modules/exam-preparation/c1/sprachbausteine", "进入 Sprachbausteine"],
+      ["Sprachbausteine", "/modules/exam-preparation/c1/sprachbausteine/cloze-choice", "进入 Sprachbausteine"],
       ["Schreiben", "/modules/exam-preparation/c1/schreiben", "进入 Schreiben"],
       ["Sprechen", "/modules/exam-preparation/c1/sprechen", "进入 Sprechen"],
     ].forEach(([name, href, cta]) => {
@@ -362,7 +362,7 @@ describe("exam preparation level entry", () => {
   it.each([
     ["Hören", "进入听力模块", "/modules/exam-preparation/c1/hoeren"],
     ["Lesen", "进入阅读模块", "/modules/exam-preparation/c1/lesen"],
-    ["Sprachbausteine", "进入 Sprachbausteine", "/modules/exam-preparation/c1/sprachbausteine"],
+    ["Sprachbausteine", "进入 Sprachbausteine", "/modules/exam-preparation/c1/sprachbausteine/cloze-choice"],
     ["Schreiben", "进入 Schreiben", "/modules/exam-preparation/c1/schreiben"],
     ["Sprechen", "进入 Sprechen", "/modules/exam-preparation/c1/sprechen"],
   ])("shows Coming soon without navigating when a non-110 C1 user opens %s", (name, cta, href) => {

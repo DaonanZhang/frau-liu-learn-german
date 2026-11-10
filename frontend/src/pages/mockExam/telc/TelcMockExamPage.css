@@ -437,9 +437,11 @@
 .writing-translation-toggle { display: inline-flex; width: 2.5rem; min-width: 2.5rem; height: 2.5rem; min-height: 2.5rem; align-items: center; justify-content: center; padding: 0; border: 1px solid #dce3df; border-radius: 50%; background: #fff; color: #2f6f5e; cursor: pointer; }
 .writing-translation-toggle:hover { border-color: #a9c8ba; background: #edf5f1; }
 .writing-translation-toggle:focus-visible { outline: 3px solid rgba(47, 111, 94, 0.28); outline-offset: 2px; }
-.writing-translation-toggle > span { flex-shrink: 0; font-size: 0.9rem; font-weight: 700; line-height: 1; }
+.writing-translation-toggle > .translation-visibility-icon { display: block; flex-shrink: 0; width: 1.4rem; height: 1.4rem; object-fit: contain; }
 .telc-mock-exam-writing-review .writing-detail-vocabulary { position: static; width: 100%; margin-bottom: 1rem; box-sizing: border-box; }
 .telc-c1-writing-quotes article { padding: 1rem 1.1rem; border-left: 4px solid #d9aa55; border-radius: 0.7rem; background: #fff9eb; }
+.telc-c1-writing-quote__header { display: flex; align-items: center; gap: .65rem; margin-bottom: .65rem; }
+.telc-c1-writing-quote__header h3 { margin: 0; color: #7a5b21; font-size: .9rem; letter-spacing: .04em; text-transform: uppercase; }
 .telc-c1-writing-quotes blockquote { margin: 0; line-height: 1.7; }
 .telc-c1-writing-quotes p { margin: 0.65rem 0 0; color: #63746d; line-height: 1.65; }
 @media (max-width: 900px) {
@@ -459,19 +461,31 @@
 .telc-c1-cloze-matching > .telc-mock-cloze-matching-pool,
 .telc-c1-cloze-matching > .telc-mock-cloze-matching-text { position: static; top: auto; max-height: min(68vh, 48rem); overflow-y: auto; overscroll-behavior: contain; }
 .telc-c1-cloze-matching > .telc-mock-cloze-matching-pool { grid-column: 2; grid-row: 1; min-width: 0; }
-.telc-c1-cloze-matching > .telc-mock-cloze-matching-text { grid-column: 1; grid-row: 1; min-width: 0; margin: 0; }
-.telc-c1-cloze-matching .telc-mock-cloze-matching-pool__options { flex-wrap: wrap; overflow: visible; }
-.telc-c1-cloze-matching .telc-mock-cloze-matching-pool__option { box-sizing: border-box; flex: 0 1 auto; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.telc-c1-cloze-matching > .telc-mock-cloze-matching-text { grid-column: 1; grid-row: 1; min-width: 0; margin: 0; overscroll-behavior-y: auto; font-size: 1rem; line-height: 1.85; }
+.telc-c1-cloze-matching .telc-mock-cloze-matching-pool { padding: .85rem; }
+.telc-c1-cloze-matching .telc-mock-cloze-matching-pool__heading { margin-bottom: .55rem; }
+.telc-c1-cloze-matching .telc-mock-cloze-matching-pool__options { gap: .4rem; flex-wrap: wrap; overflow: visible; }
+.telc-c1-cloze-matching .telc-mock-cloze-matching-pool__option { box-sizing: border-box; flex: 0 1 auto; max-width: 100%; min-width: 0; min-height: 0; padding: .42rem .58rem; border-radius: .55rem; font-size: .85rem; line-height: 1.35; overflow-wrap: anywhere; }
 .telc-c1-cloze-matching .telc-mock-cloze-matching-pool__option span,
 .telc-c1-cloze-matching .telc-mock-cloze-matching-slot__chip span { overflow-wrap: anywhere; }
 .telc-c1-cloze-matching .telc-mock-cloze-matching-slot { box-sizing: border-box; max-width: 100%; }
 .telc-c1-cloze-matching .telc-mock-cloze-matching-slot__chip { box-sizing: border-box; overflow-wrap: anywhere; white-space: normal; }
+.telc-c1-cloze-matching .telc-mock-cloze-matching-blank { display: inline-flex; width: auto; min-width: 0; max-width: 100%; gap: .15rem; margin: .04rem .12rem; }
+.telc-c1-cloze-matching .telc-mock-cloze-matching-slot.is-inline-selected { width: auto; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; line-height: inherit; vertical-align: baseline; }
+.telc-c1-cloze-matching .telc-mock-cloze-matching-slot.is-inline-selected .telc-mock-cloze-matching-slot__chip { display: inline; width: auto; min-width: 0; min-height: 0; padding: 0; border-radius: 0; background: transparent; color: inherit; font-size: 1em; font-weight: 800; line-height: inherit; text-align: inherit; vertical-align: baseline; }
+.telc-c1-cloze-matching .telc-mock-cloze-matching-slot:not(.is-inline-selected) { min-width: 2.5rem; }
 .telc-c1-cloze-matching .telc-mock-cloze-matching-slot.is-guided { border-color: #23865a; background: #e9f4ef; box-shadow: 0 0 0 3px rgba(35, 134, 90, 0.14); }
 .telc-c1-cloze-matching__example-option { position: relative; display: inline-flex; max-width: 100%; }
 .telc-c1-cloze-matching__guide { position: absolute; z-index: 2; top: calc(100% + 0.35rem); left: 0; width: max-content; max-width: min(20rem, calc(100vw - 3rem)); box-sizing: border-box; padding: 0.65rem 0.8rem; border: 1px solid #b6d9c5; border-radius: 0.75rem; background: #edf8f1; color: #246747; font-size: 0.9rem; font-weight: 750; line-height: 1.45; overflow-wrap: anywhere; pointer-events: none; }
 
+.telc-c1-reading-understanding { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(18rem, .85fr); align-items: start; gap: 1rem; }
+.telc-c1-reading-understanding > section { min-width: 0; max-height: min(68vh, 48rem); overflow-y: auto; overscroll-behavior-y: auto; }
+.telc-c1-reading-understanding__text .telc-mock-exam-source-text { margin: 0; }
+.telc-c1-reading-understanding__questions .reading-understanding-question-card:first-child { margin-top: 0; }
+
 @media (max-width: 1100px) {
-  .telc-c1-cloze-matching { grid-template-columns: 1fr; }
+  .telc-c1-cloze-matching, .telc-c1-reading-understanding { grid-template-columns: 1fr; }
   .telc-c1-cloze-matching > .telc-mock-cloze-matching-pool,
   .telc-c1-cloze-matching > .telc-mock-cloze-matching-text { grid-column: 1; grid-row: auto; max-height: none; }
+  .telc-c1-reading-understanding > section { max-height: none; overflow-y: visible; }
 }

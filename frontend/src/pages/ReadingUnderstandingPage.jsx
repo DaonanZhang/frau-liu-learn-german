@@ -18,6 +18,7 @@ import {
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
+import { stopDownwardScrollChainAtBottom } from "../utils/scrollBoundary.js";
 import "./ReadingUnderstandingPage.css";
 
 const FALLBACK_INSTRUCTION =
@@ -194,7 +195,7 @@ export default function ReadingUnderstandingPage() {
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
     >
       <div className="reading-understanding-page">
-        <div className="reading-understanding-shell">
+        <div className={`reading-understanding-shell${scope?.level === "C1" ? " reading-understanding-shell--c1" : ""}`}>
         <div className="reading-understanding-topbar">
           <Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/lesen/understanding`} className="reading-understanding-topbar__back">
             ← Zurück zu Lesen
@@ -234,7 +235,10 @@ export default function ReadingUnderstandingPage() {
           </AnnotatableTextRegion>
         </section>
 
-        <section className="reading-understanding-text">
+        <section
+          className="reading-understanding-text"
+          onWheel={scope?.level === "C1" ? stopDownwardScrollChainAtBottom : undefined}
+        >
           <div className="reading-understanding-text__header">
             <span className="reading-understanding-text__label">Lesetext</span>
           </div>
@@ -248,7 +252,10 @@ export default function ReadingUnderstandingPage() {
           </AnnotatableTextRegion>
         </section>
 
-        <section className="reading-understanding-questions">
+        <section
+          className="reading-understanding-questions"
+          onWheel={scope?.level === "C1" ? stopDownwardScrollChainAtBottom : undefined}
+        >
           <div className="reading-understanding-question-list">
             {questions.map((question) => (
               <article key={question.id} className="reading-understanding-question-card">

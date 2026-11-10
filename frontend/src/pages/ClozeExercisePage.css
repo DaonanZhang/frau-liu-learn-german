@@ -32,12 +32,20 @@
   min-width: 0;
   max-height: min(68vh, 48rem);
   overflow: auto;
+}
+
+.cloze-shell--c1 .cloze-pool-panel {
   overscroll-behavior: contain;
+}
+
+.cloze-shell--c1 .cloze-text-panel {
+  overscroll-behavior-y: auto;
 }
 
 .cloze-shell--c1 .cloze-pool-panel {
   grid-column: 2;
   grid-row: 5;
+  padding: 0.85rem;
 }
 
 .cloze-shell--c1 .cloze-text-panel {
@@ -307,32 +315,90 @@
   white-space: normal;
 }
 
+.cloze-shell--c1 .cloze-section-heading {
+  margin-bottom: 0.55rem;
+}
+
+.cloze-shell--c1 .cloze-pool {
+  align-content: flex-start;
+  gap: 0.4rem;
+}
+
+.cloze-shell--c1 .cloze-pool-chip {
+  min-height: 0;
+  padding: 0.42rem 0.58rem;
+  border-radius: 0.55rem;
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.cloze-shell--c1 .cloze-text {
+  font-size: 1rem;
+  line-height: 1.85;
+}
+
+.cloze-shell--c1 .cloze-text__paragraph + .cloze-text__paragraph {
+  margin-top: 0.9rem;
+}
+
 .cloze-shell--c1 .cloze-blank-inline {
   min-width: 0;
   max-width: 100%;
+  gap: 0.15rem;
+  margin: 0.04rem 0.12rem;
 }
 
 .cloze-shell--c1 .cloze-drop-slot--selected {
   min-width: 0;
-  width: fit-content;
+  width: auto;
   max-width: 100%;
+  min-height: 0;
   box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+.cloze-shell--c1 .cloze-select--selected {
+  color: inherit;
 }
 
 .cloze-shell--c1 .cloze-drop-slot--selected .cloze-drop-slot__chip {
-  width: 100%;
+  display: inline;
+  width: auto;
   min-width: 0;
   max-width: 100%;
+  min-height: 0;
   box-sizing: border-box;
-  text-align: left;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 1em;
+  font-weight: 800;
+  line-height: inherit;
+  text-align: inherit;
+  vertical-align: baseline;
 }
 
 .cloze-shell--c1 .cloze-drop-slot__chip > span {
-  display: block;
+  display: inline;
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
   white-space: normal;
+}
+
+.cloze-shell--c1 .cloze-drop-slot--empty {
+  width: 2.5rem;
+  min-width: 2.5rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  border-radius: 0.45rem;
+  padding: 0;
 }
 
 .cloze-shell--c1 .cloze-drop-slot--guided {

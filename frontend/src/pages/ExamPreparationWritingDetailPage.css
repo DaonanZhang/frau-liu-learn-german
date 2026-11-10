@@ -107,9 +107,9 @@
 .writing-detail-vocabulary__header button:hover { background: #edf5f1; border-color: #a9c8ba; }
 .writing-detail-translation-toggle:focus-visible,
 .writing-detail-vocabulary__header button:focus-visible { outline: 3px solid rgba(47, 111, 94, 0.28); outline-offset: 2px; }
-.writing-detail-translation-toggle > span,
+.writing-detail-translation-toggle > .translation-visibility-icon,
 .writing-detail-vocabulary__header button svg { flex-shrink: 0; }
-.writing-detail-translation-toggle > span { font-size: 0.9rem; font-weight: 700; line-height: 1; }
+.writing-detail-translation-toggle > .translation-visibility-icon { display: block; width: 1.4rem; height: 1.4rem; object-fit: contain; }
 
 .writing-detail-hero__badges {
   display: flex;
@@ -671,33 +671,38 @@
   font: 1.15rem/1.7 Georgia, "Noto Serif", serif;
 }
 
+.writing-detail-c1-quote__header { display: flex; align-items: center; gap: .65rem; margin-bottom: .7rem; }
+.writing-detail-c1-quote h2 { margin: 0; color: #2f6f5e; font: 800 .9rem/1.2 Inter, system-ui, sans-serif; letter-spacing: .04em; text-transform: uppercase; }
 .writing-detail-c1-quote p { margin: 0; }
 .writing-detail-c1-quote p + p { margin-top: .75rem; color: #68706d; font-size: .95rem; font-weight: 400; }
+.writing-detail-task-card--c1 { width: 100%; }
+.writing-detail-workspace--c1 { grid-template-columns: minmax(0, 1fr); }
 
 .writing-detail-vocabulary {
-  position: fixed;
-  z-index: 5;
-  right: 1rem;
-  bottom: 1rem;
-  width: min(20rem, calc(100vw - 2rem));
-  padding: .85rem 1rem;
+  position: static;
+  width: 100%;
+  padding: 1.15rem;
   border: 1px solid rgba(111, 131, 121, .3);
   border-radius: 1rem;
-  background: rgba(255, 255, 255, .82);
-  box-shadow: 0 8px 28px rgba(38, 52, 74, .12);
-  backdrop-filter: blur(12px);
+  background: #f8faf8;
+  box-shadow: 0 14px 30px rgba(38, 52, 74, .06);
 }
 
-.writing-detail-vocabulary > div:not(.writing-detail-vocabulary__header) { max-height: 10rem; overflow: auto; }
 .writing-detail-vocabulary__header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
-.writing-detail-vocabulary p { margin: .45rem 0; font-size: .9rem; }
+.writing-detail-vocabulary__header > strong { color: #2f2a25; font-size: 1.1rem; }
+.writing-detail-vocabulary__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .75rem; margin-top: 1rem; }
+.writing-detail-vocabulary p { margin: 0; }
+.writing-detail-vocabulary__card { min-width: 0; padding: .9rem 1rem; border: 1px solid #e5e7eb; border-radius: .875rem; background: #fff; }
+.writing-detail-vocabulary__card strong { display: block; color: #111827; font-size: 1.05rem; line-height: 1.45; overflow-wrap: anywhere; }
+.writing-detail-vocabulary__card > span { display: block; margin-top: .45rem; color: #4b5563; font-size: .92rem; line-height: 1.5; overflow-wrap: anywhere; }
+.writing-detail-vocabulary__card i { display: none; }
 .writing-detail-vocabulary footer { display: flex; align-items: center; justify-content: space-between; margin-top: .55rem; }
 .writing-detail-vocabulary button { min-width: 2.5rem; min-height: 2.35rem; border: 1px solid #dce3df; border-radius: .6rem; background: white; }
 .writing-detail-vocabulary button:disabled { opacity: .4; }
 
 @media (max-width: 700px) {
   .writing-detail-c1-quotes { grid-template-columns: minmax(0, 1fr); }
-  .writing-detail-vocabulary { right: .65rem; bottom: .65rem; }
+  .writing-detail-vocabulary__cards { grid-template-columns: minmax(0, 1fr); }
 }
 .writing-detail-b1-examples { display: grid; gap: 1rem; }
 .writing-detail-translation-zh { margin: .65rem 0 0; color: #58645f; font-size: .95rem; line-height: 1.7; }

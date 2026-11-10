@@ -16,6 +16,8 @@ import { EyeIcon } from "./LexiconPage/components/Icons.jsx";
 import "./SpeakingTeilExercisePage.css";
 
 const TITLES = { 1: "Einander kennenlernen", 2: "Über ein Thema sprechen", 3: "Gemeinsam etwas planen" };
+const C1_SPEAKING_SECONDS = { 1: 3 * 60, 2: 2 * 60 };
+const formatCountdown = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 const turnKey = (turn) => typeof turn?.turn_key === "string" && turn.turn_key.trim() ? turn.turn_key : `turn:${turn.sequence}`;
 const c1RecorderId = (turn, teil, exerciseId) => {
   const source = [turn?.source_teil, turn?.source_exercise_id, turn?.source_sequence];
@@ -164,7 +166,7 @@ function DialogueTurn({ turn, topic = "", recorderId, showPractice = false, favo
               title="翻译"
               aria-pressed={translationVisible}
               onClick={onToggleTranslation}
-            >Aa</button>
+            ><img src="/images/translate_icon.png" alt="" aria-hidden="true" /></button>
             ) : null}
           />
           {favoriteProps ? <ExerciseFavoriteButton {...favoriteProps} /> : null}
@@ -550,6 +552,9 @@ export default function SpeakingTeilExercisePage({ teil }) {
   const [favoritePending, setFavoritePending] = useState({});
   const [showC1Outline, setShowC1Outline] = useState(true);
   const [showC1Answer, setShowC1Answer] = useState(true);
+  const [c1AttemptComplete, setC1AttemptComplete] = useState(false);
+  const [c1RemainingSeconds, setC1RemainingSeconds] = useState(0);
+  const [c1TimerRunning, setC1TimerRunning] = useState(false);
   const [visibleC1QuoteTranslations, setVisibleC1QuoteTranslations] = useState({});
   const [visibleC1Translations, setVisibleC1Translations] = useState({});
 
@@ -560,7 +565,11 @@ export default function SpeakingTeilExercisePage({ teil }) {
         if (!active) return;
         setExercise(data);
         setShowC1Outline(true);
-        setShowC1Answer(true);
+        const speakingSeconds = isTelcC1Exercise(data) ? C1_SPEAKING_SECONDS[Number(teil)] || 0 : 0;
+        setShowC1Answer(speakingSeconds === 0);
+        setC1AttemptComplete(false);
+        setC1RemainingSeconds(speakingSeconds);
+        setC1TimerRunning(false);
         setVisibleC1QuoteTranslations({});
         setVisibleC1Translations({});
         const content = data?.content || {};
@@ -597,6 +606,18 @@ export default function SpeakingTeilExercisePage({ teil }) {
     return () => { active = false; };
   }, [exerciseId, teil]);
 
+  useEffect(() => {
+    if (!c1TimerRunning) return undefined;
+    const timer = window.setInterval(() => {
+      setC1RemainingSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [c1TimerRunning]);
+
+  useEffect(() => {
+    if (c1RemainingSeconds === 0) setC1TimerRunning(false);
+  }, [c1RemainingSeconds]);
+
   const content = exercise?.content || {};
   const cards = Array.isArray(content.cards) ? content.cards : [];
   const dialogue = useMemo(() => Array.isArray(content.dialogue) ? content.dialogue : [], [content.dialogue]);
@@ -608,6 +629,8 @@ export default function SpeakingTeilExercisePage({ teil }) {
   const base = exercise?.exercise_base || {};
   const isB2Telc = isTelcB2Exercise(exercise);
   const isC1Telc = isTelcC1Exercise(exercise);
+  const c1SpeakingSeconds = isC1Telc ? C1_SPEAKING_SECONDS[Number(teil)] || 0 : 0;
+  const isC1SpeakingAttempt = c1SpeakingSeconds > 0;
   const examinerTurns = isB2Telc && Number(teil) === 2
     ? dialogue.filter(isExaminerTurn)
     : [];
@@ -721,15 +744,26 @@ export default function SpeakingTeilExercisePage({ teil }) {
         {Number(teil) === 1 && topics.length ? <div className="speaking-detail-topic-list">{topics.map((topic) => <AnnotatableTextRegion as="span" key={stableContentKey(topic, topic.de || "topic")} regionId={materialAnnotationId(topic, "topic")}>{typeof topic === "string" ? topic : `${topic.de || ""}${topic.zh ? ` · ${topic.zh}` : ""}`}</AnnotatableTextRegion>)}</div> : null}
         {Number(teil) === 2 && cards.length ? <div className="speaking-detail-opinion-grid">{cards.map((card) => <AnnotatableTextRegion as="article" className="speaking-detail-opinion" key={stableContentKey(card, "card")} regionId={materialAnnotationId(card, "card")}><span>{card.participant}</span><h3>{card.title}</h3><p>{card.content}</p></AnnotatableTextRegion>)}</div> : null}
         {isC1Telc && [1, 2].includes(Number(teil)) && String(content.topic || "").trim() ? <p className="speaking-detail-c1-topic">{content.topic}</p> : null}
-        {isC1Telc && [1, 2].includes(Number(teil)) && hasC1Outline ? <div className="speaking-detail-c1-outline"><div className="speaking-detail-c1-section-header"><h3>提纲</h3><button type="button" className="speaking-detail-c1-visibility" aria-label={showC1Outline ? "隐藏提纲" : "显示提纲"} title={showC1Outline ? "隐藏提纲" : "显示提纲"} aria-expanded={showC1Outline} onClick={() => setShowC1Outline((visible) => !visible)}><EyeIcon isHidden={!showC1Outline} /></button></div>{showC1Outline ? <AnnotatableTextRegion as="div" className="speaking-detail-c1-outline__content" regionId="material:outline">{Array.isArray(content.outline) ? content.outline.map((point, index) => <p key={index}>{typeof point === "string" ? point : point.text || point.title}</p>) : content.outline}</AnnotatableTextRegion> : null}</div> : null}
+        {isC1SpeakingAttempt ? <div className="speaking-detail-c1-attempt">
+          <div className="speaking-detail-c1-timer">
+            <div><span>作答时间</span><strong role="timer" aria-live="off">{formatCountdown(c1RemainingSeconds)}</strong></div>
+            <div className="speaking-detail-c1-timer__actions">
+              <button type="button" onClick={() => setC1TimerRunning((running) => !running)} disabled={c1RemainingSeconds === 0}>{c1TimerRunning ? "暂停计时" : "开始计时"}</button>
+              <button type="button" onClick={() => { setC1TimerRunning(false); setC1RemainingSeconds(c1SpeakingSeconds); }}>重新计时</button>
+            </div>
+          </div>
+          <SpeakingPracticeRecorder language="zh" recordingId={`c1-attempt-${teil}-${exerciseId}`} showSampleAudio={false} />
+          {!c1AttemptComplete ? <button type="button" className="speaking-detail-c1-finish" onClick={() => { setC1TimerRunning(false); setC1AttemptComplete(true); setShowC1Answer(true); }}>完成并查看参考答案</button> : null}
+        </div> : null}
+        {isC1Telc && [1, 2].includes(Number(teil)) && hasC1Outline ? <div className="speaking-detail-c1-outline"><div className="speaking-detail-c1-section-header"><h3>参考提纲</h3><button type="button" className="speaking-detail-c1-visibility" aria-label={showC1Outline ? "隐藏参考提纲" : "显示参考提纲"} title={showC1Outline ? "隐藏参考提纲" : "显示参考提纲"} aria-expanded={showC1Outline} onClick={() => setShowC1Outline((visible) => !visible)}><EyeIcon isHidden={!showC1Outline} /></button></div>{showC1Outline ? <AnnotatableTextRegion as="div" className="speaking-detail-c1-outline__content" regionId="material:outline">{Array.isArray(content.outline) ? content.outline.map((point, index) => <p key={index}>{typeof point === "string" ? point : point.text || point.title}</p>) : content.outline}</AnnotatableTextRegion> : null}</div> : null}
         {isC1Telc && Number(teil) === 3 && Array.isArray(content.quotes) ? <div className="speaking-detail-c1-quotes">
           {content.quotes.map((quote, index) => {
             const translationVisible = Boolean(visibleC1QuoteTranslations[index]);
-            return <blockquote className="speaking-detail-c1-quote" key={`${index}-${quote.text}`}><div className="speaking-detail-c1-quote__row"><p>{quote.text}</p>{quote.translation_zh ? <button type="button" className="speaking-detail-c1-translation-toggle" aria-label={translationVisible ? "隐藏中文翻译" : "显示中文翻译"} title="翻译" aria-pressed={translationVisible} onClick={() => setVisibleC1QuoteTranslations((previous) => ({ ...previous, [index]: !previous[index] }))}>Aa</button> : null}</div>{translationVisible && quote.translation_zh ? <p className="speaking-detail-c1-quote__translation">{quote.translation_zh}</p> : null}</blockquote>;
+            return <blockquote className="speaking-detail-c1-quote" key={`${index}-${quote.text}`}><div className="speaking-detail-c1-quote__row"><p>{quote.text}</p>{quote.translation_zh ? <button type="button" className="speaking-detail-c1-translation-toggle" aria-label={translationVisible ? "隐藏中文翻译" : "显示中文翻译"} title="翻译" aria-pressed={translationVisible} onClick={() => setVisibleC1QuoteTranslations((previous) => ({ ...previous, [index]: !previous[index] }))}><img src="/images/translate_icon.png" alt="" aria-hidden="true" /></button> : null}</div>{translationVisible && quote.translation_zh ? <p className="speaking-detail-c1-quote__translation">{quote.translation_zh}</p> : null}</blockquote>;
           })}
         </div> : null}
       </section>
-      {isC1Telc ? (
+      {isC1Telc && (!isC1SpeakingAttempt || c1AttemptComplete) ? (
         <section className="speaking-detail-card speaking-detail-example speaking-detail-c1-answer">
           <div className="speaking-detail-c1-section-header"><h3>Beispielantwort</h3><button type="button" className="speaking-detail-c1-visibility" aria-label={showC1Answer ? "隐藏答案" : "显示答案"} title={showC1Answer ? "隐藏答案" : "显示答案"} aria-expanded={showC1Answer} onClick={() => setShowC1Answer((visible) => !visible)}><EyeIcon isHidden={!showC1Answer} /></button></div>
           {showC1Answer ? <div className="speaking-detail-c1-answer__content">

@@ -99,7 +99,7 @@ describe("ReadingAdMatchingWorkspace annotations", () => {
     expect(document.querySelector('[data-exam-annotation-region="ad:13"]')).toHaveTextContent("Text C");
   });
 
-  it("shows C1 questions first, allows repeated ads, navigates both ways, and lists A-E in order", () => {
+  it("shows the C1 article on the left, allows repeated paragraphs, and lists A-E in order", () => {
     const onAnswer = vi.fn();
     const c1Exercise = {
       ...exercise,
@@ -119,7 +119,7 @@ describe("ReadingAdMatchingWorkspace annotations", () => {
 
     expect(container.querySelectorAll(".reading-ad-card__number")).toHaveLength(5);
     expect([...container.querySelectorAll(".reading-ad-card__number")].map((node) => node.textContent)).toEqual([
-      "Anzeige A", "Anzeige B", "Anzeige C", "Anzeige D", "Anzeige E",
+      "Abschnitt A", "Abschnitt B", "Abschnitt C", "Abschnitt D", "Abschnitt E",
     ]);
     fireEvent.click(screen.getAllByRole("radio")[0]);
     expect(onAnswer).toHaveBeenCalledWith(31, "a");
@@ -133,7 +133,12 @@ describe("ReadingAdMatchingWorkspace annotations", () => {
     const workspace = container.querySelector(".reading-ad-workspace");
     expect(workspace).toHaveClass("reading-ad-workspace--c1");
     expect(workspace.querySelector(".reading-ad-question-section")).toBeInTheDocument();
-    expect(styleSource).toMatch(/\.reading-ad-workspace--c1 \.reading-ad-question-section\s*\{\s*order:\s*-1;/);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1\.15fr\)\s+minmax\(18rem,\s*0\.85fr\)/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s*>\s*\.reading-ad-sticky-stack\s*\{[^}]*grid-column:\s*1/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s*>\s*\.reading-ad-sticky-stack\s*\{[^}]*display:\s*block/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s*>\s*\.reading-ad-question-section\s*\{[^}]*grid-column:\s*2/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s*>\s*\.reading-ad-question-section\s*\{[^}]*flex-wrap:\s*nowrap/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s*>\s*\.reading-ad-sticky-stack,[^{]*\.reading-ad-workspace--c1\s*>\s*\.reading-ad-question-section\s*\{[^}]*overflow-y:\s*auto/s);
   });
 
   it("cleans the Version 2 prefix but hides its label by default", () => {

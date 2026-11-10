@@ -161,10 +161,12 @@ const router = createBrowserRouter([
         path: "/modules/exam-preparation/sprachbausteine/cloze-choice",
         element: (
           <ExerciseSelectionPage
-            backTo={(_scope) => `/modules/exam-preparation/${_scope.levelPath}/sprachbausteine`}
+            backTo={(_scope) => _scope.level === "C1"
+              ? `/modules/exam-preparation/${_scope.levelPath}`
+              : `/modules/exam-preparation/${_scope.levelPath}/sprachbausteine`}
             backLabel="← Zurück zu Sprachbausteine"
             eyebrow="Sprachbausteine"
-            title="Teil 1"
+            title={(_scope) => _scope.level === "C1" ? "Sprachbausteine" : "Teil 1"}
             description={SPRACHBAUSTEINE_TYPES[0].description}
             fetchExercises={fetchClozeChoiceExercises}
             buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/sprachbausteine/cloze-choice/${exercise.id}`}
@@ -329,14 +331,18 @@ const router = createBrowserRouter([
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
             title="Teil 3"
-            description={READING_TYPES[2].description}
+            description={(scope) => scope.level === "C1"
+              ? "阅读一篇由 A–E 五个段落组成的文章，为每个问题选择对应段落；同一段落可以多次选择。"
+              : READING_TYPES[2].description}
             fetchExercises={fetchReadingAdMatchingExercises}
             buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/lesen/ad-matching/${exercise.id}`}
             buildCardTitle={(exercise, index) =>
               `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
             }
             sortByExternalId={(scope) => scope.level === "C1"}
-            cardDescription="Öffne diese Aufgabe und ordne die Situationen den passenden Anzeigen zu."
+            cardDescription={(scope) => scope.level === "C1"
+              ? "Öffne den Text und ordne jeder Aussage den passenden Abschnitt A–E zu."
+              : "Öffne diese Aufgabe und ordne die Situationen den passenden Anzeigen zu."}
           />
         ),
       },

@@ -319,6 +319,9 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
           const cardDescription = scope.level === "C1"
             ? C1_SKILL_CONTENT[card.key]
             : card.descriptionByLevel?.[scope.level] || card.description;
+          const cardHref = card.key === "sprachbausteine" && scope.level === "C1"
+            ? `/modules/exam-preparation/${scope.levelPath}/sprachbausteine/cloze-choice`
+            : card.to?.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`);
           const content = (
             <>
               <div className="exam-module-card__header">
@@ -357,7 +360,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
             return (
               <Link
                 key={card.key}
-                to={card.to.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`)}
+                to={cardHref}
                 className="exam-module-card exam-module-card--link"
                 onClick={c1ComingSoon && card.key !== "tips" ? (event) => {
                   event.preventDefault();

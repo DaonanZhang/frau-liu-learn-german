@@ -55,6 +55,13 @@ afterEach(() => {
 });
 
 describe("SpeakingPracticeRecorder", () => {
+  it("can hide the sample-audio control for an independent recording", () => {
+    render(<SpeakingPracticeRecorder recordingId="attempt" showSampleAudio={false} />);
+
+    expect(screen.getByRole("button", { name: "Aufnahme starten" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Audio noch nicht verfügbar" })).not.toBeInTheDocument();
+  });
+
   it("renders a trailing control immediately after the sample audio button", () => {
     render(
       <SpeakingPracticeRecorder

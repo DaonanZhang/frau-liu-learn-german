@@ -6,6 +6,9 @@ import { examPreparationScope } from "../utils/examPreparationScope.js";
 export default function ExamPreparationSprachbausteinePage() {
   const scope = examPreparationScope(useParams().level);
   if (!scope) return <Navigate to="/modules/exam-preparation" replace />;
+  if (scope.level === "C1") {
+    return <Navigate to={`/modules/exam-preparation/${scope.levelPath}/sprachbausteine/cloze-choice`} replace />;
+  }
   return (
     <div className="exam-sprach-page">
       <div className="exam-sprach-topbar">

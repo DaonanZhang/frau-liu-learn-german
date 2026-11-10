@@ -17,10 +17,12 @@ import {
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import ListeningTranscript from "../components/examPreparation/ListeningTranscript.jsx";
 import PresentationNotesContent from "../components/examPreparation/PresentationNotesContent.jsx";
+import SpeakerMatchingExercise from "../components/examPreparation/SpeakerMatchingExercise.jsx";
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import { answerMatchesExpected, expectedHasMultipleAnswers } from "../utils/c1AnswerMatcher.js";
+import { buildSpeakerMatchingRows, speakerMatchingAnswerIsCorrect } from "../utils/speakerMatching.js";
 import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../hooks/useReliableAudioSources.js";
 import {
   TELC_B2_LISTENING_TEIL2_INSTRUCTION,
@@ -222,6 +224,9 @@ export default function ListeningExercisePage({
   const c1Slides = isTelcC1 && c1Format === "presentation_notes" && Array.isArray(exercise?.content?.slides)
     ? exercise.content.slides
     : [];
+  const c1SpeakerRows = isTelcC1 && c1Format === "speaker_matching"
+    ? buildSpeakerMatchingRows(exercise)
+    : [];
   const areC1NotesIncomplete = c1Slides.some((slide) => (slide.answers || []).some((answer) => {
     const question = questions.find((item) => item.question_key === answer.blank_id);
     return !question || !String(c1Notes[question.id] || "").trim();
@@ -398,6 +403,7 @@ export default function ListeningExercisePage({
             });
           }
           const selectedOptionKey = answers[question.id] || "";
+          const speakerRow = c1SpeakerRows.find((row) => row.question.id === question.id);
           const selectedOption = (question.answer_options || []).find(
             (option) => option.option_key === selectedOptionKey
           );
@@ -407,7 +413,9 @@ export default function ListeningExercisePage({
             answer_payload: {
               selected_option_key: selectedOptionKey,
             },
-            is_correct: selectedOption ? Boolean(selectedOption.is_correct) : false,
+            is_correct: speakerRow
+              ? speakerMatchingAnswerIsCorrect(speakerRow, selectedOptionKey)
+              : selectedOption ? Boolean(selectedOption.is_correct) : false,
           });
         })
       );
@@ -626,10 +634,10 @@ export default function ListeningExercisePage({
           />
         ) : null}
 
-        <section className="listening-exercise-questions">
+        <section className={`listening-exercise-questions${c1Slides.length ? " listening-exercise-questions--presentation" : ""}`}>
           <div className="listening-exercise-questions__header">
             <div>
-              <h2>Aufgaben</h2>
+              <h2>{c1Slides.length ? "Präsentation" : "Aufgaben"}</h2>
               <p className="listening-exercise-questions__sub">
                 {c1Slides.length
                   ? "Ergänze die fehlenden Angaben direkt in den Folien."
@@ -638,7 +646,7 @@ export default function ListeningExercisePage({
             </div>
           </div>
 
-          <div className="listening-exercise-question-list">
+          <div className={`listening-exercise-question-list${c1Slides.length ? " listening-exercise-question-list--slides" : ""}`}>
             {c1Slides.length ? c1Slides.map((slide, slideIndex) => (
               <article className="listening-exercise-question-card listening-exercise-c1-slide" key={`${slide.number}-${slideIndex}`}>
                 <h3>Folie {slide.number}</h3>
@@ -657,7 +665,18 @@ export default function ListeningExercisePage({
                 />
               </article>
             )) : null}
-            {questions.filter((question) => question.question_type !== "text_input").map((question) => {
+            {isTelcC1 && c1Format === "speaker_matching" ? <SpeakerMatchingExercise
+              exercise={exercise}
+              valueFor={(question) => answers[question.id]}
+              disabled={isChecked}
+              review={isChecked}
+              onChange={(question, value) => {
+                if (isChecked) setIsChecked(false);
+                setAnswers((previous) => ({ ...previous, [question.id]: value }));
+              }}
+              annotationRegionPrefix="speaker-matching"
+            /> : null}
+            {c1Format !== "speaker_matching" ? questions.filter((question) => question.question_type !== "text_input").map((question) => {
               const selectedOption = (question.answer_options || []).find(
                 (option) => option.option_key === answers[question.id]
               );
@@ -761,13 +780,17 @@ export default function ListeningExercisePage({
                   ) : null}
                 </article>
               );
-            })}
+            }) : null}
           </div>
 
           <div className="listening-exercise-actions">
             <ExamActionButton
               className="listening-exercise-check-btn"
-              disabled={isChecked || (c1Slides.length ? areC1NotesIncomplete : !questions.length || answeredCount !== questions.length)}
+              disabled={isChecked || (c1Slides.length
+                ? areC1NotesIncomplete
+                : c1Format === "speaker_matching"
+                  ? !c1SpeakerRows.length || c1SpeakerRows.some((row) => !answers[row.question.id])
+                  : !questions.length || answeredCount !== questions.length)}
               onClick={handleCheck}
               label="Prüfen"
               icon="check"

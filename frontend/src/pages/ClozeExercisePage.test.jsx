@@ -302,11 +302,14 @@ describe("Cloze exercise layout", () => {
     expect(clozeStyles).toMatch(/\.cloze-drop-slot--empty\s*\{[^}]*width:\s*6rem[^}]*height:\s*3\.5rem/);
   });
 
-  it("constrains selected C1 answers to the text column and wraps their text", () => {
+  it("renders C1 options compactly and placed answers as inline bold text", () => {
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-pool-chip\s*\{[^}]*min-height:\s*0[^}]*padding:\s*0\.42rem 0\.58rem[^}]*font-size:\s*0\.85rem[^}]*line-height:\s*1\.35/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-text\s*\{[^}]*font-size:\s*1rem[^}]*line-height:\s*1\.85/s);
     expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-blank-inline\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
-    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot--selected\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*100%/s);
-    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot--selected \.cloze-drop-slot__chip\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
-    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot__chip > span\s*\{[^}]*display:\s*block[^}]*min-width:\s*0[^}]*max-width:\s*100%[^}]*overflow-wrap:\s*anywhere[^}]*white-space:\s*normal/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot--selected\s*\{[^}]*width:\s*auto[^}]*min-height:\s*0[^}]*padding:\s*0[^}]*border:\s*0[^}]*background:\s*transparent[^}]*line-height:\s*inherit/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-select--selected\s*\{[^}]*color:\s*inherit/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot--selected \.cloze-drop-slot__chip\s*\{[^}]*display:\s*inline[^}]*width:\s*auto[^}]*min-height:\s*0[^}]*padding:\s*0[^}]*background:\s*transparent[^}]*font-size:\s*1em[^}]*font-weight:\s*800[^}]*line-height:\s*inherit/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot--empty\s*\{[^}]*width:\s*2\.5rem[^}]*height:\s*1\.75rem/s);
   });
 
   it("fits selected cloze slots to their answer text", () => {

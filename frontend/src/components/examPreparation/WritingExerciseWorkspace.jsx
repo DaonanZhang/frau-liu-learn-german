@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { AnnotatableTextRegion } from "./ExamTextAnnotations.jsx";
 
-export function TranslationVisibilityIcon({ hidden }) {
+export function TranslationVisibilityIcon() {
   return (
-    <span aria-hidden="true">Aa</span>
+    <img className="translation-visibility-icon" src="/images/translate_icon.png" alt="" aria-hidden="true" />
   );
 }
 
@@ -50,6 +50,24 @@ export default function WritingExerciseWorkspace({
   promptRegionId = "prompt",
   inputHeaderAction = null,
 }) {
+  const [hiddenQuoteTranslations, setHiddenQuoteTranslations] = useState({});
+  const taskCard = (
+    <article
+      ref={taskRef}
+      className={[
+        "writing-detail-task-card",
+        isTelcC1 ? "writing-detail-task-card--c1" : "",
+        taskClassName,
+      ].filter(Boolean).join(" ")}
+    >
+      <h2>写作要求</h2>
+      <AnnotatableTextRegion as="p" regionId={promptRegionId}>
+        <StoredLineBreaks text={exercise?.task_text} fallback="请根据题目要求完成写作。" />
+      </AnnotatableTextRegion>
+      {showTranslations && !isTelcB2 && !isTelcC1 && exercise?.content?.task_translation_zh ? <p className="writing-detail-translation-zh">{exercise.content.task_translation_zh}</p> : null}
+    </article>
+  );
+
   return (
     <div className="writing-detail-content">
       {!isTelcC1 ? <section
@@ -88,27 +106,44 @@ export default function WritingExerciseWorkspace({
         )}
       </section> : null}
 
+      {isTelcC1 ? taskCard : null}
+
       {isTelcC1 ? (
         <section className="writing-detail-c1-quotes" aria-label="引语">
-          {(Array.isArray(exercise?.content?.quotes) ? exercise.content.quotes : []).map((quote, index) => (
-            <article key={`${index}-${quote.text}`} className="writing-detail-c1-quote">
+          {(Array.isArray(exercise?.content?.quotes) ? exercise.content.quotes : []).map((quote, index) => {
+            const quoteTitle = `Zitate ${index + 1}`;
+            const translationVisible = showTranslations && !hiddenQuoteTranslations[index];
+            return <article key={`${index}-${quote.text}`} className="writing-detail-c1-quote">
+              <div className="writing-detail-c1-quote__header">
+                <h2>{quoteTitle}</h2>
+                {showTranslations && quote.translation_zh ? <button
+                  type="button"
+                  className="writing-detail-translation-toggle"
+                  aria-label={`${translationVisible ? "隐藏" : "显示"} ${quoteTitle} 中文翻译`}
+                  title="翻译"
+                  onClick={() => setHiddenQuoteTranslations((current) => ({
+                    ...current,
+                    [index]: !current[index],
+                  }))}
+                >
+                  <TranslationVisibilityIcon hidden={!translationVisible} />
+                </button> : null}
+              </div>
               <p>{quote.text}</p>
-              {showTranslations && quote.translation_zh ? <p>{quote.translation_zh}</p> : null}
-            </article>
-          ))}
+              {translationVisible && quote.translation_zh ? <p>{quote.translation_zh}</p> : null}
+            </article>;
+          })}
         </section>
+      ) : null}
+
+      {showVocabulary && isTelcC1 && Array.isArray(exercise?.content?.vocabulary_pages) && exercise.content.vocabulary_pages.length ? (
+        <VocabularyPages pages={exercise.content.vocabulary_pages} />
       ) : null}
 
       {metaPanel}
 
-      <section className="writing-detail-workspace">
-        <article ref={taskRef} className={["writing-detail-task-card", taskClassName].filter(Boolean).join(" ")}>
-          <h2>写作要求</h2>
-          <AnnotatableTextRegion as="p" regionId={promptRegionId}>
-            <StoredLineBreaks text={exercise?.task_text} fallback="请根据题目要求完成写作。" />
-          </AnnotatableTextRegion>
-          {showTranslations && !isTelcB2 && !isTelcC1 && exercise?.content?.task_translation_zh ? <p className="writing-detail-translation-zh">{exercise.content.task_translation_zh}</p> : null}
-        </article>
+      <section className={`writing-detail-workspace${isTelcC1 ? " writing-detail-workspace--c1" : ""}`}>
+        {!isTelcC1 ? taskCard : null}
 
         <article
           ref={inputRef}
@@ -133,9 +168,6 @@ export default function WritingExerciseWorkspace({
         </article>
       </section>
 
-      {showVocabulary && isTelcC1 && Array.isArray(exercise?.content?.vocabulary_pages) && exercise.content.vocabulary_pages.length ? (
-        <VocabularyPages pages={exercise.content.vocabulary_pages} />
-      ) : null}
     </div>
   );
 }
@@ -161,9 +193,14 @@ export function VocabularyPages({ pages }) {
       </div>
       {isExpanded ? (
         <>
-          <div>
+          <div className="writing-detail-vocabulary__cards">
             {entries.map((entry, index) => (
-              <p key={`${entry.word || entry.term || index}`}><span>{entry.word || entry.term || entry.de || ""}</span>{entry.translation_zh || entry.translation || entry.zh ? ` · ${entry.translation_zh || entry.translation || entry.zh}` : ""}</p>
+              <p className="writing-detail-vocabulary__card" key={`${entry.word || entry.term || index}`}>
+                <strong>{entry.word || entry.term || entry.de || ""}</strong>
+                {entry.translation_zh || entry.translation || entry.zh ? <span>
+                  <i aria-hidden="true"> · </i>{entry.translation_zh || entry.translation || entry.zh}
+                </span> : null}
+              </p>
             ))}
           </div>
           <footer>

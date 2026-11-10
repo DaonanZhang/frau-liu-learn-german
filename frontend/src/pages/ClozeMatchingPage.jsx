@@ -17,6 +17,7 @@ import {
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
+import { stopDownwardScrollChainAtBottom } from "../utils/scrollBoundary.js";
 import { useClozeAnnotationLayout } from "./clozeAnnotationLayout.js";
 import "./ClozeExercisePage.css";
 
@@ -479,7 +480,10 @@ export default function ClozeMatchingPage() {
           </div>
         </section>
 
-          <section className="cloze-text-panel">
+          <section
+            className="cloze-text-panel"
+            onWheel={scope?.level === "C1" ? stopDownwardScrollChainAtBottom : undefined}
+          >
             <div className="cloze-text" ref={clozeTextRef}>
             {paragraphs.map((parts, paragraphIndex) => (
               <p key={`paragraph-${paragraphIndex}`} className="cloze-text__paragraph">

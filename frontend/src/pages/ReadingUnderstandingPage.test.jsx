@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +17,8 @@ vi.mock("../api/exam_preparation/userExerciseStates.js", () => ({
   fetchReadingUnderstandingQuestionStates: vi.fn(),
   saveReadingUnderstandingQuestionState: vi.fn(),
 }));
+
+const readingUnderstandingStyles = readFileSync(resolve("src/pages/ReadingUnderstandingPage.css"), "utf8");
 
 describe("reading understanding annotations", () => {
   beforeEach(() => {
@@ -86,6 +90,44 @@ describe("reading understanding annotations", () => {
       .closest("[data-exam-annotation-region]")).toBeNull();
     expect(screen.getByText("难度：B1", { selector: ".reading-understanding-hero__badge" })
       .closest("[data-exam-annotation-region]")).toBeNull();
+  });
+
+  it("places the C1 reading text on the left and questions on the right", async () => {
+    fetchReadingUnderstandingExerciseDetail.mockResolvedValue({
+      id: 27,
+      exercise_base: {
+        external_id: "27",
+        level: "C1",
+        exam_type: "TELC",
+        exercise_type: "READING_UNDERSTANDING",
+      },
+      text_markdown: "Passage content",
+      questions: [{
+        id: 201,
+        question_number: 1,
+        question_text: "Question text",
+        answer_options: [
+          { id: 301, option_key: "a", option_text: "First option", is_correct: true },
+        ],
+      }],
+    });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/exercise/c1/27"]}>
+        <Routes>
+          <Route path="/exercise/:level/:exerciseId" element={<ReadingUnderstandingPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText("Passage content");
+    expect(container.querySelector(".reading-understanding-shell"))
+      .toHaveClass("reading-understanding-shell--c1");
+    expect(readingUnderstandingStyles).toMatch(/\.reading-understanding-shell--c1\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*minmax\(0, 1\.15fr\) minmax\(18rem, 0\.85fr\)/s);
+    expect(readingUnderstandingStyles).toMatch(/\.reading-understanding-shell--c1\s*>\s*\.reading-understanding-text\s*\{[^}]*grid-column:\s*1[^}]*grid-row:\s*4/s);
+    expect(readingUnderstandingStyles).toMatch(/\.reading-understanding-shell--c1\s*>\s*\.reading-understanding-questions\s*\{[^}]*grid-column:\s*2[^}]*grid-row:\s*4/s);
+    expect(readingUnderstandingStyles).toMatch(/\.reading-understanding-shell--c1\s*>\s*\.reading-understanding-text,[\s\S]*?\.reading-understanding-shell--c1\s*>\s*\.reading-understanding-questions\s*\{[^}]*max-height:\s*min\(68vh, 48rem\)[^}]*overflow-y:\s*auto/s);
+    expect(readingUnderstandingStyles).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.reading-understanding-shell--c1\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
   });
 
   it("keeps the annotation key after checking, reveals the correct option, and clears only its scope on Wiederholen", async () => {

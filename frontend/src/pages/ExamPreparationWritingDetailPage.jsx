@@ -15,7 +15,6 @@ import {
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import WritingExerciseWorkspace, {
-  TranslationVisibilityIcon,
   StoredLineBreaks,
 } from "../components/examPreparation/WritingExerciseWorkspace.jsx";
 import {
@@ -82,7 +81,6 @@ export default function ExamPreparationWritingDetailPage() {
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
-  const [showTranslations, setShowTranslations] = useState(true);
   const [draftText, setDraftText] = useState("");
   const [isChecked, setIsChecked] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(30 * 60);
@@ -341,17 +339,6 @@ export default function ExamPreparationWritingDetailPage() {
         <section className="writing-detail-hero">
           <div className="writing-detail-hero__title-group">
             <h1 className="writing-detail-hero__title">{heroTitle}</h1>
-            {isTelcC1 ? (
-              <button
-                type="button"
-                className="writing-detail-translation-toggle"
-                aria-label={showTranslations ? "隐藏中文翻译" : "显示中文翻译"}
-                title="翻译"
-                onClick={() => setShowTranslations((visible) => !visible)}
-              >
-                <TranslationVisibilityIcon hidden={!showTranslations} />
-              </button>
-            ) : null}
           </div>
           {exercise?.exercise_base?.exam_type || exercise?.exercise_base?.level || scope?.level || exercise?.exercise_base?.difficulty || exercise?.exercise_base?.is_real_exam ? (
             <div className="writing-detail-hero__badges">
@@ -374,7 +361,6 @@ export default function ExamPreparationWritingDetailPage() {
           exercise={exercise}
           isTelcB2={isTelcB2}
           isTelcC1={isTelcC1}
-          {...(isTelcC1 ? { showTranslations } : {})}
           value={draftText}
           onChange={(event) => {
             if (isChecked) {

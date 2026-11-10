@@ -230,7 +230,7 @@ export default function ReadingAdMatchingPage() {
           </div>
           <AnnotatableTextRegion regionId="task" as="p">
             {scope?.level === "C1"
-              ? "Lesen Sie die Situationen und Anzeigen. Eine Anzeige kann mehrfach gewählt werden; Fragen können unbeantwortet bleiben."
+              ? "Lesen Sie den Text mit den Abschnitten A–E und ordnen Sie jeder Aussage den passenden Abschnitt zu. Ein Abschnitt kann mehrfach gewählt werden; Fragen können unbeantwortet bleiben."
               : exercise?.instruction || FALLBACK_INSTRUCTION}
           </AnnotatableTextRegion>
         </section>
@@ -242,6 +242,7 @@ export default function ReadingAdMatchingPage() {
           review={isChecked}
           annotationsEnabled
           allowRepeated={scope?.level === "C1"}
+          showAllAds={scope?.level === "C1"}
           showVersion2Label={scope?.level === "C1"}
           onAnswer={(itemId, adKey) => {
             setAnswers((previous) => ({ ...previous, [itemId]: adKey }));

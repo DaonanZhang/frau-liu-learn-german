@@ -5,6 +5,7 @@ from apps.exam_preparation.models import (
     ClozeChoiceOption,
     ClozeMatchingBlankAnswer,
     ListeningAnswerOption,
+    ListeningExercise,
     ListeningQuestion,
     ReadingAdMatchingItem,
     ReadingTitleMatchingItem,
@@ -150,12 +151,21 @@ def _c1_correct_counts(instance):
 
     listening_scores = {"listening_teil1": 0, "listening_teil2": 0, "listening_teil3": 0}
     for part_key in listening_scores:
+        listening_exercise = ListeningExercise.objects.filter(pk=selection.get(part_key)).only("content").first()
+        content = listening_exercise.content if listening_exercise and isinstance(listening_exercise.content, dict) else {}
+        speaker_statement_keys = {
+            f"statement_{statement.get('statement_number') or index + 1}": chr(97 + index)
+            for index, statement in enumerate(content.get("statements") or [])
+            if isinstance(statement, dict)
+        } if part_key == "listening_teil1" and content.get("format") == "speaker_matching" else {}
         questions = ListeningQuestion.objects.filter(
             listening_exercise_id=selection.get(part_key),
         ).prefetch_related("answer_options")
         for question in questions:
             answer = selected(part_key, question.pk)
-            if question.question_type == ListeningQuestion.QuestionType.TEXT_INPUT:
+            if question.question_key in speaker_statement_keys:
+                is_correct = answer == speaker_statement_keys[question.question_key]
+            elif question.question_type == ListeningQuestion.QuestionType.TEXT_INPUT:
                 is_correct = answer_matches(question.correct_answer, answer)
             else:
                 is_correct = question.answer_options.filter(is_correct=True, option_key=answer).exists()

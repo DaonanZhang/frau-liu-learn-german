@@ -1,6 +1,8 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import { fetchListeningExerciseDetail } from "../api/exam_preparation/listeningExercises.js";
 import {
@@ -8,6 +10,8 @@ import {
   saveListeningQuestionState,
 } from "../api/exam_preparation/userExerciseStates.js";
 import ListeningExercisePage from "./ListeningExercisePage.jsx";
+
+const listeningExerciseStyles = readFileSync(resolve("src/pages/ListeningExercisePage.css"), "utf8");
 
 vi.mock("../api/exam_preparation/listeningExercises.js", () => ({
   fetchListeningExerciseDetail: vi.fn(),
@@ -101,10 +105,18 @@ describe("listening exercise audio loading", () => {
     expect(screen.queryByText("音频加载中…")).not.toBeInTheDocument();
   });
 
-  it("renders each TELC C1 statement as a question with speaker answers", async () => {
+  it("renders each TELC C1 speaker as a question with statement choices a-j", async () => {
     fetchListeningExerciseDetail.mockResolvedValueOnce(createListeningExercise({
       exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL1" },
-      content: { format: "speaker_matching", statements: [] },
+      content: { format: "speaker_matching", statements: [
+        { statement_number: 1, statement: "Aussage eins", speaker: "Sprecher/in 1" },
+        { statement_number: 2, statement: "Aussage zwei", speaker: "Sprecher/in 2" },
+        ...Array.from({ length: 8 }, (_, index) => ({
+          statement_number: index + 3,
+          statement: `Distraktor ${index + 3}`,
+          speaker: "",
+        })),
+      ] },
       questions: [
         { id: 101, question_number: 1, question_key: "statement_1", question_text: "Aussage eins", explanation: "Diese Aussage passt zu Sprecher/in 1.", answer_options: [
           { id: 1001, option_key: "A", option_text: "Sprecher/in 1", is_correct: true },
@@ -118,23 +130,34 @@ describe("listening exercise audio loading", () => {
     }));
     renderExercise("short_text_true_false_with_prep", "c1");
 
-    expect(await screen.findByText(/wählen Sie zu jeder Aussage die passende Sprecherin bzw\. den passenden Sprecher aus/i)).toBeInTheDocument();
-    expect(await screen.findAllByText("Aussage eins")).toHaveLength(1);
-    expect(screen.getAllByText("Aussage zwei")).toHaveLength(1);
-    fireEvent.click(screen.getAllByRole("radio", { name: "Sprecher/in 1" })[0]);
-    fireEvent.click(screen.getAllByRole("radio", { name: "Sprecher/in 2" })[1]);
+    expect(await screen.findByText(/wählen Sie für jede Sprecherin bzw\. jeden Sprecher die passende Aussage a–j aus/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sprecher/-in 1" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sprecher/-in 2" })).toBeInTheDocument();
+    const speaker1 = await screen.findByRole("combobox", { name: "Sprecher/-in 1" });
+    const speaker2 = screen.getByRole("combobox", { name: "Sprecher/-in 2" });
+    expect(within(speaker1).getAllByRole("option").map((option) => option.value).filter(Boolean)).toEqual([
+      "a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+    ]);
+    expect(within(speaker1).getByRole("option", { name: "a. Aussage eins" })).toBeInTheDocument();
+    expect(within(speaker1).getByRole("option", { name: "f. Distraktor 6" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "观点选项" })).not.toBeInTheDocument();
+    expect(screen.queryByText("选择对应观点")).not.toBeInTheDocument();
+    expect(listeningExerciseStyles).toMatch(/\.listening-exercise-c1-speaker-select::after\s*\{[^}]*right:\s*1\.35rem/);
+    expect(listeningExerciseStyles).toMatch(/\.listening-exercise-c1-speaker-select select\s*\{[^}]*min-height:\s*3\.5rem/);
+    fireEvent.change(speaker1, { target: { value: "a" } });
+    fireEvent.change(speaker2, { target: { value: "b" } });
     fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
     expect(screen.getAllByText("Richtig")).toHaveLength(2);
     expect(screen.getAllByText(/Diese Aussage passt zu Sprecher\/in/)).toHaveLength(2);
     await waitFor(() => {
       expect(saveListeningQuestionState).toHaveBeenCalledWith(expect.objectContaining({
         question: 101,
-        answer_payload: { selected_option_key: "A" },
+        answer_payload: { selected_option_key: "a" },
         is_correct: true,
       }));
       expect(saveListeningQuestionState).toHaveBeenCalledWith(expect.objectContaining({
         question: 102,
-        answer_payload: { selected_option_key: "B" },
+        answer_payload: { selected_option_key: "b" },
         is_correct: true,
       }));
     });
@@ -143,7 +166,9 @@ describe("listening exercise audio loading", () => {
   it("saves Teil 1 answers by question ID and restores them with checked state", async () => {
     const detail = createListeningExercise({
       exercise_base: { level: "C1", exam_type: "TELC", exercise_type: "LISTENING_TEIL1" },
-      content: { format: "speaker_matching", statements: [] },
+      content: { format: "speaker_matching", statements: [
+        { statement_number: 1, statement: "Aussage eins", speaker: "Sprecher/in 1" },
+      ] },
       questions: [{ id: 101, question_number: 1, question_key: "statement_1", question_text: "Aussage eins", answer_options: [
         { id: 1001, option_key: "A", option_text: "Sprecher/in 1", is_correct: true },
         { id: 1002, option_key: "B", option_text: "Sprecher/in 2", is_correct: false },
@@ -152,24 +177,24 @@ describe("listening exercise audio loading", () => {
     fetchListeningExerciseDetail.mockResolvedValue(detail);
     fetchListeningQuestionStates.mockResolvedValueOnce({ results: [] });
     renderExercise("short_text_true_false_with_prep", "c1");
-    await screen.findByText("Aussage eins");
-    fireEvent.click(screen.getByRole("radio", { name: "Sprecher/in 1" }));
+    await screen.findByRole("option", { name: "a. Aussage eins" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Sprecher/-in 1" }), { target: { value: "a" } });
     fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
 
     await waitFor(() => expect(saveListeningQuestionState).toHaveBeenCalledWith({
       question: 101,
       is_favorited: false,
-      answer_payload: { selected_option_key: "A" },
+      answer_payload: { selected_option_key: "a" },
       is_correct: true,
     }));
 
     cleanup();
     fetchListeningQuestionStates.mockResolvedValueOnce({ results: [{
       question: 101,
-      answer_payload: { selected_option_key: "A" },
+      answer_payload: { selected_option_key: "a" },
     }] });
     renderExercise("short_text_true_false_with_prep", "c1");
-    expect(await screen.findByRole("radio", { name: "Sprecher/in 1" })).toBeChecked();
+    expect(await screen.findByRole("combobox", { name: "Sprecher/-in 1" })).toHaveValue("a");
     expect(screen.getByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
   });
 
@@ -268,6 +293,13 @@ describe("listening exercise audio loading", () => {
     const title = await screen.findByText("Wichtige Folie");
     expect(title.tagName).toBe("STRONG");
     expect(title.closest(".presentation-notes-content__center")).toBeInTheDocument();
+    const presentation = title.closest(".listening-exercise-questions");
+    expect(presentation).toHaveClass("listening-exercise-questions--presentation");
+    expect(within(presentation).getByRole("heading", { name: "Präsentation" })).toBeInTheDocument();
+    expect(title.closest(".listening-exercise-question-list")).toHaveClass("listening-exercise-question-list--slides");
+    expect(listeningExerciseStyles).toMatch(/\.listening-exercise-c1-slide\s*\{[^}]*aspect-ratio:\s*4\s*\/\s*3/);
+    expect(listeningExerciseStyles).toMatch(/\.listening-exercise-c1-slide\s*\{[^}]*border-radius:\s*0/);
+    expect(listeningExerciseStyles).toMatch(/\.listening-exercise-c1-slide \.presentation-notes-content__blank\s*\{[^}]*background:\s*#dedede/);
     expect(screen.queryByText("多个答案请用分号分隔")).not.toBeInTheDocument();
     expect(screen.queryByText("Lücke 1")).not.toBeInTheDocument();
     expect(screen.queryByText(/blank_01/i)).not.toBeInTheDocument();

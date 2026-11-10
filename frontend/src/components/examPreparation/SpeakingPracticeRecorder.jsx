@@ -34,7 +34,7 @@ function buildBlob(chunks, recorder) {
   return new Blob(chunks, { type: chunk?.type || recorder?.mimeType || "audio/mp4" });
 }
 
-export default function SpeakingPracticeRecorder({ language = "de", recordingId = "default", audioUrl = "", trailingControl = null }) {
+export default function SpeakingPracticeRecorder({ language = "de", recordingId = "default", audioUrl = "", trailingControl = null, showSampleAudio = true }) {
   const copy = language === "zh"
     ? { start: "开始录音", stop: "停止录音", play: "播放录音", rerecord: "重新录制", unsupported: "当前浏览器不支持录音功能。", permission: "请允许浏览器访问麦克风。", error: "录音或播放失败，请重新尝试。" }
     : { start: "Aufnahme starten", stop: "Aufnahme stoppen", play: "Aufnahme abspielen", rerecord: "Neu aufnehmen", unsupported: "Dieser Browser unterstützt keine Audioaufnahme.", permission: "Bitte erlauben Sie den Zugriff auf das Mikrofon.", error: "Die Aufnahme oder Wiedergabe ist fehlgeschlagen." };
@@ -188,7 +188,7 @@ export default function SpeakingPracticeRecorder({ language = "de", recordingId 
         <button type="button" className={`shadowing-btn ${hasRecording ? "shadowing-btn-primary" : "shadowing-btn-secondary"}`} aria-label={copy.rerecord} title={copy.rerecord} onClick={startRecording} disabled={!hasRecording || isRecording || isStarting}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7h-5V2" /><path d="M20 2l-3.5 3.5A8 8 0 1 0 20 12" /></svg>
         </button>
-        <SpeechButton audioUrl={audioUrl} language={language} disabled={isRecording || isStarting} />
+        {showSampleAudio ? <SpeechButton audioUrl={audioUrl} language={language} disabled={isRecording || isStarting} /> : null}
         {trailingControl}
       </div>
       {isRecording ? <div className="shadowing-practice-error" role="status">{copy.stop}</div> : null}

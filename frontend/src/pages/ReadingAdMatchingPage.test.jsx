@@ -148,7 +148,7 @@ describe("ReadingAdMatchingPage annotations", () => {
     expect(screen.getByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
   });
 
-  it("uses the carousel-first layout and allows the same ad for multiple C1 situations", async () => {
+  it("uses the two-column article layout and allows the same paragraph for multiple C1 questions", async () => {
     fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
       ...detail,
       exercise_base: { ...detail.exercise_base, level: "C1" },
@@ -161,9 +161,11 @@ describe("ReadingAdMatchingPage annotations", () => {
 
     expect(await screen.findByText("Situation eins")).toBeInTheDocument();
     const workspace = document.querySelector(".reading-ad-workspace");
-    expect(workspace).not.toHaveClass("reading-ad-workspace--c1");
-    expect(workspace.querySelector(".reading-ad-carousel-controls")).toBeInTheDocument();
-    expect(workspace.querySelector("[aria-label='Anzeige A']")).toBeInTheDocument();
+    expect(workspace).toHaveClass("reading-ad-workspace--c1");
+    expect(workspace.querySelector(".reading-ad-carousel-controls")).not.toBeInTheDocument();
+    expect(workspace.querySelector("[aria-label='Abschnitt A']")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Lesetext" })).toBeInTheDocument();
+    expect(screen.getByText("Aussage")).toBeInTheDocument();
     expect(workspace.querySelector(".reading-ad-carousel").compareDocumentPosition(
       workspace.querySelector(".reading-ad-pagination"),
     ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -187,7 +189,7 @@ describe("ReadingAdMatchingPage annotations", () => {
       item: 22,
       answer_payload: { selected_ad_key: "a" },
     }));
-    expect(workspace.querySelector("[aria-label='Anzeige A']")).not.toHaveClass("reading-ad-card--selected");
+    expect(workspace.querySelector("[aria-label='Abschnitt A']")).not.toHaveClass("reading-ad-card--selected");
   });
 
   it("shows all seven C1 practice situations and labels only the version 2 backup", async () => {

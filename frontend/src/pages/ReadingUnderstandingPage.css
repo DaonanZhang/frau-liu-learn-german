@@ -8,6 +8,43 @@
   gap: 1rem;
 }
 
+.reading-understanding-shell--c1 {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+  align-items: start;
+}
+
+.reading-understanding-shell--c1 > .reading-understanding-topbar,
+.reading-understanding-shell--c1 > .reading-understanding-hero,
+.reading-understanding-shell--c1 > .reading-understanding-instruction {
+  grid-column: 1 / -1;
+}
+
+.reading-understanding-shell--c1 > .reading-understanding-text {
+  grid-column: 1;
+  grid-row: 4;
+}
+
+.reading-understanding-shell--c1 > .reading-understanding-questions {
+  grid-column: 2;
+  grid-row: 4;
+}
+
+.reading-understanding-shell--c1 > .reading-understanding-text,
+.reading-understanding-shell--c1 > .reading-understanding-questions {
+  min-width: 0;
+  max-height: min(68vh, 48rem);
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+
+.reading-understanding-shell--c1 .reading-understanding-actions {
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.55rem;
+  background: linear-gradient(180deg, rgba(245, 246, 248, 0), rgba(245, 246, 248, 0.94) 38%);
+}
+
 .reading-understanding-topbar {
   display: flex;
   align-items: center;
@@ -396,5 +433,26 @@
 
   .reading-understanding-reset-btn {
     width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
+  .reading-understanding-shell--c1 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reading-understanding-shell--c1 > .reading-understanding-topbar,
+  .reading-understanding-shell--c1 > .reading-understanding-hero,
+  .reading-understanding-shell--c1 > .reading-understanding-instruction,
+  .reading-understanding-shell--c1 > .reading-understanding-text,
+  .reading-understanding-shell--c1 > .reading-understanding-questions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .reading-understanding-shell--c1 > .reading-understanding-text,
+  .reading-understanding-shell--c1 > .reading-understanding-questions {
+    max-height: none;
+    overflow-y: visible;
   }
 }

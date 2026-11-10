@@ -19,6 +19,7 @@ import ExerciseFavoriteButton from "../../../components/examPreparation/Exercise
 import FormattedExplanation from "../../../components/examPreparation/FormattedExplanation.jsx";
 import ListeningTranscript from "../../../components/examPreparation/ListeningTranscript.jsx";
 import PresentationNotesContent from "../../../components/examPreparation/PresentationNotesContent.jsx";
+import SpeakerMatchingExercise from "../../../components/examPreparation/SpeakerMatchingExercise.jsx";
 import ReadingAdMatchingWorkspace from "../../../components/examPreparation/ReadingAdMatchingWorkspace.jsx";
 import WritingExerciseWorkspace, { TranslationVisibilityIcon, VocabularyPages } from "../../../components/examPreparation/WritingExerciseWorkspace.jsx";
 import {
@@ -29,6 +30,8 @@ import ScopedExplanation from "../../../components/examPreparation/ScopedExplana
 import { hasScopedExplanation } from "../../../components/examPreparation/explanationVisibility.js";
 import { examPreparationPurchasePath, examPreparationScope } from "../../../utils/examPreparationScope.js";
 import { answerMatchesExpected, expectedHasMultipleAnswers } from "../../../utils/c1AnswerMatcher.js";
+import { buildSpeakerMatchingRows, speakerMatchingAnswerIsCorrect } from "../../../utils/speakerMatching.js";
+import { stopDownwardScrollChainAtBottom } from "../../../utils/scrollBoundary.js";
 import {
   fetchClozeChoiceBlankStates,
   fetchClozeMatchingBlankStates,
@@ -329,30 +332,38 @@ function renderMockClozeBreak(value, keyPrefix) {
 }
 
 function C1WritingPrompt({ exercise, showTranslations = false, showHelpers = false }) {
-  const [helpersShowTranslations, setHelpersShowTranslations] = useState(true);
+  const [hiddenQuoteTranslations, setHiddenQuoteTranslations] = useState({});
   const quotes = exercise.quotes || c1WritingContent(exercise).quotes || [];
   const pages = exercise.vocabulary_pages || c1WritingContent(exercise).vocabulary_pages || [];
-  const hasQuoteTranslations = quotes.some((quote) => Boolean(quote.translation_zh));
-  const translationsVisible = showHelpers ? helpersShowTranslations : showTranslations;
   if (!quotes.length && !(showHelpers && pages.length)) return null;
   return <>
     {showHelpers && (quotes.length || pages.length) ? <div className="telc-c1-writing-quotes__header">
       <h2>{quotes.length ? "写作引语" : pages[0]?.title || "Wortschatz"}</h2>
-      {hasQuoteTranslations ? <button
-        type="button"
-        className="writing-translation-toggle"
-        aria-label={helpersShowTranslations ? "隐藏中文翻译" : "显示中文翻译"}
-        title="翻译"
-        onClick={() => setHelpersShowTranslations((visible) => !visible)}
-      >
-        <TranslationVisibilityIcon hidden={!helpersShowTranslations} />
-      </button> : null}
     </div> : null}
     {quotes.length ? <section className="telc-c1-writing-quotes" aria-label="写作引语">
-      {quotes.slice(0, 2).map((quote, index) => <article key={quote.id || index}>
-        <MockTextRegion as="blockquote" regionId={`writing:quote:${index}`}>{quote.text || ""}</MockTextRegion>
-        {translationsVisible && quote.translation_zh ? <p>{quote.translation_zh}</p> : null}
-      </article>)}
+      {quotes.slice(0, 2).map((quote, index) => {
+        const quoteTitle = `Zitate ${index + 1}`;
+        const translationVisible = showHelpers ? !hiddenQuoteTranslations[index] : showTranslations;
+        return <article key={quote.id || index}>
+          <div className="telc-c1-writing-quote__header">
+            <h3>{quoteTitle}</h3>
+            {showHelpers && quote.translation_zh ? <button
+              type="button"
+              className="writing-translation-toggle"
+              aria-label={`${translationVisible ? "隐藏" : "显示"} ${quoteTitle} 中文翻译`}
+              title="翻译"
+              onClick={() => setHiddenQuoteTranslations((current) => ({
+                ...current,
+                [index]: !current[index],
+              }))}
+            >
+              <TranslationVisibilityIcon hidden={!translationVisible} />
+            </button> : null}
+          </div>
+          <MockTextRegion as="blockquote" regionId={`writing:quote:${index}`}>{quote.text || ""}</MockTextRegion>
+          {translationVisible && quote.translation_zh ? <p>{quote.translation_zh}</p> : null}
+        </article>;
+      })}
     </section> : null}
     {showHelpers && pages.length ? <VocabularyPages pages={pages} /> : null}
   </>;
@@ -745,7 +756,10 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
           </div>
         </section>
       ) : null}
-      <div className="telc-mock-exam-source-text telc-mock-cloze-matching-text telc-mock-cloze-matching-text--compact">
+      <div
+        className="telc-mock-exam-source-text telc-mock-cloze-matching-text telc-mock-cloze-matching-text--compact"
+        onWheel={restrictExample ? stopDownwardScrollChainAtBottom : undefined}
+      >
         {splitMockClozeParts(exercise.content_with_placeholders, partKey).map((part, index) => {
             if (part.kind === "break") {
               return renderMockClozeBreak(part.value, `${partKey}-${index}`);
@@ -768,7 +782,7 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
               <span key={`${key}:${index}`} className="telc-mock-cloze-matching-blank">
                 <span
                   data-telc-mock-cloze-blank={blank.blank_key}
-                  className={`telc-mock-cloze-matching-slot${selectedOptionKey ? " is-ready" : ""}${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}${isGuided ? " is-guided" : ""}`}
+                  className={`telc-mock-cloze-matching-slot${selectedOptionKey ? " is-ready" : ""}${selectedKey && !review ? " is-inline-selected" : ""}${isCorrect ? " is-correct" : ""}${isWrong ? " is-wrong" : ""}${isGuided ? " is-guided" : ""}`}
                   onClick={() => {
                     if (restrictExample) {
                       setActiveBlankKey(blank.blank_key);
@@ -843,7 +857,6 @@ function MockClozeMatching({ exercise, answers, setAnswers, partKey, disabled, r
 }
 
 function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disabled = false, review = false, writingText, setWritingText, favoriteFor, questionNumbers, sectionRef, examLabel, examLevel }) {
-  const [writingShowTranslations, setWritingShowTranslations] = useState(true);
   if (!exercise) return <p>该部分题目加载失败。</p>;
   const partInfo = examPart(examLevel, partKey);
   const heading = exercise.exercise_base?.title || partInfo.title;
@@ -853,7 +866,9 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
   const c1ListeningIntroduction = TELC_C1_LISTENING_INSTRUCTION_BY_FORMAT[c1ListeningFormat] || "";
   const defaultIntroduction = isC1(examLevel) && partKey === "reading_title_matching"
     ? INTRODUCTION_BY_PART.cloze_matching
-    : INTRODUCTION_BY_PART[partKey];
+    : isC1(examLevel) && partKey === "reading_ad_matching"
+      ? "Lesen Sie den Text mit den Abschnitten A–E und ordnen Sie jeder Aussage den passenden Abschnitt zu. Ein Abschnitt kann mehrfach gewählt werden."
+      : INTRODUCTION_BY_PART[partKey];
   const baseIntroduction = String(exercise.instruction || defaultIntroduction || "").trim();
   const introduction = String(examLevel || "").toUpperCase() === "B2" && partKey === "listening_teil2"
     ? TELC_B2_LISTENING_TEIL2_INSTRUCTION
@@ -903,10 +918,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
     );
     }
   } else if (partKey === "reading_understanding") {
-    body = (
-      <>
-        <MockTextRegion as="div" className="telc-mock-exam-source-text" regionId={`${partKey}:passage`}>{textBlocks(exercise.text_markdown)}</MockTextRegion>
-        {(exercise.questions || []).map((question) => {
+    const questionCards = (exercise.questions || []).map((question) => {
           const key = answerKey(partKey, question.id);
           const displayNumber = displayQuestionNumber(questionNumbers, partKey, question.id, question.question_number);
           const correct = (question.answer_options || []).find((option) => option.is_correct)?.option_key;
@@ -917,9 +929,14 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
             favorite={review ? favoriteFor(partKey, question.id) : null}
             annotationRegionPrefix={partKey} annotationQuestionId={question.id}
             questionNumber={displayNumber} questionText={question.question_text} />;
-        })}
-      </>
-    );
+        });
+    const passage = <MockTextRegion as="div" className="telc-mock-exam-source-text" regionId={`${partKey}:passage`}>{textBlocks(exercise.text_markdown)}</MockTextRegion>;
+    body = isC1(examLevel) ? (
+      <div className="telc-c1-reading-understanding">
+        <section className="telc-c1-reading-understanding__text" onWheel={stopDownwardScrollChainAtBottom}>{passage}</section>
+        <section className="telc-c1-reading-understanding__questions" onWheel={stopDownwardScrollChainAtBottom}>{questionCards}</section>
+      </div>
+    ) : <>{passage}{questionCards}</>;
   } else if (partKey === "reading_ad_matching") {
     const adAnswers = Object.fromEntries((exercise.items || []).map((item) => [
       item.id,
@@ -943,6 +960,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
         annotationsEnabled
         annotationRegionPrefix={partKey}
         allowRepeated={isC1(examLevel)}
+        showAllAds={isC1(examLevel)}
       />
     </>;
   } else if (partKey === "cloze_choice") {
@@ -963,6 +981,20 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
     const isTelcC1 = isC1(examLevel);
     const questions = listeningQuestions(exercise, format, isTelcC1);
     const listeningTasks = <>
+      {format === "speaker_matching" ? <SpeakerMatchingExercise
+        exercise={exercise}
+        valueFor={(question) => answers[answerKey(partKey, question.id)]}
+        onChange={(question, value) => setAnswer(answerKey(partKey, question.id), value)}
+        disabled={disabled}
+        review={review}
+        questionNumberFor={(row, index) => displayQuestionNumber(
+          questionNumbers,
+          partKey,
+          row.question.id,
+          47 + index,
+        )}
+        annotationRegionPrefix={partKey}
+      /> : null}
       {format === "presentation_notes" && noteContent ? <div className="telc-mock-exam-source-text">
         <ClozeChoiceText content={noteContent} blanks={noteBlanks}
           optionsForBlank={(blank) => blank.options || blank.answer_options || []} partKey={partKey}
@@ -998,7 +1030,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
           />
         </article>)}
       </> : null}
-      {format !== "presentation_notes" ? questions.map((question) => {
+      {format !== "presentation_notes" && format !== "speaker_matching" ? questions.map((question) => {
         const key = answerKey(partKey, question.id);
         const displayNumber = displayQuestionNumber(questionNumbers, partKey, question.id, question.question_number);
         const correct = (question.answer_options || []).find((option) => option.is_correct)?.option_key;
@@ -1013,10 +1045,10 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
       }) : null}
     </>;
     body = <div className={`telc-c1-listening telc-c1-listening--${format}`} data-listening-format={format}>
-      {isTelcC1 ? <section className="listening-exercise-questions">
+      {isTelcC1 ? <section className={`listening-exercise-questions${format === "presentation_notes" ? " listening-exercise-questions--presentation" : ""}`}>
         <div className="listening-exercise-questions__header">
           <div>
-            <h2>Aufgaben</h2>
+            <h2>{format === "presentation_notes" ? "Präsentation" : "Aufgaben"}</h2>
             <p className="listening-exercise-questions__sub">
               {format === "presentation_notes"
                 ? "Ergänze die fehlenden Angaben direkt in den Folien."
@@ -1024,7 +1056,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
             </p>
           </div>
         </div>
-        <div className="listening-exercise-question-list">{listeningTasks}</div>
+        <div className={`listening-exercise-question-list${format === "presentation_notes" ? " listening-exercise-question-list--slides" : ""}`}>{listeningTasks}</div>
       </section> : listeningTasks}
     </div>;
   } else if (partKey === "writing") {
@@ -1037,7 +1069,7 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
           exercise={exercise}
           isTelcB2={isTelcB2}
           isTelcC1={isTelcC1}
-          showTranslations={review ? writingShowTranslations : false}
+          showTranslations={review}
           showVocabulary={review}
           value={writingText}
           onChange={(event) => setWritingText(event.target.value)}
@@ -1048,17 +1080,6 @@ function ExercisePart({ partKey, exercise, answers, setAnswer, setAnswers, disab
           metaPanel={(
             <section className="writing-detail-meta-panel">
               <div className="writing-detail-meta-chip">{wordLimit ? `${isTelcB2 ? "最少" : "至少"} ${wordLimit} 词` : "字数不限"}</div>
-              {review && isTelcC1 ? (
-                <button
-                  type="button"
-                  className="writing-translation-toggle"
-                  aria-label={writingShowTranslations ? "隐藏中文翻译" : "显示中文翻译"}
-                  title="翻译"
-                  onClick={() => setWritingShowTranslations((visible) => !visible)}
-                >
-                  <TranslationVisibilityIcon hidden={!writingShowTranslations} />
-                </button>
-              ) : null}
             </section>
           )}
         />
@@ -1102,6 +1123,11 @@ function correctCount(parts, answers, partKeys, level) {
       questions.forEach((question) => {
         if (partKey.startsWith("listening_") && listeningFormat === "presentation_notes") {
           correct += answerMatchesExpected(answers[answerKey(partKey, question.id)], question.correct_answer) ? 1 : 0;
+          return;
+        }
+        if (partKey === "listening_teil1" && listeningFormat === "speaker_matching") {
+          const row = buildSpeakerMatchingRows(exercise).find((item) => item.question.id === question.id);
+          correct += row && speakerMatchingAnswerIsCorrect(row, answers[answerKey(partKey, question.id)]) ? 1 : 0;
           return;
         }
         const selected = (question.answer_options || []).find((option) => option.option_key === answers[answerKey(partKey, question.id)]);
@@ -1183,9 +1209,22 @@ function buildAnswerSheetRows(parts, level) {
   examPartKeys(level, "listening").forEach((partKey, index) => {
     const listening = parts[partKey] || {};
     const questions = isC1(level) ? listeningQuestions(listening, listening.content?.format, true) : listening.questions || [];
+    if (isC1(level) && partKey === "listening_teil1" && listening.content?.format === "speaker_matching") {
+      const rows = buildSpeakerMatchingRows(listening).map((row) => ({
+        ...row.question,
+        statement_options: row.statements.map((statement) => ({
+          option_key: statement.key,
+          option_text: statement.text,
+        })),
+        correct_statement_key: row.correctStatementKey,
+      }));
+      add(partKey, "Hören · Teil 1", "listening", rows,
+        (item) => item.statement_options, (item) => item.correct_statement_key, 47);
+      return;
+    }
     add(partKey, `Hören · Teil ${index + 1}`, "listening", questions,
       (item) => item.answer_options || [], (item) => item.answer_options?.find((option) => option.is_correct)?.option_key,
-      isC1(level) && partKey === "listening_teil3" ? 65 : null);
+      isC1(level) ? [47, 55, 65][index] : null);
   });
   return rows;
 }

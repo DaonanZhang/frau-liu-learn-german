@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnnotatableTextRegion } from "./ExamTextAnnotations.jsx";
 import ExerciseFavoriteButton from "./ExerciseFavoriteButton.jsx";
 import FormattedExplanation from "./FormattedExplanation.jsx";
+import { stopDownwardScrollChainAtBottom } from "../../utils/scrollBoundary.js";
 
 function isNoMatchOption(ad) {
   return Boolean(ad?.is_no_match_option) || String(ad?.ad_key || "").trim().toLowerCase() === "x";
@@ -91,10 +92,13 @@ export default function ReadingAdMatchingWorkspace({
   return (
     <section className={`reading-ad-workspace${showAllAds ? " reading-ad-workspace--c1" : ""}`}>
       <div className="reading-ad-carousel-section__header">
-        <h2>Anzeigen</h2>
+        <h2>{showAllAds ? "Lesetext" : "Anzeigen"}</h2>
         {!showAllAds ? <span>Seite {safeActiveAdPage + 1} / {Math.max(1, adPages.length)}</span> : null}
       </div>
-      <div className="reading-ad-sticky-stack">
+      <div
+        className="reading-ad-sticky-stack"
+        onWheel={showAllAds ? stopDownwardScrollChainAtBottom : undefined}
+      >
         <div className="reading-ad-carousel" aria-label="Anzeigen">
           {visibleAds.map((ad) => {
             const lines = String(ad.ad_text_markdown || "").split("\n").filter(Boolean);
@@ -102,10 +106,12 @@ export default function ReadingAdMatchingWorkspace({
             return (
               <article
                 key={ad.id}
-                aria-label={`Anzeige ${String(ad.ad_key || "").toLocaleUpperCase()}`}
+                aria-label={`${showAllAds ? "Abschnitt" : "Anzeige"} ${String(ad.ad_key || "").toLocaleUpperCase()}`}
                 className={`reading-ad-card${isSelected ? " reading-ad-card--selected" : ""}`}
               >
-                <span className="reading-ad-card__number">Anzeige {String(ad.ad_key || "").toLocaleUpperCase()}</span>
+                <span className="reading-ad-card__number">
+                  {showAllAds ? "Abschnitt" : "Anzeige"} {String(ad.ad_key || "").toLocaleUpperCase()}
+                </span>
                 <TextRegion
                   enabled={annotationsEnabled}
                   regionId={regionId(`ad:${ad.id}`)}
@@ -184,7 +190,7 @@ export default function ReadingAdMatchingWorkspace({
         {currentItem ? (
           <article className="reading-ad-question-card">
             <div className="reading-ad-question-card__meta">
-              <span className="reading-ad-question-card__label">Situation</span>
+              <span className="reading-ad-question-card__label">{showAllAds ? "Aussage" : "Situation"}</span>
               {showVersion2Label && isCurrentItemVersion2 ? <span className="reading-ad-question-card__version2">备用题 · Version 2</span> : null}
               <span className="reading-ad-question-card__progress">{activeItemIndex + 1} / {items.length}</span>
             </div>

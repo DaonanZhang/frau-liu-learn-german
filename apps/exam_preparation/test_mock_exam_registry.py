@@ -135,7 +135,7 @@ class C1MockExamScoringTests(TestCase):
         )
         listening = {}
         for teil, content in (
-            (1, {"format": "speaker_matching", "statements": [{"statement": "A", "speaker": "S1"}]}),
+            (1, {"format": "speaker_matching", "statements": [{"statement_number": 1, "statement": "A", "speaker": "S1"}]}),
             (3, {"format": "presentation_notes", "slides": [{"number": "1", "answers": [{"blank_id": "a", "answer": "Lernen"}]}]}),
         ):
             base = ExerciseBase.objects.create(
@@ -149,7 +149,7 @@ class C1MockExamScoringTests(TestCase):
                 audio_file_identifier=f"Teil{teil}_1", content=content,
             )
         speaker_question = ListeningQuestion.objects.create(
-            listening_exercise=listening[1], question_number=1, question_key="speaker_1",
+            listening_exercise=listening[1], question_number=1, question_key="statement_1",
             question_type=ListeningQuestion.QuestionType.SINGLE_CHOICE, question_text="Aussage 1",
         )
         ListeningAnswerOption.objects.create(
@@ -169,7 +169,7 @@ class C1MockExamScoringTests(TestCase):
             answers={
                 f"cloze_matching:{example_answer.id}": "beispiel",
                 f"cloze_matching:{regular_answer.id}": "A",
-                f"listening_teil1:{speaker_question.pk}": "E",
+                f"listening_teil1:{speaker_question.pk}": "a",
                 f"listening_teil3:{note_question.pk}": "lernen",
             },
             writing_assessment={

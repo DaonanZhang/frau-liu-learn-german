@@ -16,11 +16,16 @@ import {
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import ListeningTranscript from "../components/examPreparation/ListeningTranscript.jsx";
+import PresentationNotesContent from "../components/examPreparation/PresentationNotesContent.jsx";
 import ScopedExplanation from "../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../components/examPreparation/explanationVisibility.js";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
+import { answerMatchesExpected, expectedHasMultipleAnswers } from "../utils/c1AnswerMatcher.js";
 import useReliableAudioSources, { AUDIO_LOAD_ERROR } from "../hooks/useReliableAudioSources.js";
-import { TELC_B2_LISTENING_TEIL2_INSTRUCTION } from "./examPreparationTypeContent.js";
+import {
+  TELC_B2_LISTENING_TEIL2_INSTRUCTION,
+  TELC_C1_LISTENING_INSTRUCTION_BY_FORMAT,
+} from "./examPreparationTypeContent.js";
 import "./ListeningExercisePage.css";
 
 const INSTRUCTION_BY_TYPE = {
@@ -80,6 +85,7 @@ export default function ListeningExercisePage({
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
   const [answers, setAnswers] = useState({});
+  const [c1Notes, setC1Notes] = useState({});
   const [isChecked, setIsChecked] = useState(false);
   const [favoritedByQuestionId, setFavoritedByQuestionId] = useState({});
   const [favoritePendingByQuestionId, setFavoritePendingByQuestionId] = useState({});
@@ -90,6 +96,8 @@ export default function ListeningExercisePage({
   const [duration, setDuration] = useState(0);
   const isTeil2 = listeningType === "short_text_true_false_once";
   const isTelcB2 = scope?.examType === "TELC" && scope.level === "B2";
+  const isTelcC1 = scope?.examType === "TELC" && scope.level === "C1";
+  const c1Format = exercise?.content?.format;
   const audioUrls = useMemo(() => [exercise?.audio_file_url].filter(Boolean), [exercise?.audio_file_url]);
   const { sources: audioSources, statuses: audioStatuses } = useReliableAudioSources(audioUrls);
   const audioUrl = exercise?.audio_file_url || "";
@@ -118,27 +126,39 @@ export default function ListeningExercisePage({
         const detail = await fetchListeningExerciseDetail(exerciseId, scope);
         if (!aborted) {
           setExercise(detail || null);
+          setC1Notes({});
           const stateData = await fetchListeningQuestionStates(exerciseId);
           if (aborted) {
             return;
           }
           const nextAnswers = {};
+          const nextNotes = {};
           const nextFavorited = {};
           const stateResults = Array.isArray(stateData?.results) ? stateData.results : [];
           stateResults.forEach((stateItem) => {
             const questionId = stateItem?.question;
-            const selectedOptionKey = stateItem?.answer_payload?.selected_option_key;
+            const payload = stateItem?.answer_payload || {};
+            const selectedOptionKey = payload.selected_option_key;
+            const answerText = payload.answer_text;
             if (questionId && selectedOptionKey) {
               nextAnswers[questionId] = selectedOptionKey;
+            }
+            if (questionId && typeof answerText === "string" && answerText) {
+              nextNotes[questionId] = answerText;
             }
             if (questionId) {
               nextFavorited[questionId] = Boolean(stateItem?.is_favorited);
             }
           });
           setFavoritedByQuestionId(nextFavorited);
-          const questionCount = Array.isArray(detail?.questions) ? detail.questions.length : 0;
+          const detailQuestions = Array.isArray(detail?.questions) ? detail.questions : [];
           setAnswers(nextAnswers);
-          setIsChecked(questionCount > 0 && Object.keys(nextAnswers).length === questionCount);
+          setC1Notes(nextNotes);
+          setIsChecked(detailQuestions.length > 0 && detailQuestions.every((question) => (
+            question.question_type === "text_input"
+              ? Boolean(nextNotes[question.id]?.trim())
+              : Boolean(nextAnswers[question.id])
+          )));
         }
       } catch (error) {
         if (!aborted) {
@@ -199,7 +219,16 @@ export default function ListeningExercisePage({
   const questions = useMemo(() => {
     return Array.isArray(exercise?.questions) ? exercise.questions : [];
   }, [exercise]);
-  const instruction = isTelcB2 && listeningType === "short_text_true_false_with_prep"
+  const c1Slides = isTelcC1 && c1Format === "presentation_notes" && Array.isArray(exercise?.content?.slides)
+    ? exercise.content.slides
+    : [];
+  const areC1NotesIncomplete = c1Slides.some((slide) => (slide.answers || []).some((answer) => {
+    const question = questions.find((item) => item.question_key === answer.blank_id);
+    return !question || !String(c1Notes[question.id] || "").trim();
+  }));
+  const instruction = isTelcC1 && TELC_C1_LISTENING_INSTRUCTION_BY_FORMAT[c1Format]
+    ? TELC_C1_LISTENING_INSTRUCTION_BY_FORMAT[c1Format]
+    : isTelcB2 && listeningType === "short_text_true_false_with_prep"
     ? TELC_B2_TEIL1_INSTRUCTION
     : isTelcB2 && listeningType === "short_text_true_false_once"
       ? TELC_B2_LISTENING_TEIL2_INSTRUCTION
@@ -330,6 +359,7 @@ export default function ListeningExercisePage({
   }
 
   async function toggleFavorite(question) {
+    if (isTelcC1 && c1Format === "speaker_matching") return;
     const nextValue = !favoritedByQuestionId[question.id];
     setFavoritePendingByQuestionId((previous) => ({ ...previous, [question.id]: true }));
     try {
@@ -355,10 +385,18 @@ export default function ListeningExercisePage({
 
   async function handleCheck() {
     setIsChecked(true);
-
     try {
       await Promise.all(
         questions.map((question) => {
+          if (question.question_type === "text_input") {
+            const answerText = c1Notes[question.id] || "";
+            return saveListeningQuestionState({
+              question: question.id,
+              is_favorited: Boolean(favoritedByQuestionId[question.id]),
+              answer_payload: { answer_text: answerText },
+              is_correct: answerMatchesExpected(answerText, question.correct_answer),
+            });
+          }
           const selectedOptionKey = answers[question.id] || "";
           const selectedOption = (question.answer_options || []).find(
             (option) => option.option_key === selectedOptionKey
@@ -593,13 +631,33 @@ export default function ListeningExercisePage({
             <div>
               <h2>Aufgaben</h2>
               <p className="listening-exercise-questions__sub">
-                Wähle pro Aufgabe genau eine Antwort aus.
+                {c1Slides.length
+                  ? "Ergänze die fehlenden Angaben direkt in den Folien."
+                  : "Wähle pro Aufgabe genau eine Antwort aus."}
               </p>
             </div>
           </div>
 
           <div className="listening-exercise-question-list">
-            {questions.map((question) => {
+            {c1Slides.length ? c1Slides.map((slide, slideIndex) => (
+              <article className="listening-exercise-question-card listening-exercise-c1-slide" key={`${slide.number}-${slideIndex}`}>
+                <h3>Folie {slide.number}</h3>
+                <PresentationNotesContent
+                  text={slide.text}
+                  questions={questions}
+                  expectedQuestionKeys={(slide.answers || []).map((answer) => answer.blank_id)}
+                  values={c1Notes}
+                  disabled={isChecked}
+                  review={isChecked}
+                  onChange={(question, value) => {
+                    setC1Notes((previous) => ({ ...previous, [question.id]: value }));
+                  }}
+                  answerIsCorrect={(question, value) => answerMatchesExpected(value, question.correct_answer)}
+                  hasMultipleAnswers={expectedHasMultipleAnswers}
+                />
+              </article>
+            )) : null}
+            {questions.filter((question) => question.question_type !== "text_input").map((question) => {
               const selectedOption = (question.answer_options || []).find(
                 (option) => option.option_key === answers[question.id]
               );
@@ -676,13 +734,13 @@ export default function ListeningExercisePage({
                         <strong className="listening-exercise-feedback__title">
                           {isQuestionCorrect ? "Richtig" : "Falsch"}
                         </strong>
-                        <ExerciseFavoriteButton
+                        {!isTelcC1 || c1Format !== "speaker_matching" ? <ExerciseFavoriteButton
                           isFavorited={Boolean(favoritedByQuestionId[question.id])}
                           pending={Boolean(favoritePendingByQuestionId[question.id])}
                           onClick={() => {
                             toggleFavorite(question);
                           }}
-                        />
+                        /> : null}
                       </div>
                       <p className="listening-exercise-feedback__line">
                         Richtige Antwort: {correctOption?.option_text || "-"}
@@ -709,7 +767,7 @@ export default function ListeningExercisePage({
           <div className="listening-exercise-actions">
             <ExamActionButton
               className="listening-exercise-check-btn"
-              disabled={isChecked || !questions.length || answeredCount !== questions.length}
+              disabled={isChecked || (c1Slides.length ? areC1NotesIncomplete : !questions.length || answeredCount !== questions.length)}
               onClick={handleCheck}
               label="Prüfen"
               icon="check"
@@ -718,6 +776,7 @@ export default function ListeningExercisePage({
               <ListeningResetButton
                 onReset={() => {
                   setAnswers({});
+                  setC1Notes({});
                   setIsChecked(false);
                   setErrorText("");
                 }}

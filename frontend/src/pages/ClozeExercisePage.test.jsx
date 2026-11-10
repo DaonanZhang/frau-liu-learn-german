@@ -11,6 +11,7 @@ import {
 import {
   fetchClozeChoiceBlankStates,
   fetchClozeMatchingBlankStates,
+  saveClozeMatchingBlankState,
 } from "../api/exam_preparation/userExerciseStates.js";
 import { layoutClozeAnnotations, useClozeAnnotationLayout } from "./clozeAnnotationLayout.js";
 import ClozeChoicePage from "./ClozeChoicePage.jsx";
@@ -31,6 +32,29 @@ vi.mock("../api/exam_preparation/userExerciseStates.js", () => ({
 
 const appLayoutStyles = readFileSync(resolve("src/layouts/AppLayout.css"), "utf8");
 const clozeStyles = readFileSync(resolve("src/pages/ClozeExercisePage.css"), "utf8");
+
+function c1Teil1Fixture() {
+  const exampleSentence = "Zuvor hatte er den Vertrag sorgfältig gelesen.";
+  return {
+    exampleSentence,
+    exercise: {
+      id: 24,
+      exercise_base: { title: "C1 Lesen Teil 1", external_id: "24", level: "C1", exercise_type: "CLOZE_MATCHING" },
+      content_with_placeholders: "{{blank_0}} Danach {{blank_1}} und {{blank_2}} weiter.",
+      options: [
+        { id: 1, option_key: "beispiel", option_text: exampleSentence },
+        { id: 2, option_key: "wrong", option_text: "eine falsche Antwort" },
+        { id: 3, option_key: "right", option_text: "die richtige Antwort" },
+        { id: 4, option_key: "third", option_text: "eine weitere Antwort" },
+      ],
+      blank_answers: [
+        { id: 240, blank_key: "blank_0", blank_number: 0, correct_option: { option_key: "beispiel" } },
+        { id: 241, blank_key: "blank_1", blank_number: 1, correct_option: { option_key: "right" } },
+        { id: 242, blank_key: "blank_2", blank_number: 2, correct_option: { option_key: "third" } },
+      ],
+    },
+  };
+}
 
 function selectText(element, start, end) {
   const range = document.createRange();
@@ -276,6 +300,13 @@ describe("Cloze exercise layout", () => {
   it("keeps unanswered cloze slots compact", () => {
     expect(clozeStyles).toMatch(/\.cloze-drop-slot--empty\s*\{[^}]*min-width:\s*6rem/);
     expect(clozeStyles).toMatch(/\.cloze-drop-slot--empty\s*\{[^}]*width:\s*6rem[^}]*height:\s*3\.5rem/);
+  });
+
+  it("constrains selected C1 answers to the text column and wraps their text", () => {
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-blank-inline\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot--selected\s*\{[^}]*width:\s*fit-content[^}]*max-width:\s*100%/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot--selected \.cloze-drop-slot__chip\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot__chip > span\s*\{[^}]*display:\s*block[^}]*min-width:\s*0[^}]*max-width:\s*100%[^}]*overflow-wrap:\s*anywhere[^}]*white-space:\s*normal/s);
   });
 
   it("fits selected cloze slots to their answer text", () => {
@@ -760,5 +791,179 @@ describe("Cloze exercise layout", () => {
     fireEvent.dragOver(slot);
     fireEvent.drop(slot);
     expect(JSON.parse(sessionStorage.getItem(scope)).regions).toEqual(marked.regions);
+  });
+
+  it("limits C1 blank zero to its data-defined example sentence and reveals it after checking", async () => {
+    const { exampleSentence, exercise } = c1Teil1Fixture();
+    fetchClozeMatchingExerciseDetail.mockResolvedValue(exercise);
+    fetchClozeMatchingBlankStates.mockResolvedValue({ results: [] });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/matching/c1/24"]}>
+        <Routes>
+          <Route path="/matching/:level/:exerciseId" element={<ClozeMatchingPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const exampleOption = await screen.findByRole("button", { name: `选择“${exampleSentence}”并填入当前空格` });
+    expect(screen.getByText("将 Beispiel 拖到标有 0 的空格中").parentElement)
+      .toContainElement(exampleOption);
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"]')).toHaveTextContent("0");
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).not.toHaveClass("cloze-drop-slot--guided");
+    expect(container.querySelector('[data-cloze-blank-key="blank_2"]')).not.toHaveClass("cloze-drop-slot--guided");
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-pool-chip[^{}]*\{[^}]*max-width:[^}]*min-width:[^}]*overflow-wrap:[^}]*white-space:/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1[^{}]*\.cloze-drop-slot__chip[^{}]*\{[^}]*max-width:[^}]*min-width:[^}]*overflow-wrap:[^}]*white-space:/s);
+    expect(clozeStyles).toMatch(/\.cloze-c1-example-guide__callout[^{}]*\{(?=[^}]*background:)(?=[^}]*border:)[^}]*pointer-events:\s*none/s);
+    expect(screen.queryByRole("button", { name: /falsche Antwort/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: `选择“${exampleSentence}”并填入当前空格` }));
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"]')).toHaveTextContent(exampleSentence);
+    expect(screen.queryByText("将 Beispiel 拖到标有 0 的空格中")).not.toBeInTheDocument();
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).toHaveClass("cloze-drop-slot--guided");
+
+    fireEvent.click(screen.getByRole("button", { name: /die richtige Antwort/ }));
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).not.toHaveClass("cloze-drop-slot--guided");
+    expect(container.querySelector('[data-cloze-blank-key="blank_2"]')).toHaveClass("cloze-drop-slot--guided");
+    fireEvent.click(container.querySelector('[data-cloze-blank-key="blank_2"]'));
+    fireEvent.click(screen.getByRole("button", { name: /eine weitere Antwort/ }));
+    expect(container.querySelector('[data-cloze-blank-key="blank_2"]')).not.toHaveClass("cloze-drop-slot--guided");
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(screen.queryByText("正在保存作答状态...")).not.toBeInTheDocument();
+    await waitFor(() => expect(saveClozeMatchingBlankState).toHaveBeenCalled());
+    expect(screen.queryByText("已保存本次批改结果。")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Wiederholen/ }));
+    expect(screen.getByText("将 Beispiel 拖到标有 0 的空格中")).toBeInTheDocument();
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"]')).toHaveTextContent("0");
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).not.toHaveClass("cloze-drop-slot--guided");
+    fireEvent.click(screen.getByRole("button", { name: `选择“${exampleSentence}”并填入当前空格` }));
+
+    const wrongOption = screen.getByRole("button", { name: /falsche Antwort/ });
+    fireEvent.dragStart(wrongOption);
+    fireEvent.dragOver(container.querySelector('[data-cloze-blank-key="blank_0"]'));
+    fireEvent.drop(container.querySelector('[data-cloze-blank-key="blank_0"]'));
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"]')).toHaveTextContent(exampleSentence);
+    fireEvent.click(wrongOption);
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).toHaveTextContent("eine falsche Antwort");
+    fireEvent.click(container.querySelector('[data-cloze-blank-key="blank_2"]'));
+    fireEvent.click(screen.getByRole("button", { name: /eine weitere Antwort/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"] .cloze-drop-slot__chip'))
+      .toHaveClass("cloze-drop-slot__chip--correct");
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]').closest(".cloze-blank-inline").querySelector(".cloze-inline-feedback"))
+      .toHaveClass("cloze-inline-feedback--answer");
+    expect(await screen.findByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
+    expect(container.querySelector('[data-cloze-blank-key="blank_0"]')).not.toHaveTextContent(exampleSentence);
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).not.toHaveTextContent("eine falsche Antwort");
+  });
+
+  it("guides the learner to the next green C1 blank after dragging away Beispiel 0", async () => {
+    const { exampleSentence, exercise } = c1Teil1Fixture();
+    fetchClozeMatchingExerciseDetail.mockResolvedValue(exercise);
+    fetchClozeMatchingBlankStates.mockResolvedValue({ results: [] });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/matching/c1/24"]}>
+        <Routes>
+          <Route path="/matching/:level/:exerciseId" element={<ClozeMatchingPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const exampleOption = await screen.findByRole("button", { name: `选择“${exampleSentence}”并填入当前空格` });
+    expect(screen.queryByText("请点击下一个绿色空格继续选择")).not.toBeInTheDocument();
+
+    fireEvent.dragStart(exampleOption);
+    fireEvent.dragOver(container.querySelector('[data-cloze-blank-key="blank_0"]'));
+    fireEvent.drop(container.querySelector('[data-cloze-blank-key="blank_0"]'));
+
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).toHaveClass("cloze-drop-slot--guided");
+    expect(screen.getByText("请点击下一个绿色空格继续选择")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /die richtige Antwort/ })).not.toBeInTheDocument();
+
+    fireEvent.click(container.querySelector('[data-cloze-blank-key="blank_1"]'));
+
+    expect(screen.queryByText("请点击下一个绿色空格继续选择")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /die richtige Antwort/ })).toBeInTheDocument();
+  });
+
+  it("keeps C1 actions below both columns and hides restored state copy", async () => {
+    const { exercise } = c1Teil1Fixture();
+    fetchClozeMatchingExerciseDetail.mockResolvedValue(exercise);
+    fetchClozeMatchingBlankStates.mockResolvedValue({
+      results: [
+        { blank: 240, answer_payload: { selected_option_key: "beispiel" }, is_favorited: false },
+        { blank: 241, answer_payload: { selected_option_key: "right" }, is_favorited: false },
+        { blank: 242, answer_payload: { selected_option_key: "third" }, is_favorited: false },
+      ],
+    });
+
+    const { container } = render(
+      <MemoryRouter initialEntries={["/matching/c1/24"]}>
+        <Routes>
+          <Route path="/matching/:level/:exerciseId" element={<ClozeMatchingPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("button", { name: "Wiederholen" });
+    expect(screen.queryByText("已恢复上次批改后的作答状态。")).not.toBeInTheDocument();
+    const actions = container.querySelector(".cloze-actions");
+    const textPanel = container.querySelector(".cloze-text-panel");
+    const poolPanel = container.querySelector(".cloze-pool-panel");
+    expect(textPanel.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(poolPanel.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1\s*\{(?=[^}]*width:\s*100%)[^}]*\}/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1\s*>\s*\.cloze-actions\s*\{(?=[^}]*grid-row:\s*6)(?=[^}]*justify-content:\s*flex-end)[^}]*\}/s);
+    expect(clozeStyles).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.cloze-shell--c1\s+\.cloze-check-btn,[\s\S]*?\.cloze-shell--c1\s+\.cloze-reset-btn\s*\{[^}]*width:\s*100%/s);
+  });
+
+  it("keeps guidance on the earliest unanswered C1 blank when a later blank is filled first", async () => {
+    const { exampleSentence, exercise } = c1Teil1Fixture();
+    fetchClozeMatchingExerciseDetail.mockResolvedValue(exercise);
+    fetchClozeMatchingBlankStates.mockResolvedValue({ results: [] });
+    const { container } = render(
+      <MemoryRouter initialEntries={["/matching/c1/24"]}>
+        <Routes>
+          <Route path="/matching/:level/:exerciseId" element={<ClozeMatchingPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: `选择“${exampleSentence}”并填入当前空格` }));
+    const blankOne = container.querySelector('[data-cloze-blank-key="blank_1"]');
+    const blankTwo = container.querySelector('[data-cloze-blank-key="blank_2"]');
+    expect(blankOne).toHaveClass("cloze-drop-slot--guided");
+    fireEvent.dragStart(screen.getByRole("button", { name: /eine weitere Antwort/ }));
+    fireEvent.dragOver(blankTwo);
+    fireEvent.drop(blankTwo);
+    expect(blankOne).toHaveClass("cloze-drop-slot--guided");
+    expect(blankTwo).not.toHaveClass("cloze-drop-slot--guided");
+  });
+
+  it("returns C1 guidance to an earlier blank when its answer is removed", async () => {
+    const { exampleSentence, exercise } = c1Teil1Fixture();
+    fetchClozeMatchingExerciseDetail.mockResolvedValue(exercise);
+    fetchClozeMatchingBlankStates.mockResolvedValue({ results: [] });
+    const { container } = render(
+      <MemoryRouter initialEntries={["/matching/c1/24"]}>
+        <Routes>
+          <Route path="/matching/:level/:exerciseId" element={<ClozeMatchingPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: `选择“${exampleSentence}”并填入当前空格` }));
+    fireEvent.click(container.querySelector('[data-cloze-blank-key="blank_1"]'));
+    fireEvent.click(screen.getByRole("button", { name: /die richtige Antwort/ }));
+    fireEvent.click(container.querySelector('[data-cloze-blank-key="blank_2"]'));
+    fireEvent.click(screen.getByRole("button", { name: /eine weitere Antwort/ }));
+    expect(container.querySelector('[data-cloze-blank-key="blank_2"]')).not.toHaveClass("cloze-drop-slot--guided");
+
+    const pool = container.querySelector("[data-cloze-pool]");
+    fireEvent.dragStart(container.querySelector('[data-cloze-blank-key="blank_1"] .cloze-drop-slot__chip'));
+    fireEvent.drop(pool);
+    expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).toHaveClass("cloze-drop-slot--guided");
   });
 });

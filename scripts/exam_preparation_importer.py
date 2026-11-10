@@ -836,6 +836,18 @@ def import_writing(xlsx_path: Path) -> int:
         ["ID", "Title", "request", "考试类型", "是否真题", "time_limit", "words_limit", "task", "Example_Text"],
         "exercise",
     )
+    example_translation_column = next(
+        (column for column in ("Example_Text_ZH", "范文中文") if column in exercise_df.columns),
+        None,
+    )
+    request_translation_column = next(
+        (column for column in ("request_zh", "题目中文") if column in exercise_df.columns),
+        None,
+    )
+    task_translation_column = next(
+        (column for column in ("task_zh", "要求中文") if column in exercise_df.columns),
+        None,
+    )
     level = infer_level_from_filename(xlsx_path)
     imported_count = 0
     exercise_rows = list(iter_records(exercise_df))
@@ -852,6 +864,12 @@ def import_writing(xlsx_path: Path) -> int:
             is_real_exam=parse_bool(row["是否真题"]),
             imported_from_file=xlsx_path.name,
         )
+        existing_exercise = WritingExercise.objects.filter(exercise_base=base).first()
+        content = dict(existing_exercise.content or {}) if existing_exercise else {}
+        if request_translation_column:
+            content["request_translation_zh"] = clean_text(row[request_translation_column])
+        if task_translation_column:
+            content["task_translation_zh"] = clean_text(row[task_translation_column])
         exercise, _ = WritingExercise.objects.update_or_create(
             exercise_base=base,
             defaults={
@@ -859,14 +877,22 @@ def import_writing(xlsx_path: Path) -> int:
                 "time_limit_minutes": parse_int(row["time_limit"], "time_limit") if clean_text(row["time_limit"]) else None,
                 "words_limit": parse_int(row["words_limit"], "words_limit") if clean_text(row["words_limit"]) else None,
                 "task_text": clean_text(row["task"]),
+                "content": content,
             },
         )
+        existing_example = exercise.example_texts.order_by("sort_order", "id").first()
+        existing_example_translation = existing_example.translation_zh if existing_example else ""
         exercise.example_texts.all().delete()
         example_text = clean_text(row["Example_Text"])
         if example_text:
             WritingExampleText.objects.create(
                 writing_exercise=exercise,
                 example_text=example_text,
+                translation_zh=(
+                    clean_text(row[example_translation_column])
+                    if example_translation_column
+                    else existing_example_translation
+                ),
                 label="example_text",
                 note="",
                 sort_order=1,

@@ -74,11 +74,7 @@ export function examPreparationLevelHomeRoutes() {
 
 function ExamPreparationLevelGate({ children }) {
   const { level } = useParams();
-  const location = useLocation();
   if (!examPreparationScope(level)) return <Navigate to="/modules/exam-preparation" replace />;
-  if (String(level).toUpperCase() === "C1" && !/\/tips(?:\/|$)/.test(location.pathname)) {
-    return <Navigate to="/modules/exam-preparation/c1" replace />;
-  }
   return children;
 }
 
@@ -275,6 +271,22 @@ const router = createBrowserRouter([
       },
       { path: "/modules/exam-preparation/lesen", element: <ExamPreparationReadingPage /> },
       {
+        path: "/modules/exam-preparation/lesen/cloze-matching",
+        element: (
+          <ExerciseSelectionPage
+            backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/lesen`}
+            backLabel="← Zurück zu Lesen"
+            eyebrow="Lesen"
+            title="Teil 1"
+            description="从备选词语中选择合适表达，完成短文中的空格。"
+            fetchExercises={fetchClozeMatchingExercises}
+            buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/lesen/cloze-matching/${exercise.id}`}
+            cardDescription="Öffne diese Aufgabe und setze die passenden Wörter in den Text ein."
+          />
+        ),
+      },
+      { path: "/modules/exam-preparation/lesen/cloze-matching/:exerciseId", element: <ClozeMatchingPage /> },
+      {
         path: "/modules/exam-preparation/lesen/title-matching",
         element: (
           <ExerciseSelectionPage
@@ -323,6 +335,7 @@ const router = createBrowserRouter([
             buildCardTitle={(exercise, index) =>
               `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
             }
+            sortByExternalId={(scope) => scope.level === "C1"}
             cardDescription="Öffne diese Aufgabe und ordne die Situationen den passenden Anzeigen zu."
           />
         ),
@@ -336,7 +349,7 @@ const router = createBrowserRouter([
               backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/sprechen`}
               backLabel="← Zurück zu Sprechen"
               eyebrow="Sprechen"
-              title={`Teil ${teil}`}
+              title={(scope) => scope.level === "C1" ? ["Teil 1A", "Teil 1a + Teil 1b", "Teil 2"][teil - 1] : `Teil ${teil}`}
               description={(scope) => examPreparationTypeDescription(SPEAKING_TYPES[teil - 1], scope.level)}
               fetchExercises={(scope) => fetchSpeakingTeilExercises(teil, scope)}
               buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/sprechen/teil-${teil}/${exercise.id}`}

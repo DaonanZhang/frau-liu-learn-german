@@ -56,11 +56,13 @@ function selectText(element, start, end) {
   document.dispatchEvent(new Event("selectionchange"));
 }
 
-function renderPage() {
+function renderPage(level = "") {
+  const initialPath = level ? `/reading/ad/${level}/77` : "/reading/ad/77";
   return render(
-    <MemoryRouter initialEntries={["/reading/ad/77"]}>
+    <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route path="/reading/ad/:exerciseId" element={<ReadingAdMatchingPage />} />
+        <Route path="/reading/ad/:level/:exerciseId" element={<ReadingAdMatchingPage />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -126,5 +128,94 @@ describe("ReadingAdMatchingPage annotations", () => {
     expect(sessionStorage.getItem(unrelatedScope)).not.toBeNull();
     expect(screen.queryByText(/Erklärung:/)).not.toBeInTheDocument();
     expect(screen.getAllByRole("radio")[0]).not.toBeChecked();
+  });
+
+  it("lets C1 learners check with an unanswered question", async () => {
+    fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
+      ...detail,
+      exercise_base: { ...detail.exercise_base, level: "C1" },
+      items: [
+        ...detail.items,
+        { ...detail.items[0], id: 22, item_number: 2, item_text: "Situation zwei" },
+      ],
+    });
+    renderPage("c1");
+
+    expect(await screen.findByText("Situation eins")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prüfen" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(await screen.findByText("未作答")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
+  });
+
+  it("uses the carousel-first layout and allows the same ad for multiple C1 situations", async () => {
+    fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
+      ...detail,
+      exercise_base: { ...detail.exercise_base, level: "C1" },
+      items: [
+        ...detail.items,
+        { ...detail.items[0], id: 22, item_number: 2, item_text: "Situation zwei" },
+      ],
+    });
+    renderPage("c1");
+
+    expect(await screen.findByText("Situation eins")).toBeInTheDocument();
+    const workspace = document.querySelector(".reading-ad-workspace");
+    expect(workspace).not.toHaveClass("reading-ad-workspace--c1");
+    expect(workspace.querySelector(".reading-ad-carousel-controls")).toBeInTheDocument();
+    expect(workspace.querySelector("[aria-label='Anzeige A']")).toBeInTheDocument();
+    expect(workspace.querySelector(".reading-ad-carousel").compareDocumentPosition(
+      workspace.querySelector(".reading-ad-pagination"),
+    ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(workspace.querySelector(".reading-ad-carousel").compareDocumentPosition(
+      workspace.querySelector(".reading-ad-question-card"),
+    ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("Situation zwei")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("radio")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "2" }));
+    expect(screen.getByText("Situation zwei")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("radio")[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+
+    await waitFor(() => expect(saveReadingAdMatchingItemState).toHaveBeenCalledTimes(2));
+    expect(saveReadingAdMatchingItemState).toHaveBeenCalledWith(expect.objectContaining({
+      item: 21,
+      answer_payload: { selected_ad_key: "a" },
+    }));
+    expect(saveReadingAdMatchingItemState).toHaveBeenCalledWith(expect.objectContaining({
+      item: 22,
+      answer_payload: { selected_ad_key: "a" },
+    }));
+    expect(workspace.querySelector("[aria-label='Anzeige A']")).not.toHaveClass("reading-ad-card--selected");
+  });
+
+  it("shows all seven C1 practice situations and labels only the version 2 backup", async () => {
+    fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
+      ...detail,
+      exercise_base: { ...detail.exercise_base, level: "C1" },
+      items: Array.from({ length: 7 }, (_, index) => ({
+        ...detail.items[0],
+        id: 21 + index,
+        item_number: index + 1,
+        item_text: index === 6 ? "( Version2 ) Eine weitere Situation." : `Situation ${index + 1}`,
+        is_version2: index === 6,
+      })),
+    });
+    renderPage("c1");
+
+    expect(await screen.findByText("Situation 1")).toBeInTheDocument();
+    expect(document.querySelector(".reading-ad-question-card__progress")).toHaveTextContent("1 / 7");
+    expect(screen.getAllByRole("button", { name: /^[1-7]$/ })).toHaveLength(7);
+    expect(screen.queryByText("备用题 · Version 2")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "7" }));
+
+    expect(screen.getByText("Eine weitere Situation.")).toBeInTheDocument();
+    expect(screen.getByText("备用题 · Version 2")).toBeInTheDocument();
+    expect(screen.queryByText(/\(\s*Version2\s*\)/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(await screen.findByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
+    expect(await screen.findByText("Situation 1")).toBeInTheDocument();
   });
 });

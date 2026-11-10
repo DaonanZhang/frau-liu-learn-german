@@ -149,7 +149,7 @@ class ListeningExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers
     is_locked = serializers.SerializerMethodField()
     show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
-    locked_content_fields = ("audio_file_identifier", "audio_file_url", "script")
+    locked_content_fields = ("audio_file_identifier", "audio_file_url", "script", "content")
 
     class Meta:
         model = ListeningExercise
@@ -162,6 +162,7 @@ class ListeningExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers
             "audio_file_identifier",
             "audio_file_url",
             "script",
+            "content",
             "created_at",
             "updated_at",
         ]
@@ -211,8 +212,10 @@ class ListeningQuestionDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "question_number",
+            "question_key",
             "question_type",
             "question_text",
+            "correct_answer",
             "explanation",
             "explanation_scope",
             "created_at",
@@ -236,6 +239,7 @@ class ListeningExerciseDetailSerializer(serializers.ModelSerializer):
             "audio_file_identifier",
             "audio_file_url",
             "script",
+            "content",
             "created_at",
             "updated_at",
             "questions",
@@ -469,6 +473,12 @@ class ReadingAdMatchingAdDetailSerializer(serializers.ModelSerializer):
 
 class ReadingAdMatchingItemDetailSerializer(serializers.ModelSerializer):
     correct_ad = ReadingAdMatchingAdDetailSerializer(read_only=True)
+    is_version2 = serializers.SerializerMethodField()
+
+    def get_is_version2(self, obj):
+        from apps.exam_preparation.mock_exam.telc.reading_ad_matching import is_version2_item_text
+
+        return is_version2_item_text(obj.item_text)
 
     class Meta:
         model = ReadingAdMatchingItem
@@ -476,6 +486,7 @@ class ReadingAdMatchingItemDetailSerializer(serializers.ModelSerializer):
             "id",
             "item_number",
             "item_text",
+            "is_version2",
             "correct_ad",
             "explanation",
             "created_at",
@@ -681,7 +692,7 @@ class WritingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.M
     is_locked = serializers.SerializerMethodField()
     show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
-    locked_content_fields = ("request_text", "task_text")
+    locked_content_fields = ("request_text", "task_text", "content")
 
     class Meta:
         model = WritingExercise
@@ -694,6 +705,7 @@ class WritingExerciseSerializer(TrialAwareExerciseSerializerMixin, serializers.M
             "time_limit_minutes",
             "words_limit",
             "task_text",
+            "content",
             "created_at",
             "updated_at",
         ]
@@ -715,6 +727,7 @@ class WritingExampleTextDetailSerializer(serializers.ModelSerializer):
             "label",
             "note",
             "example_text",
+            "translation_zh",
             "sort_order",
             "created_at",
             "updated_at",
@@ -735,6 +748,7 @@ class WritingExerciseDetailSerializer(serializers.ModelSerializer):
             "time_limit_minutes",
             "words_limit",
             "task_text",
+            "content",
             "created_at",
             "updated_at",
             "example_texts",
@@ -751,15 +765,60 @@ class SpeakingTeilExerciseSerializer(TrialAwareExerciseSerializerMixin, serializ
 
     def get_content(self, exercise):
         content = exercise.content or {}
-        def with_audio(turn):
-            return {**turn, "audio_url": get_speaking_turn_audio_url(exercise, turn)}
+        def with_audio(source_exercise, turn, sequence=None):
+            result = {**turn, "audio_url": get_speaking_turn_audio_url(source_exercise, turn)}
+            if sequence is not None:
+                result["sequence"] = sequence
+            return result
 
         result = {**content}
+        base = exercise.exercise_base
+        view = self.context.get("view")
+        if (
+            getattr(view, "action", None) == "retrieve"
+            and base.exam_type == "TELC"
+            and base.level == ExerciseBase.Level.C1
+            and base.exercise_type == ExerciseBase.ExerciseType.SPEAKING_TEIL2
+        ):
+            companion = SpeakingTeilExercise.objects.select_related("exercise_base").filter(
+                exercise_base__exam_type=base.exam_type,
+                exercise_base__level=base.level,
+                exercise_base__external_id=base.external_id,
+                exercise_base__exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            ).first()
+            if companion:
+                companion_content = companion.content or {}
+                for field in ("topic", "outline"):
+                    if field in companion_content:
+                        result[field] = companion_content[field]
+                turns = []
+                for index, turn in enumerate(companion_content.get("dialogue", []), start=1):
+                    source_sequence = turn.get("sequence")
+                    turns.append({
+                        **with_audio(companion, turn, index),
+                        "turn_key": f"turn:source:{companion.pk}:{source_sequence}",
+                        "source_exercise_id": companion.pk,
+                        "source_teil": 1,
+                        "source_sequence": source_sequence,
+                    })
+                sequence_offset = len(turns)
+                for index, turn in enumerate(content.get("dialogue", []), start=1):
+                    source_sequence = turn.get("sequence")
+                    turns.append({
+                        **with_audio(exercise, turn, sequence_offset + index),
+                        "turn_key": f"turn:{source_sequence}",
+                        "source_exercise_id": exercise.pk,
+                        "source_teil": 2,
+                        "source_sequence": source_sequence,
+                    })
+                result["dialogue"] = turns
+                return result
+
         if isinstance(content.get("dialogue"), list):
-            result["dialogue"] = [with_audio(turn) for turn in content["dialogue"]]
+            result["dialogue"] = [with_audio(exercise, turn) for turn in content["dialogue"]]
         if isinstance(content.get("sections"), list):
             result["sections"] = [
-                {**section, "turns": [with_audio(turn) for turn in section.get("turns", [])]}
+                {**section, "turns": [with_audio(exercise, turn) for turn in section.get("turns", [])]}
                 for section in content["sections"]
             ]
         return result

@@ -170,6 +170,7 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
             label="Beispieltext 1",
             note="Formell",
             example_text="Sehr geehrte Frau Müller, leider kann ich nicht kommen.",
+            translation_zh="尊敬的 Müller 女士，很遗憾我无法前来。",
             sort_order=0,
         )
         self.example_two = WritingExampleText.objects.create(
@@ -180,6 +181,12 @@ class WritingExampleTextFavoriteApiTests(APITestCase):
         )
         self.state_url = reverse("exam-prep-user-writing-example-text-states-list")
         self.favorite_questions_url = reverse("exam-prep-favorite-questions-list")
+
+    def test_b1_example_translation_is_exposed_in_writing_detail(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.get(reverse("exam-prep-writing-exercises-detail", args=[self.exercise.pk]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["example_texts"][0]["translation_zh"], "尊敬的 Müller 女士，很遗憾我无法前来。")
 
     def test_examples_can_be_favorited_independently_and_listed(self):
         self.client.force_authenticate(self.user)
@@ -330,6 +337,112 @@ class SpeakingTurnFavoriteApiTests(APITestCase):
         self.assertEqual(favorites.data["results"][0]["state_type"], "speaking_turn")
         self.assertEqual(favorites.data["results"][0]["question_text"], "Hallo")
         self.assertEqual(favorites.data["results"][0]["turn_key"], "turn:1")
+
+    def test_companion_turn_favorite_resolves_source_and_keeps_current_href(self):
+        companion_base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.C1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            external_id="C1-PAIR", title="Vortrag",
+        )
+        companion = SpeakingTeilExercise.objects.create(
+            exercise_base=companion_base,
+            content={"teil": "1", "dialogue": [
+                {"sequence": 4, "role": "TN1", "text": "Mein Vortrag beginnt."},
+            ]},
+        )
+        current_base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.C1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+            external_id="C1-PAIR", title="Austausch",
+        )
+        current = SpeakingTeilExercise.objects.create(
+            exercise_base=current_base,
+            content={"teil": "2", "dialogue": [
+                {"sequence": 1, "role": "TN2", "text": "Was meinen Sie?"},
+            ]},
+        )
+        state_url = reverse("exam-prep-user-speaking-turn-states-list")
+        self.client.post(
+            state_url,
+            {"exercise": current.pk, "turn_key": f"turn:source:{companion.pk}:4", "is_favorited": True},
+            format="json",
+        )
+
+        favorites = self.client.get(reverse("exam-prep-favorite-questions-list"))
+
+        self.assertEqual(favorites.status_code, status.HTTP_200_OK)
+        favorite = favorites.data["results"][0]
+        self.assertEqual(favorite["question_text"], "Mein Vortrag beginnt.")
+        self.assertEqual(favorite["question_label"], "口语对话 · TN1")
+        self.assertEqual(favorite["target_id"], current.pk)
+        self.assertEqual(
+            favorite["href"],
+            f"/modules/exam-preparation/c1/sprechen/teil-2/{current.pk}",
+        )
+
+    def test_companion_turn_favorite_does_not_resolve_cross_scope_source(self):
+        current_base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.C1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+            external_id="C1-PAIR", title="Austausch",
+        )
+        current = SpeakingTeilExercise.objects.create(
+            exercise_base=current_base,
+            content={"teil": "2", "dialogue": [
+                {"sequence": 7, "role": "TN2", "text": "Current content."},
+            ]},
+        )
+        source_base = ExerciseBase.objects.create(
+            exam_type="GOETHE", level=ExerciseBase.Level.B2,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            external_id="OUTSIDE", title="Other",
+        )
+        source = SpeakingTeilExercise.objects.create(
+            exercise_base=source_base,
+            content={"teil": "1", "dialogue": [
+                {"sequence": 7, "role": "TN1", "text": "Do not expose me."},
+            ]},
+        )
+        response = self.client.post(
+            reverse("exam-prep-user-speaking-turn-states-list"),
+            {
+                "exercise": current.pk,
+                "turn_key": f"turn:source:{source.pk}:7",
+                "is_favorited": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        missing = self.client.post(
+            reverse("exam-prep-user-speaking-turn-states-list"),
+            {
+                "exercise": current.pk,
+                "turn_key": "turn:source:999999:7",
+                "is_favorited": True,
+            },
+            format="json",
+        )
+        malformed = self.client.post(
+            reverse("exam-prep-user-speaking-turn-states-list"),
+            {
+                "exercise": current.pk,
+                "turn_key": "turn:source:invalid:7",
+                "is_favorited": True,
+            },
+            format="json",
+        )
+        self.assertEqual(missing.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(malformed.status_code, status.HTTP_201_CREATED)
+        favorites = self.client.get(reverse("exam-prep-favorite-questions-list"))
+        self.assertEqual(
+            {favorite["question_text"] for favorite in favorites.data["results"]},
+            {""},
+        )
 
     def test_dialogue_order_result_is_persisted_and_updated(self):
         state_url = reverse("exam-prep-user-speaking-turn-states-list")
@@ -941,6 +1054,80 @@ class MockExamApiTests(APITestCase):
             writing_ids,
         )
 
+    def test_c1_reading_ad_version2_is_a_persisted_six_item_variant(self):
+        Entitlement.objects.create(
+            user=self.user, module=self.module, season=None,
+            plan=Entitlement.Plan.MONTH_1, status=Entitlement.Status.ACTIVE,
+        )
+        self.create_question_bank(level=ExerciseBase.Level.C1, id_prefix="MOCK-C1-V2")
+        second_writing_base = ExerciseBase.objects.create(
+            exam_type="telc", level=ExerciseBase.Level.C1, skill=ExerciseBase.Skill.WRITING,
+            exercise_type=ExerciseBase.ExerciseType.WRITING_PROMPT,
+            external_id="MOCK-C1-V2-writing-2", title="Writing 2",
+        )
+        WritingExercise.objects.create(exercise_base=second_writing_base, task_text="Aufgabe 2")
+        exercise = ReadingAdMatchingExercise.objects.get(
+            exercise_base__external_id=f"MOCK-C1-V2-{ExerciseBase.ExerciseType.READING_AD_MATCHING}"
+        )
+        ads = [ReadingAdMatchingAd.objects.create(
+            exercise=exercise, ad_key=f"A{index}", ad_text_markdown=f"Anzeige {index}"
+        ) for index in range(7)]
+        items = [ReadingAdMatchingItem.objects.create(
+            exercise=exercise, item_number=index + 1,
+            item_text="  (Version2) Ersatz" if index == 6 else f"Frage {index + 1}",
+            correct_ad=ads[index],
+        ) for index in range(7)]
+
+        generated = self.client.post(self.url, {"level": "C1"}, format="json")
+
+        self.assertEqual(generated.status_code, status.HTTP_201_CREATED)
+        variant = generated.data["selection"]["reading_ad_matching_variant"]
+        self.assertIn(variant, range(7))
+        attempt = SavedMockExam.objects.get(pk=generated.data["attempt_id"])
+        self.assertEqual(attempt.paper.exercise_selection["reading_ad_matching_variant"], variant)
+        generated_items = generated.data["parts"]["reading_ad_matching"]["items"]
+        self.assertEqual(len(generated_items), 6)
+        self.assertEqual([item["item_number"] for item in generated_items], list(range(1, 7)))
+        self.assertEqual(sum(item["is_version2"] for item in generated_items), int(variant != 0))
+
+        from apps.exam_preparation.serializers import ReadingAdMatchingExerciseDetailSerializer
+        practice = ReadingAdMatchingExerciseDetailSerializer(exercise).data["items"]
+        self.assertEqual(len(practice), 7)
+        self.assertTrue(practice[-1]["is_version2"])
+
+        detail = self.client.get(reverse("exam-prep-saved-mock-exams-detail", args=[attempt.pk]))
+        self.assertEqual(
+            [item["id"] for item in detail.data["exam"]["parts"]["reading_ad_matching"]["items"]],
+            [item["id"] for item in generated_items],
+        )
+        regular_ids = [item.pk for item in items[:6]]
+        for option in range(7):
+            expected_ids = list(regular_ids)
+            if option:
+                expected_ids[option - 1] = items[6].pk
+            rebuilt = self.client.post(
+                reverse("exam-prep-saved-mock-exams-list"),
+                {"exam_type": "TELC", "level": "C1", "exercise_selection": {
+                    **generated.data["selection"], "reading_ad_matching_variant": option,
+                }},
+                format="json",
+            )
+            self.assertEqual(rebuilt.status_code, status.HTTP_201_CREATED)
+            rebuilt_detail = self.client.get(reverse("exam-prep-saved-mock-exams-detail", args=[rebuilt.data["id"]]))
+            rebuilt_items = rebuilt_detail.data["exam"]["parts"]["reading_ad_matching"]["items"]
+            self.assertEqual([item["id"] for item in rebuilt_items], expected_ids)
+            self.assertEqual([item["item_number"] for item in rebuilt_items], list(range(1, 7)))
+
+        for invalid in (True, -1, 7, 1.0, "1"):
+            invalid_response = self.client.post(
+                reverse("exam-prep-saved-mock-exams-list"),
+                {"exam_type": "TELC", "level": "C1", "exercise_selection": {
+                    **generated.data["selection"], "reading_ad_matching_variant": invalid,
+                }},
+                format="json",
+            )
+            self.assertEqual(invalid_response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_b2_generation_requires_two_writing_exercises(self):
         Entitlement.objects.create(
             user=self.user,
@@ -1049,7 +1236,7 @@ class MockExamApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["message"], "该考试类型暂不支持模拟考试。")
 
-    def test_mock_creation_rejects_levels_without_exam_rules(self):
+    def test_mock_creation_reports_missing_c1_bank_parts(self):
         Entitlement.objects.create(
             user=self.user,
             module=self.module,
@@ -1064,8 +1251,8 @@ class MockExamApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data["message"], "该考试类型或等级暂不支持模拟考试。")
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["message"], "题库尚不足以生成完整的模拟考试。")
 
     def test_repeated_create_request_is_idempotent(self):
         Entitlement.objects.create(

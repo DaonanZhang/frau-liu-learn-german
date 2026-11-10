@@ -5,6 +5,24 @@ import SpeechButton from "./SpeechButton.jsx";
 import "../../pages/VideoStudy/components/ShadowingPractice.css";
 
 const MIME_TYPES = ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/webm;codecs=opus", "audio/webm"];
+const recordingSavedListeners = new Map();
+
+function subscribeToRecordingSaved(recordingKey, listener) {
+  let listeners = recordingSavedListeners.get(recordingKey);
+  if (!listeners) {
+    listeners = new Set();
+    recordingSavedListeners.set(recordingKey, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) recordingSavedListeners.delete(recordingKey);
+  };
+}
+
+function notifyRecordingSaved(recordingKey) {
+  recordingSavedListeners.get(recordingKey)?.forEach((listener) => listener());
+}
 
 function pickMimeType() {
   if (typeof MediaRecorder === "undefined" || typeof MediaRecorder.isTypeSupported !== "function") return "";
@@ -16,7 +34,7 @@ function buildBlob(chunks, recorder) {
   return new Blob(chunks, { type: chunk?.type || recorder?.mimeType || "audio/mp4" });
 }
 
-export default function SpeakingPracticeRecorder({ language = "de", recordingId = "default", audioUrl = "" }) {
+export default function SpeakingPracticeRecorder({ language = "de", recordingId = "default", audioUrl = "", trailingControl = null }) {
   const copy = language === "zh"
     ? { start: "开始录音", stop: "停止录音", play: "播放录音", rerecord: "重新录制", unsupported: "当前浏览器不支持录音功能。", permission: "请允许浏览器访问麦克风。", error: "录音或播放失败，请重新尝试。" }
     : { start: "Aufnahme starten", stop: "Aufnahme stoppen", play: "Aufnahme abspielen", rerecord: "Neu aufnehmen", unsupported: "Dieser Browser unterstützt keine Audioaufnahme.", permission: "Bitte erlauben Sie den Zugriff auf das Mikrofon.", error: "Die Aufnahme oder Wiedergabe ist fehlgeschlagen." };
@@ -31,12 +49,18 @@ export default function SpeakingPracticeRecorder({ language = "de", recordingId 
 
   useEffect(() => {
     let active = true;
+    let savedSinceLoad = false;
     mountedRef.current = true;
+    const unsubscribe = subscribeToRecordingSaved(recordingKey, () => {
+      savedSinceLoad = true;
+      if (active) setHasRecording(true);
+    });
     loadRecordingBlob(recordingKey).then((blob) => {
-      if (active) setHasRecording(Boolean(blob));
+      if (active && !savedSinceLoad) setHasRecording(Boolean(blob));
     }).catch(() => {});
     return () => {
       active = false;
+      unsubscribe();
       mountedRef.current = false;
       sessionRef.current?.cancel();
     };
@@ -74,14 +98,17 @@ export default function SpeakingPracticeRecorder({ language = "de", recordingId 
         if (event.data?.size) chunks.push(event.data);
       };
       recorder.onstop = async () => {
+        const shouldSave = session.active || recorder.saveOnStop === true;
         session.finish();
         stream.getTracks().forEach((track) => track.stop());
         if (recorderRef.current === recorder) {
           recorderRef.current = null;
           if (mountedRef.current) setIsRecording(false);
         }
+        if (!shouldSave) return;
         try {
           await saveRecordingBlob(recordingKey, buildBlob(chunks, recorder));
+          notifyRecordingSaved(recordingKey);
           if (mountedRef.current) setHasRecording(true);
         } catch {
           if (mountedRef.current) setErrorText(copy.error);
@@ -103,7 +130,11 @@ export default function SpeakingPracticeRecorder({ language = "de", recordingId 
   }
 
   function stopRecording() {
-    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    const recorder = recorderRef.current;
+    if (recorder?.state === "recording") {
+      recorder.saveOnStop = true;
+      recorder.stop();
+    }
   }
 
   async function playRecording() {
@@ -158,6 +189,7 @@ export default function SpeakingPracticeRecorder({ language = "de", recordingId 
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7h-5V2" /><path d="M20 2l-3.5 3.5A8 8 0 1 0 20 12" /></svg>
         </button>
         <SpeechButton audioUrl={audioUrl} language={language} disabled={isRecording || isStarting} />
+        {trailingControl}
       </div>
       {isRecording ? <div className="shadowing-practice-error" role="status">{copy.stop}</div> : null}
       {errorText ? <div className="shadowing-practice-error" role="alert">{errorText}</div> : null}

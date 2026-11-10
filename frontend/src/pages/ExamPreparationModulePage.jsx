@@ -22,8 +22,8 @@ import {
 const SKILL_CARDS = [
   {
     key: "tips",
-    title: "Unsere Tipps",
-    label: "备考建议",
+    title: "备考建议",
+    label: "Unsere Tipps",
     description: "",
     to: "/modules/exam-preparation/tips",
     cta: "查看 Tipps",
@@ -79,6 +79,14 @@ const SKILL_CARDS = [
   },
 ];
 
+const C1_SKILL_CONTENT = {
+  listening: "听短对话、选择题和主题展示录音，按题目要求记录关键信息。",
+  reading: "完成选词填空、分类广告匹配和长文理解。",
+  sprachbausteine: "通过语法选择题练习词汇搭配与上下文理解。",
+  writing: "阅读两条引语并完成一篇不少于 350 词的文章，限时 70 分钟。",
+  speaking: "围绕主题作简短展示并讨论引语，练习组织观点和回应搭档。",
+};
+
 const MOCK_PHASE_LABELS = { reading: "阅读与语言模块", collection: "第一部分收卷", listening: "听力", writing: "写作", writing_review: "写作自评" };
 
 export default function ExamPreparationModulePage({ level: levelProp } = {}) {
@@ -88,6 +96,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const hasFullAccess = hasModuleAccess(user, EXAM_PREPARATION_MODULE);
+  const c1ComingSoon = scope?.level === "C1" && String(user?.telephone || "").trim() !== "110";
   const activeAttemptKey = activeMockExamKey(user?.id, scope || examPreparationScope("B1"));
   const sessionKey = mockExamSessionKey(user?.id, scope || examPreparationScope("B1"));
   const [activeMockExams, setActiveMockExams] = useState([]);
@@ -100,7 +109,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
     .sort((left, right) => right.getTime() - left.getTime())[0];
 
   useEffect(() => {
-    if (!scope || scope.level === "C1" || !hasFullAccess) return undefined;
+    if (!scope || !hasFullAccess || c1ComingSoon) return undefined;
     let cancelled = false;
     fetchSavedMockExams("active", 1, 3, scope)
       .then((data) => {
@@ -115,7 +124,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
         }
       });
     return () => { cancelled = true; };
-  }, [hasFullAccess, scope?.level]);
+  }, [c1ComingSoon, hasFullAccess, scope?.level]);
 
   async function removeInterruptedExam(record) {
     const result = await Swal.fire({
@@ -144,6 +153,10 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
   }
 
   async function openMockExam() {
+    if (c1ComingSoon) {
+      await showComingSoon();
+      return;
+    }
     if (hasFullAccess) {
       const previousAttemptId = localStorage.getItem(activeAttemptKey);
       if (previousAttemptId) {
@@ -170,6 +183,10 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
     if (result.isConfirmed) {
       navigate(examPreparationPurchasePath(scope));
     }
+  }
+
+  function showComingSoon() {
+    return Swal.fire({ icon: "info", title: "Coming soon" });
   }
 
   function continueLatestMockExam() {
@@ -255,7 +272,7 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
         <ExamPreparationContentSearch scope={scope} />
       ) : null}
 
-      <section className={`exam-module-mock${scope.level === "C1" ? " is-coming-soon" : hasFullAccess ? "" : " is-locked"}`} aria-label="笔试模拟考试">
+      <section className={`exam-module-mock${hasFullAccess ? "" : " is-locked"}`} aria-label="笔试模拟考试">
         <div className="exam-module-mock__icon" aria-hidden="true">
           <svg viewBox="0 0 48 48" focusable="false">
             <path d="M11 7.5h20a4 4 0 0 1 4 4v12.25" />
@@ -269,17 +286,17 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
           <h2>笔试模拟</h2>
           <p>按正式考试流程完成一套笔试，检验时间分配和答题情况。</p>
           <div className="exam-module-mock__actions">
-            {hasFullAccess && activeMockExams.length ? (
+            {!c1ComingSoon && hasFullAccess && activeMockExams.length ? (
               <button type="button" onClick={continueLatestMockExam} className="exam-module-mock__button is-secondary">继续考试</button>
             ) : null}
-            <button type="button" onClick={scope.level === "C1" ? () => Swal.fire({ icon: "info", title: "Coming soon" }) : openMockExam} className="exam-module-mock__button">
-              {scope.level === "C1" ? "Coming soon" : hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
+            <button type="button" onClick={openMockExam} className="exam-module-mock__button">
+              {hasFullAccess ? "开始新考试" : "🔒 购买以解锁"}
             </button>
           </div>
         </div>
       </section>
 
-      {hasFullAccess && activeMockExams.length ? (
+      {!c1ComingSoon && hasFullAccess && activeMockExams.length ? (
         <section className="exam-module-interrupted" aria-label="未完成的模拟考试">
           <div className="exam-module-interrupted__heading"><h2>未完成的模拟考试</h2>{activeMockExamCount > 3 ? <Link to={`/modules/exam-preparation/${scope.examType.toLowerCase()}/${scope.levelPath}/mock-exams`}>查看更多未完成考试</Link> : null}</div>
           <div className="exam-module-interrupted__list">
@@ -299,6 +316,9 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
 
       <section className="exam-module-grid" aria-label="专项入口列表">
         {SKILL_CARDS.map((card) => {
+          const cardDescription = scope.level === "C1"
+            ? C1_SKILL_CONTENT[card.key]
+            : card.descriptionByLevel?.[scope.level] || card.description;
           const content = (
             <>
               <div className="exam-module-card__header">
@@ -318,15 +338,13 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
                   ) : null}
                 </div>
               </div>
-              {(card.descriptionByLevel?.[scope.level] || card.description) ? (
+              {cardDescription ? (
                 <p className="exam-module-card__description">
-                  {card.descriptionByLevel?.[scope.level] || card.description}
+                  {cardDescription}
                 </p>
               ) : null}
               <div className="exam-module-card__footer">
-                {scope.level === "C1" && card.key !== "tips" ? (
-                  <span className="exam-module-card__badge">Coming soon</span>
-                ) : card.to ? (
+                {card.to ? (
                   <span className="exam-module-card__cta">{card.cta || "进入"}</span>
                 ) : (
                   <span className="exam-module-card__badge">即将开放</span>
@@ -335,17 +353,17 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
             </>
           );
 
-          if (scope.level === "C1" && card.key !== "tips") {
-            return (
-              <button key={card.key} type="button" onClick={() => Swal.fire({ icon: "info", title: "Coming soon" })} className="exam-module-card exam-module-card--link exam-module-card--coming-soon">
-                {content}
-              </button>
-            );
-          }
-
           if (card.to) {
             return (
-              <Link key={card.key} to={card.to.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`)} className="exam-module-card exam-module-card--link">
+              <Link
+                key={card.key}
+                to={card.to.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`)}
+                className="exam-module-card exam-module-card--link"
+                onClick={c1ComingSoon && card.key !== "tips" ? (event) => {
+                  event.preventDefault();
+                  showComingSoon();
+                } : undefined}
+              >
                 {content}
               </Link>
             );

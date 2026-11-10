@@ -102,6 +102,54 @@ For TELC B2, a non-empty workbook ID is the database `external_id` and must
 numerically equal the filename suffix. If the only exercise row has no ID, the
 numeric filename suffix becomes its ID. Conflicting non-empty values fail.
 
+## TELC C1 Hochschule Schreiben and Sprechen
+
+C1 Hochschule source workbooks are staged under
+`apps/exam_preparation/data/imports/telc/c1_hs/<kind>/{raw,processed,failed}`.
+The importer accepts the existing normalized `<kind>__..._<ID>.xlsx` names and
+the source suffixes `_Schreiben_<ID>`, `_Vortrag_<ID>`, and `_Zitat_<ID>`.
+Workbook, text/example, and vocabulary IDs must numerically match the filename
+suffix; an explicit mismatch fails preflight. `stage` searches nested source
+folders as well as their root.
+
+- **Lesen Teil 2 `(Version2)`:** On `exercise`, a question counts as a Version2
+  marker only when `(Version2)` appears at the beginning of `Fragen`, ignoring
+  case and whitespace inside or after the parentheses. When the marker is
+  present, the workbook must contain exactly seven non-empty questions and
+  exactly one marked question. Import retains all seven questions in source
+  order, including the `(Version2)` prefix, answer paragraph, and explanation.
+  An ordinary workbook without a leading marker keeps the existing validation
+  rules (including six-question files). Exercise practice imports all seven
+  Version2 questions; a separate mock-exam selection may choose the six regular
+  questions without changing this source import.
+
+- **Schreiben:** `meta` contains `ID`, `Title`, `task`, `Zitat A`,
+  `Zitat A_translate`, `Zitat B` (some exports have a trailing space in this
+  heading), `Zitat B_translate`, `考试类型`, `是否真题`, `time_limit`, and
+  `words_limit_min`. The only accepted limits are 70 minutes and 350 words.
+  `text` contains `ID`, `Example_Text`, and `Chinese_translation`; multiple
+  rows are joined in workbook order with a blank line into one bilingual
+  `WritingExampleText`. `word` contains `ID`, `word`, and `meaning`; empty
+  entries fail, and entries are stored in stable pages of 12.
+- **Sprechen Vortrag:** `meta` contains `ID`, `标题`, `task`, `题目`, `提纲`,
+  `考试类型`, and `是否真题`. `example` contains `exercise_id`, `Role`, `内容`,
+  and optional `translate`. At least two turns are required. The first turn
+  creates `SPEAKING_TEIL1` (Teil 1A, 3 minutes, with the topic and outline);
+  remaining turns create `SPEAKING_TEIL2` (Teil 1B, 2 minutes). Turn sequence
+  numbers restart at 1 for each exercise. For compatibility with the source
+  `Kostenloses Studium_Vortrag_002.xlsx`, the importer ignores only the exact
+  translation-header sentinel row with `exercise_id=角色`, `Role=环节`,
+  `内容=德语文本`, and `translate=中文翻译` (allowing surrounding whitespace).
+  Other rows with content and a blank `exercise_id` still fail validation.
+- **Sprechen Zitat:** `meta` contains `ID`, `标题`, `Task`, `Zitat`,
+  `Zitat_translate`, `考试类型`, and `是否真题`. The `example` columns match
+  Vortrag. The complete dialogue becomes `SPEAKING_TEIL3` (Teil 2, 6 minutes)
+  with the quotation and Chinese translation.
+
+All C1 workbooks require `考试类型=TELC`. The normal importer generates the
+speaking model audio through the existing helper; `--skip-speaking-audio`
+supports offline imports and validation without audio generation.
+
 ## TELC B2-specific formats
 
 - Lesen Teil 1 and Teil 2 use the existing reading sheet shapes.

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
@@ -23,6 +23,19 @@ function renderPage(level) {
 }
 
 describe("ExamPreparationSpeakingPage", () => {
+  it("shows the two combined TELC C1 speaking entries", () => {
+    renderPage("c1");
+
+    const list = screen.getByRole("region", { name: "口语题型列表" });
+    const links = within(list).getAllByRole("link");
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveAccessibleName(/Teil 1a \+ Teil 1b/);
+    expect(links[0]).toHaveAttribute("href", "/modules/exam-preparation/c1/sprechen/teil-2");
+    expect(links[1]).toHaveAccessibleName(/Teil 2/);
+    expect(links[1]).toHaveAttribute("href", "/modules/exam-preparation/c1/sprechen/teil-3");
+    expect(within(list).queryByRole("link", { name: /Teil 1A/ })).not.toBeInTheDocument();
+  });
+
   it("describes TELC B2 Teil 1 as a presentation", () => {
     renderPage("b2");
 

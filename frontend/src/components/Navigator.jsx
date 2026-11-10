@@ -33,9 +33,9 @@ export default function Navigator() {
   const isProfileActive = pathname.startsWith("/profile");
   const isExamPreparationActive = pathname.startsWith("/modules/exam-preparation");
   const isExamPreparationPurchaseActive = pathname === "/modules/exam-preparation/purchase";
-  const examLevelPath = pathname.match(/^\/modules\/exam-preparation\/(?:telc\/)?(b1|b2)(?:\/|$)/i)?.[1]?.toLowerCase() || null;
+  const examLevelPath = pathname.match(/^\/modules\/exam-preparation\/(?:telc\/)?(b1|b2|c1)(?:\/|$)/i)?.[1]?.toLowerCase() || null;
   const examScope = examPreparationScope(examLevelPath);
-  const isExamPreparationRecordsActive = /^\/modules\/exam-preparation\/telc\/(b1|b2)\/mock-exams(?:\/|$)/i.test(pathname);
+  const isExamPreparationRecordsActive = /^\/modules\/exam-preparation\/telc\/(b1|b2|c1)\/mock-exams(?:\/|$)/i.test(pathname);
 
   const titleText = isMobileView ? "符号刘" : "符号刘的德语素材库";
   const manualText = isMobileView ? "手册" : "操作手册";

@@ -14,6 +14,7 @@ class WritingExercise(models.Model):
     time_limit_minutes = models.PositiveIntegerField(null=True, blank=True, verbose_name="time limit in minutes")
     words_limit = models.PositiveIntegerField(null=True, blank=True, verbose_name="word limit")
     task_text = models.TextField(blank=True, default="", verbose_name="task text")
+    content = models.JSONField(default=dict, blank=True, verbose_name="exercise content")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")
 
@@ -33,6 +34,7 @@ class WritingExampleText(models.Model):
         verbose_name="writing exercise",
     )
     example_text = models.TextField(verbose_name="example text")
+    translation_zh = models.TextField(blank=True, default="", verbose_name="Chinese translation")
     label = models.CharField(max_length=64, blank=True, default="", verbose_name="label")
     note = models.TextField(blank=True, default="", verbose_name="note")
     sort_order = models.PositiveIntegerField(default=0, verbose_name="sort order")

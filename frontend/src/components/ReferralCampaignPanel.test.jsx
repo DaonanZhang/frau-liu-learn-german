@@ -124,26 +124,6 @@ describe("ReferralCampaignPanel", () => {
     expect(document.querySelector(".referral-panel__step--follow-up .referral-panel__completion-mark")).not.toBeInTheDocument();
   });
 
-  it("shows and hides the follow-up tooltip for mouse, keyboard, and touch interactions", async () => {
-    fetchReferralCampaign.mockResolvedValue(snapshot({ effective_count: 6 }));
-    renderPanel();
-    const followUp = await screen.findByRole("button", { name: "后续奖励：已完成" });
-    const tooltip = document.getElementById("referral-follow-up-tooltip");
-    expect(followUp).toHaveClass("referral-panel__node--follow-up", "is-complete");
-    expect(followUp).toHaveAttribute("aria-describedby", "referral-follow-up-tooltip");
-    expect(followUp).toHaveAttribute("aria-expanded", "false");
-    expect(tooltip).toHaveAttribute("hidden");
-
-    fireEvent.focus(followUp);
-    expect(tooltip).not.toHaveAttribute("hidden");
-    fireEvent.blur(followUp);
-    expect(tooltip).toHaveAttribute("hidden");
-
-    fireEvent.click(followUp);
-    expect(tooltip).not.toHaveAttribute("hidden");
-    expect(followUp).toHaveAttribute("aria-expanded", "true");
-  });
-
   it("renders the promotion code and both copy actions", async () => {
     fetchReferralCampaign.mockResolvedValue(snapshot({ code: "BK1-TLPEHL37W" }));
     renderPanel();

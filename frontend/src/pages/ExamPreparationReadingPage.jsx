@@ -1,5 +1,5 @@
 import { Link, Navigate, useParams } from "react-router-dom";
-import { READING_TYPES, examPreparationTypeDescription } from "./examPreparationTypeContent.js";
+import { READING_TYPES, examPreparationTypeDescription, examPreparationTypesForLevel } from "./examPreparationTypeContent.js";
 import "./ExamPreparationReadingPage.css";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
 
@@ -19,13 +19,13 @@ export default function ExamPreparationReadingPage() {
           <p className="exam-reading-hero__eyebrow">Lesen</p>
           <h1 className="exam-reading-hero__title">阅读模块</h1>
           <p className="exam-reading-hero__copy">
-            训练 {scope.examType} {scope.level} 阅读的三个部分：短文本标题匹配、长文理解选择，以及生活情境与分类广告匹配。
+            {scope.level === "C1" ? "完成选词填空、分类广告匹配和长文理解。" : `训练 ${scope.examType} ${scope.level} 阅读的三个部分：短文本标题匹配、长文理解选择，以及生活情境与分类广告匹配。`}
           </p>
         </div>
       </section>
 
       <section className="exam-reading-type-grid" aria-label="阅读题型列表">
-        {READING_TYPES.map((item) => {
+        {examPreparationTypesForLevel(READING_TYPES, scope.level).map((item) => {
           const content = (
             <>
               <div className="exam-reading-type__top">

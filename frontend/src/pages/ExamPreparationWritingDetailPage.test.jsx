@@ -1,4 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -15,6 +17,8 @@ import {
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import { updateMyProfile } from "../api/auth/profile.js";
 import ExamPreparationWritingDetailPage from "./ExamPreparationWritingDetailPage.jsx";
+
+const writingStyles = readFileSync(resolve("src/pages/ExamPreparationWritingDetailPage.css"), "utf8");
 
 vi.mock("../api/auth/index.js", () => ({
   useAuth: vi.fn(),
@@ -112,6 +116,7 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     renderPage();
 
     const emailHeading = await screen.findByRole("heading", { name: "E-Mail" });
+    expect(screen.queryByRole("button", { name: /中文翻译/ })).not.toBeInTheDocument();
     expect(emailHeading.closest(".writing-detail-request-panel"))
       .toHaveClass("writing-detail-request-panel--email");
     const emailPanel = emailHeading.closest(".writing-detail-request-panel");
@@ -189,10 +194,85 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(document.body).not.toHaveTextContent("Anleitung");
     expect(screen.queryByRole("heading", { name: /^(Anleitung|Aufgabe)$/ })).not.toBeInTheDocument();
     expect(await screen.findByText("最少 150 词")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /中文翻译/ })).not.toBeInTheDocument();
     expect(document.querySelector(".writing-detail-actions__meta")).not.toBeInTheDocument();
     expect(screen.getAllByText("0 词")).toHaveLength(1);
     expect(screen.getByRole("textbox").closest(".writing-detail-input-card--long")).toBeInTheDocument();
     expect(screen.queryByText("最多 150 词")).not.toBeInTheDocument();
+  });
+
+  it("shows the C1 quotations, 350-word target, 70-minute timer, and paged vocabulary", async () => {
+    fetchWritingExerciseDetail.mockResolvedValueOnce({
+      id: 41,
+      exercise_base: { external_id: "41", level: "C1", exam_type: "TELC", exercise_type: "WRITING" },
+      request_text: "Schreiben Sie einen argumentativen Text.",
+      task_text: "Nehmen Sie zu beiden Zitaten Stellung.",
+      time_limit_minutes: 70,
+      words_limit: 350,
+      content: {
+        quotes: [
+          { text: "Wissen ist Macht.", translation_zh: "知识就是力量。" },
+          { text: "Lernen endet nie.", translation_zh: "学习永无止境。" },
+        ],
+        vocabulary_pages: [
+          { title: "Wortschatz", entries: [{ word: "die Erkenntnis", translation_zh: "认识" }] },
+          { title: "Wortschatz", entries: [{ word: "die Voraussetzung", translation_zh: "前提" }] },
+        ],
+      },
+      example_texts: [{ id: 501, example_text: "Bildung eröffnet neue Möglichkeiten." }],
+    });
+    renderPage();
+
+    expect(await screen.findByText("Wissen ist Macht.")).toBeInTheDocument();
+    expect(screen.getByText("知识就是力量。")).toBeInTheDocument();
+    expect(screen.getByText("Lernen endet nie.")).toBeInTheDocument();
+    expect(screen.getByText("学习永无止境。")).toBeInTheDocument();
+    expect(screen.getByText("最少 350 词")).toBeInTheDocument();
+    const timerButton = screen.getByRole("button", { name: "开始计时：70:00" });
+    expect(timerButton).toBeInTheDocument();
+    const translationToggle = screen.getByRole("button", { name: "隐藏中文翻译" });
+    expect(translationToggle).toHaveTextContent("Aa");
+    expect(translationToggle.querySelector("svg")).not.toBeInTheDocument();
+    expect(translationToggle).toHaveAttribute("title", "翻译");
+
+    const vocabulary = screen.getByRole("complementary", { name: "词汇表" });
+    expect(vocabulary).toHaveClass("writing-detail-vocabulary");
+    expect(within(vocabulary).getByText("1 / 2")).toBeInTheDocument();
+    expect(within(vocabulary).getByText((_, element) => element?.tagName === "P" && element.textContent === "die Erkenntnis · 认识")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "隐藏中文翻译" }));
+    expect(screen.queryByText("知识就是力量。")).not.toBeInTheDocument();
+    expect(screen.queryByText("学习永无止境。")).not.toBeInTheDocument();
+    expect(within(vocabulary).getByText((_, element) => element?.tagName === "P" && element.textContent === "die Erkenntnis · 认识")).toBeInTheDocument();
+    const showTranslation = screen.getByRole("button", { name: "显示中文翻译" });
+    expect(showTranslation).toHaveTextContent("Aa");
+    expect(showTranslation.querySelector("svg")).not.toBeInTheDocument();
+    expect(showTranslation).toHaveAttribute("title", "翻译");
+    fireEvent.click(within(vocabulary).getByRole("button", { name: "下一页" }));
+    expect(within(vocabulary).getByText("2 / 2")).toBeInTheDocument();
+    expect(within(vocabulary).getByText((_, element) => element?.tagName === "P" && element.textContent === "die Voraussetzung · 前提")).toBeInTheDocument();
+    const collapseVocabulary = within(vocabulary).getByRole("button", { name: "收起词汇表" });
+    expect(collapseVocabulary).toHaveAttribute("title", "收起词汇表");
+    expect(collapseVocabulary.querySelector('path[d="m6 10 6 6 6-6"]')).toBeInTheDocument();
+    fireEvent.click(collapseVocabulary);
+    const expandVocabulary = within(vocabulary).getByRole("button", { name: "展开词汇表" });
+    expect(expandVocabulary).toHaveTextContent(/^$/);
+    expect(expandVocabulary).toHaveAttribute("aria-expanded", "false");
+    expect(expandVocabulary.querySelector('path[d="m6 14 6-6 6 6"]')).toBeInTheDocument();
+    expect(within(vocabulary).queryByText("2 / 2")).not.toBeInTheDocument();
+    fireEvent.click(within(vocabulary).getByRole("button", { name: "展开词汇表" }));
+    expect(within(vocabulary).getByRole("button", { name: "收起词汇表" })).toHaveAttribute("aria-expanded", "true");
+    expect(within(vocabulary).getByText("2 / 2")).toBeInTheDocument();
+    expect(within(vocabulary).getByText((_, element) => element?.tagName === "P" && element.textContent === "die Voraussetzung · 前提")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "显示中文翻译" }));
+    expect(within(vocabulary).getByText((_, element) => element?.tagName === "P" && element.textContent === "die Voraussetzung · 前提")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Bildung beeinflusst unsere Zukunft." } });
+    expect(screen.getByRole("textbox")).toHaveValue("Bildung beeinflusst unsere Zukunft.");
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(await screen.findByText("Bildung eröffnet neue Möglichkeiten.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(screen.getByRole("button", { name: "开始计时：70:00" })).toBeInTheDocument();
   });
 
   it("opens the B2 guide once and saves its own completion field", async () => {
@@ -310,6 +390,35 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(screen.getByRole("button", { name: /计时中：29:59/ })).toBeInTheDocument();
   });
 
+  it("keeps B1 sample and Chinese translations visible before and after checking, while Wiederholen clears the draft", async () => {
+    fetchWritingExerciseDetail.mockResolvedValue({
+      id: 41,
+      exercise_base: { external_id: "41", level: "B1", exam_type: "TELC", exercise_type: "WRITING" },
+      request_text: "Schreiben Sie eine E-Mail.",
+      task_text: "Nennen Sie einen Grund.",
+      time_limit_minutes: 30,
+      words_limit: 80,
+      content: {
+        request_translation_zh: "请写一封电子邮件。",
+        task_translation_zh: "请说明一个理由。",
+      },
+      example_texts: [{ id: 501, example_text: "Liebe Anna, ich kann leider nicht kommen.", translation_zh: "亲爱的安娜，很遗憾我不能来。" }],
+    });
+    renderPage();
+
+    expect(await screen.findByText("请写一封电子邮件。")).toBeInTheDocument();
+    expect(screen.getByText("请说明一个理由。")).toBeInTheDocument();
+    expect(screen.getByText("Liebe Anna, ich kann leider nicht kommen.")).toBeInTheDocument();
+    expect(screen.getByText("亲爱的安娜，很遗憾我不能来。")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Liebe Anna" } });
+    fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
+    expect(screen.getByRole("textbox")).toHaveValue("Liebe Anna");
+    fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(screen.getByText("亲爱的安娜，很遗憾我不能来。")).toBeInTheDocument();
+  });
+
   it("keeps the existing guide interactive without registering its controls", async () => {
     useAuth.mockReturnValue({
       user: { id: 7, has_seen_schreiben_guide: false },
@@ -324,9 +433,18 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(screen.getByText("先阅读题目内容").closest("[data-exam-annotation-region]")).toBeNull();
     expect(document.body).not.toHaveTextContent("Anleitung");
     expect(screen.queryByRole("heading", { name: /^(Anleitung|Aufgabe)$/ })).not.toBeInTheDocument();
+    expect(document.querySelector(".writing-detail-shell")).toBeInTheDocument();
+    expect(writingStyles).toMatch(/\.writing-detail-shell\s*\{(?=[^}]*width:\s*100%)[^}]*\}/s);
+    expect(screen.getByRole("dialog")).toHaveClass("writing-detail-guide-card--right");
 
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
     expect(await screen.findByText("需要时开始计时")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "下一步" }).closest("[data-exam-annotation-region]")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    expect(await screen.findByText("在 Meine Antwort 中作答")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveClass("writing-detail-guide-card--left");
+    expect(writingStyles).toMatch(/\.writing-detail-guide-card--left\s*\{[^}]*left:\s*1rem[^}]*right:\s*auto/s);
   });
 });

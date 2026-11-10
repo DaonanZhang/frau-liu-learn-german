@@ -4,6 +4,7 @@ from apps.exam_preparation.mock_exam.telc import rules as telc_rules
 _RULES_BY_SCOPE = {
     ("TELC", "B1"): telc_rules,
     ("TELC", "B2"): telc_rules,
+    ("TELC", "C1"): telc_rules,
 }
 
 

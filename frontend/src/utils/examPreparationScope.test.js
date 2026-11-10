@@ -23,6 +23,8 @@ describe("examPreparationScope", () => {
   it("reads only a supported TELC level from favorite query params", () => {
     expect(examPreparationScopeFromSearchParams(new URLSearchParams("exam_type=TELC&level=B2")))
       .toEqual({ examType: "TELC", level: "B2", levelPath: "b2" });
+    expect(examPreparationScopeFromSearchParams(new URLSearchParams("exam_type=TELC&level=C1")))
+      .toEqual({ examType: "TELC", level: "C1", levelPath: "c1" });
     expect(examPreparationScopeFromSearchParams(new URLSearchParams("exam_type=GOETHE&level=B2")))
       .toBeNull();
     expect(examPreparationScopeFromSearchParams(new URLSearchParams("exam_type=TELC&level=B3")))

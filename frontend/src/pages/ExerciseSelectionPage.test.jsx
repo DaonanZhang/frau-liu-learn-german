@@ -45,6 +45,44 @@ describe("ExerciseSelectionPage", () => {
     expect(cardTitles.map((heading) => heading.textContent)).toEqual(expectedOrder);
   });
 
+  it("sorts C1 ad-matching exercises by the displayed exercise number", async () => {
+    const results = [
+      { id: 8, exercise_base: { title: "Änderung", external_id: "8" } },
+      { id: 1, exercise_base: { title: "Zukunft", external_id: "1" } },
+      { id: 2, exercise_base: { title: "Ökologie", external_id: "2" } },
+    ];
+
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/c1/lesen/ad-matching"]}>
+        <Routes>
+          <Route
+            path="/modules/exam-preparation/:level/lesen/ad-matching"
+            element={(
+              <ExerciseSelectionPage
+                backTo="/modules/exam-preparation/c1/lesen"
+                backLabel="Zurück"
+                eyebrow="Lesen"
+                title="Teil 3"
+                description="Beschreibung"
+                fetchExercises={vi.fn().mockResolvedValue({ results })}
+                buildExerciseHref={(exercise) => `/exercise/${exercise.id}`}
+                buildCardTitle={(exercise) => `Übung ${exercise.exercise_base.external_id}`}
+                sortByExternalId={(scope) => scope.level === "C1"}
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const cardTitles = await screen.findAllByRole("heading", { level: 2 });
+    expect(cardTitles.map((heading) => heading.textContent)).toEqual([
+      "Übung 1",
+      "Übung 2",
+      "Übung 8",
+    ]);
+  });
+
   it("resolves a scoped description from the active exam level", async () => {
     render(
       <MemoryRouter initialEntries={["/modules/exam-preparation/b2/sprechen/teil-1"]}>

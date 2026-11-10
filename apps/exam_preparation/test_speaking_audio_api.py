@@ -41,6 +41,85 @@ class SpeakingAudioApiTests(APITestCase):
         )
         self.client.force_authenticate(user)
 
+    def test_c1_teil2_detail_composes_paired_teil1_content(self):
+        companion_base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.C1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL1,
+            external_id="C1-001", title="Vortrag",
+        )
+        companion = SpeakingTeilExercise.objects.create(
+            exercise_base=companion_base,
+            content={
+                "teil": "1",
+                "topic": "Nachhaltiger Tourismus",
+                "outline": ["Vorteile", "Nachteile"],
+                "dialogue": [{
+                    "sequence": 4, "role": "TN1", "text": "Mein Vortrag beginnt.",
+                    "audio_url": (
+                        "/resources/ExamPreparation/exam_preparation_audio/"
+                        "telc_c1_speaking/teil1/C1_C1-001_4.mp3"
+                    ),
+                }],
+            },
+        )
+        current_base = ExerciseBase.objects.create(
+            exam_type="TELC", level=ExerciseBase.Level.C1,
+            skill=ExerciseBase.Skill.SPEAKING,
+            exercise_type=ExerciseBase.ExerciseType.SPEAKING_TEIL2,
+            external_id="C1-001", title="Austausch",
+        )
+        current = SpeakingTeilExercise.objects.create(
+            exercise_base=current_base,
+            content={"teil": "2", "dialogue": [
+                {"sequence": 8, "role": "TN2", "text": "Was denken Sie dazu?", "audio_url": (
+                    "/resources/ExamPreparation/exam_preparation_audio/"
+                    "telc_c1_speaking/teil2/C1_C1-001_8.mp3"
+                )},
+                {"sequence": 9, "role": "TN1", "text": "Ich sehe das anders.", "audio_url": (
+                    "/resources/ExamPreparation/exam_preparation_audio/"
+                    "telc_c1_speaking/teil2/C1_C1-001_9.mp3"
+                )},
+            ]},
+        )
+
+        detail = self.client.get(
+            reverse("exam-prep-speaking-teil-exercises-detail", kwargs={"pk": current.pk})
+        )
+
+        self.assertEqual(detail.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail.data["content"]["topic"], "Nachhaltiger Tourismus")
+        self.assertEqual(detail.data["content"]["outline"], ["Vorteile", "Nachteile"])
+        dialogue = detail.data["content"]["dialogue"]
+        self.assertEqual(
+            [(turn["sequence"], turn["role"], turn["text"]) for turn in dialogue],
+            [(1, "TN1", "Mein Vortrag beginnt."),
+             (2, "TN2", "Was denken Sie dazu?"),
+             (3, "TN1", "Ich sehe das anders.")],
+        )
+        self.assertEqual(dialogue[0]["audio_url"], companion.content["dialogue"][0]["audio_url"])
+        self.assertEqual(dialogue[1]["audio_url"], current.content["dialogue"][0]["audio_url"])
+        self.assertEqual(dialogue[2]["audio_url"], current.content["dialogue"][1]["audio_url"])
+        self.assertEqual(
+            [(turn["turn_key"], turn["source_exercise_id"], turn["source_teil"], turn["source_sequence"])
+             for turn in dialogue],
+            [
+                (f"turn:source:{companion.pk}:4", companion.pk, 1, 4),
+                ("turn:8", current.pk, 2, 8),
+                ("turn:9", current.pk, 2, 9),
+            ],
+        )
+
+        listing = self.client.get(
+            reverse("exam-prep-speaking-teil-exercises-list"),
+            {"exam_type": "TELC", "level": "C1"},
+        )
+        listed = next(item for item in listing.data if item["id"] == current.pk)
+        self.assertNotIn("topic", listed["content"])
+        self.assertEqual([turn["text"] for turn in listed["content"]["dialogue"]], [
+            "Was denken Sie dazu?", "Ich sehe das anders.",
+        ])
+
     def test_detail_requires_audio_url_stored_in_database(self):
         with tempfile.TemporaryDirectory() as directory:
             manifest_path = Path(directory) / "manifest.json"

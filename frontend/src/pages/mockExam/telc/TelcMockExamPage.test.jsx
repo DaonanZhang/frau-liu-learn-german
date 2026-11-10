@@ -3024,6 +3024,11 @@ describe("TELC C1 mock exam", () => {
     expect(mockExamStyleSource).toMatch(/\.telc-c1-cloze-matching \.telc-mock-cloze-matching-slot\.is-inline-selected\s*\{[^}]*background:\s*transparent/s);
   });
 
+  it("gives the C1 Lesen Teil 1 option panel room for its initial guide", () => {
+    expect(mockExamStyleSource).toMatch(/\.telc-c1-cloze-matching\s*>\s*\.telc-mock-cloze-matching-pool\s*\{[^}]*min-height:\s*14rem/s);
+    expect(mockExamStyleSource).toMatch(/@media\s*\(max-width:\s*1100px\)[\s\S]*?\.telc-c1-cloze-matching\s*>\s*\.telc-mock-cloze-matching-pool\s*\{[^}]*min-height:\s*0/s);
+  });
+
   it("maps C1 Lesen Teil 2 to reading comprehension and Teil 3 to reusable A–E matching", async () => {
     const { container } = renderC1();
     expect(await screen.findByRole("heading", { level: 1, name: "Lesen & Sprachbausteine" })).toBeInTheDocument();

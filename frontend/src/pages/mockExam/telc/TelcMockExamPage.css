@@ -460,7 +460,7 @@
 .telc-c1-cloze-matching { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr); align-items: start; gap: 1rem; }
 .telc-c1-cloze-matching > .telc-mock-cloze-matching-pool,
 .telc-c1-cloze-matching > .telc-mock-cloze-matching-text { position: static; top: auto; max-height: min(68vh, 48rem); overflow-y: auto; overscroll-behavior: contain; }
-.telc-c1-cloze-matching > .telc-mock-cloze-matching-pool { grid-column: 2; grid-row: 1; min-width: 0; }
+.telc-c1-cloze-matching > .telc-mock-cloze-matching-pool { grid-column: 2; grid-row: 1; min-width: 0; min-height: 14rem; }
 .telc-c1-cloze-matching > .telc-mock-cloze-matching-text { grid-column: 1; grid-row: 1; min-width: 0; margin: 0; overscroll-behavior-y: auto; font-size: 1rem; line-height: 1.85; }
 .telc-c1-cloze-matching .telc-mock-cloze-matching-pool { padding: .85rem; }
 .telc-c1-cloze-matching .telc-mock-cloze-matching-pool__heading { margin-bottom: .55rem; }
@@ -487,5 +487,6 @@
   .telc-c1-cloze-matching, .telc-c1-reading-understanding { grid-template-columns: 1fr; }
   .telc-c1-cloze-matching > .telc-mock-cloze-matching-pool,
   .telc-c1-cloze-matching > .telc-mock-cloze-matching-text { grid-column: 1; grid-row: auto; max-height: none; }
+  .telc-c1-cloze-matching > .telc-mock-cloze-matching-pool { min-height: 0; }
   .telc-c1-reading-understanding > section { max-height: none; overflow-y: visible; }
 }

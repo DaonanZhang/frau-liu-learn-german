@@ -740,6 +740,12 @@ export default function SpeakingTeilExercisePage({ teil }) {
           </div> : null}
         </section>
       ) : null}
+      {isB2Telc && Number(teil) === 2 && String(content.source_text || "").trim() ? (
+        <section className="speaking-detail-card speaking-detail-introduction">
+          <p className="speaking-detail-card__eyebrow">Einleitung</p>
+          <AnnotatableTextRegion as="p" className="speaking-detail-introduction__text" regionId="material:source-text">{content.source_text}</AnnotatableTextRegion>
+        </section>
+      ) : null}
       {!isC1Telc && Number(teil) === 1 ? (
         <section className="speaking-detail-card speaking-detail-example"><div className="speaking-detail-dialogue speaking-detail-dialogue--flush">{dialogue.map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} showPractice recorderId={`teil-1-${exerciseId}-${turn.sequence}`} annotationRegionId={turnAnnotationId(turn)} />)}</div></section>
       ) : null}

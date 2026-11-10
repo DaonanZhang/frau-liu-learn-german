@@ -4,7 +4,11 @@ export {
   clearDeviceActivityId,
   getOrCreateDeviceActivityId,
   heartbeatDeviceSession,
+  isDeviceSessionExpired,
   login,
   logout,
+  recoverDeviceSession,
   releaseDeviceSession,
+  resetDeviceSessionExpiry,
+  subscribeToDeviceSessionExpiry,
 } from "./auth";

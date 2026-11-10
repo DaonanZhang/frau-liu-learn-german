@@ -1,29 +1,21 @@
 import Swal from "sweetalert2";
 import { clearMockExamLocalStorage } from "../exam_preparation/mockExams.js";
-import { ApiError, apiFetch } from "../client";
+import { apiFetch } from "../client";
+import {
+  clearDeviceActivityId,
+  getOrCreateDeviceActivityId,
+} from "./deviceSession.js";
 
-const DEVICE_ACTIVITY_STORAGE_KEY = "accountDeviceActivityId";
-
-export function getOrCreateDeviceActivityId() {
-  const existing = localStorage.getItem(DEVICE_ACTIVITY_STORAGE_KEY);
-  if (existing) {
-    return existing;
-  }
-  const activityId = globalThis.crypto?.randomUUID
-    ? globalThis.crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  localStorage.setItem(DEVICE_ACTIVITY_STORAGE_KEY, activityId);
-  return activityId;
-}
-
-export function clearDeviceActivityId(expectedActivityId = null) {
-  if (
-    expectedActivityId === null ||
-    localStorage.getItem(DEVICE_ACTIVITY_STORAGE_KEY) === expectedActivityId
-  ) {
-    localStorage.removeItem(DEVICE_ACTIVITY_STORAGE_KEY);
-  }
-}
+export {
+  clearDeviceActivityId,
+  getOrCreateDeviceActivityId,
+  heartbeatDeviceSession,
+  isDeviceSessionExpired,
+  recoverDeviceSession,
+  releaseDeviceSession,
+  resetDeviceSessionExpiry,
+  subscribeToDeviceSessionExpiry,
+} from "./deviceSession.js";
 
 function pickErrorMessage(err, fallback) {
   const data = err?.data;
@@ -168,57 +160,6 @@ export async function logout() {
     });
   } catch (error) {
     console.error("[logout] failed:", error);
-  }
-}
-
-/** Keep this browser counted toward the concurrent-device limit. */
-export async function heartbeatDeviceSession(activityId) {
-  const refreshToken = localStorage.getItem("refreshToken");
-  if (!refreshToken) {
-    throw new ApiError("No refresh token", { status: 401 });
-  }
-  const response = await fetch("/api/accounts/auth/device-heartbeat/", {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ refresh: refreshToken, activity_id: activityId }),
-    credentials: "include",
-  });
-  if (!response.ok) {
-    const data = await response.json().catch(() => null);
-    throw new ApiError(`Device heartbeat failed: ${response.status}`, {
-      status: response.status,
-      data,
-    });
-  }
-}
-
-/** Release only the device slot; the stored tokens remain valid. */
-export function releaseDeviceSession() {
-  const refreshToken = localStorage.getItem("refreshToken");
-  const activityId = localStorage.getItem(DEVICE_ACTIVITY_STORAGE_KEY);
-  if (!refreshToken || !activityId) {
-    return;
-  }
-
-  const payload = new URLSearchParams({
-    refresh: refreshToken,
-    activity_id: activityId,
-  });
-  clearDeviceActivityId(activityId);
-  const queued = navigator.sendBeacon?.(
-    "/api/accounts/auth/device-release/",
-    payload
-  );
-  if (!queued) {
-    fetch("/api/accounts/auth/device-release/", {
-      method: "POST",
-      body: payload,
-      credentials: "include",
-      keepalive: true,
-    }).catch(() => {});
   }
 }
 

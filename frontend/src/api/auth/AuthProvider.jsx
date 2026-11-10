@@ -3,12 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext.jsx";
 import { apiFetch } from "../client.js";
 import { clearAllExamAnnotations } from "../../utils/examTextAnnotations.js";
+import DeviceSessionExpiredModal from "./DeviceSessionExpiredModal.jsx";
 import {
-  clearDeviceActivityId,
-  getOrCreateDeviceActivityId,
-  heartbeatDeviceSession,
+  isDeviceSessionExpired,
   logout as clearAuthTokens,
+  recoverDeviceSession,
   releaseDeviceSession,
+  resetDeviceSessionExpiry,
+  subscribeToDeviceSessionExpiry,
 } from "./index.js";
 
 const DEVICE_TAB_STORAGE_KEY = "accountActiveDeviceTabs";
@@ -28,9 +30,25 @@ function writeActiveDeviceTabs(tabs) {
   localStorage.setItem(DEVICE_TAB_STORAGE_KEY, JSON.stringify(tabs));
 }
 
-export function AuthProvider({ children }) {
+function reloadCurrentPage() {
+  window.location.reload();
+}
+
+function navigateBrowserToLogin() {
+  window.history.replaceState(null, "", "/login");
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+export function AuthProvider({
+  children,
+  reloadPage = reloadCurrentPage,
+  navigateToLogin = navigateBrowserToLogin,
+}) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [deviceSessionExpired, setDeviceSessionExpired] = useState(
+    isDeviceSessionExpired,
+  );
   const tabId = useRef(
     globalThis.crypto?.randomUUID?.() ||
       `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -38,33 +56,11 @@ export function AuthProvider({ children }) {
 
   const hasToken = useCallback(() => Boolean(localStorage.getItem("accessToken")), []);
 
-  const ensureDeviceHeartbeat = useCallback(async () => {
-    let activityId = getOrCreateDeviceActivityId();
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        await heartbeatDeviceSession(activityId);
-        return true;
-      } catch (error) {
-        if (
-          attempt === 0 &&
-          error?.data?.code === "device_activity_closed"
-        ) {
-          clearDeviceActivityId(activityId);
-          activityId = getOrCreateDeviceActivityId();
-          continue;
-        }
-        if (
-          error?.status === 401 ||
-          error?.data?.code === "concurrent_session_limit"
-        ) {
-          await clearAuthTokens();
-          setUser(null);
-        }
-        throw error;
-      }
-    }
-    return false;
-  }, []);
+  const ensureDeviceHeartbeat = useCallback(() => recoverDeviceSession(), []);
+
+  useEffect(() => subscribeToDeviceSessionExpiry(() => {
+    setDeviceSessionExpired(true);
+  }), []);
 
   const reloadMe = useCallback(async () => {
     if (!hasToken()) {
@@ -207,15 +203,33 @@ export function AuthProvider({ children }) {
     }
   }, [reloadMe]);
 
+  const reloadAfterSessionExpiry = useCallback(() => {
+    reloadPage();
+  }, [reloadPage]);
+
+  const logoutAfterSessionExpiry = useCallback(() => {
+    void clearAuthTokens();
+    clearAllExamAnnotations();
+    resetDeviceSessionExpiry();
+    setDeviceSessionExpired(false);
+    setUser(null);
+    setLoading(false);
+    navigateToLogin();
+  }, [navigateToLogin]);
+
   const value = {
     user,
     loading,
     isAuthenticated: Boolean(user),
     reloadMe,
     notifyLogin,
+    deviceSessionExpired,
+    reloadAfterSessionExpiry,
     logout: () => {
       clearAuthTokens();
       clearAllExamAnnotations();
+      resetDeviceSessionExpiry();
+      setDeviceSessionExpired(false);
       setUser(null);
       setLoading(false);
     },
@@ -224,6 +238,11 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={value}>
       {children}
+      <DeviceSessionExpiredModal
+        open={deviceSessionExpired}
+        onReload={reloadAfterSessionExpiry}
+        onLogout={logoutAfterSessionExpiry}
+      />
     </AuthContext.Provider>
   );
 }

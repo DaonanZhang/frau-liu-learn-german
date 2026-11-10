@@ -240,6 +240,64 @@ body {
   box-shadow: 0 0 0 4px var(--auth-focus-ring);
 }
 
+.auth-legalConsent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-height: 44px;
+  margin-top: 0.25rem;
+  color: var(--auth-muted);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.auth-legalConsent > input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 13px 0 0;
+  cursor: pointer;
+}
+
+.auth-legalConsentText {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.16rem;
+}
+
+.auth-legalConsentText label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.auth-legalConsentText button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-legalConsentText button:hover {
+  text-decoration: underline;
+}
+
+.auth-legalConsentText button:focus-visible {
+  border-radius: 2px;
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: 2px;
+}
+
 /* =========================
    Buttons
    ========================= */

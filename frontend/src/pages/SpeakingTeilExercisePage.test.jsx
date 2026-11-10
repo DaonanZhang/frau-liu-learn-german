@@ -501,6 +501,41 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     expect(screen.queryByText("Sprechen Sie über das Thema Urlaub.")).not.toBeInTheDocument();
   });
 
+  it("shows the B2 Teil 2 introduction before the dialogue practice", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      ...teil2Exercise,
+      exercise_base: { ...teil2Exercise.exercise_base, level: "B2", exam_type: "TELC" },
+      content: { ...teil2Exercise.content, source_text: "Einleitung\nBitte lesen Sie den Text." },
+    });
+    const { container } = renderPage(2, 45);
+
+    expect(await screen.findByText("Einleitung")).toBeInTheDocument();
+    expect(container.querySelector(".speaking-detail-introduction__text").textContent).toBe("Einleitung\nBitte lesen Sie den Text.");
+    const intro = container.querySelector(".speaking-detail-introduction");
+    const practice = container.querySelector(".speaking-detail-example");
+    expect(intro.compareDocumentPosition(practice) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("does not show the introduction for B1 or empty source text", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      ...teil2Exercise,
+      content: { ...teil2Exercise.content, source_text: "B1 source" },
+    });
+    const { container, unmount } = renderPage(2, 45);
+    expect(await screen.findByText("Ordnen Sie die Gesprächsteile.")).toBeInTheDocument();
+    expect(container.querySelector(".speaking-detail-introduction")).toBeNull();
+    unmount();
+
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      ...teil2Exercise,
+      exercise_base: { ...teil2Exercise.exercise_base, level: "B2", exam_type: "TELC" },
+      content: { ...teil2Exercise.content, source_text: "  " },
+    });
+    const emptyPage = renderPage(2, 45);
+    expect(await screen.findByText("Ordnen Sie die Gesprächsteile.")).toBeInTheDocument();
+    expect(emptyPage.container.querySelector(".speaking-detail-introduction")).toBeNull();
+  });
+
   it("shows TELC B2 Teil 2 examiner turns above and excludes them from sorting", async () => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue({
       ...teil2Exercise,

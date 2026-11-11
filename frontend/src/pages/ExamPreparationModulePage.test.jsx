@@ -323,7 +323,7 @@ describe("exam preparation level entry", () => {
   });
 
   it("links all six C1 entries and opens the C1 mock exam", async () => {
-    authMocks.useAuth.mockReturnValue({ user: entitledUser(true, "110") });
+    authMocks.useAuth.mockReturnValue({ user: entitledUser(true, "13800138000") });
     fetchSavedMockExams.mockResolvedValue({
       count: 1,
       results: [{ id: 41, exam_type: "telc", level: "C1", progress: { phase: "reading" }, updated_at: "2026-10-01T10:00:00Z" }],
@@ -359,54 +359,30 @@ describe("exam preparation level entry", () => {
     expect(Swal.fire).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ["Hören", "进入听力模块", "/modules/exam-preparation/c1/hoeren"],
-    ["Lesen", "进入阅读模块", "/modules/exam-preparation/c1/lesen"],
-    ["Sprachbausteine", "进入 Sprachbausteine", "/modules/exam-preparation/c1/sprachbausteine/cloze-choice"],
-    ["Schreiben", "进入 Schreiben", "/modules/exam-preparation/c1/schreiben"],
-    ["Sprechen", "进入 Sprechen", "/modules/exam-preparation/c1/sprechen"],
-  ])("shows Coming soon without navigating when a non-110 C1 user opens %s", (name, cta, href) => {
-    renderPage("c1");
-    const beforeLocation = screen.getByTestId("location").textContent;
+  it("lets a non-entitled non-110 user navigate to a C1 skill and purchase mock exam access", async () => {
+    authMocks.useAuth.mockReturnValue({ user: { id: 7, telephone: "13800138000", entitlements: [] } });
+    Swal.fire.mockResolvedValue({ isConfirmed: true });
+    const { unmount } = renderPage("c1");
     const skills = screen.getByRole("region", { name: "专项入口列表" });
-    const entry = within(skills).getByRole("link", { name: new RegExp(name) });
-    expect(entry).toHaveAttribute("href", href);
-    expect(entry).toHaveClass("exam-module-card--link");
-
+    const entry = within(skills).getByRole("link", { name: /进入听力模块/ });
+    expect(entry).toHaveAttribute("href", "/modules/exam-preparation/c1/hoeren");
     fireEvent.click(entry);
+    expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/c1/hoeren");
+    expect(Swal.fire).not.toHaveBeenCalled();
 
-    expect(screen.getByTestId("location").textContent).toBe(beforeLocation);
-    expect(screen.getByRole("link", { name: /备考建议/ })).toHaveAttribute(
-      "href",
-      "/modules/exam-preparation/c1/tips",
-    );
-    expect(within(entry).getByText(cta)).toBeInTheDocument();
-    expect(Swal.fire).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(Swal.fire.mock.calls[0][0])).toMatch(/Coming soon/i);
-  });
-
-  it("does not load or show unfinished C1 mock exam entries for a non-110 user", () => {
+    unmount();
     renderPage("c1");
-
+    fireEvent.click(screen.getByRole("button", { name: /购买以解锁/ }));
+    await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(
+      "/modules/exam-preparation/purchase?return_to=%2Fmodules%2Fexam-preparation%2Fc1",
+    ));
+    expect(Swal.fire).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(Swal.fire.mock.calls[0][0])).toMatch(/购买备考季以解锁笔试模拟/);
     expect(fetchSavedMockExams).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText("未完成的模拟考试")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "继续考试" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "查看更多未完成考试" })).not.toBeInTheDocument();
-  });
-
-  it("shows Coming soon without navigating when a non-110 C1 user starts a mock exam", () => {
-    renderPage("c1");
-    const beforeLocation = screen.getByTestId("location").textContent;
-
-    fireEvent.click(screen.getByRole("button", { name: "开始新考试" }));
-
-    expect(screen.getByTestId("location").textContent).toBe(beforeLocation);
-    expect(Swal.fire).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(Swal.fire.mock.calls[0][0])).toMatch(/Coming soon/i);
   });
 
   it("keeps the C1 mock exam behind the existing purchase lock", async () => {
-    authMocks.useAuth.mockReturnValue({ user: { id: 7, telephone: "110", entitlements: [] } });
+    authMocks.useAuth.mockReturnValue({ user: { id: 7, telephone: "13800138000", entitlements: [] } });
     Swal.fire.mockResolvedValue({ isConfirmed: true });
     renderPage("c1");
 

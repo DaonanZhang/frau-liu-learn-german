@@ -194,7 +194,7 @@ describe("SpeakingTeilExercisePage text annotations", () => {
 
   it.each([
     [1, "03:00"],
-    [2, "02:00"],
+    [2, "03:00"],
   ])("requires an independent timed recording before revealing C1 Teil %s answers", async (teil, duration) => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue({
       id: 80 + teil,
@@ -233,13 +233,37 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     vi.useFakeTimers();
     try {
       fireEvent.click(screen.getByRole("button", { name: "开始计时" }));
+      expect(screen.getByRole("button", { name: "暂停计时" })).toHaveAttribute("title", "暂停计时");
+      expect(screen.getByRole("button", { name: "暂停计时" }).querySelector("svg")).toHaveAttribute("aria-hidden", "true");
       act(() => vi.advanceTimersByTime(1000));
       expect(screen.getByRole("timer")).toHaveTextContent("02:59");
       fireEvent.click(screen.getByRole("button", { name: "暂停计时" }));
       act(() => vi.advanceTimersByTime(1000));
       expect(screen.getByRole("timer")).toHaveTextContent("02:59");
       fireEvent.click(screen.getByRole("button", { name: "重新计时" }));
+      expect(screen.getByRole("button", { name: "重新计时" })).toHaveAttribute("title", "重新计时");
+      expect(screen.getByRole("button", { name: "开始计时" })).toHaveAttribute("title", "开始计时");
       expect(screen.getByRole("timer")).toHaveTextContent("03:00");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts the C1 Teil 1B timer at three minutes", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      id: 92,
+      exercise_base: { level: "C1", title: "C1 Zusammenfassung", exam_type: "TELC", exercise_type: "SPEAKING_TEIL2" },
+      instruction: "Fassen Sie zusammen.",
+      content: { outline: ["Ausgangslage"] },
+    });
+    renderPage(2, 92);
+    await screen.findByRole("timer");
+    expect(screen.getByRole("timer")).toHaveTextContent("03:00");
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "开始计时" }));
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.getByRole("timer")).toHaveTextContent("02:59");
     } finally {
       vi.useRealTimers();
     }

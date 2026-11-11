@@ -3317,7 +3317,7 @@ describe("TELC C1 mock exam", () => {
     const vocabularyOnlyExam = structuredClone(exam);
     delete vocabularyOnlyExam.parts.writing.content.quotes;
     vocabularyOnlyExam.parts.writing.content.vocabulary_pages = [{
-      title: "Wörter",
+      title: "Wortschatz 1",
       entries: [{ word: "die Möglichkeit", translation_zh: "可能性" }],
     }];
 
@@ -3326,7 +3326,8 @@ describe("TELC C1 mock exam", () => {
     expect(await screen.findByRole("complementary", { name: "词汇表" })).toBeInTheDocument();
     expect(screen.getByText("die Möglichkeit")).toBeInTheDocument();
     expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("可能性");
-    expect(screen.getByRole("heading", { name: "Wörter" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "相关词汇" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Wortschatz 1" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /中文翻译/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "写作引语" })).not.toBeInTheDocument();
     const collapseVocabulary = screen.getByRole("button", { name: "收起词汇表" });

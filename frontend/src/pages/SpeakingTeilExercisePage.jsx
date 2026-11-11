@@ -16,7 +16,7 @@ import { EyeIcon } from "./LexiconPage/components/Icons.jsx";
 import "./SpeakingTeilExercisePage.css";
 
 const TITLES = { 1: "Einander kennenlernen", 2: "Über ein Thema sprechen", 3: "Gemeinsam etwas planen" };
-const C1_SPEAKING_SECONDS = { 1: 3 * 60, 2: 2 * 60 };
+const C1_SPEAKING_SECONDS = { 1: 3 * 60, 2: 3 * 60 };
 const formatCountdown = (seconds) => `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
 const turnKey = (turn) => typeof turn?.turn_key === "string" && turn.turn_key.trim() ? turn.turn_key : `turn:${turn.sequence}`;
 const c1RecorderId = (turn, teil, exerciseId) => {
@@ -748,8 +748,12 @@ export default function SpeakingTeilExercisePage({ teil }) {
           <div className="speaking-detail-c1-timer">
             <div><span>作答时间</span><strong role="timer" aria-live="off">{formatCountdown(c1RemainingSeconds)}</strong></div>
             <div className="speaking-detail-c1-timer__actions">
-              <button type="button" onClick={() => setC1TimerRunning((running) => !running)} disabled={c1RemainingSeconds === 0}>{c1TimerRunning ? "暂停计时" : "开始计时"}</button>
-              <button type="button" onClick={() => { setC1TimerRunning(false); setC1RemainingSeconds(c1SpeakingSeconds); }}>重新计时</button>
+              <button type="button" aria-label={c1TimerRunning ? "暂停计时" : "开始计时"} title={c1TimerRunning ? "暂停计时" : "开始计时"} onClick={() => setC1TimerRunning((running) => !running)} disabled={c1RemainingSeconds === 0}>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d={c1TimerRunning ? "M7 5h4v14H7zM15 5h4v14h-4z" : "m7 4 13 8-13 8z"} fill="currentColor" /></svg>
+              </button>
+              <button type="button" aria-label="重新计时" title="重新计时" onClick={() => { setC1TimerRunning(false); setC1RemainingSeconds(c1SpeakingSeconds); }}>
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.34-5.66L4 8.7M4 4v4.7h4.7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
             </div>
           </div>
           <SpeakingPracticeRecorder language="zh" recordingId={`c1-attempt-${teil}-${exerciseId}`} showSampleAudio={false} />

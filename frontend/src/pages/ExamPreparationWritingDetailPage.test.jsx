@@ -215,7 +215,7 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
           { text: "Lernen endet nie.", translation_zh: "学习永无止境。" },
         ],
         vocabulary_pages: [
-          { title: "Wortschatz", entries: [{ word: "die Erkenntnis", translation_zh: "认识" }] },
+          { title: "Wortschatz 1", entries: [{ word: "die Erkenntnis", translation_zh: "认识" }] },
           { title: "Wortschatz", entries: [{ word: "die Voraussetzung", translation_zh: "前提" }] },
         ],
       },
@@ -244,6 +244,9 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     expect(within(secondQuote).getByRole("button", { name: "隐藏 Zitate 2 中文翻译" })).toBeInTheDocument();
 
     const vocabulary = screen.getByRole("complementary", { name: "词汇表" });
+    expect(vocabulary.querySelector("footer")).toHaveClass("writing-detail-vocabulary__pagination");
+    expect(within(vocabulary).getByText("相关词汇")).toBeInTheDocument();
+    expect(within(vocabulary).queryByText("Wortschatz 1")).not.toBeInTheDocument();
     expect(vocabulary).toHaveClass("writing-detail-vocabulary");
     expect(taskCard.compareDocumentPosition(quoteSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(quoteSection.compareDocumentPosition(vocabulary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

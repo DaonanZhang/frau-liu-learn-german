@@ -180,7 +180,7 @@ export function VocabularyPages({ pages }) {
   return (
     <aside className="writing-detail-vocabulary" aria-label="词汇表">
       <div className="writing-detail-vocabulary__header">
-        <strong>{page.title || "词汇表"}</strong>
+        <strong>相关词汇</strong>
         <button
           type="button"
           aria-label={isExpanded ? "收起词汇表" : "展开词汇表"}
@@ -203,7 +203,7 @@ export function VocabularyPages({ pages }) {
               </p>
             ))}
           </div>
-          <footer>
+          <footer className="writing-detail-vocabulary__pagination">
             <button type="button" onClick={() => setPageIndex((current) => Math.max(0, current - 1))} disabled={pageIndex === 0} aria-label="上一页">←</button>
             <span>{pageIndex + 1} / {pages.length}</span>
             <button type="button" onClick={() => setPageIndex((current) => Math.min(pages.length - 1, current + 1))} disabled={pageIndex >= pages.length - 1} aria-label="下一页">→</button>

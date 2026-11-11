@@ -696,7 +696,7 @@
 .writing-detail-vocabulary__card strong { display: block; color: #111827; font-size: 1.05rem; line-height: 1.45; overflow-wrap: anywhere; }
 .writing-detail-vocabulary__card > span { display: block; margin-top: .45rem; color: #4b5563; font-size: .92rem; line-height: 1.5; overflow-wrap: anywhere; }
 .writing-detail-vocabulary__card i { display: none; }
-.writing-detail-vocabulary footer { display: flex; align-items: center; justify-content: space-between; margin-top: .55rem; }
+.writing-detail-vocabulary__pagination { display: flex; align-items: center; justify-content: center; gap: .75rem; margin-top: .55rem; }
 .writing-detail-vocabulary button { min-width: 2.5rem; min-height: 2.35rem; border: 1px solid #dce3df; border-radius: .6rem; background: white; }
 .writing-detail-vocabulary button:disabled { opacity: .4; }
 

@@ -338,7 +338,7 @@ function C1WritingPrompt({ exercise, showTranslations = false, showHelpers = fal
   if (!quotes.length && !(showHelpers && pages.length)) return null;
   return <>
     {showHelpers && (quotes.length || pages.length) ? <div className="telc-c1-writing-quotes__header">
-      <h2>{quotes.length ? "写作引语" : pages[0]?.title || "Wortschatz"}</h2>
+      <h2>{quotes.length ? "写作引语" : "相关词汇"}</h2>
     </div> : null}
     {quotes.length ? <section className="telc-c1-writing-quotes" aria-label="写作引语">
       {quotes.slice(0, 2).map((quote, index) => {

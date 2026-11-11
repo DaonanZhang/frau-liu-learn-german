@@ -55,11 +55,11 @@ export const EXAM_PREPARATION_MODULE = {
   route: "/modules/exam-preparation",
   moduleKey: "exam_preparation",
   title: "备考季",
-  subtitle: "TELC B1/B2 听说读写全真训练",
+  subtitle: "TELC B1、B2、C1 HS 听说读写全真训练",
   description:
     "“源于真题，高于真题” —— 我们的题库由符号刘博士团队精心打磨，紧扣官方大纲。用真题和模拟题复刻考试难度与命题规律，让你在考场上游刃有余、拒绝慌乱。",
   badge: "源于真题，高于真题",
-  stats: ["TELC B1/B2", "全题型交互", "答案详解"],
+  stats: ["TELC B1、B2、C1 HS", "全题型交互", "答案详解"],
   image: "/images/exam_cover.png",
   originalPricesByDuration: {
     30: 99.9,

@@ -51,6 +51,13 @@ describe("Home invitation modal", () => {
     );
   });
 
+  it("shows TELC B1, B2, and C1 HS on the exam preparation card", () => {
+    render(<Home />);
+
+    expect(screen.getByText("TELC B1、B2、C1 HS 听说读写全真训练")).toBeInTheDocument();
+    expect(screen.getByText("TELC B1、B2、C1 HS")).toBeInTheDocument();
+  });
+
   it("hides the modal for the current mount when closed", () => {
     render(<Home />);
 

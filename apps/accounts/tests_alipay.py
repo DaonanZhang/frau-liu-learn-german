@@ -18,8 +18,11 @@ from apps.accounts.models import (
     Entitlement,
     Module,
     ModuleSeason,
+    PaymentDiscountApplication,
     PaymentGrantTask,
+    PromotionCodeRecord,
     PurchaseOffer,
+    UserCoupon,
 )
 from apps.accounts.views.payment import _apply_payment_status, _query_and_sync_payment_status
 from apps.accounts.services.payment_grant_service import process_payment_grant_task_by_id
@@ -148,6 +151,136 @@ class AlipayPaymentApiTests(APITestCase):
             is_active=True,
         )
         self.client.force_authenticate(user=self.user)
+
+    def _make_pending_purchase(self, order_no="pending-api-001", *, user=None, expires_at=None):
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no=order_no,
+            subject="Pending purchase",
+            total_amount=Decimal("29.90"),
+            status=AlipayWebsitePayment.Status.PENDING,
+            expires_at=expires_at or timezone.now() + timedelta(minutes=10),
+        )
+        task = PaymentGrantTask.objects.create(
+            payment=payment,
+            offer=self.offer,
+            user=user or self.user,
+            module=self.module,
+            season=self.season,
+            plan=Entitlement.Plan.MONTH_1,
+        )
+        return payment, task
+
+    def test_pending_orders_are_owned_open_unexpired_purchases_only(self):
+        self._make_pending_purchase()
+        self._make_pending_purchase("other-user", user=get_user_model().objects.create_user(
+            telephone="13700137001", country_code="+86", password="pass-123456"
+        ))
+        self._make_pending_purchase("expired", expires_at=timezone.now() - timedelta(seconds=1))
+        AlipayWebsitePayment.objects.create(
+            merchant_order_no="debug-pending", subject="Debug", total_amount=Decimal("1.00"),
+            status=AlipayWebsitePayment.Status.PENDING,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+
+        response = self.client.get("/api/accounts/payments/alipay/pending/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["merchant_order_no"] for item in response.data["orders"]], ["pending-api-001"])
+        self.assertEqual(response.data["orders"][0]["module_name"], self.module.name)
+
+    @patch("apps.accounts.views.payment._query_and_sync_payment_status", return_value="synced")
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_resume_reuses_existing_purchase_after_sync(self, mock_get_service, mock_query):
+        payment, _ = self._make_pending_purchase()
+        mock_get_service.return_value.build_page_pay_url.return_value = "https://alipay.test/resume"
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/pending/resume/",
+            {"merchant_order_no": payment.merchant_order_no}, format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"already_paid": False, "pay_url": "https://alipay.test/resume"})
+        self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
+        self.assertEqual(PaymentGrantTask.objects.count(), 1)
+        mock_query.assert_called_once_with(payment=payment)
+
+    @patch("apps.accounts.views.payment._query_and_sync_payment_status", return_value="not_found")
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_resume_allows_not_found_trade_without_creating_another_order(
+        self, mock_get_service, mock_query
+    ):
+        payment, _ = self._make_pending_purchase()
+        mock_get_service.return_value.build_page_pay_url.return_value = "https://alipay.test/resume"
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/pending/resume/",
+            {"merchant_order_no": payment.merchant_order_no},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"already_paid": False, "pay_url": "https://alipay.test/resume"})
+        self.assertEqual(AlipayWebsitePayment.objects.count(), 1)
+        self.assertEqual(PaymentGrantTask.objects.count(), 1)
+        mock_query.assert_called_once_with(payment=payment)
+
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_cancel_closes_payment_and_releases_reserved_coupon(self, mock_get_service):
+        payment, _ = self._make_pending_purchase()
+        service = Mock()
+        service.config.seller_id = ""
+        service.query_trade.return_value = {
+            "code": "10000",
+            "trade_status": "WAIT_BUYER_PAY",
+            "total_amount": "29.90",
+        }
+        service.close_trade.return_value = {"code": "10000"}
+        mock_get_service.return_value = service
+        promotion = PromotionCodeRecord.objects.create(
+            code="TESTCANCEL", campaign_name="Test cancel", discount_amount=Decimal("1.00")
+        )
+        coupon = UserCoupon.objects.create(
+            user=self.user, promotion_code=promotion, discount_amount=Decimal("1.00"),
+            status=UserCoupon.Status.RESERVED, reserved_payment=payment,
+        )
+        PaymentDiscountApplication.objects.create(
+            payment=payment, coupon=coupon, promotion_code=promotion, user=self.user, offer=self.offer,
+            original_amount=Decimal("29.90"), promotion_discount_amount=Decimal("1.00"),
+            final_amount=Decimal("28.90"),
+        )
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/pending/cancel/",
+            {"merchant_order_no": payment.merchant_order_no}, format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payment.refresh_from_db()
+        coupon.refresh_from_db()
+        self.assertEqual(response.data["status"], "closed")
+        self.assertEqual(payment.status, AlipayWebsitePayment.Status.CLOSED)
+        self.assertEqual(coupon.status, UserCoupon.Status.AVAILABLE)
+        service.close_trade.assert_called_once_with(merchant_order_no=payment.merchant_order_no)
+
+    @patch("apps.accounts.views.payment._close_unpaid_payment")
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_cancel_returns_paid_race_without_closing_payment(self, mock_get_service, mock_close):
+        payment, _ = self._make_pending_purchase()
+        mock_close.side_effect = lambda **kwargs: (
+            AlipayWebsitePayment.objects.filter(pk=payment.pk).update(status=AlipayWebsitePayment.Status.PAID)
+            and "paid"
+        )
+
+        response = self.client.post(
+            "/api/accounts/payments/alipay/pending/cancel/",
+            {"merchant_order_no": payment.merchant_order_no}, format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["already_paid"])
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, AlipayWebsitePayment.Status.PAID)
 
     @patch("apps.accounts.views.payment.get_alipay_service")
     def test_notify_logs_rejected_signature_without_payload(
@@ -1140,6 +1273,90 @@ class AlipayPaymentApiTests(APITestCase):
     ALIPAY_REFUND_RECONCILE_DAYS=90,
 )
 class AlipayReconciliationTests(APITestCase):
+    @patch("apps.accounts.views.payment.get_alipay_service")
+    def test_expired_missing_alipay_order_is_closed_and_releases_coupon(
+        self,
+        mock_get_service: Mock,
+    ) -> None:
+        user = get_user_model().objects.create_user(
+            telephone="13600000001",
+            country_code="+86",
+            password="pass-123456",
+        )
+        module = Module.objects.create(key="expired-reconcile", name="Expired reconcile")
+        offer = PurchaseOffer.objects.create(
+            code="expired-reconcile-offer",
+            title="Expired reconcile offer",
+            module=module,
+            plan=Entitlement.Plan.MONTH_1,
+            price_amount=Decimal("29.90"),
+        )
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-expired-reconcile-001",
+            subject="Expired purchase",
+            total_amount=Decimal("29.90"),
+            status=AlipayWebsitePayment.Status.PENDING,
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+        promotion = PromotionCodeRecord.objects.create(
+            code="EXPIREDRECONCILE",
+            campaign_name="Expired reconciliation",
+            discount_amount=Decimal("1.00"),
+        )
+        coupon = UserCoupon.objects.create(
+            user=user,
+            promotion_code=promotion,
+            discount_amount=Decimal("1.00"),
+            status=UserCoupon.Status.RESERVED,
+            reserved_payment=payment,
+        )
+        PaymentDiscountApplication.objects.create(
+            payment=payment,
+            coupon=coupon,
+            promotion_code=promotion,
+            user=user,
+            offer=offer,
+            original_amount=Decimal("29.90"),
+            promotion_discount_amount=Decimal("1.00"),
+            final_amount=Decimal("28.90"),
+        )
+        service = Mock()
+        service.query_trade.return_value = {
+            "code": "40004",
+            "sub_code": "ACQ.TRADE_NOT_EXIST",
+        }
+        mock_get_service.return_value = service
+
+        stats = reconcile_alipay_payments_now(limit=100)
+
+        payment.refresh_from_db()
+        coupon.refresh_from_db()
+        self.assertEqual(payment.status, AlipayWebsitePayment.Status.CLOSED)
+        self.assertEqual(coupon.status, UserCoupon.Status.AVAILABLE)
+        self.assertIsNone(coupon.reserved_payment_id)
+        self.assertEqual(stats["queried"], 1)
+        service.close_trade.assert_not_called()
+
+    @patch("apps.accounts.views.payment._query_and_sync_payment_status")
+    @patch("apps.accounts.views.payment._close_unpaid_payment")
+    def test_unexpired_open_order_is_queried_without_safe_close(
+        self,
+        mock_close: Mock,
+        mock_query: Mock,
+    ) -> None:
+        payment = AlipayWebsitePayment.objects.create(
+            merchant_order_no="pay-unexpired-reconcile-001",
+            subject="Open purchase",
+            total_amount=Decimal("29.90"),
+            status=AlipayWebsitePayment.Status.PENDING,
+            expires_at=timezone.now() + timedelta(minutes=10),
+        )
+
+        reconcile_alipay_payments_now(limit=100)
+
+        mock_query.assert_called_once_with(payment=payment)
+        mock_close.assert_not_called()
+
     @patch("apps.accounts.views.payment._query_and_sync_payment_status")
     def test_old_paid_order_outside_refund_window_is_not_queried(
         self,

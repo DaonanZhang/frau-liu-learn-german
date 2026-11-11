@@ -176,7 +176,7 @@ class ReferralRedemptionFirstIssueTests(TestCase):
             expires_at=timezone.now() - timedelta(days=1),
         )
         self.assert_rejected_without_writes(
-            "existing_exam_preparation_access", "本次推广活动仅针对第一次购买备考季的用户哦！"
+            "existing_exam_preparation_access", "很抱歉，本活动仅对备考季新用户有效。"
         )
         Entitlement.objects.filter(user=self.user).delete()
         for status in Entitlement.Status.values:
@@ -189,7 +189,7 @@ class ReferralRedemptionFirstIssueTests(TestCase):
                 expires_at=timezone.now() - timedelta(days=1),
             )
             self.assert_rejected_without_writes(
-                "existing_exam_preparation_access", "本次推广活动仅针对第一次购买备考季的用户哦！"
+                "existing_exam_preparation_access", "很抱歉，本活动仅对备考季新用户有效。"
             )
             Entitlement.objects.filter(user=self.user).delete()
 

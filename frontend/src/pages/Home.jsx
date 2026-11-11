@@ -20,6 +20,12 @@ import {
   hasModuleAccess,
 } from "../utils/moduleAccess.js";
 import { addRedeemActionToPurchaseModal } from "../utils/modulePurchaseRedeem.js";
+import {
+  cancelPendingAlipayPayment,
+  fetchPendingAlipayPayments,
+  resumePendingAlipayPayment,
+  savePendingPaymentContext,
+} from "../api/payments/alipay.js";
 
 import "./Home.css";
 import "./Homepage/ModuleEntryCard.css";
@@ -90,6 +96,95 @@ export default function Home() {
   const [learningVideoUserData, setLearningVideoUserData] = useState(null);
   const [failedSources, setFailedSources] = useState({});
   const [showInvitationModal, setShowInvitationModal] = useState(true);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [pendingOrdersLoading, setPendingOrdersLoading] = useState(false);
+  const [pendingOrdersError, setPendingOrdersError] = useState("");
+  const [pendingOrderAction, setPendingOrderAction] = useState("");
+
+  const refreshPendingOrders = async () => {
+    setPendingOrdersLoading(true);
+    setPendingOrdersError("");
+    try {
+      setPendingOrders(await fetchPendingAlipayPayments());
+    } catch {
+      setPendingOrdersError("待支付订单暂时无法加载。");
+    } finally {
+      setPendingOrdersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setPendingOrders([]);
+      return undefined;
+    }
+    let aborted = false;
+    setPendingOrdersLoading(true);
+    fetchPendingAlipayPayments()
+      .then((orders) => {
+        if (!aborted) {
+          setPendingOrders(orders);
+          setPendingOrdersError("");
+        }
+      })
+      .catch(() => {
+        if (!aborted) setPendingOrdersError("待支付订单暂时无法加载。");
+      })
+      .finally(() => {
+        if (!aborted) setPendingOrdersLoading(false);
+      });
+    return () => { aborted = true; };
+  }, [user]);
+
+  const handleResumePendingOrder = async (order) => {
+    if (pendingOrderAction) return;
+    setPendingOrderAction(order.merchant_order_no);
+    setPendingOrdersError("");
+    try {
+      const result = await resumePendingAlipayPayment(order.merchant_order_no);
+      if (result?.pay_url) {
+        savePendingPaymentContext(order.merchant_order_no, { returnPath: globalThis.location.pathname });
+        globalThis.location.assign(result.pay_url);
+      } else {
+        await refreshPendingOrders();
+        setPendingOrdersError("暂时无法继续支付，请刷新后重试。");
+      }
+    } catch {
+      setPendingOrdersError("暂时无法继续支付，请稍后重试。");
+    } finally {
+      setPendingOrderAction("");
+    }
+  };
+
+  const handleCancelPendingOrder = async (order) => {
+    if (pendingOrderAction) return;
+    const confirmation = await Swal.fire({
+      title: "取消待支付订单？",
+      text: order.subject || order.module_name || "此订单",
+      showCancelButton: true,
+      confirmButtonText: "取消订单",
+      cancelButtonText: "继续保留",
+    });
+    if (!confirmation.isConfirmed) return;
+
+    setPendingOrderAction(order.merchant_order_no);
+    setPendingOrdersError("");
+    try {
+      const result = await cancelPendingAlipayPayment(order.merchant_order_no);
+      if (result?.already_paid && result.pay_url) {
+        savePendingPaymentContext(order.merchant_order_no, { returnPath: globalThis.location.pathname });
+        globalThis.location.assign(result.pay_url);
+      } else if (result?.already_paid) {
+        await refreshPendingOrders();
+      } else {
+        setPendingOrders((orders) => orders.filter((item) => item.merchant_order_no !== order.merchant_order_no));
+      }
+    } catch {
+      setPendingOrdersError("订单暂时无法取消，请稍后重试。");
+    } finally {
+      setPendingOrderAction("");
+    }
+  };
 
   const isMobileView = useMaxWidth(990);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -175,7 +270,7 @@ export default function Home() {
 
             <section className="home-invitation-modal__card">
               <h3>🎁 好友专属优惠</h3>
-              <p>只要好友作为网站新用户使用你的专属分享码下单备考季，即可享受 <strong>立减 5 元</strong> 优惠！</p>
+              <p>只要好友作为网站备考季新用户使用你的专属分享码下单备考季，即可享受 <strong>立减 5 元</strong> 优惠！</p>
             </section>
 
             <section className="home-invitation-modal__card">
@@ -205,6 +300,49 @@ export default function Home() {
             </button>
           </section>
         </div>
+      )}
+      {user && (pendingOrdersLoading || pendingOrdersError || pendingOrders.length > 0) && (
+        <section className="home-pending-orders" aria-labelledby="home-pending-orders-title">
+          <header className="home-pending-orders__header">
+            <svg className="home-pending-orders__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 3v3m10-3v3M4 9h16M6 5h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" />
+              <path d="M8 13h3m2 0h3M8 17h3" />
+            </svg>
+            <h2 id="home-pending-orders-title">待支付订单</h2>
+            {pendingOrders.length > 0 && (
+              <span className="home-pending-orders__count" aria-label={`${pendingOrders.length} 笔订单`}>
+                {pendingOrders.length}
+              </span>
+            )}
+          </header>
+          {pendingOrdersLoading && <p role="status">正在加载订单…</p>}
+          {pendingOrdersError && <p className="home-pending-orders__error" role="alert">{pendingOrdersError}</p>}
+          {pendingOrders.length > 0 && (
+            <div className="home-pending-orders__list">
+              {pendingOrders.map((order) => {
+                const expiresAt = order.payment_expires_at
+                  ? new Date(order.payment_expires_at).toLocaleString()
+                  : "";
+                return (
+                  <article className="home-pending-orders__item" key={order.merchant_order_no}>
+                    <div className="home-pending-orders__details">
+                      <strong>{order.subject || order.module_name || "订单"}</strong>
+                      <span>¥{order.amount}{expiresAt ? ` · 有效至 ${expiresAt}` : ""}</span>
+                    </div>
+                    <div className="home-pending-orders__actions">
+                      <button className="home-pending-orders__pay" type="button" disabled={Boolean(pendingOrderAction)} onClick={() => handleResumePendingOrder(order)}>
+                        {pendingOrderAction === order.merchant_order_no ? "处理中…" : "继续支付"}
+                      </button>
+                      <button className="home-pending-orders__cancel" type="button" disabled={Boolean(pendingOrderAction)} onClick={() => handleCancelPendingOrder(order)}>
+                        取消订单
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
       <div className={`home-layout ${isMobileView ? "home-layout--mobile" : ""}`}>
         <div

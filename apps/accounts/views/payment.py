@@ -1057,6 +1057,157 @@ class AlipayNotifyAPIView(APIView):
         return HttpResponse("success", content_type="text/plain")
 
 
+class AlipayPendingOrdersAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "alipay_payment_status"
+
+    def get(self, request: Request) -> Response:
+        now = timezone.now()
+        tasks = (
+            PaymentGrantTask.objects.select_related("payment", "module", "season", "offer")
+            .filter(
+                user=request.user,
+                offer__isnull=False,
+                payment__status__in=[
+                    AlipayWebsitePayment.Status.CREATED,
+                    AlipayWebsitePayment.Status.PENDING,
+                ],
+                payment__expires_at__gt=now,
+            )
+            .order_by("-payment__created_at")
+        )
+        orders = [
+            {
+                "merchant_order_no": task.payment.merchant_order_no,
+                "subject": task.payment.subject,
+                "amount": f"{task.payment.total_amount:.2f}",
+                "payment_expires_at": task.payment.expires_at.isoformat(),
+                "module_key": task.module.key if task.module_id else "",
+                "module_name": task.module.name if task.module_id else "",
+                "season_number": task.season.season_number if task.season_id else None,
+                "offer_code": task.offer.code if task.offer_id else "",
+            }
+            for task in tasks
+        ]
+        return Response({"orders": orders}, status=status.HTTP_200_OK)
+
+
+class AlipayPendingOrderResumeAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "alipay_payment_status"
+
+    def post(self, request: Request) -> Response:
+        merchant_order_no = str(request.data.get("merchant_order_no") or "").strip()
+        if not merchant_order_no:
+            return Response(
+                {"detail": "merchant_order_no is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        task = (
+            PaymentGrantTask.objects.select_related("payment")
+            .filter(
+                payment__merchant_order_no=merchant_order_no,
+                user=request.user,
+                offer__isnull=False,
+            )
+            .first()
+        )
+        if task is None:
+            return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+        payment = task.payment
+        try:
+            if payment.status in {
+                AlipayWebsitePayment.Status.CREATED,
+                AlipayWebsitePayment.Status.PENDING,
+            }:
+                outcome = _query_and_sync_payment_status(payment=payment)
+                payment.refresh_from_db()
+                if payment.status == AlipayWebsitePayment.Status.PAID:
+                    return Response({
+                        "already_paid": True,
+                        "pay_url": f"{_resolve_frontend_return_url(request)}?{urlencode({'out_trade_no': payment.merchant_order_no})}",
+                    })
+                if payment.status not in {
+                    AlipayWebsitePayment.Status.CREATED,
+                    AlipayWebsitePayment.Status.PENDING,
+                }:
+                    return Response(
+                        {"detail": "This payment is no longer payable."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if payment.expires_at is None or payment.expires_at <= timezone.now():
+                    _close_unpaid_payment(payment=payment, alipay_service=get_alipay_service())
+                    payment.refresh_from_db()
+                    if payment.status == AlipayWebsitePayment.Status.PAID:
+                        return Response({
+                            "already_paid": True,
+                            "pay_url": f"{_resolve_frontend_return_url(request)}?{urlencode({'out_trade_no': payment.merchant_order_no})}",
+                        })
+                    return Response(
+                        {"detail": "This payment has expired and cannot be resumed."},
+                        status=status.HTTP_409_CONFLICT,
+                    )
+                if outcome == "unavailable":
+                    return Response(
+                        {"detail": "Could not confirm the Alipay payment status."},
+                        status=status.HTTP_502_BAD_GATEWAY,
+                    )
+            else:
+                return Response({"detail": "This payment is no longer payable."}, status=status.HTTP_409_CONFLICT)
+            pay_url = get_alipay_service().build_page_pay_url(payment=payment)
+            return Response({"already_paid": False, "pay_url": pay_url}, status=status.HTTP_200_OK)
+        except (AlipayConfigurationError, AlipayGatewayError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+
+
+class AlipayPendingOrderCancelAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "alipay_payment_status"
+
+    def post(self, request: Request) -> Response:
+        merchant_order_no = str(request.data.get("merchant_order_no") or "").strip()
+        if not merchant_order_no:
+            return Response(
+                {"detail": "merchant_order_no is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        task = (
+            PaymentGrantTask.objects.select_related("payment")
+            .filter(
+                payment__merchant_order_no=merchant_order_no,
+                user=request.user,
+                offer__isnull=False,
+            )
+            .first()
+        )
+        if task is None:
+            return Response({"detail": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+        if task.payment.status == AlipayWebsitePayment.Status.PAID:
+            return Response(
+                {"already_paid": True, "status": AlipayWebsitePayment.Status.PAID},
+                status=status.HTTP_200_OK,
+            )
+        try:
+            outcome = _close_unpaid_payment(payment=task.payment, alipay_service=get_alipay_service())
+        except (AlipayConfigurationError, AlipayGatewayError) as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
+        task.payment.refresh_from_db()
+        if outcome == "paid" or task.payment.status == AlipayWebsitePayment.Status.PAID:
+            return Response(
+                {"already_paid": True, "status": AlipayWebsitePayment.Status.PAID},
+                status=status.HTTP_200_OK,
+            )
+        if task.payment.status != AlipayWebsitePayment.Status.CLOSED:
+            return Response(
+                {"detail": "Alipay could not confirm that the payment was closed."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response({"status": AlipayWebsitePayment.Status.CLOSED}, status=status.HTTP_200_OK)
+
+
 class AlipayPaymentStatusAPIView(APIView):
     """
     Return the current payment/grant status for the authenticated buyer.

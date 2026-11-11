@@ -26,6 +26,9 @@ from apps.accounts.views.payment import (
     AlipayPaymentStatusAPIView,
     CreateAlipayPurchaseAPIView,
     CreateAlipayDebugPaymentAPIView,
+    AlipayPendingOrdersAPIView,
+    AlipayPendingOrderResumeAPIView,
+    AlipayPendingOrderCancelAPIView,
 )
 
 from apps.accounts.views.auth import (
@@ -131,6 +134,21 @@ urlpatterns += [
         "auth/password-reset/confirm/",
         PasswordResetConfirmAPIView.as_view(),
         name="password-reset-confirm",
+    ),
+    path(
+        "payments/alipay/pending/",
+        AlipayPendingOrdersAPIView.as_view(),
+        name="alipay-pending-orders",
+    ),
+    path(
+        "payments/alipay/pending/resume/",
+        AlipayPendingOrderResumeAPIView.as_view(),
+        name="alipay-pending-resume",
+    ),
+    path(
+        "payments/alipay/pending/cancel/",
+        AlipayPendingOrderCancelAPIView.as_view(),
+        name="alipay-pending-cancel",
     ),
     path(
         "payments/alipay/debug-create/",

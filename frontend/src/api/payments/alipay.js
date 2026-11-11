@@ -65,6 +65,25 @@ export async function fetchAlipayPaymentStatus(merchantOrderNo) {
   return apiFetch(`/accounts/payments/alipay/status/?${sp.toString()}`);
 }
 
+export async function fetchPendingAlipayPayments() {
+  const data = await apiFetch("/accounts/payments/alipay/pending/");
+  return Array.isArray(data?.orders) ? data.orders : [];
+}
+
+export function resumePendingAlipayPayment(merchantOrderNo) {
+  return apiFetch("/accounts/payments/alipay/pending/resume/", {
+    method: "POST",
+    body: { merchant_order_no: merchantOrderNo },
+  });
+}
+
+export function cancelPendingAlipayPayment(merchantOrderNo) {
+  return apiFetch("/accounts/payments/alipay/pending/cancel/", {
+    method: "POST",
+    body: { merchant_order_no: merchantOrderNo },
+  });
+}
+
 export function savePendingPaymentContext(merchantOrderNo, context = {}) {
   const key = String(merchantOrderNo || "").trim();
   if (!key) {

@@ -274,7 +274,7 @@ class ReferralRedemptionOpenParticipationTests(TestCase):
         self.assertEqual(self.snapshot(), before)
         self.assert_rejected_without_writes(
             EXISTING_EXAM_PREPARATION_ACCESS,
-            "本次推广活动仅针对第一次购买备考季的用户哦！",
+            "很抱歉，本活动仅对备考季新用户有效。",
             code="BK1-BCDEFGH2",
         )
 

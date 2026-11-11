@@ -211,7 +211,11 @@ def reconcile_alipay_payments_now(*, limit: int = 100) -> dict[str, int]:
         Processing counters suitable for logs and operational checks.
     """
 
-    from apps.accounts.views.payment import _query_and_sync_payment_status
+    from apps.accounts.views.payment import (
+        _close_unpaid_payment,
+        _query_and_sync_payment_status,
+        get_alipay_service,
+    )
 
     now = timezone.now()
     interval_seconds = int(getattr(settings, "ALIPAY_RECONCILE_INTERVAL_SECONDS", 900))
@@ -255,9 +259,23 @@ def reconcile_alipay_payments_now(*, limit: int = 100) -> dict[str, int]:
         "refund_entitlements_reconciled": 0,
         "notify_payloads_purged": 0,
     }
+    alipay_service = None
     for payment in payments:
         try:
-            _query_and_sync_payment_status(payment=payment)
+            if (
+                payment.status
+                in [AlipayWebsitePayment.Status.CREATED, AlipayWebsitePayment.Status.PENDING]
+                and payment.expires_at is not None
+                and payment.expires_at <= now
+            ):
+                if alipay_service is None:
+                    alipay_service = get_alipay_service()
+                _close_unpaid_payment(
+                    payment=payment,
+                    alipay_service=alipay_service,
+                )
+            else:
+                _query_and_sync_payment_status(payment=payment)
             stats["queried"] += 1
         except (DatabaseError, ValueError) as exc:
             stats["query_failed"] += 1

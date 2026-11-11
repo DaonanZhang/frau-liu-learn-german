@@ -6,13 +6,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   fetchGuideDetail,
+  fetchGuides,
+  guideMatchesLevel,
   setGuideLiked,
 } from "../api/exam_preparation/guides.js";
 import ExamPreparationGuideDetailPage from "./ExamPreparationGuideDetailPage.jsx";
 
 vi.mock("../api/exam_preparation/guides.js", () => ({
   fetchGuideDetail: vi.fn(),
-  guideMatchesLevel: vi.fn(() => true),
+  fetchGuides: vi.fn(),
+  guideMatchesLevel: vi.fn((item, level) => new RegExp(`\\bTELC\\s+${level}\\b`, "i").test(
+    [...(item?.badges || []), item?.title].filter(Boolean).join(" "),
+  )),
   setGuideLiked: vi.fn(),
 }));
 
@@ -54,8 +59,12 @@ function renderPage(level = "b1", guideId = "3") {
 describe("ExamPreparationGuideDetailPage", () => {
   beforeEach(() => {
     fetchGuideDetail.mockReset();
+    fetchGuides.mockReset();
     setGuideLiked.mockReset();
+    guideMatchesLevel.mockClear();
     fetchGuideDetail.mockResolvedValue(guide);
+    fetchGuides.mockResolvedValue({ results: [] });
+    Object.defineProperty(window, "scrollTo", { configurable: true, value: vi.fn() });
   });
 
   it("retrieves the guide once and renders its cover, summary, Markdown body, and updated counters", async () => {
@@ -75,6 +84,59 @@ describe("ExamPreparationGuideDetailPage", () => {
     expect(within(table).getByRole("cell", { name: "匹配" })).toBeInTheDocument();
     expect(screen.getByLabelText("观看 28 次")).toBeInTheDocument();
     expect(screen.getByLabelText("6 个赞")).toBeInTheDocument();
+  });
+
+  it("shows only other guides in the current level with links under the current level path", async () => {
+    fetchGuides.mockResolvedValue({
+      results: [
+        { id: "3", title: "Same guide", badges: ["TELC B1"] },
+        { id: 8, title: "TELC B2 Lesen", badges: ["TELC B2"] },
+        { id: 9, title: "TELC B1 Hören", badges: ["TELC B1"] },
+      ],
+    });
+    renderPage();
+
+    const section = await screen.findByRole("navigation", { name: "其他备考攻略" });
+    expect(within(section).getByRole("link", { name: "TELC B1 Hören" })).toHaveAttribute(
+      "href",
+      "/modules/exam-preparation/b1/tips/9",
+    );
+    expect(within(section).queryByText("Same guide")).not.toBeInTheDocument();
+    expect(within(section).queryByText("TELC B2 Lesen")).not.toBeInTheDocument();
+  });
+
+  it("returns to the top when opening another guide", async () => {
+    fetchGuides.mockResolvedValue({
+      results: [{ id: 9, title: "TELC B1 Hören", badges: ["TELC B1"] }],
+    });
+    fetchGuideDetail
+      .mockResolvedValueOnce(guide)
+      .mockResolvedValueOnce({ ...guide, id: 9, title: "TELC B1 Hören" });
+    renderPage();
+
+    await screen.findByRole("link", { name: "TELC B1 Hören" });
+    window.scrollTo.mockClear();
+    fireEvent.click(await screen.findByRole("link", { name: "TELC B1 Hören" }));
+
+    expect(window.scrollTo).toHaveBeenCalledWith(0, 0);
+    expect(await screen.findByRole("heading", { name: "TELC B1 Hören", level: 1 })).toBeInTheDocument();
+    expect(fetchGuideDetail).toHaveBeenLastCalledWith("9");
+  });
+
+  it("keeps the article available when the related guide request fails", async () => {
+    fetchGuides.mockRejectedValue(new Error("offline"));
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: guide.title, level: 1 })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "其他备考攻略" })).not.toBeInTheDocument();
+  });
+
+  it("hides the related section when there are no other guides", async () => {
+    fetchGuides.mockResolvedValue({ results: [{ ...guide, id: "3" }] });
+    renderPage();
+
+    await screen.findByRole("heading", { name: guide.title, level: 1 });
+    expect(screen.queryByRole("navigation", { name: "其他备考攻略" })).not.toBeInTheDocument();
   });
 
   it("optimistically adds a like with feedback animation and removes it without animation", async () => {

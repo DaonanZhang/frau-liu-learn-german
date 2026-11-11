@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 
 import {
   fetchGuideDetail,
+  fetchGuides,
   guideMatchesLevel,
   setGuideLiked,
 } from "../api/exam_preparation/guides.js";
@@ -16,12 +17,34 @@ export default function ExamPreparationGuideDetailPage() {
   const scope = examPreparationScope(level);
   const scopeLevel = scope?.level;
   const [guide, setGuide] = useState(null);
+  const [guides, setGuides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
   const [likeErrorText, setLikeErrorText] = useState("");
   const [likePending, setLikePending] = useState(false);
   const [celebrating, setCelebrating] = useState(false);
   const celebrationTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (!scopeLevel) return undefined;
+    let cancelled = false;
+
+    fetchGuides()
+      .then(({ results }) => {
+        if (!cancelled) setGuides(results);
+      })
+      .catch(() => {
+        if (!cancelled) setGuides([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scopeLevel]);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [guideId]);
 
   useEffect(() => {
     if (!scopeLevel) return undefined;
@@ -59,6 +82,9 @@ export default function ExamPreparationGuideDetailPage() {
 
   const tipsPath = `/modules/exam-preparation/${scope.levelPath}/tips`;
   const moduleName = examPreparationModuleName(scope);
+  const relatedGuides = guide
+    ? guides.filter((item) => String(item.id) !== String(guide.id) && guideMatchesLevel(item, scopeLevel))
+    : [];
 
   async function toggleLike() {
     if (!guide || likePending) return;
@@ -136,6 +162,19 @@ export default function ExamPreparationGuideDetailPage() {
             {likeErrorText ? <p className="exam-guide-detail__like-error" role="alert">{likeErrorText}</p> : null}
           </footer>
         </article>
+      ) : null}
+
+      {!loading && !errorText && relatedGuides.length ? (
+        <nav className="exam-guide-related" aria-labelledby="exam-guide-related-title">
+          <h2 id="exam-guide-related-title">其他备考攻略</h2>
+          <ul>
+            {relatedGuides.map((item) => (
+              <li key={item.id}>
+                <Link to={`${tipsPath}/${item.id}`}>{item.title}</Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
       ) : null}
     </div>
   );

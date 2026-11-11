@@ -34,6 +34,7 @@ describe("ExamPreparationWritingPage", () => {
 
   it("renders a B2 card with its imported title and without numbered or article copy", async () => {
     fetchWritingExercises.mockResolvedValue({
+      count: 4,
       results: [{
         id: 122,
         exercise_base: {
@@ -59,8 +60,23 @@ describe("ExamPreparationWritingPage", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Hotelzimmer reklamieren" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("4 道题目")).toBeInTheDocument();
     expect(screen.queryByText("写作练习 1")).not.toBeInTheDocument();
     expect(screen.queryByText("Dieser Artikel darf nicht auf der Karte erscheinen.")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the number of writing results when count is invalid", async () => {
+    fetchWritingExercises.mockResolvedValue({ count: null, results: [{ id: 1 }, { id: 2 }] });
+
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/b1/schreiben"]}>
+        <Routes>
+          <Route path="/modules/exam-preparation/:level/schreiben" element={<ExamPreparationWritingPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByLabelText("2 道题目")).toBeInTheDocument();
   });
 
   it("uses the imported title and no article preview for B1", () => {

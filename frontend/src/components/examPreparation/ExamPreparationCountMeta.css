@@ -1,0 +1,26 @@
+.exam-preparation-count-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.55rem;
+  color: #68756f;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.exam-preparation-count-meta__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.22rem;
+}
+
+.exam-preparation-count-meta__value {
+  color: #2f7d62;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.exam-preparation-count-meta__separator {
+  margin-right: 0.25rem;
+  color: #a0aaa5;
+}

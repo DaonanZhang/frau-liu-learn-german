@@ -139,6 +139,24 @@ describe("ReadingAdMatchingWorkspace annotations", () => {
     expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s*>\s*\.reading-ad-question-section\s*\{[^}]*grid-column:\s*2/s);
     expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s*>\s*\.reading-ad-question-section\s*\{[^}]*flex-wrap:\s*nowrap/s);
     expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s*>\s*\.reading-ad-sticky-stack,[^{]*\.reading-ad-workspace--c1\s*>\s*\.reading-ad-question-section\s*\{[^}]*overflow-y:\s*auto/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s+\.reading-ad-card__line--heading\s*\{[^}]*font-weight:\s*400/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s+\.reading-ad-question-card__title\s*\{[^}]*font-size:\s*1rem[^}]*font-weight:\s*500/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s+\.reading-ad-pagination__item\s*\{[^}]*width:\s*2\.6rem[^}]*height:\s*2\.6rem[^}]*font-size:\s*\.85rem/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s+\.reading-ad-option-grid\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s+\.reading-ad-option\s*\{[^}]*min-height:\s*3\.25rem/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s+\.reading-ad-option__circle\s*\{[^}]*width:\s*1\.25rem[^}]*height:\s*1\.25rem/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s+\.reading-ad-option__key\s*\{[^}]*font-size:\s*1rem/s);
+    expect(styleSource).toMatch(/\.reading-ad-workspace--c1\s+\.reading-ad-c1-question-arrows button\s*\{[^}]*min-height:\s*2\.4rem[^}]*font-size:\s*\.9rem/s);
+    const desktopC1Layout = styleSource.slice(
+      styleSource.indexOf("@media (min-width: 901px)"),
+      styleSource.indexOf("@media (max-width: 900px)"),
+    );
+    expect(desktopC1Layout).toMatch(/\.reading-ad-shell:has\(>\s*\.reading-ad-workspace--c1\)\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1\.15fr\)\s+minmax\(18rem,\s*0\.85fr\)/s);
+    expect(desktopC1Layout).toMatch(/\.reading-ad-shell\s*>\s*\.reading-ad-workspace--c1\s*\{[^}]*display:\s*contents/s);
+    expect(desktopC1Layout).toMatch(/\.reading-ad-workspace--c1\s*>\s*\.reading-ad-sticky-stack\s*\{(?=[^}]*grid-row:\s*5\s*\/\s*span\s*2)(?=[^}]*height:\s*min\(68vh,\s*48rem\))(?=[^}]*overflow-y:\s*auto)[^}]*\}/s);
+    expect(desktopC1Layout).toMatch(/\.reading-ad-workspace--c1\s+\.reading-ad-carousel\s*\{[^}]*min-height:\s*100%/s);
+    expect(desktopC1Layout).toMatch(/\.reading-ad-shell:has\(>\s*\.reading-ad-workspace--c1\)\s*>\s*\.reading-ad-actions\s*\{(?=[^}]*grid-column:\s*2)(?=[^}]*grid-row:\s*6)[^}]*\}/s);
+    expect(desktopC1Layout).toMatch(/\.app-layout:has\(\.reading-ad-workspace--c1\)\s+\.app-body\s*\{[^}]*padding-bottom:\s*0\.5rem/s);
   });
 
   it("cleans the Version 2 prefix but hides its label by default", () => {

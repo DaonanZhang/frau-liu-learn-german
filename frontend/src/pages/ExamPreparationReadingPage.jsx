@@ -2,10 +2,14 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { READING_TYPES, examPreparationTypeDescription, examPreparationTypesForLevel } from "./examPreparationTypeContent.js";
 import "./ExamPreparationReadingPage.css";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
+import { useExamPreparationStatistics } from "../hooks/useExamPreparationStatistics.js";
+import ExamPreparationCountMeta from "../components/examPreparation/ExamPreparationCountMeta.jsx";
 
 export default function ExamPreparationReadingPage() {
   const scope = examPreparationScope(useParams().level);
+  const statistics = useExamPreparationStatistics();
   if (!scope) return <Navigate to="/modules/exam-preparation" replace />;
+  const typeCounts = statistics?.[scope.level]?.types;
   return (
     <div className="exam-reading-page">
       <div className="exam-reading-topbar">
@@ -25,13 +29,17 @@ export default function ExamPreparationReadingPage() {
       </section>
 
       <section className="exam-reading-type-grid" aria-label="阅读题型列表">
-        {examPreparationTypesForLevel(READING_TYPES, scope.level).map((item) => {
+        {examPreparationTypesForLevel(READING_TYPES, scope.level).map((item, index) => {
+          const countKey = scope.level === "C1"
+            ? ["CLOZE_MATCHING", "READING_UNDERSTANDING", "READING_AD_MATCHING"][index]
+            : ["READING_TITLE_MATCHING", "READING_UNDERSTANDING", "READING_AD_MATCHING"][index];
           const content = (
             <>
               <div className="exam-reading-type__top">
                 <h2 className="exam-reading-type__title">{item.title}</h2>
               </div>
               <p className="exam-reading-type__description">{examPreparationTypeDescription(item, scope.level)}</p>
+              <ExamPreparationCountMeta items={[{ value: typeCounts?.[countKey], label: "道题目" }]} />
               <div className="exam-reading-type__bottom">
                 {item.to ? (
                   <span className="exam-reading-type__cta">{item.cta}</span>

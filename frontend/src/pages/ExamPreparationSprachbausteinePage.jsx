@@ -2,10 +2,14 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { SPRACHBAUSTEINE_TYPES, examPreparationTypesForLevel } from "./examPreparationTypeContent.js";
 import "./ExamPreparationSprachbausteinePage.css";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
+import { useExamPreparationStatistics } from "../hooks/useExamPreparationStatistics.js";
+import ExamPreparationCountMeta from "../components/examPreparation/ExamPreparationCountMeta.jsx";
 
 export default function ExamPreparationSprachbausteinePage() {
   const scope = examPreparationScope(useParams().level);
+  const statistics = useExamPreparationStatistics();
   if (!scope) return <Navigate to="/modules/exam-preparation" replace />;
+  const typeCounts = statistics?.[scope.level]?.types;
   if (scope.level === "C1") {
     return <Navigate to={`/modules/exam-preparation/${scope.levelPath}/sprachbausteine/cloze-choice`} replace />;
   }
@@ -30,12 +34,13 @@ export default function ExamPreparationSprachbausteinePage() {
       </section>
 
       <section className="exam-sprach-type-grid" aria-label="语法题型列表">
-        {examPreparationTypesForLevel(SPRACHBAUSTEINE_TYPES, scope.level).map((item) => (
+        {examPreparationTypesForLevel(SPRACHBAUSTEINE_TYPES, scope.level).map((item, index) => (
           <Link key={item.key} to={item.to.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`)} className="exam-sprach-type exam-sprach-type--link">
             <div className="exam-sprach-type__top">
               <h2 className="exam-sprach-type__title">{item.title}</h2>
             </div>
             <p className="exam-sprach-type__description">{item.description}</p>
+            <ExamPreparationCountMeta items={[{ value: typeCounts?.[["CLOZE_CHOICE", "CLOZE_MATCHING"][index]], label: "道题目" }]} />
             <div className="exam-sprach-type__bottom">
               <span className="exam-sprach-type__cta">{item.cta}</span>
             </div>

@@ -366,8 +366,8 @@ export default function ClozeMatchingPage() {
       <div className="cloze-page">
         <div className={`cloze-shell${scope?.level === "C1" ? " cloze-shell--c1" : ""}`}>
         <div className="cloze-topbar">
-          <Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/${scope?.level === "C1" ? "lesen" : "sprachbausteine"}${scope?.level === "C1" ? "" : "/cloze-matching"}`} className="cloze-topbar__back">
-            {scope?.level === "C1" ? "← Zurück zu Lesen" : "← Zurück zu Sprachbausteine"}
+          <Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/${scope?.level === "C1" ? "lesen" : "sprachbausteine"}/cloze-matching`} className="cloze-topbar__back">
+            {scope?.level === "C1" ? "← Zurück zu Lesen Teil 1" : "← Zurück zu Sprachbausteine"}
           </Link>
           <span className="cloze-topbar__meta">
             {exercise?.exercise_base?.level || scope?.level} · {exercise?.exercise_base?.external_id || "001"}

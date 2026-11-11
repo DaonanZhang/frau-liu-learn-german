@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../api/auth/useAuth.js";
 import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
+import ExamPreparationCountMeta from "../components/examPreparation/ExamPreparationCountMeta.jsx";
 import "./ExerciseSelectionPage.css";
 
 export default function ExerciseSelectionPage({
@@ -24,6 +25,7 @@ export default function ExerciseSelectionPage({
   const scope = examPreparationScope(level);
   const { user } = useAuth();
   const [exercises, setExercises] = useState([]);
+  const [exerciseCount, setExerciseCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
@@ -34,10 +36,12 @@ export default function ExerciseSelectionPage({
       try {
         setLoading(true);
         setErrorText("");
+        setExerciseCount(null);
         if (!scope) return;
         const data = await fetchExercises(scope);
         if (!aborted) {
           const results = Array.isArray(data?.results) ? data.results : [];
+          setExerciseCount(Number.isFinite(data?.count) ? data.count : results.length);
           setExercises([...results].sort(
             (left, right) => {
               const shouldSortByExternalId = typeof sortByExternalId === "function"
@@ -89,6 +93,7 @@ export default function ExerciseSelectionPage({
           <p className="exercise-selection-hero__copy">
             {typeof description === "function" ? description(scope) : description}
           </p>
+          {!loading && !errorText ? <ExamPreparationCountMeta items={[{ value: exerciseCount, label: "道题目" }]} /> : null}
         </div>
       </section>
 

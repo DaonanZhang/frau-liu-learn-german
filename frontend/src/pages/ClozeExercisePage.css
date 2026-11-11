@@ -50,10 +50,11 @@
 
 .cloze-shell--c1 .cloze-text-panel {
   grid-column: 1;
-  grid-row: 5;
+  grid-row: 5 / span 2;
 }
 
 .cloze-shell--c1 > .cloze-actions {
+  grid-column: 2;
   grid-row: 6;
   justify-content: flex-end;
   position: sticky;
@@ -63,6 +64,12 @@
   border-radius: 0;
   background: linear-gradient(180deg, rgba(245, 246, 248, 0), rgba(245, 246, 248, 0.92) 42%, rgba(245, 246, 248, 1));
   box-shadow: none;
+}
+
+@media (min-width: 761px) {
+  .app-layout:has(.cloze-shell--c1) .app-body {
+    padding-bottom: 0.5rem;
+  }
 }
 
 .cloze-shell--c1 .cloze-check-btn,
@@ -81,9 +88,11 @@
     grid-column: 1;
     grid-row: auto;
     max-height: none;
+    height: auto;
   }
 
   .cloze-shell--c1 > .cloze-actions {
+    grid-column: 1;
     grid-row: auto;
   }
 

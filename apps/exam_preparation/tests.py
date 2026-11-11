@@ -117,6 +117,103 @@ class ExamPreparationGuideEngagementApiTests(APITestCase):
         self.assertEqual(ExamPreparationGuideLike.objects.filter(guide=self.guide, user=self.user).count(), 0)
 
 
+class ExamPreparationStatisticsApiTests(APITestCase):
+    def setUp(self):
+        ExerciseBase.objects.all().delete()
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138990",
+            password="test-password",
+        )
+        self.url = reverse("exam-prep-statistics")
+
+    def test_authenticated_user_without_entitlement_can_read_level_statistics(self):
+        bases = [
+            ("B1", "LISTENING", "LISTENING_TEIL1", "b1-listening-1"),
+            ("B1", "LISTENING", "LISTENING_TEIL1", "b1-listening-2"),
+            ("B1", "READING", "READING_UNDERSTANDING", "b1-reading"),
+            ("B2", "WRITING", "WRITING_PROMPT", "b2-writing"),
+            ("B1", "SPEAKING", "SPEAKING_TEIL1", "goethe-b1"),
+        ]
+        for level, skill, exercise_type, external_id in bases:
+            ExerciseBase.objects.create(
+                exam_type="GOETHE" if external_id == "goethe-b1" else "TELC",
+                level=level,
+                skill=skill,
+                exercise_type=exercise_type,
+                external_id=external_id,
+            )
+        ExamPreparationGuide.objects.create(
+            title="TELC B1 Lesen",
+            body_markdown="Guide",
+            badges=["Lesen"],
+            is_published=True,
+        )
+        ExamPreparationGuide.objects.create(
+            title="TELC B1 Hören",
+            body_markdown="Guide",
+            badges=["Hören"],
+            is_published=True,
+        )
+        ExamPreparationGuide.objects.create(
+            title="Prüfungstipps",
+            body_markdown="Guide",
+            badges=["TELC B2"],
+            is_published=True,
+        )
+        ExamPreparationGuide.objects.create(
+            title="TELC C1 Lesen",
+            body_markdown="Guide",
+            is_published=False,
+        )
+        self.client.force_authenticate(self.user)
+
+        self.assertFalse(Entitlement.objects.filter(user=self.user).exists())
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        levels = response.data["levels"]
+        self.assertEqual(set(levels), {"B1", "B2", "C1"})
+        self.assertEqual(levels["B1"]["exercise_count"], 3)
+        self.assertEqual(levels["B1"]["module_count"], 3)
+        self.assertEqual(levels["B1"]["skills"]["LISTENING"], {"exercise_count": 2, "type_count": 1})
+        self.assertEqual(levels["B1"]["skills"]["READING"], {"exercise_count": 1, "type_count": 1})
+        self.assertEqual(levels["B1"]["skills"]["WRITING"], {"exercise_count": 0, "type_count": 0})
+        self.assertEqual(levels["B1"]["types"]["LISTENING_TEIL1"], 2)
+        self.assertEqual(levels["B1"]["types"]["SPEAKING_TEIL1"], 0)
+        self.assertEqual(levels["B1"]["guide_count"], 2)
+        self.assertEqual(levels["B2"]["exercise_count"], 1)
+        self.assertEqual(levels["B2"]["module_count"], 2)
+        self.assertEqual(levels["B2"]["guide_count"], 1)
+        self.assertEqual(levels["C1"]["exercise_count"], 0)
+        self.assertEqual(levels["C1"]["module_count"], 0)
+        self.assertEqual(levels["C1"]["guide_count"], 0)
+        for stats in levels.values():
+            self.assertEqual(set(stats["skills"]), {key for key, _ in ExerciseBase.Skill.choices})
+            self.assertEqual(set(stats["types"]), {key for key, _ in ExerciseBase.ExerciseType.choices})
+
+    def test_unknown_skill_and_type_values_do_not_break_statistics(self):
+        ExerciseBase.objects.create(
+            exam_type="TELC",
+            level="B1",
+            skill="UNKNOWN_SKILL",
+            exercise_type="UNKNOWN_TYPE",
+            external_id="legacy-invalid-enums",
+        )
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["levels"]["B1"]["exercise_count"], 1)
+        self.assertEqual(response.data["levels"]["B1"]["module_count"], 0)
+
+    def test_statistics_requires_authentication(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
 class QuestionLevelExplanationSerializerTests(SimpleTestCase):
     def test_detail_serializers_expose_explanation_scope(self):
         for serializer_class in (

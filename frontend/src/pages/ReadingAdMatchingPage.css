@@ -210,9 +210,67 @@
   border-top: 1px solid #e4e7eb;
 }
 
+.reading-ad-workspace--c1 .reading-ad-card__line--heading { font-weight: 400; }
+.reading-ad-workspace--c1 .reading-ad-question-card__title { font-size: 1rem; line-height: 1.45; font-weight: 500; }
+.reading-ad-workspace--c1 .reading-ad-pagination__item { min-width: 2.6rem; width: 2.6rem; height: 2.6rem; border-radius: .55rem; font-size: .85rem; }
+.reading-ad-workspace--c1 .reading-ad-option-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .4rem; margin-top: .65rem; }
+.reading-ad-workspace--c1 .reading-ad-option { min-height: 3.25rem; gap: .35rem; padding: .25rem; border-radius: .6rem; }
+.reading-ad-workspace--c1 .reading-ad-option__circle { width: 1.25rem; height: 1.25rem; }
+.reading-ad-workspace--c1 .reading-ad-option__key { font-size: 1rem; }
+.reading-ad-workspace--c1 .reading-ad-c1-question-arrows { gap: .5rem; }
+.reading-ad-workspace--c1 .reading-ad-c1-question-arrows button { min-height: 2.4rem; padding: .35rem .7rem; font-size: .9rem; }
+
 .reading-ad-c1-question-arrows { display: flex; align-items: center; justify-content: center; gap: 1rem; }
 .reading-ad-c1-question-arrows button { min-height: 2.75rem; padding: .5rem 1rem; border: 1px solid #dce3df; border-radius: .7rem; background: #fff; color: #2f6f5e; font-weight: 700; }
 .reading-ad-c1-question-arrows button:disabled { opacity: .45; }
+
+@media (min-width: 901px) {
+  .reading-ad-shell:has(> .reading-ad-workspace--c1) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+    align-items: start;
+  }
+
+  .reading-ad-shell:has(> .reading-ad-workspace--c1) > .reading-ad-topbar,
+  .reading-ad-shell:has(> .reading-ad-workspace--c1) > .reading-ad-hero,
+  .reading-ad-shell:has(> .reading-ad-workspace--c1) > .reading-ad-instruction {
+    grid-column: 1 / -1;
+  }
+
+  .reading-ad-shell > .reading-ad-workspace--c1 {
+    display: contents;
+  }
+
+  .reading-ad-workspace--c1 > .reading-ad-carousel-section__header {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .reading-ad-workspace--c1 > .reading-ad-sticky-stack {
+    grid-column: 1;
+    grid-row: 5 / span 2;
+    height: min(68vh, 48rem);
+    overflow-y: auto;
+  }
+
+  .reading-ad-workspace--c1 .reading-ad-carousel {
+    min-height: 100%;
+  }
+
+  .reading-ad-workspace--c1 > .reading-ad-question-section {
+    grid-column: 2;
+    grid-row: 4 / span 2;
+  }
+
+  .reading-ad-shell:has(> .reading-ad-workspace--c1) > .reading-ad-actions {
+    grid-column: 2;
+    grid-row: 6;
+  }
+
+  .app-layout:has(.reading-ad-workspace--c1) .app-body {
+    padding-bottom: 0.5rem;
+  }
+}
 
 @media (max-width: 900px) {
   .reading-ad-workspace--c1 {

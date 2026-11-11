@@ -7,13 +7,14 @@ import uuid
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
-from django.db.models import F
+from django.db.models import Count, F
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import action
@@ -112,6 +113,63 @@ from apps.exam_preparation.serializers import (
     WritingExerciseDetailSerializer,
     WritingExerciseSerializer,
 )
+
+
+class ExamPreparationStatisticsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        levels = {
+            level: {
+                "exercise_count": 0,
+                "module_count": 0,
+                "guide_count": 0,
+                "skills": {
+                    skill: {"exercise_count": 0, "type_count": 0}
+                    for skill, _ in ExerciseBase.Skill.choices
+                },
+                "types": {exercise_type: 0 for exercise_type, _ in ExerciseBase.ExerciseType.choices},
+            }
+            for level in ("B1", "B2", "C1")
+        }
+
+        exercise_queryset = ExerciseBase.objects.filter(
+            exam_type="TELC",
+            level__in=levels,
+        )
+        skill_keys = {skill for skill, _ in ExerciseBase.Skill.choices}
+        type_keys = {exercise_type for exercise_type, _ in ExerciseBase.ExerciseType.choices}
+        skills_with_data = {level: set() for level in levels}
+        rows = exercise_queryset.values("level", "skill", "exercise_type").annotate(count=Count("id"))
+        for row in rows:
+            level_stats = levels[row["level"]]
+            skill = row["skill"]
+            exercise_type = row["exercise_type"]
+            count = row["count"]
+
+            level_stats["exercise_count"] += count
+            if skill in skill_keys:
+                level_stats["skills"][skill]["exercise_count"] += count
+                skills_with_data[row["level"]].add(skill)
+                if exercise_type in type_keys:
+                    level_stats["skills"][skill]["type_count"] += 1
+            if exercise_type in type_keys:
+                level_stats["types"][exercise_type] += count
+
+        guides = ExamPreparationGuide.objects.filter(is_published=True).values_list("title", "badges")
+        for title, badges in guides:
+            searchable_parts = [str(title)]
+            if isinstance(badges, list):
+                searchable_parts.extend(str(badge) for badge in badges)
+            searchable_text = " ".join(searchable_parts)
+            for level in levels:
+                if re.search(rf"\bTELC\s+{level}\b", searchable_text, re.IGNORECASE):
+                    levels[level]["guide_count"] += 1
+
+        for level, skills in skills_with_data.items():
+            levels[level]["module_count"] = len(skills) + int(levels[level]["guide_count"] > 0)
+
+        return Response({"levels": levels})
 
 
 class BaseExamPreparationViewSet(ModelViewSet):

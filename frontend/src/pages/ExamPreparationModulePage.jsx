@@ -12,6 +12,8 @@ import {
 } from "../api/exam_preparation/mockExams.js";
 import { clearAnnotationScope, mockAnnotationScope } from "../utils/examTextAnnotations.js";
 import ExamPreparationContentSearch from "../components/examPreparation/ExamPreparationContentSearch.jsx";
+import ExamPreparationCountMeta from "../components/examPreparation/ExamPreparationCountMeta.jsx";
+import { useExamPreparationStatistics } from "../hooks/useExamPreparationStatistics.js";
 import "./ExamPreparationModulePage.css";
 import {
   examPreparationModuleName,
@@ -88,8 +90,16 @@ const C1_SKILL_CONTENT = {
 };
 
 const MOCK_PHASE_LABELS = { reading: "阅读与语言模块", collection: "第一部分收卷", listening: "听力", writing: "写作", writing_review: "写作自评" };
+const SKILL_STAT_KEYS = {
+  listening: "LISTENING",
+  reading: "READING",
+  sprachbausteine: "SPRACHBAUSTEIN",
+  writing: "WRITING",
+  speaking: "SPEAKING",
+};
 
 export default function ExamPreparationModulePage({ level: levelProp } = {}) {
+  const statistics = useExamPreparationStatistics();
   const { level: routeLevel } = useParams();
   const levelParam = routeLevel || levelProp;
   const scope = examPreparationScope(levelParam);
@@ -204,6 +214,14 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
               to={`/modules/exam-preparation/${level.toLowerCase()}`}
             >
               <span className="exam-level-selection__title">{examPreparationModuleName(level)}</span>
+              {statistics?.[level] ? (
+                <ExamPreparationCountMeta
+                  items={[
+                    { value: statistics[level].module_count, label: "个模块" },
+                    { value: statistics[level].exercise_count, label: "道题目" },
+                  ]}
+                />
+              ) : null}
               <span className="exam-level-selection__action">
                 进入备考季 <span aria-hidden="true">→</span>
               </span>
@@ -307,6 +325,8 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
 
       <section className="exam-module-grid" aria-label="专项入口列表">
         {SKILL_CARDS.map((card) => {
+          const levelStatistics = statistics?.[scope.level];
+          const skillStatistics = levelStatistics?.skills?.[SKILL_STAT_KEYS[card.key]];
           const cardDescription = scope.level === "C1"
             ? C1_SKILL_CONTENT[card.key]
             : card.descriptionByLevel?.[scope.level] || card.description;
@@ -332,6 +352,21 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
                   ) : null}
                 </div>
               </div>
+              {card.key === "tips" && levelStatistics ? (
+                <div className="exam-module-card__counts">
+                  <ExamPreparationCountMeta items={[{ value: levelStatistics.guide_count, label: "篇文章" }]} />
+                </div>
+              ) : null}
+              {skillStatistics ? (
+                <div className="exam-module-card__counts">
+                  <ExamPreparationCountMeta
+                    items={[
+                      { value: skillStatistics.type_count, label: "种题型" },
+                      { value: skillStatistics.exercise_count, label: "道题目" },
+                    ]}
+                  />
+                </div>
+              ) : null}
               {cardDescription ? (
                 <p className="exam-module-card__description">
                   {cardDescription}

@@ -5,6 +5,7 @@ import { useAuth } from "../api/auth/useAuth.js";
 import { showExamPreparationPurchasePrompt } from "../utils/examPreparationTrial.js";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
 import { isTelcC1Writing, writingCardContent, writingWordLimitLabel } from "./writingDisplay.js";
+import ExamPreparationCountMeta from "../components/examPreparation/ExamPreparationCountMeta.jsx";
 import "./ExamPreparationWritingPage.css";
 
 export default function ExamPreparationWritingPage() {
@@ -12,6 +13,7 @@ export default function ExamPreparationWritingPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [exercises, setExercises] = useState([]);
+  const [exerciseCount, setExerciseCount] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
 
@@ -22,10 +24,13 @@ export default function ExamPreparationWritingPage() {
       try {
         setLoading(true);
         setErrorText("");
+        setExerciseCount(null);
         if (!scope) return;
         const data = await fetchWritingExercises(scope);
         if (!aborted) {
-          setExercises(Array.isArray(data?.results) ? data.results : []);
+          const results = Array.isArray(data?.results) ? data.results : [];
+          setExercises(results);
+          setExerciseCount(Number.isFinite(data?.count) ? data.count : results.length);
         }
       } catch (error) {
         if (!aborted) {
@@ -61,6 +66,7 @@ export default function ExamPreparationWritingPage() {
           <p className="writing-hero__copy">
             {scope.level === "C1" ? "根据两条引语完成一篇不少于 350 词的文章，限时 70 分钟。" : "考试时间 30 分钟。根据朋友或机构发来的电子邮件完成回复，必须涵盖题目给出的 4 个提示要点（Leitpunkte），并注意书信格式、恰当语体与逻辑连贯性。"}
           </p>
+          {!loading && !errorText ? <ExamPreparationCountMeta items={[{ value: exerciseCount, label: "道题目" }]} /> : null}
         </div>
       </section>
 

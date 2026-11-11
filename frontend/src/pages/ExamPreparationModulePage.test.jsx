@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,9 +14,15 @@ import {
 import { mockAnnotationScope } from "../utils/examTextAnnotations.js";
 import Swal from "sweetalert2";
 
+const examPreparationModuleCss = readFileSync(resolve("src/pages/ExamPreparationModulePage.css"), "utf8");
+
 const authMocks = vi.hoisted(() => ({ useAuth: vi.fn() }));
+const statisticsMocks = vi.hoisted(() => ({ useExamPreparationStatistics: vi.fn() }));
 
 vi.mock("../api/auth/useAuth.js", () => ({ useAuth: authMocks.useAuth }));
+vi.mock("../hooks/useExamPreparationStatistics.js", () => ({
+  useExamPreparationStatistics: statisticsMocks.useExamPreparationStatistics,
+}));
 vi.mock("sweetalert2", () => ({ default: { fire: vi.fn() } }));
 
 function entitledUser(releaseAccess = true, telephone = "13800138000") {
@@ -51,11 +59,24 @@ function renderPage(level = "b1") {
   );
 }
 
+function renderLevelSelection() {
+  return render(
+    <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
+      <Routes>
+        <Route path="/modules/exam-preparation" element={<ExamPreparationModulePage />} />
+        <Route path="/modules/exam-preparation/b2" element={<LocationProbe />} />
+        <Route path="*" element={<LocationProbe />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
 describe("exam preparation mock exam entry", () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
     authMocks.useAuth.mockReturnValue({ user: entitledUser() });
+    statisticsMocks.useExamPreparationStatistics.mockReturnValue(null);
     Swal.fire.mockReset();
     deleteSavedMockExam.mockReset();
     fetchSavedMockExams.mockResolvedValue({
@@ -272,22 +293,22 @@ describe("exam preparation mock exam entry", () => {
 });
 
 describe("exam preparation level entry", () => {
+  it("keeps level cards wide on desktop and constrained on mobile", () => {
+    expect(examPreparationModuleCss).toMatch(/\.exam-level-selection__grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*18rem\)\);/);
+    expect(examPreparationModuleCss).toMatch(/@media\s*\(min-width:\s*761px\)\s*\{\s*\.exam-level-selection__title\s*\{\s*white-space:\s*nowrap;/);
+    expect(examPreparationModuleCss).toMatch(/@media\s*\(max-width:\s*760px\)\s*\{\s*\.exam-level-selection__grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*15\.5rem\)\);/);
+  });
+
   beforeEach(() => {
     authMocks.useAuth.mockReturnValue({ user: entitledUser(true, "13800138000") });
+    statisticsMocks.useExamPreparationStatistics.mockReturnValue(null);
     Swal.fire.mockReset();
     fetchSavedMockExams.mockReset();
     fetchSavedMockExams.mockResolvedValue({ count: 0, next: null, previous: null, results: [] });
   });
 
   it("keeps the TELC B2 level card as a normal link", () => {
-    render(
-      <MemoryRouter initialEntries={["/modules/exam-preparation"]}>
-        <Routes>
-          <Route path="/modules/exam-preparation" element={<ExamPreparationModulePage />} />
-          <Route path="/modules/exam-preparation/b2" element={<LocationProbe />} />
-        </Routes>
-      </MemoryRouter>,
-    );
+    renderLevelSelection();
 
     fireEvent.click(screen.getByRole("link", { name: /TELC B2/ }));
 
@@ -308,10 +329,63 @@ describe("exam preparation level entry", () => {
     expect(fetchSavedMockExams).not.toHaveBeenCalled();
   });
 
+  it("shows dynamic statistics on all three level cards, including zero values", () => {
+    statisticsMocks.useExamPreparationStatistics.mockReturnValue({
+      B1: { module_count: 2, exercise_count: 7 },
+      B2: { module_count: 0, exercise_count: 0 },
+      C1: { module_count: 4, exercise_count: 19 },
+    });
+    renderLevelSelection();
+
+    expect(screen.getByRole("link", { name: /TELC B1/ }).querySelector(".exam-preparation-count-meta")).toHaveTextContent(/2 个模块\s*·\s*7 道题目/);
+    expect(screen.getByRole("link", { name: /TELC B2/ }).querySelector(".exam-preparation-count-meta")).toHaveTextContent(/0 个模块\s*·\s*0 道题目/);
+    expect(screen.getByRole("link", { name: /TELC C1 HS/ }).querySelector(".exam-preparation-count-meta")).toHaveTextContent(/4 个模块\s*·\s*19 道题目/);
+  });
+
   it("shows the TELC C1 HS module name on the C1 home", () => {
     renderPage("c1");
 
     expect(screen.getByRole("heading", { name: "TELC C1 HS" })).toBeInTheDocument();
+  });
+
+  it("shows guide and mapped skill statistics on the C1 home", async () => {
+    statisticsMocks.useExamPreparationStatistics.mockReturnValue({
+      C1: {
+        guide_count: 3,
+        skills: {
+          LISTENING: { type_count: 1, exercise_count: 2 },
+          READING: { type_count: 2, exercise_count: 4 },
+          SPRACHBAUSTEIN: { type_count: 3, exercise_count: 6 },
+          WRITING: { type_count: 0, exercise_count: 0 },
+          SPEAKING: { type_count: 1, exercise_count: 5 },
+        },
+      },
+    });
+    renderPage("c1");
+    await waitFor(() => expect(fetchSavedMockExams).toHaveBeenCalled());
+
+    const skills = screen.getByRole("region", { name: "专项入口列表" });
+    expect(within(skills).getByRole("link", { name: /备考建议/ })).toHaveTextContent("3 篇文章");
+    [
+      ["进入听力模块", "1 种题型 · 2 道题目"],
+      ["进入阅读模块", "2 种题型 · 4 道题目"],
+      ["进入 Sprachbausteine", "3 种题型 · 6 道题目"],
+      ["进入 Schreiben", "0 种题型 · 0 道题目"],
+      ["进入 Sprechen", "1 种题型 · 5 道题目"],
+    ].forEach(([name, expected]) => {
+      expect(within(skills).getByRole("link", { name: new RegExp(name) }).querySelector(".exam-preparation-count-meta")).toHaveTextContent(new RegExp(expected.replace(" · ", "\\s*·\\s*")));
+    });
+  });
+
+  it("omits statistics when the statistics hook returns null", () => {
+    statisticsMocks.useExamPreparationStatistics.mockReturnValue(null);
+    const { unmount } = renderLevelSelection();
+    expect(document.querySelectorAll(".exam-preparation-count-meta")).toHaveLength(0);
+    unmount();
+
+    renderPage("b1");
+    expect(document.querySelectorAll(".exam-preparation-count-meta")).toHaveLength(0);
+    expect(screen.getByRole("link", { name: "← 返回级别选择" })).toHaveAttribute("href", "/modules/exam-preparation");
   });
 
   it.each(["b1", "b2", "c1"])("shows the tips entry for %s", (level) => {

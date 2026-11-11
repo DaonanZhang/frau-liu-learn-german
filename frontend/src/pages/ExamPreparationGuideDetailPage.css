@@ -276,6 +276,41 @@
   text-align: right;
 }
 
+.exam-guide-related {
+  padding: 1rem clamp(1rem, 5vw, 2rem);
+  border: 1px solid #e0e6e3;
+  border-radius: 1rem;
+  background: #ffffff;
+}
+
+.exam-guide-related h2 {
+  margin: 0 0 0.65rem;
+  color: #34443f;
+  font-size: 1rem;
+}
+
+.exam-guide-related ul {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.exam-guide-related a {
+  display: inline-block;
+  min-height: 2.5rem;
+  padding-block: 0.5rem;
+  color: #35695a;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.exam-guide-related a:hover,
+.exam-guide-related a:focus-visible {
+  text-decoration: underline;
+}
+
 @keyframes exam-guide-like-pop {
   0% { transform: scale(1); }
   45% { transform: scale(1.1); }

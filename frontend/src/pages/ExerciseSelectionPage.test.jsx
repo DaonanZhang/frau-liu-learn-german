@@ -135,4 +135,57 @@ describe("ExerciseSelectionPage", () => {
 
     expect(await screen.findByText("B2: nur einmal hören")).toBeInTheDocument();
   });
+
+  it("shows the API count below the hero description", async () => {
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/b1/lesen/understanding"]}>
+        <Routes>
+          <Route
+            path="/modules/exam-preparation/:level/lesen/understanding"
+            element={(
+              <ExerciseSelectionPage
+                backTo="/modules/exam-preparation/b1/lesen"
+                backLabel="Zurück"
+                eyebrow="Lesen"
+                title="Teil 2"
+                description="Beschreibung"
+                fetchExercises={vi.fn().mockResolvedValue({ count: 17, results: [{ id: 1 }] })}
+                buildExerciseHref={() => "/exercise/1"}
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByLabelText("17 道题目")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["falls back to the result count", { results: [{ id: 1 }, { id: 2 }] }, "2 道题目"],
+    ["shows zero for an empty list", { count: "invalid", results: [] }, "0 道题目"],
+  ])("%s", async (_name, response, expectedCount) => {
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/b1/lesen/understanding"]}>
+        <Routes>
+          <Route
+            path="/modules/exam-preparation/:level/lesen/understanding"
+            element={(
+              <ExerciseSelectionPage
+                backTo="/modules/exam-preparation/b1/lesen"
+                backLabel="Zurück"
+                eyebrow="Lesen"
+                title="Teil 2"
+                description="Beschreibung"
+                fetchExercises={vi.fn().mockResolvedValue(response)}
+                buildExerciseHref={() => "/exercise/1"}
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByLabelText(expectedCount)).toBeInTheDocument();
+  });
 });

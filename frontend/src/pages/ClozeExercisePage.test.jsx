@@ -861,6 +861,25 @@ describe("Cloze exercise layout", () => {
     expect(container.querySelector('[data-cloze-blank-key="blank_1"]')).not.toHaveTextContent("eine falsche Antwort");
   });
 
+  it("returns a C1 Lesen Teil 1 exercise to its exercise list", async () => {
+    const { exercise } = c1Teil1Fixture();
+    fetchClozeMatchingExerciseDetail.mockResolvedValue(exercise);
+    fetchClozeMatchingBlankStates.mockResolvedValue({ results: [] });
+
+    render(
+      <MemoryRouter initialEntries={["/matching/c1/24"]}>
+        <Routes>
+          <Route path="/matching/:level/:exerciseId" element={<ClozeMatchingPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("link", { name: "← Zurück zu Lesen Teil 1" })).toHaveAttribute(
+      "href",
+      "/modules/exam-preparation/c1/lesen/cloze-matching",
+    );
+  });
+
   it("guides the learner to the next green C1 blank after dragging away Beispiel 0", async () => {
     const { exampleSentence, exercise } = c1Teil1Fixture();
     fetchClozeMatchingExerciseDetail.mockResolvedValue(exercise);
@@ -918,7 +937,11 @@ describe("Cloze exercise layout", () => {
     expect(textPanel.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(poolPanel.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(clozeStyles).toMatch(/\.cloze-shell--c1\s*\{(?=[^}]*width:\s*100%)[^}]*\}/s);
-    expect(clozeStyles).toMatch(/\.cloze-shell--c1\s*>\s*\.cloze-actions\s*\{(?=[^}]*grid-row:\s*6)(?=[^}]*justify-content:\s*flex-end)[^}]*\}/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1\s+\.cloze-text-panel\s*\{(?=[^}]*grid-column:\s*1)(?=[^}]*grid-row:\s*5\s*\/\s*span\s*2)[^}]*\}/s);
+    expect(clozeStyles).toMatch(/\.cloze-shell--c1\s*>\s*\.cloze-actions\s*\{(?=[^}]*grid-column:\s*2)(?=[^}]*grid-row:\s*6)(?=[^}]*justify-content:\s*flex-end)[^}]*\}/s);
+    expect(clozeStyles).toMatch(/@media\s*\(min-width:\s*761px\)[\s\S]*?\.app-layout:has\(\.cloze-shell--c1\)\s+\.app-body\s*\{[^}]*padding-bottom:\s*0\.5rem/);
+    expect(clozeStyles).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.cloze-shell--c1\s+\.cloze-pool-panel,[\s\S]*?\.cloze-shell--c1\s+\.cloze-text-panel\s*\{(?=[^}]*grid-column:\s*1)(?=[^}]*grid-row:\s*auto)(?=[^}]*max-height:\s*none)(?=[^}]*height:\s*auto)[^}]*\}/s);
+    expect(clozeStyles).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.cloze-shell--c1\s*>\s*\.cloze-actions\s*\{(?=[^}]*grid-column:\s*1)(?=[^}]*grid-row:\s*auto)[^}]*\}/s);
     expect(clozeStyles).toMatch(/@media\s*\(max-width:\s*760px\)[\s\S]*?\.cloze-shell--c1\s+\.cloze-check-btn,[\s\S]*?\.cloze-shell--c1\s+\.cloze-reset-btn\s*\{[^}]*width:\s*100%/s);
   });
 

@@ -2,10 +2,14 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import { examPreparationTypeDescription, SPEAKING_TYPES, examPreparationTypesForLevel } from "./examPreparationTypeContent.js";
 import "./ExamPreparationSpeakingPage.css";
 import { examPreparationScope } from "../utils/examPreparationScope.js";
+import { useExamPreparationStatistics } from "../hooks/useExamPreparationStatistics.js";
+import ExamPreparationCountMeta from "../components/examPreparation/ExamPreparationCountMeta.jsx";
 
 export default function ExamPreparationSpeakingPage() {
   const scope = examPreparationScope(useParams().level);
+  const statistics = useExamPreparationStatistics();
   if (!scope) return <Navigate to="/modules/exam-preparation" replace />;
+  const typeCounts = statistics?.[scope.level]?.types;
   return (
     <div className="exam-speaking-page">
       <div className="exam-speaking-topbar">
@@ -40,6 +44,7 @@ export default function ExamPreparationSpeakingPage() {
             <p className="exam-speaking-type__description">
               {examPreparationTypeDescription(item, scope.level)}
             </p>
+            <ExamPreparationCountMeta items={[{ value: typeCounts?.[`SPEAKING_${item.key.toUpperCase()}`], label: "道题目" }]} />
             <div className="exam-speaking-type__bottom">
               <span className="exam-speaking-type__cta">{item.cta}</span>
             </div>

@@ -12,6 +12,7 @@ from apps.exam_preparation.views import (
     ClozeMatchingOptionViewSet,
     ExerciseBaseViewSet,
     ExamPreparationGuideViewSet,
+    ExamPreparationStatisticsAPIView,
     FavoriteQuestionViewSet,
     ListeningAnswerOptionViewSet,
     ListeningExerciseViewSet,
@@ -164,6 +165,11 @@ router.register(
 )
 
 urlpatterns = [
+    path(
+        "statistics/",
+        ExamPreparationStatisticsAPIView.as_view(),
+        name="exam-prep-statistics",
+    ),
     path(
         "content-search/",
         ExamPreparationContentSearchAPIView.as_view(),

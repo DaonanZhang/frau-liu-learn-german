@@ -7,7 +7,7 @@ import uuid
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
-from django.db.models import Count, F
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -40,6 +40,7 @@ from apps.exam_preparation.models import (
     ClozeMatchingExercise,
     ClozeMatchingOption,
     ExerciseBase,
+    ExamVocabularyCard,
     ExamPreparationGuide,
     ExamPreparationGuideLike,
     ListeningAnswerOption,
@@ -61,6 +62,7 @@ from apps.exam_preparation.models import (
     UserClozeChoiceBlankState,
     UserClozeMatchingBlankState,
     UserExerciseFavorite,
+    UserExamVocabularyFavorite,
     UserListeningQuestionState,
     UserReadingAdMatchingItemState,
     UserReadingTitleMatchingItemState,
@@ -81,6 +83,7 @@ from apps.exam_preparation.serializers import (
     ClozeMatchingExerciseSerializer,
     ClozeMatchingOptionSerializer,
     ExerciseBaseSerializer,
+    ExamVocabularyCardSerializer,
     ExamPreparationGuideSerializer,
     ListeningAnswerOptionSerializer,
     ListeningExerciseDetailSerializer,
@@ -1230,6 +1233,44 @@ class WritingExerciseViewSet(BaseExamPreparationViewSet):
         if self.action == "retrieve":
             return WritingExerciseDetailSerializer
         return super().get_serializer_class()
+
+
+class ExamVocabularyCardPagination(PageNumberPagination):
+    page_size = 20
+
+
+class ExamVocabularyCardViewSet(ReadOnlyModelViewSet):
+    serializer_class = ExamVocabularyCardSerializer
+    permission_classes = [IsAuthenticated, HasValidEntitlement]
+    required_module_key = "exam_preparation"
+    pagination_class = ExamVocabularyCardPagination
+
+    def get_queryset(self):
+        user = self.request.user
+        favorite = UserExamVocabularyFavorite.objects.filter(user=user, card_id=OuterRef("pk"))
+        queryset = ExamVocabularyCard.objects.annotate(is_favorite=Exists(favorite))
+        for field in ("exam_type", "level"):
+            value = self.request.query_params.get(field)
+            if value:
+                queryset = queryset.filter(**{field: value})
+        favorites = self.request.query_params.get("favorites")
+        if favorites in {"true", "false"}:
+            queryset = queryset.filter(is_favorite=(favorites == "true"))
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(Q(term__icontains=search) | Q(translation_zh__icontains=search))
+        return queryset
+
+    @action(detail=True, methods=["post", "delete"])
+    def favorite(self, request, pk=None):
+        card = self.get_object()
+        if request.method == "POST":
+            UserExamVocabularyFavorite.objects.get_or_create(user=request.user, card=card)
+            is_favorite = True
+        else:
+            UserExamVocabularyFavorite.objects.filter(user=request.user, card=card).delete()
+            is_favorite = False
+        return Response({"is_favorite": is_favorite})
 
 
 class WritingExampleTextViewSet(BaseExamPreparationViewSet):

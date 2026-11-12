@@ -6,6 +6,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { addExamPreparationLevelRoutes, examPreparationLevelHomeRoutes } from "../App.jsx";
 import ExamPreparationTipsPage from "./ExamPreparationTipsPage.jsx";
+import ExamPreparationVocabularyPage from "./ExamPreparationVocabularyPage.jsx";
 
 const authMock = vi.hoisted(() => ({ useAuth: vi.fn(() => ({ user: null })) }));
 vi.mock("../api/auth/useAuth.js", () => ({ useAuth: authMock.useAuth }));
@@ -26,6 +27,11 @@ function Location() {
 }
 
 describe("exam preparation route migration", () => {
+  it("registers the C1 Wortschatz route", () => {
+    const route = examPreparationLevelHomeRoutes().find(({ path }) => path === "/modules/exam-preparation/c1/wortschatz");
+    expect(route?.element.type).toBe(ExamPreparationVocabularyPage);
+  });
+
   it("registers a level-aware guide detail route", () => {
     const appSource = readFileSync(resolve("src/App.jsx"), "utf8");
 

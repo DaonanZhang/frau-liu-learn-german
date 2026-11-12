@@ -28,6 +28,7 @@ import {
 } from "../../utils/examTextAnnotations.js";
 
 import "./ExamTextAnnotations.css";
+import DictionaryLookupOverlay from "./DictionaryLookupOverlay.jsx";
 
 const EMPTY_STATE = { version: 1, regions: {} };
 const AnnotationContext = createContext(null);
@@ -638,6 +639,7 @@ function AnnotationController({ children }) {
   return (
     <AnnotationContext.Provider value={controllerContext}>
       {children}
+      <DictionaryLookupOverlay />
       <ExamTextAnnotationToolbar
         active={active}
         onAction={handleAction}

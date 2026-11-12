@@ -17,6 +17,29 @@
   overflow-x: hidden;
 }
 
+.lp-sourceSwitch {
+	display: flex;
+	gap: .5rem;
+	padding: .7rem 1rem 0;
+}
+
+.lp-sourceSwitch button {
+	min-height: 2.35rem;
+	padding: .45rem .85rem;
+	border: 1px solid #e5e7eb;
+	border-radius: .7rem;
+	background: #fff;
+	color: #475569;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.lp-sourceSwitch button.is-active {
+	border-color: #2563eb;
+	background: #eef5ff;
+	color: #2563eb;
+}
+
 .lp-header {
   display: flex;
   align-items: center;
@@ -107,6 +130,12 @@
   padding: 1.5rem 1rem 1rem;
   flex-wrap: wrap;
   border-bottom: 1px solid #f1f3f5;
+}
+
+.lp-savedCount {
+	font-size: .9rem;
+	font-weight: 700;
+	color: #475569;
 }
 
 .lp-pill {

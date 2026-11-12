@@ -324,13 +324,15 @@ export default function ExamPreparationModulePage({ level: levelProp } = {}) {
       ) : null}
 
       <section className="exam-module-grid" aria-label="专项入口列表">
-        {SKILL_CARDS.map((card) => {
+        {[...SKILL_CARDS, ...(scope.level === "C1" ? [{ key: "vocabulary", title: "Wortschatz", label: "词汇", description: "", to: "/modules/exam-preparation/c1/wortschatz", cta: "查看词汇", progress: "词汇收藏" }] : [])].map((card) => {
           const levelStatistics = statistics?.[scope.level];
           const skillStatistics = levelStatistics?.skills?.[SKILL_STAT_KEYS[card.key]];
           const cardDescription = scope.level === "C1"
             ? C1_SKILL_CONTENT[card.key]
             : card.descriptionByLevel?.[scope.level] || card.description;
-          const cardHref = card.key === "sprachbausteine" && scope.level === "C1"
+          const cardHref = card.key === "vocabulary"
+            ? card.to
+            : card.key === "sprachbausteine" && scope.level === "C1"
             ? `/modules/exam-preparation/${scope.levelPath}/sprachbausteine/cloze-choice`
             : card.to?.replace("/modules/exam-preparation/", `/modules/exam-preparation/${scope.levelPath}/`);
           const content = (

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AnnotatableTextRegion } from "./ExamTextAnnotations.jsx";
+import ExamVocabularyCard from "./ExamVocabularyCard.jsx";
 
 export function TranslationVisibilityIcon() {
   return (
@@ -194,14 +195,7 @@ export function VocabularyPages({ pages }) {
       {isExpanded ? (
         <>
           <div className="writing-detail-vocabulary__cards">
-            {entries.map((entry, index) => (
-              <p className="writing-detail-vocabulary__card" key={`${entry.word || entry.term || index}`}>
-                <strong>{entry.word || entry.term || entry.de || ""}</strong>
-                {entry.translation_zh || entry.translation || entry.zh ? <span>
-                  <i aria-hidden="true"> · </i>{entry.translation_zh || entry.translation || entry.zh}
-                </span> : null}
-              </p>
-            ))}
+            {entries.map((entry, index) => <ExamVocabularyCard entry={entry} key={`${entry.card?.id || entry.word || entry.term || index}`} />)}
           </div>
           <footer className="writing-detail-vocabulary__pagination">
             <button type="button" onClick={() => setPageIndex((current) => Math.max(0, current - 1))} disabled={pageIndex === 0} aria-label="上一页">←</button>

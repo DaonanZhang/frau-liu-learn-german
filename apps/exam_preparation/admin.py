@@ -8,6 +8,8 @@ from apps.exam_preparation.models import (
     ClozeMatchingExercise,
     ClozeMatchingOption,
     ExerciseBase,
+    ExamVocabularyCard,
+    ExamVocabularySource,
     ExamPreparationGuide,
     ExamPreparationGuideLike,
     ListeningAnswerOption,
@@ -28,6 +30,7 @@ from apps.exam_preparation.models import (
     UserClozeChoiceBlankState,
     UserClozeMatchingBlankState,
     UserExerciseFavorite,
+    UserExamVocabularyFavorite,
     UserListeningQuestionState,
     UserReadingAdMatchingItemState,
     UserReadingTitleMatchingItemState,
@@ -37,6 +40,25 @@ from apps.exam_preparation.models import (
     WritingExampleText,
     WritingExercise,
 )
+
+
+@admin.register(ExamVocabularyCard)
+class ExamVocabularyCardAdmin(admin.ModelAdmin):
+    list_display = ("term", "translation_zh", "exam_type", "level", "kind", "part_of_speech")
+    list_filter = ("exam_type", "level", "kind", "part_of_speech")
+    search_fields = ("term", "translation_zh")
+
+
+@admin.register(ExamVocabularySource)
+class ExamVocabularySourceAdmin(admin.ModelAdmin):
+    list_display = ("writing_exercise", "page_index", "entry_index", "card")
+    list_filter = ("page_index",)
+
+
+@admin.register(UserExamVocabularyFavorite)
+class UserExamVocabularyFavoriteAdmin(admin.ModelAdmin):
+    list_display = ("user", "card", "created_at")
+    search_fields = ("user__telephone", "card__term", "card__translation_zh")
 
 
 @admin.register(ExamPreparationGuide)

@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { EyeIcon } from "./Icons";
+import ExerciseFavoriteButton from "../../../components/examPreparation/ExerciseFavoriteButton.jsx";
 import "./LexiconCard.css";
 
 /**
@@ -89,7 +90,11 @@ export default function LexiconCard({
 	onToggleKnown,
 	onToggleNotKnown,
 	onToggleChinese,
+ isFavorited = false,
+ favoritePending = false,
+ onToggleFavorite,
 }) {
+	const [favoriteError, setFavoriteError] = useState("");
 	const posLabel = useMemo(() => {
 		return posToLabel(entry?.pos);
 	}, [entry]);
@@ -122,7 +127,7 @@ export default function LexiconCard({
 					<span className="lp-wordText">{entry?.title || ""}</span>
 				</div>
 
-				<div className="lp-cardMarkActions" aria-label="Knowledge actions">
+				{typeof onToggleFavorite !== "function" ? <div className="lp-cardMarkActions" aria-label="Knowledge actions">
 					<button
 						type="button"
 						className={[
@@ -154,8 +159,24 @@ export default function LexiconCard({
 					>
 						不认识
 					</button>
-				</div>
+				</div> : null}
+				{typeof onToggleFavorite === "function" ? (
+					<span className="lp-cardExamFavorite"><ExerciseFavoriteButton
+						isFavorited={isFavorited}
+						pending={favoritePending}
+						label={`收藏 ${entry?.title || "词汇"}`}
+						onClick={async () => {
+							setFavoriteError("");
+							try {
+								await onToggleFavorite(entry);
+							} catch {
+								setFavoriteError("取消收藏失败，请重试。");
+							}
+						}}
+					/></span>
+				) : null}
 			</div>
+			{favoriteError ? <div className="lp-favoriteError" role="alert">{favoriteError}</div> : null}
 
 			{!isChineseHidden && entry?.translation ? (
 				<div className="lp-meaningRow">

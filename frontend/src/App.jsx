@@ -20,6 +20,7 @@ import ExamPreparationListeningPage from "./pages/ExamPreparationListeningPage.j
 import ExamPreparationSpeakingPage from "./pages/ExamPreparationSpeakingPage.jsx";
 import ExamPreparationSprachbausteinePage from "./pages/ExamPreparationSprachbausteinePage.jsx";
 import ExamPreparationReadingPage from "./pages/ExamPreparationReadingPage.jsx";
+import ExamPreparationVocabularyPage from "./pages/ExamPreparationVocabularyPage.jsx";
 import {
   LISTENING_TYPES,
   READING_TYPES,
@@ -69,6 +70,7 @@ export function examPreparationLevelHomeRoutes() {
     { path: "/modules/exam-preparation/b1", element: <ExamPreparationModulePage level="b1" /> },
     { path: "/modules/exam-preparation/b2", element: <ExamPreparationModulePage level="b2" /> },
     { path: "/modules/exam-preparation/c1", element: <ExamPreparationModulePage level="c1" /> },
+    { path: "/modules/exam-preparation/c1/wortschatz", element: <ExamPreparationVocabularyPage /> },
   ];
 }
 

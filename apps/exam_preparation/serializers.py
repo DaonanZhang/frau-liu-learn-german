@@ -15,6 +15,8 @@ from apps.exam_preparation.models import (
     ClozeMatchingExercise,
     ClozeMatchingOption,
     ExerciseBase,
+    ExamVocabularySource,
+    ExamVocabularyCard,
     ExamPreparationGuide,
     ListeningAnswerOption,
     ListeningExercise,
@@ -41,6 +43,7 @@ from apps.exam_preparation.models import (
     UserSpeakingTurnState,
     WritingExampleText,
     WritingExercise,
+    UserExamVocabularyFavorite,
 )
 
 
@@ -738,6 +741,55 @@ class WritingExampleTextDetailSerializer(serializers.ModelSerializer):
 class WritingExerciseDetailSerializer(serializers.ModelSerializer):
     exercise_base = ExerciseBaseSerializer(read_only=True)
     example_texts = WritingExampleTextDetailSerializer(many=True, read_only=True)
+    content = serializers.SerializerMethodField()
+
+    def get_content(self, exercise):
+        content = exercise.content or {}
+        pages = content.get("vocabulary_pages") if isinstance(content, dict) else None
+        if not isinstance(pages, list):
+            return content
+        sources = {
+            (source.page_index, source.entry_index): source.card
+            for source in ExamVocabularySource.objects.filter(writing_exercise=exercise).select_related("card")
+        }
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        favorite_ids = set()
+        if user and user.is_authenticated and sources:
+            favorite_ids = set(UserExamVocabularyFavorite.objects.filter(
+                user=user, card_id__in=[card.id for card in sources.values()]
+            ).values_list("card_id", flat=True))
+        result = {**content}
+        result_pages = []
+        for page_index, page in enumerate(pages):
+            if not isinstance(page, dict) or not isinstance(page.get("entries"), list):
+                result_pages.append(page)
+                continue
+            result_page = {**page}
+            entries = []
+            for entry_index, entry in enumerate(page["entries"]):
+                card = sources.get((page_index, entry_index))
+                if card is None or not isinstance(entry, dict):
+                    entries.append(entry)
+                    continue
+                entries.append({**entry, "card": {
+                    "id": card.id,
+                    "kind": card.kind,
+                    "term": card.term,
+                    "translation_zh": card.translation_zh,
+                    "part_of_speech": card.part_of_speech,
+                    "article": card.article,
+                    "plural": card.plural,
+                    "verb_forms": card.verb_forms,
+                    "note": card.note,
+                    "example_de": card.example_de,
+                    "example_zh": card.example_zh,
+                    "is_favorite": card.id in favorite_ids,
+                }})
+            result_page["entries"] = entries
+            result_pages.append(result_page)
+        result["vocabulary_pages"] = result_pages
+        return result
 
     class Meta:
         model = WritingExercise
@@ -752,6 +804,18 @@ class WritingExerciseDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "example_texts",
+        ]
+        read_only_fields = fields
+
+
+class ExamVocabularyCardSerializer(serializers.ModelSerializer):
+    is_favorite = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = ExamVocabularyCard
+        fields = [
+            "id", "exam_type", "level", "kind", "term", "translation_zh", "part_of_speech", "article",
+            "plural", "verb_forms", "note", "example_de", "example_zh", "is_favorite",
         ]
         read_only_fields = fields
 

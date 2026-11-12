@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { addRedeemActionToPurchaseModal } from "../../utils/modulePurchaseRedeem.js";
+import { fetchAllFavoriteVocabularyCards, setVocabularyCardFavorite } from "../../api/exam_preparation/vocabularyCards.js";
 
 import { fetchVideoList } from "../../api/learning_by_video/videos";
 import {
@@ -403,6 +404,32 @@ function safeArray(response) {
   return [];
 }
 
+function mapExamVocabularyCard(card) {
+  const forms = card?.verb_forms && typeof card.verb_forms === "object"
+    ? Object.entries(card.verb_forms).map(([label, value]) => value ? `${label}: ${value}` : "").filter(Boolean).join(" · ")
+    : "";
+  const note = [
+    normalizeText(card?.note),
+    card?.plural ? `复数：${card.plural}` : "",
+    forms ? `变位：${forms}` : "",
+  ].filter(Boolean).join("\n");
+  return {
+    key: `exam:${card.id}`,
+    kind: ["word", "expression", "sentence"].includes(card?.kind) ? card.kind : "word",
+    title: normalizeText(card?.term),
+    translation: normalizeText(card?.translation_zh),
+    pos: normalizeText(card?.part_of_speech),
+    article: normalizeText(card?.article) || null,
+    note,
+    example_de: normalizeText(card?.example_de),
+    example_zh: normalizeText(card?.example_zh),
+    entityId: toIntOrNull(card?.id),
+    subtitleIds: [],
+    occurrenceIds: [],
+    examFavorite: Boolean(card?.is_favorite),
+  };
+}
+
 /**
  * Clamp value into [min, max]
  *
@@ -513,6 +540,8 @@ export default function LexiconPage() {
   const [errorText, setErrorText] = useState("");
 
   const [entries, setEntries] = useState([]);
+  const [source, setSource] = useState("video");
+  const [examFavoritePendingByKey, setExamFavoritePendingByKey] = useState({});
   const [activeKind, setActiveKind] = useState("word");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sentenceFilter, setSentenceFilter] = useState("all");
@@ -761,6 +790,19 @@ export default function LexiconPage() {
       }
     }
 
+    if (source !== "video") {
+      setEntries([]);
+      setKnowledgeByKey({});
+      setSubtitlesById({});
+      setSubtitleItems([]);
+      setFavoriteSubtitleIds(new Set());
+      setFavoritePendingBySubtitleId({});
+      setHiddenChineseByKey({});
+      setIsLoading(false);
+      setErrorText("");
+      return () => { aborted = true; };
+    }
+
     if (selectedVideoId !== null && selectedVideoId !== undefined) {
       loadAllData(selectedVideoId);
     } else {
@@ -778,7 +820,31 @@ export default function LexiconPage() {
     return () => {
       aborted = true;
     };
-  }, [selectedVideoId]);
+  }, [selectedVideoId, source]);
+
+  useEffect(() => {
+    if (source !== "exam") return undefined;
+    let aborted = false;
+    setIsLoading(true);
+    setErrorText("");
+    fetchAllFavoriteVocabularyCards()
+      .then((cards) => {
+        if (!aborted) {
+          setEntries(cards.map(mapExamVocabularyCard).filter((entry) => entry.entityId && entry.title));
+          setHiddenChineseByKey({});
+        }
+      })
+      .catch((error) => {
+        if (!aborted) {
+          setEntries([]);
+          setErrorText(error?.message ? String(error.message) : "Failed to load lexicon");
+        }
+      })
+      .finally(() => {
+        if (!aborted) setIsLoading(false);
+      });
+    return () => { aborted = true; };
+  }, [source]);
 
   const selectedVideoName = useMemo(() => {
     if (selectedVideoId === null) {
@@ -885,7 +951,7 @@ export default function LexiconPage() {
   }, []);
 
   const baseEntries = useMemo(() => {
-    if (activeKind === "sentence") {
+    if (activeKind === "sentence" && source === "video") {
       return [];
     }
 
@@ -896,9 +962,11 @@ export default function LexiconPage() {
     }
 
     return list;
-  }, [entries, activeKind]);
+  }, [entries, activeKind, source]);
 
-  const sentenceCount = useMemo(() => subtitleItems.length, [subtitleItems]);
+  const sentenceCount = source === "exam"
+    ? entries.filter((entry) => entry.kind === "sentence").length
+    : subtitleItems.length;
 
   const sentenceStatusCounts = useMemo(() => {
     let favorited = 0;
@@ -1038,6 +1106,34 @@ export default function LexiconPage() {
     },
     [favoritePendingBySubtitleId, favoriteSubtitleIds]
   );
+
+  const onToggleExamFavorite = useCallback(async (entry) => {
+    const cardId = toIntOrNull(entry?.entityId);
+    if (!cardId || examFavoritePendingByKey[entry.key]) return;
+    setExamFavoritePendingByKey((previous) => ({ ...previous, [entry.key]: true }));
+    try {
+      await setVocabularyCardFavorite(cardId, false);
+      setEntries((previous) => previous.filter((item) => item.key !== entry.key));
+    } catch {
+      throw new Error("取消收藏失败，请重试。");
+    } finally {
+      setExamFavoritePendingByKey((previous) => {
+        const next = { ...previous };
+        delete next[entry.key];
+        return next;
+      });
+    }
+  }, [examFavoritePendingByKey]);
+
+  const onChangeSource = useCallback((nextSource) => {
+    if (nextSource === source) return;
+    setSource(nextSource);
+    setSelectedVideoId(null);
+    setActiveKind("word");
+    setStatusFilter("all");
+    setSentenceFilter("all");
+    setIsMobileSidebarOpen(false);
+  }, [source]);
 
   /**
    * @param {LexiconEntry} entry - Entry.
@@ -1196,8 +1292,8 @@ export default function LexiconPage() {
 
     const subtitleItem = firstSubtitleId ? subtitlesById[firstSubtitleId] : null;
 
-    const subtitleContent = normalizeText(subtitleItem?.content);
-    const subtitleTranslation = normalizeText(subtitleItem?.translation);
+    const subtitleContent = normalizeText(entry.example_de || subtitleItem?.content);
+    const subtitleTranslation = normalizeText(entry.example_zh || subtitleItem?.translation);
 
     return (
       <div className={["lp-carouselCard", `lp-carouselCard--${slot}`].join(" ")}>
@@ -1212,6 +1308,9 @@ export default function LexiconPage() {
           }}
           subtitleContent={subtitleContent}
           subtitleTranslation={subtitleTranslation}
+          isFavorited={source === "exam" && entry.examFavorite}
+          favoritePending={Boolean(examFavoritePendingByKey[entry.key])}
+          onToggleFavorite={source === "exam" ? onToggleExamFavorite : undefined}
         />
       </div>
     );
@@ -1245,9 +1344,9 @@ export default function LexiconPage() {
         ]
           .filter(Boolean)
           .join(" ")}
-        aria-hidden={isMobileView && !isMobileSidebarOpen}
+        aria-hidden={source === "exam" || (isMobileView && !isMobileSidebarOpen)}
       >
-        <Sidebar
+        {source === "video" ? <Sidebar
           isCollapsed={effectiveSidebarCollapsed}
           isLoading={isVideosLoading}
           videos={videos}
@@ -1260,14 +1359,20 @@ export default function LexiconPage() {
           onBackToModules={onBackToModules}
           onToggleCollapsed={onToggleSidebar}
           onGoHome={onClickGoHome}
-        />
+        /> : null}
       </aside>
 
       <main className="lp-main">
+        <nav className="lp-sourceSwitch" aria-label="词库来源">
+          <button type="button" className={source === "video" ? "is-active" : ""} aria-pressed={source === "video"} onClick={() => onChangeSource("video")}>视频季</button>
+          <button type="button" className={source === "exam" ? "is-active" : ""} aria-pressed={source === "exam"} onClick={() => onChangeSource("exam")}>备考季</button>
+        </nav>
         <header className="lp-header">
           <div className="lp-headerLeft">
             <div className="lp-title">词库</div>
-            {selectedVideoName ? (
+            {source === "exam" ? (
+              <div className="lp-subtitle">备考季收藏词汇</div>
+            ) : selectedVideoName ? (
               <div className="lp-subtitle">{selectedVideoName}</div>
             ) : activeModuleConfig ? (
               <div className="lp-subtitle">{activeModuleConfig.title}</div>
@@ -1277,7 +1382,7 @@ export default function LexiconPage() {
           </div>
 
           <div className="lp-headerActions">
-            {isMobileView ? (
+            {source === "video" && isMobileView ? (
               <button
                 type="button"
                 className="lp-sidebarToggle"
@@ -1344,7 +1449,9 @@ export default function LexiconPage() {
         </div>
 
         <div className="lp-filtersRow">
-          {activeKind === "sentence" ? (
+          {source === "exam" ? (
+            <div className="lp-savedCount">已收藏 {entries.length}</div>
+          ) : activeKind === "sentence" ? (
             <>
               <button
                 type="button"
@@ -1430,23 +1537,23 @@ export default function LexiconPage() {
 
         {isLoading ? <div className="lp-stateBox">Loading…</div> : null}
         {!isLoading && errorText ? <div className="lp-stateBox">Failed to load: {errorText}</div> : null}
-        {!isLoading && !errorText && !selectedVideoId ? (
+        {!isLoading && !errorText && source === "video" && !selectedVideoId ? (
           <div className="lp-stateBox">
             {activeModuleConfig
               ? "当前模块里的视频尚未解锁，请点击左侧带锁视频查看购买入口。"
               : "左侧先选择“科普季”或“Vlog季”，再进入具体视频词库。"}
           </div>
         ) : null}
-        {!isLoading && !errorText && activeKind === "sentence" && filteredSentenceItems.length <= 0 ? (
+        {!isLoading && !errorText && source === "video" && activeKind === "sentence" && filteredSentenceItems.length <= 0 ? (
           <div className="lp-stateBox">暂无句子</div>
         ) : null}
-        {!isLoading && !errorText && activeKind !== "sentence" && filteredEntries.length <= 0 ? (
-          <div className="lp-stateBox"></div>
+        {!isLoading && !errorText && (activeKind !== "sentence" || source === "exam") && filteredEntries.length <= 0 && (source === "exam" || selectedVideoId) ? (
+          <div className="lp-stateBox">{source === "exam" ? "暂无收藏词汇" : ""}</div>
         ) : null}
 
-        {!isLoading && !errorText && selectedVideoId ? (
+        {!isLoading && !errorText && (source === "exam" || selectedVideoId) ? (
           <>
-            {activeKind === "sentence" ? (
+            {source === "video" && activeKind === "sentence" ? (
               <section className="lp-sentenceList" aria-label="Sentence cards">
                 {filteredSentenceItems.map((subtitle) => {
                   const subtitleId = toIntOrNull(subtitle?.id);
@@ -1557,8 +1664,8 @@ export default function LexiconPage() {
 
                   const subtitleItem = firstSubtitleId ? subtitlesById[firstSubtitleId] : null;
 
-                  const subtitleContent = normalizeText(subtitleItem?.content);
-                  const subtitleTranslation = normalizeText(subtitleItem?.translation);
+                  const subtitleContent = normalizeText(entry.example_de || subtitleItem?.content);
+                  const subtitleTranslation = normalizeText(entry.example_zh || subtitleItem?.translation);
 
                   return (
                     <LexiconCard
@@ -1573,6 +1680,9 @@ export default function LexiconPage() {
                       }}
                       subtitleContent={subtitleContent}
                       subtitleTranslation={subtitleTranslation}
+                      isFavorited={source === "exam" && entry.examFavorite}
+                      favoritePending={Boolean(examFavoritePendingByKey[entry.key])}
+                      onToggleFavorite={source === "exam" ? onToggleExamFavorite : undefined}
                     />
                   );
                 })}

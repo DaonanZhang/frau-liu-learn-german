@@ -119,8 +119,24 @@ class C1ImporterUnitTests(TestCase):
             staged = importer.stage(source)
         self.assertEqual(len(staged), 1)
         self.assertEqual(staged[0].name, valid.name)
-        self.assertTrue((Path(self.temp_dir.name) / "imports/reading_ad_matching/failed" / empty.name).exists())
+        self.assertTrue((Path(self.temp_dir.name) / "imports/reading_teil2/failed" / empty.name).exists())
         self.assertEqual(staged[0].parent.name, "raw")
+
+    def test_raw_files_discovers_direct_reading_teil_folders(self):
+        imports = Path(self.temp_dir.name) / "imports"
+        expected = []
+        for folder in ("reading_teil1", "reading_teil2", "reading_teil3"):
+            raw = imports / folder / "raw"
+            raw.mkdir(parents=True)
+            path = raw / f"{folder}__example_001.xlsx"
+            path.touch()
+            expected.append(path)
+        legacy = imports / "reading_ad_matching" / "raw"
+        legacy.mkdir(parents=True)
+        (legacy / "reading_teil2__legacy_001.xlsx").touch()
+
+        with patch.object(importer, "RAW_ROOT", imports):
+            self.assertEqual(importer.raw_files(), sorted(expected))
 
     def test_reading_teil1_preflight_rejects_an_answer_missing_from_the_option_bank(self):
         path = Path(self.temp_dir.name) / "reading_teil1__broken_001.xlsx"

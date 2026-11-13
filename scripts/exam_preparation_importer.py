@@ -1097,17 +1097,37 @@ def parse_speaking_ueber_ein_thema_sprechen_workbook(xlsx_path: Path) -> dict[st
 def parse_speaking_gemeinsam_etwas_planen_workbook(xlsx_path: Path) -> dict[str, object]:
     xlsx = pd.ExcelFile(xlsx_path, engine="openpyxl")
     meta_df = get_sheet(xlsx, "meta")
-    require_columns(
-        meta_df,
-        ["ID", "标题", "内容", "句子类型", "考试类型", "是否真题"],
-        "meta",
-    )
-    rows = [row for row in iter_records(meta_df) if clean_text(row.get("内容"))]
-    if not rows:
-        raise ImportErrorWithContext(f"{xlsx_path.name}: Teil 3 dialogue is empty")
+    if {"ID", "task"}.issubset(meta_df.columns) and "内容" not in meta_df.columns:
+        meta_rows = [row for row in iter_records(meta_df) if clean_text(row.get("ID")) or clean_text(row.get("task"))]
+        if len(meta_rows) != 1:
+            raise ImportErrorWithContext(f"{xlsx_path.name}: expected exactly one meaningful meta row")
+        workbook_id = single_workbook_value(xlsx_path, meta_rows, "ID")
+        task = clean_text(meta_rows[0].get("task"))
+        dialogue_df = get_sheet(xlsx, "example")
+        require_columns(
+            dialogue_df,
+            ["ID", "标题", "内容", "句子类型", "考试类型", "是否真题"],
+            "example",
+        )
+        rows = [row for row in iter_records(dialogue_df) if clean_text(row.get("内容"))]
+        if not rows:
+            raise ImportErrorWithContext(f"{xlsx_path.name}: Teil 3 dialogue is empty")
+        if any(normalize_link_id(row.get("ID")) != normalize_link_id(workbook_id) for row in rows):
+            raise ImportErrorWithContext(f"{xlsx_path.name}: inconsistent ID between meta and example")
+        title = single_workbook_value(xlsx_path, rows, "标题")
+    else:
+        require_columns(
+            meta_df,
+            ["ID", "标题", "内容", "句子类型", "考试类型", "是否真题"],
+            "meta",
+        )
+        rows = [row for row in iter_records(meta_df) if clean_text(row.get("内容"))]
+        if not rows:
+            raise ImportErrorWithContext(f"{xlsx_path.name}: Teil 3 dialogue is empty")
+        workbook_id = single_workbook_value(xlsx_path, rows, "ID")
+        title = single_workbook_value(xlsx_path, rows, "标题")
+        task = ""
 
-    workbook_id = single_workbook_value(xlsx_path, rows, "ID")
-    title = single_workbook_value(xlsx_path, rows, "标题")
     exam_type = single_workbook_value(xlsx_path, rows, "考试类型")
     is_real_exam = parse_bool(single_workbook_value(xlsx_path, rows, "是否真题"))
     dialogue = []
@@ -1135,6 +1155,7 @@ def parse_speaking_gemeinsam_etwas_planen_workbook(xlsx_path: Path) -> dict[str,
         "external_id": external_id_from_filename(xlsx_path, workbook_id),
         "level": infer_level_from_filename(xlsx_path),
         "title": title or SPEAKING_TEIL_CONFIG["3"]["title"],
+        "task": task,
         "exam_type": exam_type,
         "is_real_exam": is_real_exam,
         "instruction": SPEAKING_TEIL_CONFIG["3"]["instruction"],
@@ -1194,7 +1215,7 @@ def save_speaking_exercise(
             raise ImportErrorWithContext(f"{xlsx_path.name}: speaking audio generation failed: {error}") from error
     SpeakingTeilExercise.objects.update_or_create(
         exercise_base=base,
-        defaults={"instruction": parsed["instruction"], "content": content},
+        defaults={"instruction": parsed["instruction"], "task": parsed.get("task", ""), "content": content},
     )
     return 1
 

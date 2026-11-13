@@ -240,7 +240,7 @@ def _serialize_writing(base: ExerciseBase) -> dict[str, Any]:
 
 def _serialize_speaking(base: ExerciseBase) -> dict[str, Any]:
     exercise: SpeakingTeilExercise = _related(base, "speaking_teil_exercise")
-    return {"instruction": exercise.instruction, "content": exercise.content}
+    return {"instruction": exercise.instruction, "task": exercise.task, "content": exercise.content}
 
 
 SERIALIZERS = {
@@ -510,7 +510,7 @@ def _sync_writing(base: ExerciseBase, data: dict[str, Any]):
 def _sync_speaking(base: ExerciseBase, data: dict[str, Any]):
     SpeakingTeilExercise.objects.update_or_create(
         exercise_base=base,
-        defaults={"instruction": data.get("instruction", ""), "content": data.get("content", {})},
+        defaults={"instruction": data.get("instruction", ""), "task": data.get("task", ""), "content": data.get("content", {})},
     )
 
 

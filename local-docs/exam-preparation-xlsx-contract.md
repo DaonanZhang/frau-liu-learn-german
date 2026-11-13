@@ -106,6 +106,15 @@ numeric filename suffix becomes its ID. Conflicting non-empty values fail.
 
 C1 Hochschule source workbooks are staged under
 `apps/exam_preparation/data/imports/telc/c1_hs/<kind>/{raw,processed,failed}`.
+The reading workbooks use their exam part directly instead of the database
+exercise-type name:
+
+- `reading_teil1/{raw,processed,failed}`
+- `reading_teil2/{raw,processed,failed}`
+- `reading_teil3/{raw,processed,failed}`
+
+The importer does not scan the former reading directories `cloze_matching`,
+`reading_ad_matching`, or `reading_understanding` under `c1_hs`.
 The importer accepts the existing normalized `<kind>__..._<ID>.xlsx` names and
 the source suffixes `_Schreiben_<ID>`, `_Vortrag_<ID>`, and `_Zitat_<ID>`.
 Workbook, text/example, and vocabulary IDs must numerically match the filename
@@ -761,16 +770,18 @@ Normalized `content` fields:
 
 Example filename: `b1_speaking_planen_008.xlsm`.
 
-The workbook has one `meta` worksheet. Required columns:
+Legacy workbooks store `ID`, `标题`, `内容`, `句子类型`, `考试类型`, and
+`是否真题` together on `meta`; repeated metadata must be consistent across
+non-empty dialogue rows. New workbooks store exactly one meaningful `meta` row
+with `ID` and `task`, and store dialogue rows on `example` with `ID`, `标题`,
+`内容`, `句子类型`, `考试类型`, and `是否真题`. The task is imported from
+`meta.task`, while the exercise title comes from the single unique
+`example.标题`; every dialogue row ID must match `meta.ID`.
 
-- `ID`, `标题`, `内容`
-- `句子类型`
-- `考试类型`, `是否真题`
-
-The repeated metadata must be consistent across all rows. Each non-empty row
-is one dialogue turn. Because this workbook has no role column, turns are
-assigned alternately to `TN1` and `TN2`, starting with `TN1`. Consecutive rows
-with the same `句子类型` form one ordered planning stage.
+Each non-empty dialogue row is one turn. Because these workbooks have no role
+column, turns are assigned alternately to `TN1` and `TN2`, starting with `TN1`.
+Consecutive rows with the same `句子类型` form one ordered planning stage.
+Legacy workbooks leave the separate `task` field empty.
 
 Normalized `content` fields:
 

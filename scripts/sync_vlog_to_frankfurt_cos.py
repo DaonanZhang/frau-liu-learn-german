@@ -114,6 +114,11 @@ def build_parser(repo_root: Path) -> argparse.ArgumentParser:
             "under the selected prefix. Full object-key matching is always enabled."
         ),
     )
+    parser.add_argument(
+        "--overwrite-existing",
+        action="store_true",
+        help="Upload local files even when their COS object keys already exist",
+    )
     parser.add_argument("--dry-run", action="store_true", help="List planned uploads without writing COS")
     return parser
 
@@ -345,12 +350,12 @@ def sync_files(
         relative_name = path.relative_to(args.source_dir).as_posix()
         key = object_key_for(path, args.source_dir, args.object_prefix)
 
-        if key in remote_objects:
+        if key in remote_objects and not args.overwrite_existing:
             stats.skipped_key += 1
             print(f"[{index}/{stats.total}] SKIP existing key: {relative_name}")
             continue
 
-        if args.dedupe_etag:
+        if key not in remote_objects and args.dedupe_etag:
             local_etag = md5_file(path)
             if local_etag in remote_single_part_etags:
                 stats.skipped_etag += 1

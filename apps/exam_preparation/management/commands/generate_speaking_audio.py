@@ -38,6 +38,10 @@ class Command(BaseCommand):
         parser.add_argument("--voice", default=DEFAULT_VOICE)
         parser.add_argument("--limit", type=int, default=0, help="Generate at most this many new MP3 files")
         parser.add_argument("--overwrite", action="store_true", help="Regenerate existing files for the chosen voice")
+        parser.add_argument("--exam-type")
+        parser.add_argument("--level")
+        parser.add_argument("--exercise-type")
+        parser.add_argument("--external-id")
 
     def handle(self, *args, **options):
         voice = options["voice"]
@@ -101,11 +105,22 @@ class Command(BaseCommand):
 
         generated = 0
         for exercise, turn, text in turns:
+            base = exercise.exercise_base
+            if any(
+                value is not None and str(getattr(base, field)) != value
+                for field, value in (
+                    ("exam_type", options["exam_type"]),
+                    ("level", options["level"]),
+                    ("exercise_type", options["exercise_type"]),
+                    ("external_id", options["external_id"]),
+                )
+            ):
+                continue
             target = speaking_turn_audio_path(
-                exercise_type=exercise.exercise_base.exercise_type,
-                exam_type=exercise.exercise_base.exam_type,
-                level=exercise.exercise_base.level,
-                external_id=exercise.exercise_base.external_id,
+                exercise_type=base.exercise_type,
+                exam_type=base.exam_type,
+                level=base.level,
+                external_id=base.external_id,
                 sequence=turn["sequence"],
             )
             if target.is_file() and not options["overwrite"]:

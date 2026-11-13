@@ -13,6 +13,7 @@ class SpeakingTeilExercise(models.Model):
         verbose_name="exercise base",
     )
     instruction = models.TextField(blank=True, default="", verbose_name="instruction")
+    task = models.TextField(blank=True, default="", verbose_name="task")
     content = models.JSONField(default=dict, verbose_name="task content")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="created at")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="updated at")

@@ -91,6 +91,7 @@ class SpeakingImportAudioTests(TestCase):
             "level": ExerciseBase.Level.B1,
             "external_id": "7",
             "title": "Thema",
+            "task": "Zusammen planen.",
             "exam_type": "telc",
             "is_real_exam": False,
             "instruction": "Sprechen",
@@ -120,4 +121,5 @@ class SpeakingImportAudioTests(TestCase):
                 generate_speaking_audio=True,
             )
         content = update.call_args.kwargs["defaults"]["content"]
+        self.assertEqual(update.call_args.kwargs["defaults"]["task"], "Zusammen planen.")
         self.assertEqual(content["dialogue"][0]["audio_url"], content["sections"][0]["turns"][0]["audio_url"])

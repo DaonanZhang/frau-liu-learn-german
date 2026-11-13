@@ -83,6 +83,7 @@ def make_args(source_dir: Path, **overrides):
         "part_size_mb": 8,
         "max_threads": 2,
         "dedupe_etag": False,
+        "overwrite_existing": False,
         "dry_run": False,
     }
     values.update(overrides)
@@ -90,6 +91,35 @@ def make_args(source_dir: Path, **overrides):
 
 
 class SyncVlogToFrankfurtTests(unittest.TestCase):
+    def test_existing_key_is_uploaded_only_when_overwrite_is_enabled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source_dir = Path(directory)
+            path = source_dir / "existing.txt"
+            path.write_text("replacement", encoding="utf-8")
+            key = f"{sync_module.DEFAULT_PREFIX}/existing.txt"
+            local_md5 = hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()
+            remote = {key: sync_module.RemoteObject(key=key, etag=local_md5, size=8)}
+
+            default_client = FakeUploadClient({})
+            default_stats, _ = sync_module.sync_files(
+                default_client,
+                make_args(source_dir),
+                [path],
+                remote,
+            )
+            overwrite_client = FakeUploadClient({})
+            overwrite_stats, _ = sync_module.sync_files(
+                overwrite_client,
+                make_args(source_dir, overwrite_existing=True, dedupe_etag=True),
+                [path],
+                remote,
+            )
+
+            self.assertEqual(default_client.calls, [])
+            self.assertEqual(default_stats.skipped_key, 1)
+            self.assertEqual(overwrite_client.calls, [key])
+            self.assertEqual(overwrite_stats.uploaded, 1)
+
     def test_default_scan_is_limited_to_video_and_cover_directories(self):
         with tempfile.TemporaryDirectory() as directory:
             source_dir = Path(directory)

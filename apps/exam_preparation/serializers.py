@@ -761,7 +761,8 @@ class SpeakingTeilExerciseSerializer(TrialAwareExerciseSerializerMixin, serializ
     show_free_trial_badge = serializers.SerializerMethodField()
     exercise_base = ExerciseBaseSerializer(read_only=True)
     content = serializers.SerializerMethodField()
-    locked_content_fields = ("instruction", "content")
+    task = serializers.CharField(read_only=True)
+    locked_content_fields = ("instruction", "task", "content")
 
     def get_content(self, exercise):
         content = exercise.content or {}
@@ -772,6 +773,8 @@ class SpeakingTeilExerciseSerializer(TrialAwareExerciseSerializerMixin, serializ
             return result
 
         result = {**content}
+        if exercise.task:
+            result["task"] = exercise.task
         base = exercise.exercise_base
         view = self.context.get("view")
         if (
@@ -831,6 +834,7 @@ class SpeakingTeilExerciseSerializer(TrialAwareExerciseSerializerMixin, serializ
             "show_free_trial_badge",
             "exercise_base",
             "instruction",
+            "task",
             "content",
             "created_at",
             "updated_at",

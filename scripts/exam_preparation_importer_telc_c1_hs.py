@@ -28,9 +28,9 @@ from apps.exam_preparation.speaking_audio import speaking_turn_audio_url
 RAW_ROOT = ROOT / "apps/exam_preparation/data/imports/telc/c1_hs"
 DEFAULT_SOURCE = ROOT / "tmp/c1hs-drive"
 KINDS = {
-    "reading_teil1": ("cloze_matching", None),
-    "reading_teil2": ("reading_ad_matching", None),
-    "reading_teil3": ("reading_understanding", shared.import_reading_understanding),
+    "reading_teil1": ("reading_teil1", None),
+    "reading_teil2": ("reading_teil2", None),
+    "reading_teil3": ("reading_teil3", shared.import_reading_understanding),
     "cloze_choice": ("cloze_choice", shared.import_cloze_choice),
     "listening_teil1": ("listening_teil1", None),
     "listening_teil2": ("listening_teil2", None),
@@ -438,6 +438,13 @@ def stage(source: Path) -> list[Path]:
     return staged
 
 
+def raw_files() -> list[Path]:
+    files = []
+    for folder in sorted({folder for folder, _ in KINDS.values()}):
+        files.extend((RAW_ROOT / folder / "raw").glob("*.xlsx"))
+    return sorted(files)
+
+
 def _base(path, identifier, row, skill, exercise_type):
     return shared.upsert_base(
         level="C1", skill=skill, exercise_type=exercise_type, external_id=identifier,
@@ -728,7 +735,7 @@ def main() -> int:
     parser.add_argument("--import-seeds", action="store_true", help="import the embedded writing and speaking practice samples")
     parser.add_argument("--skip-speaking-audio", action="store_true", help="import model text without generating speaking audio")
     args = parser.parse_args()
-    files = [args.file] if args.file else (stage(args.source_dir) if args.stage else sorted(RAW_ROOT.glob("*/raw/*.xlsx")))
+    files = [args.file] if args.file else (stage(args.source_dir) if args.stage else raw_files())
     if not files:
         print("No C1 Hochschule workbooks found.")
         if args.import_seeds:

@@ -10,6 +10,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.models import Entitlement, Module
 from apps.exam_preparation.models import ExerciseBase, SpeakingTeilExercise
+from apps.exam_preparation.serializers import SpeakingTeilExerciseSerializer
 from apps.exam_preparation import speaking_audio
 
 
@@ -40,6 +41,37 @@ class SpeakingAudioApiTests(APITestCase):
             },
         )
         self.client.force_authenticate(user)
+
+    def test_task_is_exposed_in_content_and_as_a_model_field(self):
+        self.exercise.task = "Gemeinsam planen."
+        self.exercise.save(update_fields=["task"])
+
+        data = SpeakingTeilExerciseSerializer(
+            self.exercise, context={"has_full_exam_preparation_access": True}
+        ).data
+
+        self.assertEqual(data["task"], "Gemeinsam planen.")
+        self.assertEqual(data["content"]["task"], "Gemeinsam planen.")
+
+    def test_locked_task_is_not_exposed(self):
+        self.exercise.task = "Nicht freigeben."
+        self.exercise.save(update_fields=["task"])
+        base = self.exercise.exercise_base
+        cache_key = (
+            type(self.exercise), base.exam_type, base.level, base.exercise_type,
+        )
+
+        data = SpeakingTeilExerciseSerializer(
+            self.exercise,
+            context={
+                "has_full_exam_preparation_access": False,
+                "free_trial_exercise_ids": {cache_key: []},
+            },
+        ).data
+
+        self.assertTrue(data["is_locked"])
+        self.assertEqual(data["task"], "")
+        self.assertEqual(data["content"], {})
 
     def test_c1_teil2_detail_composes_paired_teil1_content(self):
         companion_base = ExerciseBase.objects.create(

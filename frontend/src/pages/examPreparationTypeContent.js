@@ -68,8 +68,8 @@ export const READING_TYPES = [
 
 const C1_READING_TYPES = [
   { ...READING_TYPES[0], title: "Teil 1", to: "/modules/exam-preparation/lesen/cloze-matching", description: "从备选词语中选择合适表达，完成短文中的空格。" },
-  { ...READING_TYPES[1], title: "Teil 2", description: "阅读长文并完成理解题。" },
-  { ...READING_TYPES[2], title: "Teil 3", description: "阅读一篇由 A–E 五个段落组成的文章，为每个问题选择对应段落；同一段落可以多次选择。" },
+  { ...READING_TYPES[2], title: "Teil 2", description: "阅读一篇由 A–E 五个段落组成的文章，为每个问题选择对应段落；同一段落可以多次选择。" },
+  { ...READING_TYPES[1], title: "Teil 3", description: "阅读长文并完成理解题。" },
 ];
 
 export const SPRACHBAUSTEINE_TYPES = [

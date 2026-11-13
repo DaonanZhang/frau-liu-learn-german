@@ -2952,7 +2952,9 @@ describe("TELC C1 mock exam", () => {
           { id: 3, option_key: "c", option_text: "Nicht im Text" },
         ] }],
       },
-      cloze_choice: { exercise_base: { title: "C1 Sprachbausteine 1", exam_type: "TELC" }, content_with_placeholders: "Ich {{blank_1}}.", blanks: [] },
+      cloze_choice: { exercise_base: { title: "C1 Sprachbausteine 1", exam_type: "TELC" }, content_with_placeholders: "Ich {{blank_1}}.", blanks: [
+        { id: 51, blank_key: "blank_1", blank_number: 1, options: [{ id: 1, option_key: "A", option_text: "lerne", is_correct: true }] },
+      ] },
       listening_teil1: { exercise_base: { title: "C1 Hören 1", exam_type: "TELC" }, script: "Moderator: Testtranskript", content: { format: "speaker_matching", statements: [
         { statement_number: 1, statement: "Aussage eins", speaker: "Sprecher/in 1" },
         { statement_number: 2, statement: "Aussage zwei", speaker: "Sprecher/in 2" },
@@ -3029,24 +3031,18 @@ describe("TELC C1 mock exam", () => {
     expect(mockExamStyleSource).toMatch(/@media\s*\(max-width:\s*1100px\)[\s\S]*?\.telc-c1-cloze-matching\s*>\s*\.telc-mock-cloze-matching-pool\s*\{[^}]*min-height:\s*0/s);
   });
 
-  it("maps C1 Lesen Teil 2 to reading comprehension and Teil 3 to reusable A–E matching", async () => {
+  it("orders C1 reading navigation and answer sheet as paragraph matching then comprehension", async () => {
     const { container } = renderC1();
     expect(await screen.findByRole("heading", { level: 1, name: "Lesen & Sprachbausteine" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Lesen · Teil 1" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Lesen · Teil 2" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Lesen · Teil 3" })).toBeInTheDocument();
+    const navigation = container.querySelector(".telc-mock-exam-part-nav");
+    expect([...navigation.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Lesen · Teil 1", "Lesen · Teil 2", "Lesen · Teil 3", "Sprachbausteine · Teil 1",
+    ]);
+    const answerSheet = await screen.findByRole("region", { name: "答题卡" });
+    expect([...answerSheet.querySelectorAll(".mock-answer-sheet__part h4")].map((heading) => heading.textContent)).toEqual([
+      "Lesen · Teil 1", "Lesen · Teil 2", "Lesen · Teil 3", "Sprachbausteine · Teil 1",
+    ]);
     fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 2" }));
-    expect(await screen.findByText("Lesetext")).toBeInTheDocument();
-    expect(screen.getByText("Aussage")).toBeInTheDocument();
-    const readingWorkspace = container.querySelector(".telc-c1-reading-understanding");
-    expect(readingWorkspace).toBeInTheDocument();
-    expect(readingWorkspace.querySelector(".telc-c1-reading-understanding__text")).toContainElement(screen.getByText("Lesetext"));
-    expect(readingWorkspace.querySelector(".telc-c1-reading-understanding__questions")).toContainElement(screen.getByText("Aussage").closest(".reading-understanding-question-card"));
-    expect(mockExamStyleSource).toMatch(/\.telc-c1-reading-understanding\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1\.15fr\)\s+minmax\(18rem,\s*\.85fr\)/s);
-    expect(screen.queryByText("Welche Anzeige passt?")).not.toBeInTheDocument();
-    expect(mockExamStyleSource).toMatch(/\.telc-mock-exam-page\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s);
-
-    fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 3" }));
     expect(await screen.findByText("Welche Anzeige passt?")).toBeInTheDocument();
     const workspace = container.querySelector(".reading-ad-workspace");
     expect(workspace).toHaveClass("reading-ad-workspace--c1");
@@ -3069,6 +3065,17 @@ describe("TELC C1 mock exam", () => {
       "reading_ad_matching:22": "A",
     }));
     expect(screen.getByRole("button", { name: "完成本部分，进入听力" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 3" }));
+    expect(await screen.findByText("Lesetext")).toBeInTheDocument();
+    expect(screen.getByText("Aussage")).toBeInTheDocument();
+    const readingWorkspace = container.querySelector(".telc-c1-reading-understanding");
+    expect(readingWorkspace).toBeInTheDocument();
+    expect(readingWorkspace.querySelector(".telc-c1-reading-understanding__text")).toContainElement(screen.getByText("Lesetext"));
+    expect(readingWorkspace.querySelector(".telc-c1-reading-understanding__questions")).toContainElement(screen.getByText("Aussage").closest(".reading-understanding-question-card"));
+    expect(mockExamStyleSource).toMatch(/\.telc-c1-reading-understanding\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1\.15fr\)\s+minmax\(18rem,\s*\.85fr\)/s);
+    expect(screen.queryByText("Welche Anzeige passt?")).not.toBeInTheDocument();
+    expect(mockExamStyleSource).toMatch(/\.telc-mock-exam-page\s*\{[^}]*width:\s*100%[^}]*max-width:\s*none/s);
   });
 
   it("keeps legacy C1 reading_teil2 and reading_teil3 payloads mapped to the corrected UI order", async () => {
@@ -3092,9 +3099,9 @@ describe("TELC C1 mock exam", () => {
 
     renderC1("reading", "cloze_matching", legacyExam);
     fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 2" }));
-    expect(await screen.findByText("Lesetext")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 3" }));
     expect(await screen.findByText("Welche Anzeige passt?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Lesen · Teil 3" }));
+    expect(await screen.findByText("Lesetext")).toBeInTheDocument();
   });
 
   it("renders speaker matching and presentation notes from their C1 content formats", async () => {

@@ -31,7 +31,7 @@ export default function ExamPreparationReadingPage() {
       <section className="exam-reading-type-grid" aria-label="阅读题型列表">
         {examPreparationTypesForLevel(READING_TYPES, scope.level).map((item, index) => {
           const countKey = scope.level === "C1"
-            ? ["CLOZE_MATCHING", "READING_UNDERSTANDING", "READING_AD_MATCHING"][index]
+            ? { "title-matching": "CLOZE_MATCHING", "ad-matching": "READING_AD_MATCHING", understanding: "READING_UNDERSTANDING" }[item.key]
             : ["READING_TITLE_MATCHING", "READING_UNDERSTANDING", "READING_AD_MATCHING"][index];
           const content = (
             <>

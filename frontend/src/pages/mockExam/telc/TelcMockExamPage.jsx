@@ -88,12 +88,12 @@ const PART_FAVORITE_CONFIG = {
   writing: { fetch: fetchWritingExerciseStates, save: saveWritingExerciseState, target: "exercise", items: (exercise) => [exercise] },
 };
 
-const C1_READING_PART_KEYS = ["cloze_matching", "reading_understanding", "reading_ad_matching", "cloze_choice"];
+const C1_READING_PART_KEYS = ["cloze_matching", "reading_ad_matching", "reading_understanding", "cloze_choice"];
 const C1_LISTENING_PART_KEYS = ["listening_teil1", "listening_teil2", "listening_teil3"];
 const C1_PARTS = {
   cloze_matching: { section: "reading", short: "L 1", title: "Lesen · Teil 1" },
-  reading_understanding: { section: "reading", short: "L 2", title: "Lesen · Teil 2" },
-  reading_ad_matching: { section: "reading", short: "L 3", title: "Lesen · Teil 3" },
+  reading_ad_matching: { section: "reading", short: "L 2", title: "Lesen · Teil 2" },
+  reading_understanding: { section: "reading", short: "L 3", title: "Lesen · Teil 3" },
   cloze_choice: { section: "reading", short: "SB 1", title: "Sprachbausteine · Teil 1" },
   listening_teil1: { section: "listening", short: "H 1", title: "Hören · Teil 1" },
   listening_teil2: { section: "listening", short: "H 2", title: "Hören · Teil 2" },
@@ -1183,11 +1183,11 @@ function buildAnswerSheetRows(parts, level) {
         const isExampleBlank = Number(item.blank_number) === 0 || item.blank_key === "blank_0";
         return matchingOptions.filter((option) => (String(option.option_key || "").toLowerCase() === "beispiel") === isExampleBlank);
       }, (item) => item.correct_option?.option_key);
-    const understanding = parts.reading_understanding || {};
-    add("reading_understanding", "Lesen · Teil 2", "reading", understanding.questions || [],
-      (item) => item.answer_options || [], (item) => item.answer_options?.find((option) => option.is_correct)?.option_key);
     const adMatching = parts.reading_ad_matching || {};
-    add("reading_ad_matching", "Lesen · Teil 3", "reading", adMatching.items || [], adMatching.ads || [], (item) => item.correct_ad?.ad_key);
+    add("reading_ad_matching", "Lesen · Teil 2", "reading", adMatching.items || [], adMatching.ads || [], (item) => item.correct_ad?.ad_key);
+    const understanding = parts.reading_understanding || {};
+    add("reading_understanding", "Lesen · Teil 3", "reading", understanding.questions || [],
+      (item) => item.answer_options || [], (item) => item.answer_options?.find((option) => option.is_correct)?.option_key);
   } else {
     add("reading_title_matching", "Lesen · Teil 1", "reading", titleMatching.items || [],
       titleMatching.options || [], (item) => item.correct_option?.option_key);

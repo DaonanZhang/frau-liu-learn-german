@@ -27,15 +27,26 @@ describe("TELC B2 exam preparation entry copy", () => {
     expect(examPreparationTypeDescription(READING_TYPES[2], "B1")).toContain("分类广告");
   });
 
-  it("maps C1 reading, speaking, and grammar cards to their TELC parts", () => {
+  it("maps C1 reading cards to Teil 2 paragraph matching and Teil 3 comprehension", () => {
     const c1Reading = examPreparationTypesForLevel(READING_TYPES, "C1");
     expect(c1Reading.map((item) => item.title)).toEqual(["Teil 1", "Teil 2", "Teil 3"]);
-    expect(c1Reading.map((item) => item.key)).toEqual(["title-matching", "understanding", "ad-matching"]);
+    expect(c1Reading.map((item) => item.key)).toEqual(["title-matching", "ad-matching", "understanding"]);
     expect(c1Reading.map((item) => item.to)).toEqual([
       "/modules/exam-preparation/lesen/cloze-matching",
-      "/modules/exam-preparation/lesen/understanding",
       "/modules/exam-preparation/lesen/ad-matching",
+      "/modules/exam-preparation/lesen/understanding",
     ]);
+    expect(c1Reading[1].description).toContain("A–E 五个段落");
+    expect(c1Reading[2].description).toContain("阅读长文");
+    expect(examPreparationTypesForLevel(READING_TYPES, "B1").map((item) => item.key)).toEqual([
+      "title-matching", "understanding", "ad-matching",
+    ]);
+    expect(examPreparationTypesForLevel(READING_TYPES, "B2").map((item) => item.key)).toEqual([
+      "title-matching", "understanding", "ad-matching",
+    ]);
+  });
+
+  it("keeps C1 speaking and grammar cards mapped to their TELC parts", () => {
     const c1Speaking = examPreparationTypesForLevel(SPEAKING_TYPES, "C1");
     expect(c1Speaking.map((item) => item.title)).toEqual(["Teil 1a + Teil 1b", "Teil 2"]);
     expect(c1Speaking.map((item) => item.to)).toEqual([

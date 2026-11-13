@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -41,8 +41,16 @@ describe("ExamPreparationReadingPage counts", () => {
 
     renderPage("c1");
 
-    expect(screen.getByLabelText("18 道题目")).toBeInTheDocument();
-    expect(screen.getByLabelText("19 道题目")).toBeInTheDocument();
-    expect(screen.getByLabelText("20 道题目")).toBeInTheDocument();
+    const cards = screen.getByRole("region", { name: "阅读题型列表" }).querySelectorAll("a");
+    expect([...cards].map((card) => [card.querySelector("h2").textContent, card.getAttribute("href")])).toEqual([
+      ["Teil 1", "/modules/exam-preparation/c1/lesen/cloze-matching"],
+      ["Teil 2", "/modules/exam-preparation/c1/lesen/ad-matching"],
+      ["Teil 3", "/modules/exam-preparation/c1/lesen/understanding"],
+    ]);
+    expect(within(cards[0]).getByLabelText("18 道题目")).toBeInTheDocument();
+    expect(within(cards[1]).getByLabelText("20 道题目")).toBeInTheDocument();
+    expect(within(cards[2]).getByLabelText("19 道题目")).toBeInTheDocument();
+    expect(cards[1]).toHaveTextContent("A–E 五个段落");
+    expect(cards[2]).toHaveTextContent("阅读长文");
   });
 });

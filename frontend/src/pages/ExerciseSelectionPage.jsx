@@ -15,7 +15,7 @@ export default function ExerciseSelectionPage({
   fetchExercises,
   buildExerciseHref,
   buildCardTitle,
-  sortByExternalId = false,
+  sortById = false,
   cardDescription = "Öffne diese Aufgabe und beginne direkt mit dem Training.",
   cardCta = "Übung öffnen",
   emptyMessage = "Zurzeit sind keine Aufgaben verfügbar.",
@@ -44,18 +44,13 @@ export default function ExerciseSelectionPage({
           setExerciseCount(Number.isFinite(data?.count) ? data.count : results.length);
           setExercises([...results].sort(
             (left, right) => {
-              const shouldSortByExternalId = typeof sortByExternalId === "function"
-                ? sortByExternalId(scope)
-                : sortByExternalId;
-              if (!shouldSortByExternalId) {
+              const shouldSortById = typeof sortById === "function"
+                ? sortById(scope)
+                : sortById;
+              if (!shouldSortById) {
                 return Number(Boolean(left?.is_locked)) - Number(Boolean(right?.is_locked));
               }
-              const externalIdOrder = String(left?.exercise_base?.external_id || "").localeCompare(
-                String(right?.exercise_base?.external_id || ""),
-                "de",
-                { numeric: true, sensitivity: "base" },
-              );
-              return externalIdOrder || Number(left?.id || 0) - Number(right?.id || 0);
+              return Number(left?.id || 0) - Number(right?.id || 0);
             },
           ));
         }
@@ -74,7 +69,7 @@ export default function ExerciseSelectionPage({
     return () => {
       aborted = true;
     };
-  }, [fetchExercises, scope?.level, sortByExternalId]);
+  }, [fetchExercises, scope?.level, sortById]);
 
   if (!scope) return <Navigate to="/modules/exam-preparation" replace />;
 
@@ -104,7 +99,7 @@ export default function ExerciseSelectionPage({
         <section className="exercise-selection-grid" aria-label="Aufgabenliste">
           {exercises.map((exercise, index) => {
             const cardTitle =
-              buildCardTitle?.(exercise, index) ||
+              buildCardTitle?.(exercise, index, scope) ||
               exercise?.exercise_base?.title?.trim() ||
               `Übung ${index + 1}`;
             const isRealExam = Boolean(exercise?.exercise_base?.is_real_exam);

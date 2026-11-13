@@ -45,7 +45,7 @@ describe("ExerciseSelectionPage", () => {
     expect(cardTitles.map((heading) => heading.textContent)).toEqual(expectedOrder);
   });
 
-  it("sorts C1 ad-matching exercises by the displayed exercise number", async () => {
+  it("shows C1 ad-matching titles in database id order", async () => {
     const results = [
       { id: 8, exercise_base: { title: "Änderung", external_id: "8" } },
       { id: 1, exercise_base: { title: "Zukunft", external_id: "1" } },
@@ -66,8 +66,10 @@ describe("ExerciseSelectionPage", () => {
                 description="Beschreibung"
                 fetchExercises={vi.fn().mockResolvedValue({ results })}
                 buildExerciseHref={(exercise) => `/exercise/${exercise.id}`}
-                buildCardTitle={(exercise) => `Übung ${exercise.exercise_base.external_id}`}
-                sortByExternalId={(scope) => scope.level === "C1"}
+                buildCardTitle={(exercise, _index, scope) => scope?.level === "C1"
+                  ? exercise.exercise_base.title
+                  : `Übung ${exercise.exercise_base.external_id}`}
+                sortById={(scope) => scope.level === "C1"}
               />
             )}
           />
@@ -77,10 +79,41 @@ describe("ExerciseSelectionPage", () => {
 
     const cardTitles = await screen.findAllByRole("heading", { level: 2 });
     expect(cardTitles.map((heading) => heading.textContent)).toEqual([
-      "Übung 1",
-      "Übung 2",
-      "Übung 8",
+      "Zukunft",
+      "Ökologie",
+      "Änderung",
     ]);
+  });
+
+  it("keeps B2 ad-matching titles as Übung external_id", async () => {
+    render(
+      <MemoryRouter initialEntries={["/modules/exam-preparation/b2/lesen/ad-matching"]}>
+        <Routes>
+          <Route
+            path="/modules/exam-preparation/:level/lesen/ad-matching"
+            element={(
+              <ExerciseSelectionPage
+                backTo="/modules/exam-preparation/b2/lesen"
+                backLabel="Zurück"
+                eyebrow="Lesen"
+                title="Teil 3"
+                description="Beschreibung"
+                fetchExercises={vi.fn().mockResolvedValue({ results: [
+                  { id: 8, exercise_base: { title: "Änderung", external_id: "23" } },
+                ] })}
+                buildExerciseHref={(exercise) => `/exercise/${exercise.id}`}
+                buildCardTitle={(exercise, _index, scope) => scope?.level === "C1"
+                  ? exercise.exercise_base.title
+                  : `Übung ${exercise.exercise_base.external_id}`}
+                sortById={(scope) => scope.level === "C1"}
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole("heading", { level: 2 })).toHaveTextContent("Übung 23");
   });
 
   it("resolves a scoped description from the active exam level", async () => {
@@ -106,6 +139,37 @@ describe("ExerciseSelectionPage", () => {
     );
 
     expect(screen.getByText("Präsentation B2")).toBeInTheDocument();
+  });
+
+  it("resolves the corrected C1 ad-matching heading while keeping the B2 part number", async () => {
+    const view = (level) => render(
+      <MemoryRouter initialEntries={[`/modules/exam-preparation/${level}/lesen/ad-matching`]}>
+        <Routes>
+          <Route
+            path="/modules/exam-preparation/:level/lesen/ad-matching"
+            element={(
+              <ExerciseSelectionPage
+                backTo="/modules/exam-preparation/lesen"
+                backLabel="Zurück"
+                eyebrow="Lesen"
+                title={(scope) => scope.level === "C1" ? "Teil 2" : "Teil 3"}
+                description={(scope) => scope.level === "C1" ? "A–E 段落匹配" : "B2 Anzeigen"}
+                fetchExercises={vi.fn().mockResolvedValue({ results: [] })}
+              />
+            )}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const c1 = view("c1");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Teil 2");
+    expect(screen.getByText("A–E 段落匹配")).toBeInTheDocument();
+    c1.unmount();
+
+    view("b2");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Teil 3");
+    expect(screen.getByText("B2 Anzeigen")).toBeInTheDocument();
   });
 
   it("resolves card copy from the active exam level", async () => {

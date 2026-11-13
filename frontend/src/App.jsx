@@ -314,8 +314,8 @@ const router = createBrowserRouter([
             backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/lesen`}
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
-            title="Teil 2"
-            description={READING_TYPES[1].description}
+            title={(scope) => scope.level === "C1" ? "Teil 3" : "Teil 2"}
+            description={(scope) => scope.level === "C1" ? "阅读长文并完成理解题。" : READING_TYPES[1].description}
             fetchExercises={fetchReadingUnderstandingExercises}
             buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/lesen/understanding/${exercise.id}`}
             cardDescription="Öffne diese Aufgabe und beantworte die Fragen zum Lesetext Schritt für Schritt."
@@ -330,16 +330,17 @@ const router = createBrowserRouter([
             backTo={(scope) => `/modules/exam-preparation/${scope.levelPath}/lesen`}
             backLabel="← Zurück zu Lesen"
             eyebrow="Lesen"
-            title="Teil 3"
+            title={(scope) => scope.level === "C1" ? "Teil 2" : "Teil 3"}
             description={(scope) => scope.level === "C1"
               ? "阅读一篇由 A–E 五个段落组成的文章，为每个问题选择对应段落；同一段落可以多次选择。"
               : READING_TYPES[2].description}
             fetchExercises={fetchReadingAdMatchingExercises}
             buildExerciseHref={(exercise, scope) => `/modules/exam-preparation/${scope.levelPath}/lesen/ad-matching/${exercise.id}`}
-            buildCardTitle={(exercise, index) =>
-              `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
+            buildCardTitle={(exercise, index, scope) => scope.level === "C1"
+              ? exercise?.exercise_base?.title
+              : `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
             }
-            sortByExternalId={(scope) => scope.level === "C1"}
+            sortById={(scope) => scope.level === "C1"}
             cardDescription={(scope) => scope.level === "C1"
               ? "Öffne den Text und ordne jeder Aussage den passenden Abschnitt A–E zu."
               : "Öffne diese Aufgabe und ordne die Situationen den passenden Anzeigen zu."}

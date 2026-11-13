@@ -47,8 +47,10 @@ export default function ExerciseSelectionPage({
               const shouldSortById = typeof sortById === "function"
                 ? sortById(scope)
                 : sortById;
+              const lockOrder = Number(Boolean(left?.is_locked)) - Number(Boolean(right?.is_locked));
+              if (lockOrder !== 0) return lockOrder;
               if (!shouldSortById) {
-                return Number(Boolean(left?.is_locked)) - Number(Boolean(right?.is_locked));
+                return 0;
               }
               return Number(left?.id || 0) - Number(right?.id || 0);
             },

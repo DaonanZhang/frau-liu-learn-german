@@ -8,6 +8,7 @@ from apps.accounts.models import Entitlement
 
 FREE_EXERCISES_PER_TYPE = 3
 TELC_B2_READING_UNDERSTANDING_FREE_EXTERNAL_IDS = {"1", "2", "6"}
+TELC_C1_READING_AD_MATCHING_FREE_EXTERNAL_IDS = {"1", "2", "4"}
 
 
 def user_has_full_exam_preparation_access(user) -> bool:
@@ -50,6 +51,16 @@ def get_free_trial_exercise_ids(exercise) -> set:
         return set(
             exercises.filter(
                 exercise_base__external_id__in=TELC_B2_READING_UNDERSTANDING_FREE_EXTERNAL_IDS,
+            ).values_list("id", flat=True)
+        )
+    if (
+        exercise_base.exam_type == "TELC"
+        and exercise_base.level == "C1"
+        and exercise_base.exercise_type == "READING_AD_MATCHING"
+    ):
+        return set(
+            exercises.filter(
+                exercise_base__external_id__in=TELC_C1_READING_AD_MATCHING_FREE_EXTERNAL_IDS,
             ).values_list("id", flat=True)
         )
     return set(exercises.order_by("id").values_list("id", flat=True)[:FREE_EXERCISES_PER_TYPE])

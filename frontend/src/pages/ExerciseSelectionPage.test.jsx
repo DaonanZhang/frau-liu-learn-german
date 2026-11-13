@@ -45,11 +45,12 @@ describe("ExerciseSelectionPage", () => {
     expect(cardTitles.map((heading) => heading.textContent)).toEqual(expectedOrder);
   });
 
-  it("shows C1 ad-matching titles in database id order", async () => {
+  it("shows unlocked C1 ad-matching titles first, then sorts each group by database id", async () => {
     const results = [
-      { id: 8, exercise_base: { title: "Änderung", external_id: "8" } },
-      { id: 1, exercise_base: { title: "Zukunft", external_id: "1" } },
-      { id: 2, exercise_base: { title: "Ökologie", external_id: "2" } },
+      { id: 8, is_locked: false, exercise_base: { title: "Änderung", external_id: "8" } },
+      { id: 1, is_locked: true, exercise_base: { title: "Zukunft", external_id: "1" } },
+      { id: 2, is_locked: false, exercise_base: { title: "Ökologie", external_id: "2" } },
+      { id: 3, is_locked: true, exercise_base: { title: "Studium", external_id: "3" } },
     ];
 
     render(
@@ -79,9 +80,10 @@ describe("ExerciseSelectionPage", () => {
 
     const cardTitles = await screen.findAllByRole("heading", { level: 2 });
     expect(cardTitles.map((heading) => heading.textContent)).toEqual([
-      "Zukunft",
       "Ökologie",
       "Änderung",
+      "Zukunft",
+      "Studium",
     ]);
   });
 

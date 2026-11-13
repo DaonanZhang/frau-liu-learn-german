@@ -138,6 +138,10 @@ class C1ImporterUnitTests(TestCase):
         with patch.object(importer, "RAW_ROOT", imports):
             self.assertEqual(importer.raw_files(), sorted(expected))
 
+    def test_kind_for_uses_standard_raw_folder_for_title_based_filename(self):
+        path = Path(self.temp_dir.name) / "reading_teil2/raw/Studieren mal anders_Lesen_Teil 2_003.xlsx"
+        self.assertEqual(importer.kind_for(path), "reading_teil2")
+
     def test_reading_teil1_preflight_rejects_an_answer_missing_from_the_option_bank(self):
         path = Path(self.temp_dir.name) / "reading_teil1__broken_001.xlsx"
         with pd.ExcelWriter(path, engine="openpyxl") as writer:

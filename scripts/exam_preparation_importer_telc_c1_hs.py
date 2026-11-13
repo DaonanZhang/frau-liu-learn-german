@@ -77,6 +77,8 @@ SPEAKING_SEEDS = [
 
 
 def kind_for(path: Path) -> str:
+    if path.parent.name == "raw" and path.parent.parent.name in KINDS:
+        return path.parent.parent.name
     for kind in KINDS:
         if path.name.lower().startswith(kind + "__"):
             return kind

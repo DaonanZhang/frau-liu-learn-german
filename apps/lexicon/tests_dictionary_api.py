@@ -1,4 +1,7 @@
+from importlib import import_module
+
 from django.contrib.auth import get_user_model
+from django.apps import apps as django_apps
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -8,6 +11,7 @@ from apps.accounts.models import Entitlement, Module
 from apps.exam_preparation.models import ExamVocabularyCard, UserExamVocabularyFavorite
 from apps.exam_preparation.vocabulary import normalize_vocabulary_term
 from apps.lexicon.models import DictionaryEntry, DictionaryForm
+from apps.lexicon.models.dictionary import normalize_dictionary_form
 
 
 class DictionaryApiTests(TestCase):
@@ -29,18 +33,72 @@ class DictionaryApiTests(TestCase):
         self.lookup_url = reverse("lexicon-dictionary-lookup")
         self.gehen = self.make_entry("gehen", "走", "verb", 20)
         self.haus = self.make_entry("Haus", "房子", "noun", 10)
+        self.duerfen = self.make_entry("dürfen", "可以", "verb", 8)
+        self.handedict_match = self.make_entry("gehen", "走", "verb", 100, source="handedict")
         self.add_form(self.gehen, "gehen", "")
         self.add_form(self.gehen, "ging", "VER:1:SIN:PRT:NON")
         self.add_form(self.gehen, "ging", "VER:3:SIN:PRT:NON")
         self.add_form(self.haus, "Haus", "")
         self.add_form(self.haus, "Häusern", "SUB:DAT:PLU:NEU")
+        self.add_form(self.duerfen, "dürfen", "")
+
+    def test_lookup_matches_precomposed_and_decomposed_unicode_forms(self):
+        precomposed = self.client.get(self.lookup_url, {"word": "dürfen"})
+        decomposed = self.client.get(self.lookup_url, {"word": "du\u0308rfen"})
+
+        self.assertEqual(precomposed.status_code, status.HTTP_200_OK)
+        self.assertEqual(decomposed.status_code, status.HTTP_200_OK)
+        expected = [{"id": self.duerfen.pk, "lemma": "dürfen", "translation_zh": "可以"}]
+        for response in (precomposed, decomposed):
+            self.assertTrue(response.data["matched"])
+            self.assertEqual(
+                [
+                    {key: match[key] for key in ("id", "lemma", "translation_zh")}
+                    for match in response.data["matches"]
+                ],
+                expected,
+            )
+
+    def test_legacy_nfd_vocabulary_card_is_reused_after_normalization(self):
+        legacy_term = "du\u0308rfen"
+        card = ExamVocabularyCard.objects.create(
+            exam_type="TELC",
+            level="C1",
+            kind=ExamVocabularyCard.Kind.WORD,
+            term=legacy_term,
+            normalized_term=legacy_term.casefold(),
+            translation_zh="可以",
+        )
+        UserExamVocabularyFavorite.objects.create(user=self.user, card=card)
+        migration = import_module("apps.exam_preparation.migrations.0033_normalize_vocabulary_unicode")
+        migration.normalize_existing_cards(django_apps, None)
+
+        for word in ("dürfen", legacy_term):
+            match = self.client.get(self.lookup_url, {"word": word}).data["matches"][0]
+            self.assertEqual(match["card"], {"id": card.pk, "is_favorite": True})
+        response = self.client.post(self.favorite_url(self.duerfen))
+        self.assertEqual(response.data, {"card": {"id": card.pk, "is_favorite": True}})
+        self.assertEqual(
+            ExamVocabularyCard.objects.filter(
+                normalized_term=normalize_vocabulary_term("dürfen"), translation_zh="可以"
+            ).count(),
+            1,
+        )
+
+    def test_wikdict_results_precede_handedict_regardless_of_importance(self):
+        self.add_form(self.handedict_match, "ging", "VER:1:SIN:PRT:NON")
+        response = self.client.get(self.lookup_url, {"word": "ging"})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([match["id"] for match in response.data["matches"]], [self.gehen.pk])
+        self.assertEqual(response.data["matches"][0]["lemma"], "gehen")
 
     @staticmethod
-    def make_entry(headword, translation, pos="", importance=None):
+    def make_entry(headword, translation, pos="", importance=None, source="wikdict"):
         return DictionaryEntry.objects.create(
-            source="wikdict",
+            source=source,
             headword=headword,
-            normalized_headword=headword.strip().casefold(),
+            normalized_headword=normalize_dictionary_form(headword),
             translation_zh=translation,
             part_of_speech=pos,
             importance=importance,
@@ -51,7 +109,7 @@ class DictionaryApiTests(TestCase):
         return DictionaryForm.objects.create(
             entry=entry,
             form=form,
-            normalized_form=form.strip().casefold(),
+            normalized_form=normalize_dictionary_form(form),
             morphology_tag=tag,
         )
 
@@ -107,6 +165,21 @@ class DictionaryApiTests(TestCase):
         self.assertEqual(len(results), 8)
         self.assertEqual(results[0]["lemma"], "word-9")
         self.assertEqual(len({result["id"] for result in results}), 8)
+
+    def test_nfc_and_nfd_queries_return_same_first_eight_candidates_in_same_order(self):
+        composed = "dürfen"
+        decomposed = "du\u0308rfen"
+        for index in range(10):
+            entry = self.make_entry(f"lemma-{index}", f"译义{index}", importance=10 - index)
+            form = composed if index % 2 == 0 else decomposed
+            self.add_form(entry, form, f"TAG:{index}")
+
+        nfc_results = self.client.get(self.lookup_url, {"word": composed}).data["matches"]
+        nfd_results = self.client.get(self.lookup_url, {"word": decomposed}).data["matches"]
+
+        self.assertEqual(len(nfc_results), 8)
+        self.assertEqual([item["id"] for item in nfc_results], [item["id"] for item in nfd_results])
+        self.assertEqual([item["matched_form"] for item in nfc_results], [item["matched_form"] for item in nfd_results])
 
     def test_post_delete_favorite_are_idempotent_and_isolated_by_user(self):
         post_url = self.favorite_url(self.gehen)

@@ -40,6 +40,8 @@
 .dictionary-lookup-definition > div + div { margin-top: 3px; }
 .dictionary-lookup-definition small { color: #68717d; }
 .dictionary-lookup-error { grid-column: 1 / -1; color: #a12b2b; }
+.dictionary-lookup-attribution { margin: 10px 0 0; padding-top: 8px; border-top: 1px solid #eceff2; color: #68717d; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.dictionary-lookup-attribution a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
 @media (hover: hover) and (pointer: fine) {
   .dictionary-lookup-overlay button:hover { background: #e8ebef; }

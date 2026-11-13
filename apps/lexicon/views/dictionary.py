@@ -1,3 +1,5 @@
+import unicodedata
+
 from django.db import transaction
 from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404
@@ -30,7 +32,8 @@ class DictionaryLookupView(APIView):
         candidates = sorted(
             forms,
             key=lambda form: (
-                form.form != word,
+                {"wikdict": 0, "handedict": 1}.get(form.entry.source, 2),
+                unicodedata.normalize("NFC", form.form) != unicodedata.normalize("NFC", word),
                 -(form.entry.importance if form.entry.importance is not None else float("-inf")),
                 form.entry_id,
                 form.form,
@@ -39,8 +42,12 @@ class DictionaryLookupView(APIView):
         matches = []
         seen = set()
         for form in candidates:
-            if form.entry_id not in seen:
-                seen.add(form.entry_id)
+            identity = (
+                normalize_vocabulary_term(form.entry.headword),
+                form.entry.translation_zh,
+            )
+            if identity not in seen:
+                seen.add(identity)
                 matches.append((form.entry, form.form))
                 if len(matches) == 8:
                     break

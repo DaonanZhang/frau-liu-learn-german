@@ -73,6 +73,29 @@ describe("dictionary lookup overlay", () => {
     expect(screen.getByRole("button", { name: "取消收藏" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("shows one compact HanDeDict license attribution for all matches", async () => {
+    lookupDictionaryWord.mockResolvedValue({ matches: [
+      { id: 4, lemma: "gehen", translation_zh: "去" },
+      { id: 5, lemma: "gehen", translation_zh: "行走" },
+    ] });
+    setup();
+    await act(async () => {
+      fireEvent.pointerUp(screen.getByText("ging"), { pointerType: "touch", clientX: 1, clientY: 1 });
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+    });
+
+    expect(document.querySelector(".dictionary-lookup-attribution").textContent)
+      .toContain("补充词条使用 HanDeDict中德词典反向生成并经严格过滤。许可：CC BY-SA 3.0。");
+    expect(screen.getAllByRole("link", { name: "HanDeDict" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "HanDeDict" })).toHaveAttribute("href", "https://github.com/gugray/HanDeDict");
+    expect(screen.getByRole("link", { name: "CC BY-SA 3.0" })).toHaveAttribute("href", "https://creativecommons.org/licenses/by-sa/3.0/");
+    for (const link of screen.getAllByRole("link")) {
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    }
+  });
+
   it("uses DELETE for an existing favorite and ignores touch selection and interactive targets", async () => {
     lookupDictionaryWord.mockResolvedValue({ matches: [{
       id: 4, matched_form: "ging", lemma: "gehen", translation_zh: "去", card: { id: 7, is_favorite: true },

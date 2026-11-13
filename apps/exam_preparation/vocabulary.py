@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from apps.exam_preparation.models import ExamVocabularyCard, ExamVocabularySource
 
 
 def normalize_vocabulary_term(term: str) -> str:
-    return re.sub(r"\s+", " ", term.strip()).casefold()
+    normalized = unicodedata.normalize("NFC", term).strip()
+    return re.sub(r"\s+", " ", normalized).casefold()
 
 
 def classify_vocabulary_kind(term: str, part_of_speech: str = "") -> str:

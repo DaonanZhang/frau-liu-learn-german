@@ -1,5 +1,7 @@
 import gzip
+import re
 import sqlite3
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
@@ -12,8 +14,12 @@ from apps.lexicon.models.dictionary import normalize_dictionary_form
 
 
 DEFAULT_WIKDICT = Path(settings.BASE_DIR) / "apps/lexicon/data/external/wikdict/de-zh.sqlite3"
+DEFAULT_HANDEDICT = Path(settings.BASE_DIR) / "apps/lexicon/data/external/handedict/handedict.u8"
 MORPHOLOGY_DIR = Path(settings.BASE_DIR) / "apps/lexicon/data/external/morphology"
 BATCH_SIZE = 1000
+HANDEDICT_LINE = re.compile(r"^\S+\s+(\S+)\s+\[[^]]*\]\s+/(.*)/\s*$")
+HANDEDICT_POS = re.compile(r"\s+\((S|V|Adj|Adv)(?:,\s*[A-Z][A-Za-z.-]*)*\)$")
+HANDEDICT_POS_MAP = {"S": "noun", "V": "verb", "Adj": "adjective", "Adv": "adverb"}
 
 
 def pos_from_tag(tag):
@@ -35,10 +41,12 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--wikdict", type=Path, default=DEFAULT_WIKDICT)
+        parser.add_argument("--handedict", type=Path, default=DEFAULT_HANDEDICT)
         parser.add_argument("--morphology", type=Path)
 
     def handle(self, *args, **options):
         wikdict_path = options["wikdict"]
+        handedict_path = options["handedict"]
         morphology_path = options["morphology"]
         if morphology_path is None:
             matches = sorted(MORPHOLOGY_DIR.glob("*.tsv.gz"))
@@ -48,20 +56,22 @@ class Command(BaseCommand):
                     "pass --morphology to select a file."
                 )
             morphology_path = matches[0]
-        for path, label in ((wikdict_path, "WikDict"), (morphology_path, "Morphology")):
+        for path, label in (
+            (wikdict_path, "WikDict"),
+            (handedict_path, "HanDeDict"),
+            (morphology_path, "Morphology"),
+        ):
             if not path.is_file():
                 raise CommandError(f"{label} file not found: {path}")
 
         try:
-            entries = self._read_entries(wikdict_path)
+            entries = self._read_entries(wikdict_path) + self._read_handedict(handedict_path)
             with transaction.atomic():
-                DictionaryEntry.objects.filter(source="wikdict").delete()
+                DictionaryEntry.objects.filter(source__in=("wikdict", "handedict")).delete()
                 DictionaryEntry.objects.bulk_create(entries, batch_size=BATCH_SIZE)
                 by_exact_lemma = defaultdict(list)
-                by_normalized_lemma = defaultdict(list)
                 for entry in entries:
-                    by_exact_lemma[entry.headword].append(entry)
-                    by_normalized_lemma[entry.normalized_headword].append(entry)
+                    by_exact_lemma[_exact_lemma_key(entry.headword)].append(entry)
                 forms = [
                     DictionaryForm(
                         entry=entry,
@@ -71,20 +81,59 @@ class Command(BaseCommand):
                     for entry in entries
                 ]
                 DictionaryForm.objects.bulk_create(forms, batch_size=BATCH_SIZE, ignore_conflicts=True)
-                skipped = self._read_morphology(
-                    morphology_path, by_exact_lemma, by_normalized_lemma
-                )
+                skipped = self._read_morphology(morphology_path, by_exact_lemma)
                 updates = [entry for entry in entries if entry.part_of_speech]
                 if updates:
                     DictionaryEntry.objects.bulk_update(updates, ["part_of_speech"], batch_size=BATCH_SIZE)
                 entry_count = len(entries)
-                form_count = DictionaryForm.objects.filter(entry__source="wikdict").count()
+                form_count = DictionaryForm.objects.filter(
+                    entry__source__in=("wikdict", "handedict")
+                ).count()
         except (OSError, UnicodeError, sqlite3.Error, ValueError) as exc:
             raise CommandError(f"Dictionary import failed: {exc}") from exc
 
         self.stdout.write(
-            f"Imported entries={entry_count} forms={form_count} skipped={skipped}"
+            f"Imported entries={entry_count} forms={form_count} skipped="
+            f"{skipped + self.skipped_handedict}"
         )
+
+    def _read_handedict(self, path):
+        entry_map = {}
+        skipped = 0
+        with path.open("r", encoding="utf-8-sig") as source:
+            for raw_line in source:
+                line = raw_line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                match = HANDEDICT_LINE.fullmatch(line)
+                if not match:
+                    skipped += 1
+                    continue
+                chinese_headword, glosses = match.groups()
+                for gloss in glosses.split("/"):
+                    gloss = gloss.strip()
+                    pos = ""
+                    pos_match = HANDEDICT_POS.search(gloss)
+                    if pos_match:
+                        pos = HANDEDICT_POS_MAP[pos_match.group(1)]
+                        gloss = gloss[:pos_match.start()].strip()
+                    if not _is_single_word(gloss):
+                        skipped += 1
+                        continue
+                    key = (gloss, chinese_headword)
+                    existing = entry_map.get(key)
+                    if existing is None:
+                        entry_map[key] = DictionaryEntry(
+                            source="handedict",
+                            headword=gloss,
+                            normalized_headword=normalize_dictionary_form(gloss),
+                            translation_zh=chinese_headword,
+                            part_of_speech=pos,
+                        )
+                    elif not existing.part_of_speech and pos:
+                        existing.part_of_speech = pos
+        self.skipped_handedict = skipped
+        return list(entry_map.values())
 
     def _read_entries(self, path):
         connection = sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True)
@@ -119,7 +168,7 @@ class Command(BaseCommand):
         finally:
             connection.close()
 
-    def _read_morphology(self, path, by_exact_lemma, by_normalized_lemma):
+    def _read_morphology(self, path, by_exact_lemma):
         forms = []
         skipped = 0
         with gzip.open(path, "rt", encoding="utf-8") as source:
@@ -128,12 +177,7 @@ class Command(BaseCommand):
                 if len(columns) != 3:
                     raise ValueError(f"Morphology line {line_number} must have exactly three TSV columns")
                 surface, lemma, tag = (column.strip() for column in columns)
-                matching = (
-                    by_exact_lemma.get(lemma)
-                    or by_normalized_lemma.get(normalize_dictionary_form(lemma), [])
-                    if lemma
-                    else []
-                )
+                matching = by_exact_lemma.get(_exact_lemma_key(lemma), []) if lemma else []
                 if not surface or not matching:
                     skipped += 1
                     continue
@@ -155,3 +199,26 @@ class Command(BaseCommand):
         if forms:
             DictionaryForm.objects.bulk_create(forms, batch_size=BATCH_SIZE, ignore_conflicts=True)
         return skipped + self.skipped_entries
+
+
+def _is_single_word(value):
+    if not value or value[0] in "-'’" or value[-1] in "-'’":
+        return False
+    previous_is_letter = False
+    has_letter = False
+    for character in value:
+        category = unicodedata.category(character)
+        if category.startswith("L"):
+            previous_is_letter = True
+            has_letter = True
+        elif category.startswith("M") and previous_is_letter:
+            continue
+        elif character in "-'’" and previous_is_letter:
+            previous_is_letter = False
+        else:
+            return False
+    return has_letter and previous_is_letter
+
+
+def _exact_lemma_key(value):
+    return unicodedata.normalize("NFC", value).strip()

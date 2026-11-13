@@ -104,6 +104,36 @@ describe("LexiconPage sources", () => {
     expect(screen.getByText("已收藏 1")).toBeInTheDocument();
   });
 
+  it("keeps mobile carousel controls clickable without starting a drag", async () => {
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn((query) => ({ matches: query.includes("max-width: 990px"), addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+    });
+    apiMocks.fetchAllFavoriteVocabularyCards.mockResolvedValue([
+      { id: 11, kind: "word", term: "Erster Begriff", translation_zh: "第一项", is_favorite: true },
+      { id: 12, kind: "word", term: "Zweiter Begriff", translation_zh: "第二项", is_favorite: true },
+    ]);
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "备考季" }));
+    await screen.findByText("Erster Begriff");
+    fireEvent.click(screen.getByRole("button", { name: /单词/ }));
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+    expect(screen.getByText("Erster Begriff")).toBeInTheDocument();
+
+    const carousel = document.querySelector(".lp-carousel");
+    carousel.setPointerCapture = vi.fn();
+    const next = screen.getByRole("button", { name: "Next" });
+    fireEvent.pointerDown(next, { pointerId: 1, clientX: 320 });
+    expect(carousel.setPointerCapture).not.toHaveBeenCalled();
+    fireEvent.click(next);
+    expect(screen.getByText("2/2")).toBeInTheDocument();
+    expect(screen.getByText("Zweiter Begriff")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Previous" }));
+    expect(screen.getByText("1/2")).toBeInTheDocument();
+    expect(screen.getByText("Erster Begriff")).toBeInTheDocument();
+  });
+
   it("keeps the card and reports an error when cancellation fails", async () => {
     apiMocks.setVocabularyCardFavorite.mockRejectedValue(new Error("network"));
     renderPage();

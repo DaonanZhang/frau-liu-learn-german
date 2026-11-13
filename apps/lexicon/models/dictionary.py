@@ -1,8 +1,10 @@
+import unicodedata
+
 from django.db import models
 
 
 def normalize_dictionary_form(value):
-    return value.strip().casefold()
+    return unicodedata.normalize("NFC", value).strip().casefold()
 
 
 class DictionaryEntry(models.Model):

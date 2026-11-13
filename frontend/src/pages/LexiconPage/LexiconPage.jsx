@@ -1215,6 +1215,10 @@ export default function LexiconPage() {
       return;
     }
 
+    if (event.target.closest?.("button,a,input,select,textarea,label,[role=button]")) {
+      return;
+    }
+
     dragRef.current = {
       isDragging: true,
       startX: event.clientX,

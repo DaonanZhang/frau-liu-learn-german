@@ -248,6 +248,10 @@ export default function DictionaryLookupOverlay() {
           );
         })}
       </ul>
+      <p className="dictionary-lookup-attribution">
+        补充词条使用 <a href="https://github.com/gugray/HanDeDict" target="_blank" rel="noopener noreferrer">HanDeDict</a>
+        中德词典反向生成并经严格过滤。许可：<a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0</a>。
+      </p>
     </section>
   );
 }

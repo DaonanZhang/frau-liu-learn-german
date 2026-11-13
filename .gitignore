@@ -15,6 +15,7 @@ venv/
 
 /apps/exam_preparation/data/
 /apps/lexicon/data/external/wikdict/*.sqlite3
+/apps/lexicon/data/external/handedict/handedict.u8
 /apps/lexicon/data/external/morphology/*.tar.gz
 /apps/lexicon/data/external/morphology/forms.tsv.gz
 

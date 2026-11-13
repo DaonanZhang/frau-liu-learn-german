@@ -1,4 +1,6 @@
 from django.contrib.auth import get_user_model
+from django.apps import apps as django_apps
+from importlib import import_module
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
@@ -16,8 +18,59 @@ from apps.exam_preparation.models import (
 from apps.exam_preparation.vocabulary import (
     classify_vocabulary_kind,
     default_vocabulary_note,
+    normalize_vocabulary_term,
     sync_writing_vocabulary,
 )
+
+
+def legacy_normalize_vocabulary_term(term):
+    import re
+
+    return re.sub(r"\s+", " ", term.strip()).casefold()
+
+
+class ExamVocabularyNormalizationMigrationTests(TestCase):
+    def test_migration_normalizes_and_merges_unicode_cards_without_losing_relations(self):
+        User = get_user_model()
+        first_user = User.objects.create_user(telephone="13800138801", password="pw")
+        second_user = User.objects.create_user(telephone="13800138802", password="pw")
+        nfd = "du\u0308rfen"
+        nfc = "dürfen"
+        canonical = ExamVocabularyCard.objects.create(
+            exam_type="TELC",
+            level="C1",
+            term=nfd,
+            normalized_term=legacy_normalize_vocabulary_term(nfd),
+            translation_zh="可以",
+        )
+        duplicate = ExamVocabularyCard.objects.create(
+            exam_type="TELC",
+            level="C1",
+            term=nfc,
+            normalized_term=legacy_normalize_vocabulary_term(nfc),
+            translation_zh="可以",
+            note="已有注释",
+        )
+        UserExamVocabularyFavorite.objects.create(user=first_user, card=canonical)
+        UserExamVocabularyFavorite.objects.create(user=first_user, card=duplicate)
+        UserExamVocabularyFavorite.objects.create(user=second_user, card=duplicate)
+        exercise = make_writing({"vocabulary_pages": []}, external_id="unicode-card-migration")
+        source = ExamVocabularySource.objects.create(
+            writing_exercise=exercise, card=duplicate, page_index=0, entry_index=0
+        )
+
+        migration = import_module("apps.exam_preparation.migrations.0033_normalize_vocabulary_unicode")
+        normalize_existing_cards = migration.normalize_existing_cards
+        normalize_existing_cards(django_apps, None)
+
+        canonical.refresh_from_db()
+        self.assertEqual(canonical.normalized_term, "dürfen")
+        self.assertEqual(canonical.note, "已有注释")
+        self.assertFalse(ExamVocabularyCard.objects.filter(pk=duplicate.pk).exists())
+        self.assertEqual(UserExamVocabularyFavorite.objects.filter(user=first_user, card=canonical).count(), 1)
+        self.assertTrue(UserExamVocabularyFavorite.objects.filter(user=second_user, card=canonical).exists())
+        source.refresh_from_db()
+        self.assertEqual(source.card_id, canonical.pk)
 
 
 def make_writing(content, external_id="vocabulary-test"):
@@ -40,6 +93,7 @@ class ExamVocabularyModelAndSyncTests(TestCase):
         self.assertEqual(default_vocabulary_note(ExamVocabularyCard.Kind.EXPRESSION, "努力"), "表示“努力”的常用表达。")
         self.assertEqual(default_vocabulary_note(ExamVocabularyCard.Kind.SENTENCE, ""), "C1 Hochschule 常用句型。")
         self.assertEqual(default_vocabulary_note(ExamVocabularyCard.Kind.WORD, "申请"), "")
+        self.assertEqual(normalize_vocabulary_term("du\u0308rfen"), normalize_vocabulary_term("dürfen"))
 
     def test_sync_sets_kind_default_note_and_preserves_existing_note(self):
         exercise = make_writing({"vocabulary_pages": [{"entries": [

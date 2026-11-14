@@ -340,7 +340,7 @@ const router = createBrowserRouter([
               ? exercise?.exercise_base?.title
               : `Übung ${exercise?.exercise_base?.external_id || exercise?.id || index + 1}`
             }
-            sortById={(scope) => scope.level === "C1"}
+            sortByExternalId={(scope) => scope.level === "C1"}
             cardDescription={(scope) => scope.level === "C1"
               ? "Öffne den Text und ordne jeder Aussage den passenden Abschnitt A–E zu."
               : "Öffne diese Aufgabe und ordne die Situationen den passenden Anzeigen zu."}

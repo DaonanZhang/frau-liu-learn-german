@@ -45,12 +45,13 @@ describe("ExerciseSelectionPage", () => {
     expect(cardTitles.map((heading) => heading.textContent)).toEqual(expectedOrder);
   });
 
-  it("shows unlocked C1 ad-matching titles first, then sorts each group by database id", async () => {
+  it("shows unlocked C1 ad-matching titles first, then sorts each group by external id", async () => {
     const results = [
-      { id: 8, is_locked: false, exercise_base: { title: "Änderung", external_id: "8" } },
-      { id: 1, is_locked: true, exercise_base: { title: "Zukunft", external_id: "1" } },
-      { id: 2, is_locked: false, exercise_base: { title: "Ökologie", external_id: "2" } },
-      { id: 3, is_locked: true, exercise_base: { title: "Studium", external_id: "3" } },
+      { id: 90, is_locked: false, exercise_base: { title: "002", external_id: "2" } },
+      { id: 10, is_locked: false, exercise_base: { title: "001", external_id: "1" } },
+      { id: 20, is_locked: false, exercise_base: { title: "004", external_id: "4" } },
+      { id: 15, is_locked: true, exercise_base: { title: "003", external_id: "3" } },
+      { id: 30, is_locked: true, exercise_base: { title: "005", external_id: "5" } },
     ];
 
     render(
@@ -70,7 +71,7 @@ describe("ExerciseSelectionPage", () => {
                 buildCardTitle={(exercise, _index, scope) => scope?.level === "C1"
                   ? exercise.exercise_base.title
                   : `Übung ${exercise.exercise_base.external_id}`}
-                sortById={(scope) => scope.level === "C1"}
+                sortByExternalId={(scope) => scope.level === "C1"}
               />
             )}
           />
@@ -80,10 +81,11 @@ describe("ExerciseSelectionPage", () => {
 
     const cardTitles = await screen.findAllByRole("heading", { level: 2 });
     expect(cardTitles.map((heading) => heading.textContent)).toEqual([
-      "Ökologie",
-      "Änderung",
-      "Zukunft",
-      "Studium",
+      "001",
+      "002",
+      "004",
+      "003",
+      "005",
     ]);
   });
 
@@ -107,7 +109,7 @@ describe("ExerciseSelectionPage", () => {
                 buildCardTitle={(exercise, _index, scope) => scope?.level === "C1"
                   ? exercise.exercise_base.title
                   : `Übung ${exercise.exercise_base.external_id}`}
-                sortById={(scope) => scope.level === "C1"}
+                sortByExternalId={(scope) => scope.level === "C1"}
               />
             )}
           />

@@ -11,6 +11,7 @@ import {
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import SpeakingPracticeRecorder from "../components/examPreparation/SpeakingPracticeRecorder.jsx";
+import SpeakingTaskBox from "../components/examPreparation/SpeakingTaskBox.jsx";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import { EyeIcon } from "./LexiconPage/components/Icons.jsx";
 import "./SpeakingTeilExercisePage.css";
@@ -740,7 +741,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
       <section className={`speaking-detail-card speaking-detail-task${isC1Telc && [1, 2].includes(Number(teil)) ? " speaking-detail-task--c1-topic" : ""}`}>
         <p className="speaking-detail-card__eyebrow">Aufgabe</p><h2>{taskTitle}</h2>
         <AnnotatableTextRegion as="p" className="speaking-detail-task__instruction" regionId="task">{exercise.instruction}</AnnotatableTextRegion>
-        {content.task && !hideB2Task ? <AnnotatableTextRegion as="p" className="speaking-detail-task__text" regionId="material:task">{content.task}</AnnotatableTextRegion> : null}
+        {!hideB2Task ? <SpeakingTaskBox text={replaceLegacyLineBreaks(content.task)} /> : null}
         {Number(teil) === 1 && topics.length ? <div className="speaking-detail-topic-list">{topics.map((topic) => <AnnotatableTextRegion as="span" key={stableContentKey(topic, topic.de || "topic")} regionId={materialAnnotationId(topic, "topic")}>{typeof topic === "string" ? topic : `${topic.de || ""}${topic.zh ? ` · ${topic.zh}` : ""}`}</AnnotatableTextRegion>)}</div> : null}
         {Number(teil) === 2 && cards.length ? <div className="speaking-detail-opinion-grid">{cards.map((card) => <AnnotatableTextRegion as="article" className="speaking-detail-opinion" key={stableContentKey(card, "card")} regionId={materialAnnotationId(card, "card")}><span>{card.participant}</span><h3>{card.title}</h3><p>{card.content}</p></AnnotatableTextRegion>)}</div> : null}
         {isC1Telc && [1, 2].includes(Number(teil)) && String(content.topic || "").trim() ? <p className="speaking-detail-c1-topic">{content.topic}</p> : null}

@@ -564,6 +564,30 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     expect(screen.getByText("Name")).toBeInTheDocument();
   });
 
+  it("renders the Aufgabe box with normalized line breaks and one visible label", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      ...teil1Exercise,
+      content: { ...teil1Exercise.content, task: "Erster Punkt<br> Zweiter Punkt" },
+    });
+    const { container } = renderPage(1, 47);
+
+    expect(await screen.findByRole("group", { name: "Aufgabe" })).toBeInTheDocument();
+    const task = container.querySelector('[data-exam-annotation-region="material:task"]');
+    expect(task.textContent).toBe("Erster Punkt\n Zweiter Punkt");
+    expect(screen.getAllByText("Aufgabe")).toHaveLength(1);
+  });
+
+  it("omits the Aufgabe box when task content is empty", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      ...teil1Exercise,
+      content: { ...teil1Exercise.content, task: "  " },
+    });
+    renderPage(1, 47);
+
+    expect(await screen.findByText("Stellen Sie sich vor.")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Aufgabe" })).not.toBeInTheDocument();
+  });
+
   it("keeps the task text for B1 Sprechen Teil 1", async () => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue(teil1Exercise);
     renderPage(1, 47);
@@ -571,6 +595,14 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     expect(await screen.findByText("Stellen Sie sich vor.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 2, name: "Einander kennenlernen" })).toBeInTheDocument();
     expect(screen.getByText("Sprechen Sie über sich.")).toBeInTheDocument();
+  });
+
+  it("omits the Aufgabe box when locked content is empty", async () => {
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({ ...teil1Exercise, content: {} });
+    renderPage(1, 47);
+
+    expect(await screen.findByText("Stellen Sie sich vor.")).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Aufgabe" })).not.toBeInTheDocument();
   });
 
   it("hides the task text for TELC B2 Sprechen Teil 2", async () => {

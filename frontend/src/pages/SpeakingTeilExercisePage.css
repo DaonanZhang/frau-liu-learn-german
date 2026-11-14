@@ -12,7 +12,7 @@
 .speaking-detail-card { padding: 1.35rem; border: 1px solid rgba(223, 226, 229, 0.96); border-radius: 1.3rem; background: #fff; box-shadow: 0 14px 30px rgba(38, 52, 74, 0.06); }
 .speaking-detail-card h2 { margin: 0; color: #2d2925; font-size: clamp(1.3rem, 2vw, 1.65rem); }
 .speaking-detail-task__instruction, .speaking-detail-recording p { margin: 0.7rem 0 0; color: #5b6472; line-height: 1.7; }
-.speaking-detail-task__text { margin: 1rem 0 0; padding: 1rem; border-left: 4px solid #2f6f5e; border-radius: 0 0.8rem 0.8rem 0; background: #f4f8f6; color: #37424f; line-height: 1.75; white-space: pre-line; }
+.speaking-detail-task__text { width: auto; max-width: 100%; box-sizing: border-box; margin: 1rem 0 0; padding: 1rem; border-left: 4px solid #2f6f5e; border-radius: 0 0.8rem 0.8rem 0; background: #f4f8f6; color: #37424f; line-height: 1.75; white-space: pre-line; overflow-wrap: anywhere; }
 .speaking-detail-opinion-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-top: 1.1rem; }
 .speaking-detail-opinion { padding: 1.05rem; border: 1px solid #e2e5e8; border-radius: 1rem; background: #fffaf2; }
 .speaking-detail-opinion:nth-child(2) { background: #f2f7f8; }

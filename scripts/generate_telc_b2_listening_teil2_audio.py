@@ -200,9 +200,9 @@ def run_ffmpeg(arguments: list[str]) -> None:
         raise RuntimeError(result.stderr.strip() or "ffmpeg failed")
 
 
-def create_silence(path: Path) -> None:
+def create_silence(path: Path, seconds: int) -> None:
     run_ffmpeg([
-        "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono", "-t", "60",
+        "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono", "-t", str(seconds),
         "-ar", "24000", "-ac", "1", "-b:a", "48k", str(path),
     ])
 
@@ -278,16 +278,133 @@ def read_workbook(path: Path) -> dict[str, object]:
     if path.stem.rsplit("_", 1)[-1] != external_id:
         raise ValueError(f"{path.name}: filename ID does not match workbook ID {external_id}")
     copy = str(row["copy"])
-    if copy.count("<60''>") != 1:
-        raise ValueError(f"{path.name}: copy must contain exactly one <60''> marker")
     participants = parse_participants(row["出场人物"])
+    dialogue_boundary = len(copy)
+    for name, _gender in participants:
+        label = re.search(
+            rf"(?:^|\r?\n|<br\s*/?>|>)(\s*{re.escape(name)}\s*:)",
+            copy,
+            flags=re.IGNORECASE,
+        )
+        if label:
+            dialogue_boundary = min(dialogue_boundary, label.start(1))
+    preparation_marker, preparation_seconds = parse_preparation_marker(
+        copy, path.name, boundary=dialogue_boundary
+    )
+    dialogue_copy = copy[preparation_marker.end():]
+    timeline = build_dialogue_timeline(dialogue_copy, participants)
     return {
         "id": external_id,
         "intro": str(row["Einleitung"]).strip(),
         "participants": participants,
         "voices": assign_voices(participants),
-        "turns": parse_dialogue(copy.split("<60''>", 1)[1], participants),
+        "preparation_seconds": preparation_seconds,
+        "pause_markers": parse_pause_markers(dialogue_copy),
+        "timeline": timeline,
+        "turns": [value for kind, value in timeline if kind == "speech"],
     }
+
+
+def parse_pause_markers(
+    copy: str, *, allow_legacy_double_quotes: bool = False
+) -> list[tuple[re.Match[str], int]]:
+    pattern = re.compile(r"<(\d+)(?:''|\"\")>" if allow_legacy_double_quotes else r"<(\d+)''>")
+    markers = []
+    for candidate in re.finditer(r"<\d+[^<>]*(?:>|(?=\s|$))", copy):
+        match = pattern.fullmatch(candidate.group())
+        if match is None:
+            raise ValueError(f"Malformed pause marker: {candidate.group()!r}")
+        original_match = pattern.search(copy, candidate.start())
+        markers.append((original_match, int(original_match.group(1))))
+    return markers
+
+
+def parse_preparation_marker(
+    copy: str, source_name: str = "copy", *, boundary: int | None = None,
+    allow_legacy_double_quotes: bool = False,
+) -> tuple[re.Match[str], int]:
+    try:
+        markers = parse_pause_markers(
+            copy[:boundary], allow_legacy_double_quotes=allow_legacy_double_quotes
+        )
+    except ValueError as error:
+        raise ValueError(f"{source_name}: malformed preparation-time marker: {error}") from error
+    if not markers:
+        raise ValueError(f"{source_name}: copy must contain a preparation-time marker")
+    return markers[-1][0], sum(seconds for _match, seconds in markers)
+
+
+def build_dialogue_timeline(
+    value: object, participants: list[tuple[str, str]], *, allow_legacy_double_quotes: bool = False
+) -> list[tuple[str, object]]:
+    names = {name for name, _ in participants}
+    timeline: list[tuple[str, object]] = []
+    speakers: tuple[str, ...] | None = None
+    speech: list[str] = []
+    turn_has_speech = False
+
+    def flush_speech() -> None:
+        nonlocal speech, turn_has_speech
+        text = "\n".join(speech).strip()
+        if text:
+            timeline.append(("speech", (speakers, text)))
+            turn_has_speech = True
+        speech = []
+
+    def flush_turn() -> None:
+        nonlocal speakers, turn_has_speech
+        if speakers is None:
+            return
+        flush_speech()
+        if not turn_has_speech:
+            raise ValueError(f"Dialogue turn has no text: {' / '.join(speakers)}")
+        speakers = None
+        turn_has_speech = False
+
+    for line in str(value or "").replace("\r\n", "\n").splitlines():
+        label = re.fullmatch(r"\s*([^:\n]+?)\s*:\s*", line)
+        if label:
+            candidates = tuple(part.strip() for part in label.group(1).split("/") if part.strip())
+            if candidates and all(candidate in names for candidate in candidates):
+                flush_turn()
+                speakers = candidates
+                continue
+        if speakers is None:
+            if line.strip():
+                raise ValueError(f"Text appears before the first valid speaker label: {line!r}")
+            continue
+        markers = parse_pause_markers(line, allow_legacy_double_quotes=allow_legacy_double_quotes)
+        position = 0
+        for match, seconds in markers:
+            speech.append(line[position:match.start()])
+            flush_speech()
+            timeline.append(("pause", seconds))
+            position = match.end()
+        speech.append(line[position:])
+    flush_turn()
+    if not any(kind == "speech" for kind, _value in timeline):
+        raise ValueError("Dialogue contains no turns")
+    return timeline
+
+
+def synthesize_timeline(
+    timeline: list[tuple[str, object]], voices: dict[str, str], work_dir: Path, *, region: str, key: str
+) -> list[Path]:
+    segments = []
+    pause_index = 0
+    for index, (kind, value) in enumerate(timeline, start=1):
+        if kind == "pause":
+            pause_index += 1
+            path = work_dir / f"pause_{pause_index}.mp3"
+            create_silence(path, int(value))
+            segments.append(path)
+            continue
+        speech_dir = work_dir / f"speech_{index}"
+        speech_dir.mkdir()
+        segments.extend(synthesize_turn_segments(
+            [value], voices, speech_dir, region=region, key=key
+        ))
+    return segments
 
 
 def synthesize_turn_segments(
@@ -380,7 +497,6 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="telc-b2-listening-") as directory:
         temp_dir = Path(directory)
         intro_path = temp_dir / "intro.mp3"
-        silence_path = temp_dir / "silence.mp3"
         intro_path.write_bytes(
             synthesize_ssml(
                 build_intro_ssml(next(iter(intros))),
@@ -388,8 +504,6 @@ def main() -> int:
                 key=key,
             )
         )
-        create_silence(silence_path)
-
         generated = 0
         for workbook in workbooks:
             target = OUTPUT_DIR / f"Teil2_{workbook['id']}.mp3"
@@ -398,13 +512,15 @@ def main() -> int:
                 continue
             item_dir = temp_dir / str(workbook["id"])
             item_dir.mkdir()
-            dialogue_segments = synthesize_turn_segments(
-                workbook["turns"], workbook["voices"], item_dir, region=region, key=key
+            silence_path = item_dir / "silence.mp3"
+            create_silence(silence_path, int(workbook["preparation_seconds"]))
+            dialogue_segments = synthesize_timeline(
+                workbook["timeline"], workbook["voices"], item_dir, region=region, key=key
             )
             temporary_target = OUTPUT_DIR / f"{target.stem}.part.mp3"
             concatenate_audio([intro_path, silence_path, *dialogue_segments], temporary_target)
             duration = audio_duration(temporary_target)
-            if duration <= 60:
+            if duration <= int(workbook["preparation_seconds"]):
                 raise RuntimeError(f"Generated audio is unexpectedly short: {target.name} ({duration:.1f}s)")
             temporary_target.replace(target)
             generated += 1

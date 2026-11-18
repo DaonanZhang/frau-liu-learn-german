@@ -142,7 +142,7 @@ export default function VideoStudyPage() {
   const [video, setVideo] = useState(null);
   const [loadingVideo, setLoadingVideo] = useState(true);
   const [videoErrorText, setVideoErrorText] = useState("");
-  const [playbackErrorText, setPlaybackErrorText] = useState("");
+  const [playback, setPlayback] = useState({ url: "", loading: true, error: "" });
 
   const [playbackSettings, setPlaybackSettings] = useState({
     videoMode: "single_play",      // "single_play" | "single_loop"
@@ -361,8 +361,25 @@ export default function VideoStudyPage() {
   const topicTags = useMemo(() => getTopicTags(video), [video]);
   const shouldShowEmptyDescriptionFallback = Number(video?.season_number) !== 4;
   const leftVideoUrl = video?.video_url ?? "";
-  const isHlsUrl = useMemo(() => isProbablyHlsUrl(leftVideoUrl), [leftVideoUrl]);
-  const playerErrorText = videoErrorText || playbackErrorText;
+  const playbackUrl = deviceSessionExpired || videoErrorText ? "" : leftVideoUrl;
+  if (playback.url !== playbackUrl) {
+    setPlayback({ url: playbackUrl, loading: true, error: "" });
+  }
+  const canMountVideo = Boolean(playbackUrl && !playback.error);
+
+  function setMediaLoading(loading) {
+    setPlayback((current) =>
+      current.error || current.loading === loading ? current : { ...current, loading }
+    );
+  }
+
+  function handleMediaError(url) {
+    setPlayback((current) => current.url === url ? {
+      url,
+      loading: false,
+      error: "视频播放失败，请刷新页面后重试。",
+    } : current);
+  }
   const backPath = useMemo(() => {
     const requestedReturnPath = String(location.state?.returnTo || "").trim();
     if (requestedReturnPath) {
@@ -386,60 +403,31 @@ export default function VideoStudyPage() {
     }
     videoElement.setAttribute("playsinline", "");
     videoElement.setAttribute("webkit-playsinline", "");
-  }, [leftVideoUrl]);
+  }, [playbackUrl]);
 
   useEffect(() => {
     const videoElement = videoRef.current;
-    if (!videoElement) {
-      return () => {};
+    if (!videoElement || !canMountVideo) {
+      return;
     }
 
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-
-    setPlaybackErrorText("");
-
-    if (!leftVideoUrl) {
-      videoElement.removeAttribute("src");
-      try {
+    if (!isProbablyHlsUrl(playbackUrl) || videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+      videoElement.src = playbackUrl;
+      videoElement.load();
+      return () => {
+        videoElement.removeAttribute("src");
         videoElement.load();
-      } catch {
-        // ignore
-      }
-      return () => {};
-    }
-
-    if (!isHlsUrl) {
-      videoElement.src = leftVideoUrl;
-      try {
-        videoElement.load();
-      } catch {
-        // ignore
-      }
-      return () => {};
-    }
-
-    const canPlayNativeHls = Boolean(videoElement.canPlayType("application/vnd.apple.mpegurl"));
-    if (canPlayNativeHls) {
-      videoElement.src = leftVideoUrl;
-      try {
-        videoElement.load();
-      } catch {
-        // ignore
-      }
-      return () => {};
+      };
     }
 
     if (Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true });
       hlsRef.current = hls;
-      hls.loadSource(leftVideoUrl);
+      hls.loadSource(playbackUrl);
       hls.attachMedia(videoElement);
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data?.fatal) {
-          setPlaybackErrorText("HLS playback error.");
+        if (data?.fatal && hlsRef.current === hls) {
+          handleMediaError(playbackUrl);
           hls.destroy();
           hlsRef.current = null;
         }
@@ -452,9 +440,8 @@ export default function VideoStudyPage() {
       };
     }
 
-    setPlaybackErrorText("This browser does not support HLS playback.");
-    return () => {};
-  }, [leftVideoUrl, isHlsUrl]);
+    setPlayback({ url: playbackUrl, loading: false, error: "当前浏览器不支持播放此视频。" });
+  }, [playbackUrl, canMountVideo]);
 
   const loopRef = useRef({
     enabled: false,
@@ -465,21 +452,6 @@ export default function VideoStudyPage() {
     lastLoopAt: 0,
   });
 
-  /**
-   * Apply video-level looping behavior.
-   *
-   * - single_play  -> play once, stop at end
-   * - single_loop  -> restart video automatically when ended
-   */
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    if (!videoElement) {
-      return;
-    }
-
-    videoElement.loop = playbackSettings.videoMode === "single_loop";
-  }, [playbackSettings.videoMode]);
-
   useEffect(() => {
     const videoElement = videoRef.current;
     if (!videoElement) {
@@ -487,7 +459,7 @@ export default function VideoStudyPage() {
     }
     const rate = Number(playbackSettings.playbackRate || 1);
     videoElement.playbackRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
-  }, [playbackSettings.playbackRate, leftVideoUrl]);
+  }, [playbackSettings.playbackRate, playbackUrl]);
 
   useEffect(() => {
     if (playbackSettings.sentenceMode !== "loop") {
@@ -706,7 +678,7 @@ export default function VideoStudyPage() {
       videoElement.removeEventListener("timeupdate", onTimeUpdate);
     };
   }, [
-    leftVideoUrl,
+    playbackUrl,
     playbackSettings.sentenceMode,
     playbackSettings.loopCount,
     playbackSettings.autoNext,
@@ -786,7 +758,7 @@ export default function VideoStudyPage() {
     return () => {
       videoElement.removeEventListener("play", onPlay);
     };
-  }, [leftVideoUrl, subtitleItems, playbackSettings.sentenceMode, findSubtitleIndexByTime, startSentenceLoopIfEnabled]);
+  }, [playbackUrl, subtitleItems, playbackSettings.sentenceMode, findSubtitleIndexByTime, startSentenceLoopIfEnabled]);
 
 
   useEffect(() => {
@@ -817,7 +789,7 @@ export default function VideoStudyPage() {
     return () => {
       videoElement.removeEventListener("seeked", onSeeked);
     };
-  }, [leftVideoUrl, playbackSettings.sentenceMode, subtitleItems, findSubtitleIndexByTime, startSentenceLoopIfEnabled]);
+  }, [playbackUrl, playbackSettings.sentenceMode, subtitleItems, findSubtitleIndexByTime, startSentenceLoopIfEnabled]);
 
 
   function handleSeek(seconds, options = {}) {
@@ -1115,20 +1087,47 @@ export default function VideoStudyPage() {
                     </button>
                   </div>
                 </div>
-              ) : playerErrorText ? (
+              ) : videoErrorText ? (
                 <div className="vs-playerPlaceholder">
-                  <div className="vs-playerPlaceholderText">Failed to load video: {playerErrorText}</div>
+                  <div className="vs-playerPlaceholderText">Failed to load video: {videoErrorText}</div>
+                </div>
+              ) : playback.error ? (
+                <div className="vs-playerPlaceholder">
+                  <div className="vs-videoPlaybackError" role="alert">{playback.error}</div>
                 </div>
               ) : leftVideoUrl ? (
-                <video
-                  ref={videoRef}
-                  className="vs-playerPlaceholder"
-                  controls={!isMobile}
-                  playsInline
-                  controlsList="nodownload"
-                  onContextMenu={(event) => event.preventDefault()}
-                  preload="metadata"
-                />
+                <div className="vs-playerMedia">
+                  <video
+                    key={playbackUrl}
+                    ref={videoRef}
+                    className="vs-playerPlaceholder"
+                    controls={!isMobile}
+                    loop={playbackSettings.videoMode === "single_loop"}
+                    playsInline
+                    controlsList="nodownload"
+                    onContextMenu={(event) => event.preventDefault()}
+                    preload="metadata"
+                    onWaiting={() => setMediaLoading(true)}
+                    onStalled={(event) => {
+                      const { paused, readyState } = event.currentTarget;
+                      if (!paused || readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+                        setMediaLoading(true);
+                      }
+                    }}
+                    onLoadedData={() => setMediaLoading(false)}
+                    onCanPlay={() => setMediaLoading(false)}
+                    onPlaying={() => setMediaLoading(false)}
+                    onError={() => handleMediaError(playbackUrl)}
+                  />
+                  {playback.loading ? (
+                    <div className="vs-videoLoading" role="status">
+                      <div className="vs-videoLoadingStatus">
+                        <span>视频加载中…</span>
+                        <div className="vs-videoLoadingBar" role="progressbar" aria-label="视频加载进度" />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
               ) : (
                 <div className="vs-playerPlaceholder">
                   <div className="vs-playerPlaceholderText">

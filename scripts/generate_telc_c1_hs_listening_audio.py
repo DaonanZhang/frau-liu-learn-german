@@ -148,6 +148,32 @@ def _normalize_dialogue_speakers(dialogue: str, participants: list[tuple[str, st
     return "\n".join(normalized_lines)
 
 
+def _dialogue_boundary(copy: str, participants: list[tuple[str, str]]) -> int:
+    aliases = set()
+    for name, _gender in participants:
+        aliases.update(_speaker_aliases(name))
+    normalize = lambda value: re.sub(r"\s+", " ", value).strip().casefold()
+    line_start = 0
+    for separator in re.finditer(r"<br\s*/?>|\r?\n", copy, flags=re.IGNORECASE):
+        line = copy[line_start:separator.start()]
+        stripped = line.strip()
+        if ":" in stripped:
+            speakers = [part.strip() for part in stripped.split(":", 1)[0].split("/")]
+            if speakers and all(normalize(speaker) in aliases for speaker in speakers):
+                return line_start
+        elif normalize(stripped) in aliases:
+            return line_start
+        line_start = separator.end()
+    stripped = copy[line_start:].strip()
+    if ":" in stripped:
+        speakers = [part.strip() for part in stripped.split(":", 1)[0].split("/")]
+        if speakers and all(normalize(speaker) in aliases for speaker in speakers):
+            return line_start
+    elif normalize(stripped) in aliases:
+        return line_start
+    return len(copy)
+
+
 def read_workbook(path: Path) -> dict:
     meta_frame = pd.read_excel(path, sheet_name="meta", dtype=object)
     if len(meta_frame) != 1:
@@ -171,14 +197,19 @@ def read_workbook(path: Path) -> dict:
     participants = _parse_participants(participants_text)
     voices = _assign_voices(participants)
     copy = str(meta.get("copy") or meta.get("script") or "")
-    markers = list(re.finditer(r"<60(?:''|\"\")>", copy))
-    if not markers:
-        raise ValueError(f"{path.name}: copy must contain a preparation-time marker")
-    dialogue = copy[markers[-1].end():]
+    preparation_marker, preparation_seconds = b2_audio.parse_preparation_marker(
+        copy, path.name, boundary=_dialogue_boundary(copy, participants),
+        allow_legacy_double_quotes=True,
+    )
+    dialogue = copy[preparation_marker.end():]
+    pause_markers = b2_audio.parse_pause_markers(dialogue, allow_legacy_double_quotes=True)
     dialogue = re.sub(r"<br\s*/?>", "\n", dialogue, flags=re.IGNORECASE)
-    dialogue = re.sub(r"<[^>]*>", "", dialogue)
+    dialogue = re.sub(r"<(?!\d+)[^>]*>", "", dialogue)
     dialogue = _normalize_dialogue_speakers(dialogue, participants)
-    turns = b2_audio.parse_dialogue(dialogue, participants)
+    timeline = b2_audio.build_dialogue_timeline(
+        dialogue, participants, allow_legacy_double_quotes=True
+    )
+    turns = [value for kind, value in timeline if kind == "speech"]
     intro = re.sub(r"<[^>]*>", "", str(meta.get("Einleitung", ""))).strip()
     return {
         "id": exercise_id,
@@ -186,6 +217,9 @@ def read_workbook(path: Path) -> dict:
         "intro": intro,
         "participants": participants,
         "voices": voices,
+        "preparation_seconds": preparation_seconds,
+        "pause_markers": pause_markers,
+        "timeline": timeline,
         "turns": turns,
     }
 
@@ -204,10 +238,12 @@ def generate(workbook: dict, target: Path, *, key: str, region: str) -> None:
         intro.write_bytes(b2_audio.synthesize_ssml(
             b2_audio.build_intro_ssml(workbook["intro"]), region=region, key=key,
         ))
-        segments = b2_audio.synthesize_turn_segments(
-            workbook["turns"], workbook["voices"], temp_dir, region=region, key=key,
+        silence = temp_dir / "silence.mp3"
+        b2_audio.create_silence(silence, int(workbook["preparation_seconds"]))
+        segments = b2_audio.synthesize_timeline(
+            workbook["timeline"], workbook["voices"], temp_dir, region=region, key=key,
         )
-        b2_audio.concatenate_audio([intro, *segments], target)
+        b2_audio.concatenate_audio([intro, silence, *segments], target)
 
 
 def main() -> int:

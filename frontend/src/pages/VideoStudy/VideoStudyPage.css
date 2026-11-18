@@ -109,6 +109,66 @@
   color: #6b7280;
 }
 
+.vs-playerMedia {
+  position: relative;
+}
+
+.vs-videoLoading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.vs-videoLoadingStatus {
+  box-sizing: border-box;
+  display: grid;
+  gap: 0.4rem;
+  width: min(9rem, calc(100% - 1rem));
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.5rem;
+  background: rgba(15, 23, 42, 0.86);
+  color: #fff;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.vs-videoLoadingBar {
+  height: 0.25rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.vs-videoLoadingBar::before {
+  content: "";
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: currentColor;
+  transform: translateX(75%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .vs-videoLoadingBar::before {
+    animation: vs-video-loading 1.2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes vs-video-loading {
+  from { transform: translateX(0); }
+  to { transform: translateX(150%); }
+}
+
+.vs-videoPlaybackError {
+  padding: 0.45rem;
+  color: #374151;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .vs-sessionExpired {
   display: grid;
   justify-items: center;

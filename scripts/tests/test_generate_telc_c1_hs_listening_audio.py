@@ -27,6 +27,7 @@ class C1ListeningAudioTests(TestCase):
             workbook = audio.read_workbook(path)
         self.assertEqual(len(workbook["participants"]), 2)
         self.assertEqual(len(set(workbook["voices"].values())), 2)
+        self.assertEqual(workbook["preparation_seconds"], 60)
         self.assertEqual(workbook["turns"][0][0], ("Moderator",))
         self.assertEqual(workbook["turns"][0][1], "Herr Meier, guten Tag.")
 
@@ -41,6 +42,7 @@ class C1ListeningAudioTests(TestCase):
             workbook = audio.read_workbook(path)
 
         self.assertEqual(workbook["participants"], [("Moderator", "mann"), ("Dr. Matthias Kässner", "mann")])
+        self.assertEqual(workbook["preparation_seconds"], 60)
         self.assertEqual(workbook["turns"], [(("Moderator",), "Guten Tag."), (("Dr. Matthias Kässner",), "Vielen Dank.")])
 
     def test_known_role_aliases_and_genderless_generic_speakers(self):
@@ -63,6 +65,60 @@ class C1ListeningAudioTests(TestCase):
         self.assertEqual(moderator_workbook["turns"][1][0], ("Frau Mentor",))
         self.assertEqual(generic_workbook["participants"], [("Sprecher 1", "mann"), ("Sprecher 2", "frau")])
         self.assertEqual(len(generic_workbook["turns"]), 2)
+
+    def test_read_workbook_accepts_canonical_duration_and_rejects_noncanonical_marker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "listening_teil1__003.xlsx"
+            def write_copy(copy):
+                pd.DataFrame([{
+                    "音频文件_ID": "", "出场人物": "Moderator (Mann)",
+                    "Einleitung": "Intro", "copy": copy,
+                }]).to_excel(path, sheet_name="meta", index=False)
+            write_copy("Vorbereitung <2''>Moderator: Hallo.")
+            workbook = audio.read_workbook(path)
+            self.assertEqual(workbook["preparation_seconds"], 2)
+            for copy in ["Moderator: Hallo.", "Vorbereitung <60>Moderator: Hallo.", 'Vorbereitung <2">Moderator: Hallo.']:
+                write_copy(copy)
+                with self.subTest(copy=copy), self.assertRaisesRegex(ValueError, "preparation"):
+                    audio.read_workbook(path)
+
+    def test_reader_keeps_body_pauses_and_rejects_malformed_preparation_before_them(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "listening_teil1__003.xlsx"
+            def write_copy(copy):
+                pd.DataFrame([{
+                    "音频文件_ID": "", "出场人物": "Moderator (Mann)",
+                    "Einleitung": "Intro", "copy": copy,
+                }]).to_excel(path, sheet_name="meta", index=False)
+            write_copy("Vorbereitung <30''><br>Moderator: Hallo. <2''> Weiter. <2''> Ende.")
+            workbook = audio.read_workbook(path)
+            self.assertEqual(workbook["preparation_seconds"], 30)
+            self.assertEqual([kind for kind, _value in workbook["timeline"]], ["speech", "pause", "speech", "pause", "speech"])
+            self.assertEqual([(match.group(), seconds) for match, seconds in workbook["pause_markers"]], [
+                ("<2''>", 2), ("<2''>", 2),
+            ])
+            write_copy('Vorbereitung <60>\nModerator: Dieser Satz darf not be lost. <2\'>')
+            with self.assertRaisesRegex(ValueError, "preparation"):
+                audio.read_workbook(path)
+            write_copy("Vorbereitung text<br>Moderator: Erster Satz. <2''> Zweiter Satz.")
+            with self.assertRaisesRegex(ValueError, "preparation"):
+                audio.read_workbook(path)
+            write_copy("Vorbereitung <30''><br>Moderator: Satz eins. <2> Satz zwei.")
+            with self.assertRaisesRegex(ValueError, "pause"):
+                audio.read_workbook(path)
+
+    def test_repeated_preparation_markers_sum_duration_and_start_body_after_last(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "listening_teil2__003.xlsx"
+            pd.DataFrame([{
+                "音频文件_ID": "", "出场人物": "Moderator (Mann)",
+                "Einleitung": "Intro",
+                "copy": "Vorbereitung <60''><60''><60''><br>Moderator: Dialog beginnt.",
+            }]).to_excel(path, sheet_name="meta", index=False)
+            workbook = audio.read_workbook(path)
+        self.assertEqual(workbook["preparation_seconds"], 180)
+        self.assertEqual(workbook["turns"], [(('Moderator',), "Dialog beginnt.")])
+        self.assertEqual(workbook["pause_markers"], [])
 
     def test_host_voices_are_reserved_and_eight_generic_speakers_are_distinct(self):
         male_aliases = audio._speaker_aliases("Moderator Andreas Köhler")
@@ -100,17 +156,63 @@ class C1ListeningAudioTests(TestCase):
     def test_execute_uses_azure_ssml_pipeline_with_separate_speaker_voices(self):
         voices = {"Moderator": "de-DE-ConradNeural", "Julia": "de-DE-KatjaNeural"}
         workbook = {
-            "intro": "Sie hören ein Gespräch.",
+            "intro": "Sie hören ein Gespräch.", "preparation_seconds": 60,
+            "timeline": [("speech", (("Moderator",), "Guten Tag.")), ("speech", (("Julia",), "Guten Tag zurück."))],
             "voices": voices,
             "turns": [(('Moderator',), "Guten Tag."), (('Julia',), "Guten Tag zurück.")],
         }
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "teil2.mp3"
             with patch.object(audio.b2_audio, "synthesize_ssml", return_value=b"mock audio") as synthesize, \
+                 patch.object(audio.b2_audio, "create_silence"), \
                  patch.object(audio.b2_audio, "concatenate_audio") as concatenate:
                 audio.generate(workbook, target, key="mock", region="westeurope")
         generated_ssml = [call.args[0].decode("utf-8") for call in synthesize.call_args_list]
-        dialogue_ssml = next(text for text in generated_ssml if "Guten Tag zurück" in text)
-        self.assertIn(f'<voice name="{voices["Moderator"]}">', dialogue_ssml)
-        self.assertIn(f'<voice name="{voices["Julia"]}">', dialogue_ssml)
+        dialogue_ssml = [text for text in generated_ssml if "Guten Tag" in text]
+        self.assertTrue(any(f'<voice name="{voices["Moderator"]}">' in text for text in dialogue_ssml))
+        self.assertTrue(any(f'<voice name="{voices["Julia"]}">' in text for text in dialogue_ssml))
         concatenate.assert_called_once()
+
+    def test_execute_places_parsed_silence_between_intro_and_dialogue(self):
+        workbook = {
+            "intro": "Intro", "preparation_seconds": 2,
+            "timeline": [("speech", (("Moderator",), "Dialog"))],
+            "voices": {"Moderator": "voice-a"},
+            "turns": [(('Moderator',), "Dialog")],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "teil2.mp3"
+            with patch.object(audio.b2_audio, "create_silence") as create_silence, \
+                 patch.object(audio.b2_audio, "synthesize_ssml", return_value=b"audio"), \
+                 patch.object(audio.b2_audio, "synthesize_turn_segments", return_value=[Path("dialogue.mp3")]), \
+                 patch.object(audio.b2_audio, "concatenate_audio") as concatenate:
+                audio.generate(workbook, target, key="mock", region="westeurope")
+        create_silence.assert_called_once()
+        self.assertEqual(create_silence.call_args.args[1], 2)
+        inputs = concatenate.call_args.args[0]
+        self.assertEqual([path.name for path in inputs[1:]], ["silence.mp3", "dialogue.mp3"])
+
+    def test_execute_consumes_body_timeline_after_preparation_silence(self):
+        timeline = [
+            ("speech", (("Moderator",), "first")), ("pause", 2),
+            ("speech", (("Moderator",), "second")), ("pause", 3),
+            ("speech", (("Moderator",), "third")),
+        ]
+        body = [Path("speech1.mp3"), Path("pause1.mp3"), Path("speech2.mp3"), Path("pause2.mp3"), Path("speech3.mp3")]
+        workbook = {
+            "intro": "Intro", "preparation_seconds": 60, "timeline": timeline,
+            "voices": {"Moderator": "voice-a"}, "turns": [],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "teil2.mp3"
+            with patch.object(audio.b2_audio, "create_silence") as create_silence, \
+                 patch.object(audio.b2_audio, "synthesize_ssml", return_value=b"audio"), \
+                 patch.object(audio.b2_audio, "synthesize_timeline", return_value=body) as synthesize_timeline, \
+                 patch.object(audio.b2_audio, "concatenate_audio") as concatenate:
+                audio.generate(workbook, target, key="mock", region="westeurope")
+        synthesize_timeline.assert_called_once()
+        self.assertEqual(synthesize_timeline.call_args.args[0], timeline)
+        self.assertEqual(create_silence.call_args.args[1], 60)
+        self.assertEqual([path.name for path in concatenate.call_args.args[0][1:]], [
+            "silence.mp3", "speech1.mp3", "pause1.mp3", "speech2.mp3", "pause2.mp3", "speech3.mp3",
+        ])

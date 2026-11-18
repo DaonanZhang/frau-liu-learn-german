@@ -20,6 +20,7 @@ import WritingExerciseWorkspace, {
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
+  examDictionaryCollectionKey,
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
@@ -324,6 +325,8 @@ export default function ExamPreparationWritingDetailPage() {
   return (
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
+      dictionaryEnabled={isChecked}
     >
       <div className="writing-detail-page">
       <div className="writing-detail-shell">

@@ -11,6 +11,7 @@ from apps.exam_preparation.views import (
     ClozeMatchingExerciseViewSet,
     ClozeMatchingOptionViewSet,
     ExerciseBaseViewSet,
+    ExamVocabularyCardViewSet,
     ExamPreparationGuideViewSet,
     ExamPreparationStatisticsAPIView,
     FavoriteQuestionViewSet,
@@ -110,6 +111,7 @@ router.register(
     basename="exam-prep-cloze-matching-blank-answers",
 )
 router.register(r"writing-exercises", WritingExerciseViewSet, basename="exam-prep-writing-exercises")
+router.register(r"vocabulary-cards", ExamVocabularyCardViewSet, basename="exam-prep-vocabulary-cards")
 router.register(r"writing-example-texts", WritingExampleTextViewSet, basename="exam-prep-writing-example-texts")
 router.register(
     r"speaking-teil-exercises",

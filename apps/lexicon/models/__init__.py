@@ -1,4 +1,5 @@
 from .core import ExpressionText, SentenceText, WordText
+from .dictionary import DictionaryEntry, DictionaryForm
 from .user_marks import (
     OccurrenceKnowledgeState,
     TextKnowledgeState,
@@ -14,6 +15,8 @@ __all__ = [
     "WordText",
     "SentenceText",
     "ExpressionText",
+    "DictionaryEntry",
+    "DictionaryForm",
     "OccurrenceKnowledgeState",
     "TextKnowledgeState",
     "UserWordMark",

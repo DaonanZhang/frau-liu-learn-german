@@ -1,13 +1,74 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Navigator from "./Navigator.jsx";
+import AppLayout from "../layouts/AppLayout.jsx";
 
 const authMocks = vi.hoisted(() => ({ useAuth: vi.fn() }));
 
 vi.mock("../api/auth", () => ({ useAuth: authMocks.useAuth }));
 vi.mock("../hooks/useMaxWidth.js", () => ({ default: () => false }));
+vi.mock("./ReferralNoticeModal.jsx", () => ({ default: () => null }));
+
+describe("dictionary navigation switch", () => {
+  function renderLayout(path) {
+    return render(
+      <MemoryRouter initialEntries={[path]}>
+        <Routes><Route element={<AppLayout />}><Route path="*" element={<LocationProbe />} /></Route></Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  beforeEach(() => {
+    authMocks.useAuth.mockReturnValue({ isAuthenticated: true, loading: false });
+  });
+
+  afterEach(() => localStorage.clear());
+
+  it.each([
+    "/videos/7",
+    "/modules/exam-preparation/b1/lesen/understanding/18",
+    "/modules/exam-preparation/b2/hoeren/short-text-once/9",
+    "/modules/exam-preparation/c1/schreiben/12/",
+    "/modules/exam-preparation/b1/sprechen/teil-3/4",
+    "/modules/exam-preparation/b2/sprachbausteine/cloze-choice/25",
+    "/modules/exam-preparation/telc/c1/mock-exam?saved=37",
+  ])("shows the switch on %s", (path) => {
+    renderLayout(path);
+    expect(screen.getByRole("switch", { name: "词典" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it.each([
+    "/",
+    "/lexicon",
+    "/modules/science-season",
+    "/modules/vlog-season",
+    "/modules/exam-preparation/b1",
+    "/modules/exam-preparation/b2/lesen/understanding",
+    "/modules/exam-preparation/c1/schreiben",
+    "/modules/exam-preparation/b1/tips/12",
+    "/modules/exam-preparation/telc/c1/mock-exams",
+    "/modules/exam-preparation/purchase",
+  ])("hides the switch on %s", (path) => {
+    renderLayout(path);
+    expect(screen.queryByRole("switch", { name: "词典" })).not.toBeInTheDocument();
+  });
+
+  it("remembers a change after remounting on a different module's detail page", () => {
+    const firstPage = renderLayout("/videos/7");
+    const toggle = screen.getByRole("switch", { name: "词典" });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    firstPage.unmount();
+
+    renderLayout("/modules/exam-preparation/b1/lesen/understanding/18");
+    const restoredToggle = screen.getByRole("switch", { name: "词典" });
+    expect(restoredToggle).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(restoredToggle);
+    expect(restoredToggle).toHaveAttribute("aria-checked", "true");
+  });
+});
 
 describe("mock exam navigation release gate", () => {
   beforeEach(() => {

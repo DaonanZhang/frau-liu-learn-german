@@ -239,13 +239,29 @@ Notes:
   missing matching audio file is an import error. The workbook transaction is
   rolled back and the workbook is moved to `failed/`.
 
+TELC listening pause-marker notes:
+
+- Write all new numeric pause markers as `<N''>`. `N` is the exact silence
+  duration in seconds at that position. Body text may contain multiple pause
+  markers, including markers inside a speaker turn; generated audio preserves
+  their order.
+- B2 and C1 listening workbooks require one or more valid preparation markers
+  after the preparation instructions and before the first recognized
+  participant label (the preparation boundary). Their durations sum to create
+  one silence between the introduction and body timeline. Malformed or missing
+  preparation markers and malformed body numeric markers are errors. Later
+  body pauses do not change the preparation duration.
+- C1 may still read the legacy `<N"">` spelling. The single-double-quote
+  spelling `<N">` is not supported.
+
 TELC B2 Hören Teil 2 audio-preparation notes:
 
 - `Einleitung` contains the shared narrator text. Generate it once with the
   fixed narrator voice `de-DE-KlarissaNeural` and reuse it for all Teil 2
   exercises; this voice must not be assigned to a dialogue participant.
-- In `copy`, `<60''>` means exactly 60 seconds of silence between the shared
-  introduction and the interview.
+- The preparation marker uses canonical `<N''>`; for example, `<30''>` means
+  exactly 30 seconds between the introduction and the interview. Later body
+  markers use the same canonical form and each creates a pause at its location.
 - `出场人物` defines the dialogue participants and their genders. Speaker
   labels in `copy` select voices and are not spoken aloud. Every participant
   needs a distinct voice, including participants of the same gender.

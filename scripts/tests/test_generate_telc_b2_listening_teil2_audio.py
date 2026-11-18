@@ -18,12 +18,153 @@ from generate_telc_b2_listening_teil2_audio import (  # noqa: E402
     build_intro_ssml,
     parse_dialogue,
     parse_participants,
+    parse_pause_markers,
+    parse_preparation_marker,
+    build_dialogue_timeline,
+    synthesize_timeline,
     synthesize_ssml,
     synthesize_turn_segments,
+    create_silence,
+    main,
+    read_workbook,
 )
 
 
 class TelcB2ListeningTeil2AudioTests(TestCase):
+    def test_parses_supported_preparation_markers_and_durations(self):
+        for marker, seconds in [("<30''>", 30), ("<60''>", 60), ("<2''>", 2)]:
+            with self.subTest(marker=marker):
+                match, duration = parse_preparation_marker(f"Intro {marker} Dialogue")
+                self.assertEqual(duration, seconds)
+                self.assertEqual(match.group(), marker)
+                self.assertEqual(f"Intro {marker} Dialogue"[match.end():], " Dialogue")
+
+    def test_missing_or_malformed_preparation_marker_is_rejected(self):
+        for copy in ["No marker", "Intro <60> Dialogue", "Intro <60'' Dialogue"]:
+            with self.subTest(copy=copy), self.assertRaisesRegex(ValueError, "preparation"):
+                parse_preparation_marker(copy)
+
+    def test_pause_parser_returns_all_markers_in_order_with_spans_and_durations(self):
+        copy = "Intro <30''>Anna: eins <2''> zwei <2''> drei"
+        markers = parse_pause_markers(copy)
+        self.assertEqual([(match.group(), seconds) for match, seconds in markers], [
+            ("<30''>", 30), ("<2''>", 2), ("<2''>", 2),
+        ])
+        self.assertEqual([copy[match.start():match.end()] for match, _ in markers], [
+            "<30''>", "<2''>", "<2''>",
+        ])
+
+    def test_b2_does_not_accept_double_quote_markers(self):
+        for marker in ['<2">', '<2"">']:
+            with self.subTest(marker=marker), self.assertRaises(ValueError):
+                parse_pause_markers(marker)
+
+    def test_speech_timeline_keeps_two_body_pauses_in_place(self):
+        timeline = build_dialogue_timeline(
+            "Anna:\nErster Satz <2''> zweiter Satz <3''> dritter Satz.",
+            [("Anna", "frau")],
+        )
+        self.assertEqual(timeline, [
+            ("speech", (("Anna",), "Erster Satz")),
+            ("pause", 2),
+            ("speech", (("Anna",), "zweiter Satz")),
+            ("pause", 3),
+            ("speech", (("Anna",), "dritter Satz.")),
+        ])
+
+    def test_timeline_synthesis_outputs_speech_silence_speech_silence_speech(self):
+        timeline = [
+            ("speech", (("Anna",), "first")), ("pause", 2),
+            ("speech", (("Anna",), "second")), ("pause", 3),
+            ("speech", (("Anna",), "third")),
+        ]
+        with tempfile.TemporaryDirectory() as directory, \
+             patch("generate_telc_b2_listening_teil2_audio.synthesize_turn_segments", side_effect=lambda _turns, _voices, folder, **_kwargs: [folder / "speech.mp3"]) as synthesize, \
+             patch("generate_telc_b2_listening_teil2_audio.create_silence") as silence:
+            segments = synthesize_timeline(
+                timeline, {"Anna": "voice"}, Path(directory), region="test", key="key"
+            )
+        self.assertEqual([path.name for path in segments], [
+            "speech.mp3", "pause_1.mp3", "speech.mp3", "pause_2.mp3", "speech.mp3",
+        ])
+        self.assertEqual(len({path for path in segments if path.name == "speech.mp3"}), 3)
+        self.assertEqual([call.args[1] for call in silence.call_args_list], [2, 3])
+        self.assertEqual(synthesize.call_count, 3)
+
+    def test_reader_rejects_malformed_preparation_even_when_body_has_valid_pauses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "b2_listening_teil2_001.xlsx"
+            import pandas as pd
+            pd.DataFrame([{
+                "音频文件_ID": 1, "出场人物": "Anna (frau)", "Einleitung": "Intro",
+                "copy": "Vorbereitung <60''>Anna:\nErster Satz. <2''> Zweiter Satz. <3''> Dritter Satz.",
+            }]).to_excel(path, sheet_name="meta", index=False)
+            workbook = read_workbook(path)
+            self.assertEqual(workbook["preparation_seconds"], 60)
+            self.assertEqual([(match.group(), seconds) for match, seconds in workbook["pause_markers"]], [("<2''>", 2), ("<3''>", 3)])
+            self.assertEqual([kind for kind, _value in workbook["timeline"]], ["speech", "pause", "speech", "pause", "speech"])
+            pd.DataFrame([{
+                "音频文件_ID": 1, "出场人物": "Anna (frau)", "Einleitung": "Intro",
+                "copy": 'Vorbereitung <60>\nAnna:\nDieser Satz darf nicht verloren gehen. <2">',
+            }]).to_excel(path, sheet_name="meta", index=False)
+            with self.assertRaisesRegex(ValueError, "preparation"):
+                read_workbook(path)
+            pd.DataFrame([{
+                "音频文件_ID": 1, "出场人物": "Anna (frau)", "Einleitung": "Intro",
+                "copy": 'Vorbereitung text\nAnna:\nErster Satz. <2"> Zweiter Satz.',
+            }]).to_excel(path, sheet_name="meta", index=False)
+            with self.assertRaisesRegex(ValueError, "preparation"):
+                read_workbook(path)
+            pd.DataFrame([{
+                "音频文件_ID": 1, "出场人物": "Anna (frau)", "Einleitung": "Intro",
+                "copy": "Vorbereitung <60''>Anna:\nErster Satz. <2> Zweiter Satz.",
+            }]).to_excel(path, sheet_name="meta", index=False)
+            with self.assertRaisesRegex(ValueError, "pause"):
+                read_workbook(path)
+
+    def test_main_uses_each_workbook_duration_and_concatenates_intro_silence_dialogue(self):
+        workbooks = [{
+            "id": str(index).zfill(3), "intro": "Intro", "participants": [("Anna", "frau")],
+            "voices": {"Anna": "voice-a"}, "turns": [(("Anna",), "Hallo.")],
+            "timeline": [("speech", (("Anna",), "Hallo.")), ("pause", 2), ("speech", (("Anna",), "Weiter."))],
+            "preparation_seconds": 2 if index == 1 else 30,
+        } for index in range(1, 21)]
+        with tempfile.TemporaryDirectory() as directory:
+            output_dir = Path(directory)
+            with patch.object(sys, "argv", ["audio", "--apply"]), \
+                 patch("pathlib.Path.glob", return_value=[Path(f"{index}.xlsx") for index in range(20)]), \
+                 patch("generate_telc_b2_listening_teil2_audio.read_workbook", side_effect=workbooks), \
+                 patch("generate_telc_b2_listening_teil2_audio.OUTPUT_DIR", output_dir), \
+                 patch("generate_telc_b2_listening_teil2_audio.shutil.which", return_value="ffmpeg"), \
+                 patch("generate_telc_b2_listening_teil2_audio.load_azure_environment", return_value=("key", "region")), \
+                 patch("generate_telc_b2_listening_teil2_audio.synthesize_ssml", return_value=b"intro"), \
+                 patch("generate_telc_b2_listening_teil2_audio.create_silence") as create_silence, \
+                 patch("generate_telc_b2_listening_teil2_audio.synthesize_timeline", return_value=[Path("speech.mp3"), Path("pause.mp3"), Path("speech2.mp3")]) as synthesize_timeline, \
+                 patch("generate_telc_b2_listening_teil2_audio.concatenate_audio", side_effect=lambda _inputs, target: target.touch()) as concatenate, \
+                 patch("generate_telc_b2_listening_teil2_audio.audio_duration", return_value=100):
+                self.assertEqual(main(), 0)
+        self.assertEqual([call.args[1] for call in create_silence.call_args_list[:2]], [2, 30])
+        for call in concatenate.call_args_list[:2]:
+            self.assertEqual([path.name for path in call.args[0][1:]], ["silence.mp3", "speech.mp3", "pause.mp3", "speech2.mp3"])
+        self.assertEqual(synthesize_timeline.call_args_list[0].args[0], workbooks[0]["timeline"])
+
+    def test_read_workbook_stores_duration_and_dialogue_after_marker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "b2_listening_teil2_001.xlsx"
+            import pandas as pd
+            pd.DataFrame([{
+                "音频文件_ID": 1, "出场人物": "Anna (frau)", "Einleitung": "Intro",
+                "copy": "Vorbereitung <30''>Anna:\nHallo.",
+            }]).to_excel(path, sheet_name="meta", index=False)
+            workbook = read_workbook(path)
+        self.assertEqual(workbook["preparation_seconds"], 30)
+        self.assertEqual(workbook["turns"], [(('Anna',), "Hallo.")])
+
+    def test_create_silence_uses_requested_duration(self):
+        with patch("generate_telc_b2_listening_teil2_audio.run_ffmpeg") as run_ffmpeg:
+            create_silence(Path("silence.mp3"), 30)
+        self.assertIn("30", run_ffmpeg.call_args.args[0])
+
     def test_builds_the_approved_intro_without_reading_range_symbols(self):
         ssml = build_intro_ssml(
             "Entscheiden Sie, ob die Aussagen 1–10 richtig sind.\n"

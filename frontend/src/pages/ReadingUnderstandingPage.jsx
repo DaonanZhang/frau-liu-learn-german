@@ -15,6 +15,7 @@ import { hasScopedExplanation } from "../components/examPreparation/explanationV
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
+  examDictionaryCollectionKey,
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
@@ -193,6 +194,8 @@ export default function ReadingUnderstandingPage() {
   return (
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
+      dictionaryEnabled={isChecked}
     >
       <div className="reading-understanding-page">
         <div className={`reading-understanding-shell${scope?.level === "C1" ? " reading-understanding-shell--c1" : ""}`}>

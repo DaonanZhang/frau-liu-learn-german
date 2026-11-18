@@ -79,7 +79,7 @@ function renderPromptWithInlineInputs({
           />
 
           {showReveal ? (
-            <span className="fim-inlineAnswer" aria-label="Correct answer">
+            <span className="fim-inlineAnswer" aria-label="Correct answer" data-dictionary-region>
               {answerText}
             </span>
           ) : null}
@@ -123,6 +123,8 @@ export default function FillInExerciseModal({
   titleText,
 }) {
   const inputRefs = useRef([]);
+  const lastPlayedExerciseRef = useRef(null);
+  const autoCorrectRef = useRef(false);
   const [resultState, setResultState] = useState("idle"); // idle | correct | wrong1 | wrong2
   const [shouldShake, setShouldShake] = useState(false);
 
@@ -147,6 +149,59 @@ export default function FillInExerciseModal({
     normalizedUserValues.every((v) => Boolean(v));
 
   const isCheckDisabled = !allFilled || isCorrect || isLockedAsWrong || normalizedAnswers.length === 0;
+
+  useEffect(() => {
+    if (!isOpen) {
+      lastPlayedExerciseRef.current = null;
+      return;
+    }
+    if (lastPlayedExerciseRef.current === exerciseKey) {
+      return;
+    }
+
+    lastPlayedExerciseRef.current = exerciseKey;
+    if (typeof onPlay === "function") {
+      onPlay();
+    }
+  }, [isOpen, exerciseKey, onPlay]);
+
+  useEffect(() => {
+    if (!isOpen || !allFilled || !["idle", "wrong1"].includes(resultState)) {
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      const isAllCorrect = normalizedAnswers.every((answer, index) => (
+        normalizedUserValues[index] === answer
+      ));
+
+      if (isAllCorrect) {
+        autoCorrectRef.current = true;
+        setResultState("correct");
+      }
+    }, 1500);
+
+    return () => window.clearTimeout(timerId);
+  }, [isOpen, allFilled, normalizedAnswers, normalizedUserValues, resultState]);
+
+  useEffect(() => {
+    autoCorrectRef.current = false;
+  }, [isOpen, exerciseKey]);
+
+  useEffect(() => {
+    if (!isOpen || !isCorrect || !autoCorrectRef.current) {
+      return undefined;
+    }
+
+    const timerId = window.setTimeout(() => {
+      autoCorrectRef.current = false;
+      if (hasNext && typeof onNext === "function") {
+        onNext();
+      }
+    }, 1000);
+
+    return () => window.clearTimeout(timerId);
+  }, [isOpen, isCorrect, hasNext, onNext]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -196,6 +251,7 @@ export default function FillInExerciseModal({
    * @returns {void}
    */
   function resetExerciseState() {
+    autoCorrectRef.current = false;
     setResultState("idle");
     setShouldShake(false);
     setUserValues(blankList.map(() => ""));
@@ -222,6 +278,8 @@ export default function FillInExerciseModal({
     if (!allFilled) {
       return;
     }
+
+    autoCorrectRef.current = false;
 
     const isAllCorrect = normalizedAnswers.every((ans, index) => {
       const userValue = normalizedUserValues[index] || "";

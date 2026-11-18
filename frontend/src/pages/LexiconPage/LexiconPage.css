@@ -17,6 +17,29 @@
   overflow-x: hidden;
 }
 
+.lp-sourceSwitch {
+	display: flex;
+	gap: .5rem;
+	padding: .7rem 1rem 0;
+}
+
+.lp-sourceSwitch button {
+	min-height: 2.35rem;
+	padding: .45rem .85rem;
+	border: 1px solid #e5e7eb;
+	border-radius: .7rem;
+	background: #fff;
+	color: #475569;
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.lp-sourceSwitch button.is-active {
+	border-color: #2563eb;
+	background: #eef5ff;
+	color: #2563eb;
+}
+
 .lp-header {
   display: flex;
   align-items: center;
@@ -107,6 +130,33 @@
   padding: 1.5rem 1rem 1rem;
   flex-wrap: wrap;
   border-bottom: 1px solid #f1f3f5;
+}
+
+.lp-savedCount {
+	font-size: .9rem;
+	font-weight: 700;
+	color: #475569;
+}
+
+.lp-collectionPicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  color: #475569;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.lp-collectionPicker select {
+  min-width: 9rem;
+  min-height: 2.35rem;
+  max-width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.65rem;
+  background: #fff;
+  color: #111827;
 }
 
 .lp-pill {
@@ -345,6 +395,18 @@
     transform: scale(1);
   }
 
+  .lp-collectionPicker {
+    flex: 1 1 auto;
+    font-size: 0.8rem;
+  }
+
+  .lp-collectionPicker select {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    font-size: 0.85rem;
+  }
+
   /* 2) real swipe-carousel (not a horizontal list) */
   .lp-carousel {
     position: relative;
@@ -452,4 +514,20 @@
     color: rgba(17, 24, 39, 0.7);
     font-weight: 700;
   }
+}
+
+/* Keep independent favorite and knowledge controls usable on narrow cards. */
+.lp-root .lp-cardHeaderRow {
+  flex-wrap: wrap;
+}
+
+.lp-root .lp-cardWord {
+  flex: 1 1 100%;
+}
+
+.lp-root .lp-cardMarkActions {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+  flex-wrap: wrap;
 }

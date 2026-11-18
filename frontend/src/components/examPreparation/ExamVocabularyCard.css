@@ -1,0 +1,10 @@
+.exam-vocabulary-card { min-width: 0; padding: 1rem; border: 1px solid #e5e7eb; border-radius: .875rem; background: #fff; }
+.exam-vocabulary-card__header { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.exam-vocabulary-card h2 { margin: 0; overflow-wrap: anywhere; font-size: 1.1rem; line-height: 1.4; }
+.exam-vocabulary-card__translation { margin: .3rem 0 0; color: #4b5563; overflow-wrap: anywhere; }
+.exam-vocabulary-card__details { display: grid; gap: .55rem; margin: .9rem 0 0; }
+.exam-vocabulary-card__details > div { min-width: 0; }
+.exam-vocabulary-card__details dt { color: #6b7280; font-size: .78rem; }
+.exam-vocabulary-card__details dd { margin: .1rem 0 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.exam-vocabulary-card__error { color: #a23434; font-size: .875rem; }
+@media (max-width: 480px) { .exam-vocabulary-card__header { flex-wrap: wrap; } }

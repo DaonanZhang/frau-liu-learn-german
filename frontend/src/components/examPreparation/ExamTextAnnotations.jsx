@@ -28,6 +28,8 @@ import {
 } from "../../utils/examTextAnnotations.js";
 
 import "./ExamTextAnnotations.css";
+import DictionaryLookupOverlay from "./DictionaryLookupOverlay.jsx";
+import { useDictionaryPreference } from "../dictionary/DictionaryPreference.jsx";
 
 const EMPTY_STATE = { version: 1, regions: {} };
 const AnnotationContext = createContext(null);
@@ -121,7 +123,22 @@ function installHighlightStyles(providerId) {
   }
 }
 
-export function ExamTextAnnotationProvider({ scope, children }) {
+// eslint-disable-next-line react-refresh/only-export-components
+export function examDictionaryCollectionKey(exercise, scope) {
+  const level = String(exercise?.exercise_base?.level || scope?.level || "").trim().toUpperCase();
+  const examType = String(exercise?.exercise_base?.exam_type || scope?.examType || "").trim().toUpperCase();
+  return examType === "TELC" && ["B1", "B2", "C1"].includes(level)
+    ? `exam:TELC:${level}`
+    : null;
+}
+
+export function ExamTextAnnotationProvider({
+  scope,
+  children,
+  dictionaryCollectionKey = null,
+  dictionaryEnabled = false,
+}) {
+  const { enabled: dictionaryPreferenceEnabled } = useDictionaryPreference();
   const providerId = useId().replace(/:/g, "");
 
   const [state, setState] = useState(() => (typeof scope === "string"
@@ -279,7 +296,12 @@ export function ExamTextAnnotationProvider({ scope, children }) {
 
   return (
     <AnnotationContext.Provider value={value}>
-      <AnnotationController>{children}</AnnotationController>
+      <AnnotationController
+        dictionaryCollectionKey={dictionaryCollectionKey}
+        dictionaryEnabled={dictionaryEnabled && dictionaryPreferenceEnabled}
+      >
+        {children}
+      </AnnotationController>
     </AnnotationContext.Provider>
   );
 }
@@ -470,7 +492,7 @@ function ExamTextAnnotationToolbar({ active, onAction, onDismiss }) {
   );
 }
 
-function AnnotationController({ children }) {
+function AnnotationController({ children, dictionaryCollectionKey, dictionaryEnabled }) {
   const context = useExamTextAnnotations();
   const { state } = context;
   const [active, setActive] = useState(null);
@@ -638,6 +660,7 @@ function AnnotationController({ children }) {
   return (
     <AnnotationContext.Provider value={controllerContext}>
       {children}
+      {dictionaryEnabled ? <DictionaryLookupOverlay collectionKey={dictionaryCollectionKey} /> : null}
       <ExamTextAnnotationToolbar
         active={active}
         onAction={handleAction}

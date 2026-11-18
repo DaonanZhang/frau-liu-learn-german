@@ -1,0 +1,9 @@
+.exam-vocabulary-page { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.exam-vocabulary-page__back { align-self: flex-start; padding: .55rem .85rem; border: 1px solid #d2ddd8; border-radius: .75rem; color: #49635b; text-decoration: none; }
+.exam-vocabulary-page h1 { margin: 0; color: #26342f; font-size: clamp(1.6rem, 3vw, 2.1rem); }
+.exam-vocabulary-page__tabs { display: flex; gap: .5rem; }
+.exam-vocabulary-page__tabs button, .exam-vocabulary-page__more { min-height: 2.6rem; padding: .5rem .9rem; border: 1px solid #d2ddd8; border-radius: .65rem; background: white; color: #34443e; cursor: pointer; }
+.exam-vocabulary-page__tabs button[aria-selected="true"] { border-color: #527c6e; background: #edf5f1; color: #245e4e; }
+.exam-vocabulary-page__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: .85rem; }
+.exam-vocabulary-page__more { align-self: center; }
+.exam-vocabulary-page__empty { color: #66716d; }

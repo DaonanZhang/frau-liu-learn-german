@@ -509,7 +509,7 @@ export default function ExercisePanel({ isOpen, onClose, videoId, seasonNumber =
                           <div className={["exPanelFeedback", option.is_correct ? "isCorrect" : "isWrong"].join(" ")}>
                             <div className="exPanelFeedbackHeader">{getOptionResultLabel(option)}</div>
                             {String(option.explanation || "").trim() ? (
-                              <div className="exPanelFeedbackText">
+                              <div className="exPanelFeedbackText" data-dictionary-region>
                                 <FormattedExplanation text={option.explanation} fallback="" />
                               </div>
                             ) : null}
@@ -618,12 +618,12 @@ export default function ExercisePanel({ isOpen, onClose, videoId, seasonNumber =
 
                       {!getSelectedOption(activeQuestion)?.is_correct && getCorrectOption(activeQuestion) ? (
                         <div className="exPanelFeedbackText">
-                          正确答案：{getCorrectOption(activeQuestion)?.text}
+                          正确答案：<span data-dictionary-region>{getCorrectOption(activeQuestion)?.text}</span>
                         </div>
                       ) : null}
 
                       {getGrammarExplanation(activeQuestion) ? (
-                        <div className="exPanelFeedbackText">
+                        <div className="exPanelFeedbackText" data-dictionary-region>
                           <FormattedExplanation text={getGrammarExplanation(activeQuestion)} fallback="" />
                         </div>
                       ) : null}

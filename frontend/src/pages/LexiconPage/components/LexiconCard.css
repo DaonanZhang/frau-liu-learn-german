@@ -57,6 +57,45 @@
 	transition: opacity 140ms ease, transform 140ms ease;
 }
 
+.lp-cardExamFavorite {
+	flex: 0 0 auto;
+	display: inline-flex;
+}
+
+.lp-cardExamFavorite .exam-favorite-btn {
+	transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.lp-cardExamFavorite .exam-favorite-btn:active {
+	transform: scale(0.97);
+}
+
+.lp-favoriteError {
+	margin-top: .35rem;
+	color: #a23434;
+	font-size: .8rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.lp-cardExamFavorite .exam-favorite-btn:hover:not(:disabled) {
+		transform: scale(0.97);
+		border-color: #cf6327;
+		background: #fff1e6;
+	}
+}
+
+@media (hover: none) {
+	.lp-cardExamFavorite .exam-favorite-btn:hover:not(:disabled) {
+		transform: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.lp-cardExamFavorite .exam-favorite-btn {
+		transition: none;
+	}
+}
+
 .lp-card:hover .lp-cardMarkActions,
 .lp-card:focus-within .lp-cardMarkActions {
 	opacity: 1;

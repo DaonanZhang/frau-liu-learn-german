@@ -12,6 +12,7 @@ import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
+  examDictionaryCollectionKey,
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import ReadingAdMatchingWorkspace from "../components/examPreparation/ReadingAdMatchingWorkspace.jsx";
@@ -191,7 +192,11 @@ export default function ReadingAdMatchingPage() {
   }
 
   return (
-    <ExamTextAnnotationProvider scope={annotationScope}>
+    <ExamTextAnnotationProvider
+      scope={annotationScope}
+      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
+      dictionaryEnabled={isChecked}
+    >
       <div className="reading-ad-page">
         <div className="reading-ad-shell">
         <div className="reading-ad-topbar">

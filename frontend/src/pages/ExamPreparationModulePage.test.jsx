@@ -396,7 +396,7 @@ describe("exam preparation level entry", () => {
     expect(within(tips).getByText("Unsere Tipps", { selector: ".exam-module-card__kicker" })).toBeInTheDocument();
   });
 
-  it("links all six C1 entries and opens the C1 mock exam", async () => {
+  it("links all seven C1 entries and opens the C1 mock exam", async () => {
     authMocks.useAuth.mockReturnValue({ user: entitledUser(true, "13800138000") });
     fetchSavedMockExams.mockResolvedValue({
       count: 1,
@@ -414,7 +414,8 @@ describe("exam preparation level entry", () => {
     const skills = screen.getByRole("region", { name: "专项入口列表" });
     const tips = within(skills).getByRole("link", { name: /备考建议/ });
     expect(tips).toHaveAttribute("href", "/modules/exam-preparation/c1/tips");
-    expect(within(skills).getAllByRole("link")).toHaveLength(6);
+    expect(within(skills).getAllByRole("link")).toHaveLength(7);
+    expect(within(skills).getByRole("link", { name: /Wortschatz/ })).toHaveAttribute("href", "/modules/exam-preparation/c1/wortschatz");
     expect(within(skills).queryAllByRole("button")).toHaveLength(0);
     [
       ["Hören", "/modules/exam-preparation/c1/hoeren", "进入听力模块"],
@@ -431,6 +432,11 @@ describe("exam preparation level entry", () => {
     fireEvent.click(within(mockEntry).getByRole("button", { name: "开始新考试" }));
     expect(screen.getByTestId("location")).toHaveTextContent("/modules/exam-preparation/telc/c1/mock-exam");
     expect(Swal.fire).not.toHaveBeenCalled();
+  });
+
+  it.each(["b1", "b2"])("does not show Wortschatz on %s", (level) => {
+    renderPage(level);
+    expect(screen.queryByRole("link", { name: /Wortschatz/ })).not.toBeInTheDocument();
   });
 
   it("lets a non-entitled non-110 user navigate to a C1 skill and purchase mock exam access", async () => {

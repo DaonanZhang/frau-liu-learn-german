@@ -505,6 +505,9 @@ def _sync_writing(base: ExerciseBase, data: dict[str, Any]):
         "sort_order",
         ("example_text", "translation_zh", "label", "note"),
     )
+    from apps.exam_preparation.vocabulary import sync_writing_vocabulary
+
+    sync_writing_vocabulary(exercise)
 
 
 def _sync_speaking(base: ExerciseBase, data: dict[str, Any]):

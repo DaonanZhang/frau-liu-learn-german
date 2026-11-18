@@ -39,6 +39,7 @@ from .user_activity import (
     UserSpeakingTurnState,
 )
 from .writing import WritingExampleText, WritingExercise
+from .vocabulary import ExamVocabularyCard, ExamVocabularySource, UserExamVocabularyFavorite
 
 __all__ = [
     "ExerciseBase",
@@ -79,4 +80,7 @@ __all__ = [
     "UserWritingExampleTextState",
     "UserWritingExerciseState",
     "UserSpeakingTurnState",
+    "ExamVocabularyCard",
+    "ExamVocabularySource",
+    "UserExamVocabularyFavorite",
 ]

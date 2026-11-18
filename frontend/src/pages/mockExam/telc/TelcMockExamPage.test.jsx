@@ -4,6 +4,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+vi.mock("../../../components/examPreparation/DictionaryLookupOverlay.jsx", () => ({
+  default: ({ collectionKey }) => <div data-testid="dictionary-overlay" data-collection-key={collectionKey} />,
+}));
+
 import TelcMockExamPage from "./TelcMockExamPage.jsx";
 import TelcMockExamAnswerSheet from "./TelcMockExamAnswerSheet.jsx";
 import { mockAnnotationScope } from "../../../utils/examTextAnnotations.js";
@@ -14,6 +18,13 @@ import {
   submitSavedMockExam,
   updateSavedMockExam,
 } from "../../../api/exam_preparation/mockExams.js";
+
+function expectVocabularyCard(container, term, translation) {
+  const card = container.querySelector(".exam-vocabulary-card");
+  expect(card).toBeInTheDocument();
+  expect(within(card).getByRole("heading", { name: term })).toBeInTheDocument();
+  expect(within(card).getByText(translation)).toBeInTheDocument();
+}
 
 const originalCreateObjectURL = URL.createObjectURL;
 const originalRevokeObjectURL = URL.revokeObjectURL;
@@ -578,6 +589,7 @@ describe("mock exam exercise layout", () => {
     render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Lesen 2" });
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
     expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
     expect(document.querySelector('[data-exam-annotation-region="reading_understanding:passage"]')).toHaveTextContent("Lesetext");
     expect(document.querySelector('[data-exam-annotation-region="reading_understanding:question:101"]')).toHaveTextContent("Lesefrage");
@@ -1869,6 +1881,7 @@ describe("mock exam answer review", () => {
     const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const feedback = await screen.findByText("未作答");
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
     const feedbackCard = feedback.closest(".reading-understanding-feedback");
 
     expect(feedbackCard).toHaveClass("reading-understanding-feedback--wrong");
@@ -2484,6 +2497,14 @@ describe("mock exam annotation scope acceptance", () => {
       "answers", "is_favorite", "progress", "writing_assessment", "writing_text",
     ].sort());
     expect(payload).not.toHaveProperty("annotations");
+  });
+
+  it("enables dictionary lookup during the mock writing review", async () => {
+    saveSnapshot(writingReviewState());
+
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+
+    expect(await screen.findByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
   });
 
   it.each([
@@ -3261,7 +3282,7 @@ describe("TELC C1 mock exam", () => {
 
     expect(await screen.findByText("Ein deutsches Zitat.")).toBeInTheDocument();
     expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
+    expectVocabularyCard(container, "der Beitrag", "贡献");
     const hideTranslation = screen.getByRole("button", { name: "隐藏 Zitate 1 中文翻译" });
     expect(hideTranslation.querySelector('img[src="/images/translate_icon.png"]')).toBeInTheDocument();
     expect(hideTranslation.querySelector("svg")).not.toBeInTheDocument();
@@ -3269,7 +3290,7 @@ describe("TELC C1 mock exam", () => {
     fireEvent.click(hideTranslation);
     expect(screen.queryByText("中文引语翻译")).not.toBeInTheDocument();
     expect(screen.getByText("第二条中文翻译")).toBeInTheDocument();
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
+    expectVocabularyCard(container, "der Beitrag", "贡献");
     const showTranslation = screen.getByRole("button", { name: "显示 Zitate 1 中文翻译" });
     expect(showTranslation.querySelector('img[src="/images/translate_icon.png"]')).toBeInTheDocument();
     expect(showTranslation.querySelector("svg")).not.toBeInTheDocument();
@@ -3277,7 +3298,7 @@ describe("TELC C1 mock exam", () => {
     expect(screen.getByText("der Beitrag")).toBeInTheDocument();
     fireEvent.click(showTranslation);
     expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
+    expectVocabularyCard(container, "der Beitrag", "贡献");
   });
 
   it("lets C1 writing review toggle quote and vocabulary translations and collapse vocabulary", async () => {
@@ -3285,7 +3306,7 @@ describe("TELC C1 mock exam", () => {
 
     expect(await screen.findByText("Ein deutsches Zitat.")).toBeInTheDocument();
     expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
+    expectVocabularyCard(container, "der Beitrag", "贡献");
     const hideTranslation = screen.getByRole("button", { name: "隐藏 Zitate 1 中文翻译" });
     expect(hideTranslation.querySelector('img[src="/images/translate_icon.png"]')).toBeInTheDocument();
     expect(hideTranslation).toHaveAttribute("title", "翻译");
@@ -3293,7 +3314,7 @@ describe("TELC C1 mock exam", () => {
     fireEvent.click(hideTranslation);
     expect(screen.queryByText("中文引语翻译")).not.toBeInTheDocument();
     expect(screen.getByText("第二条中文翻译")).toBeInTheDocument();
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
+    expectVocabularyCard(container, "der Beitrag", "贡献");
     expect(screen.getByText("Ein deutsches Zitat.")).toBeInTheDocument();
     expect(screen.getByText("der Beitrag")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "显示 Zitate 1 中文翻译" }));
@@ -3302,21 +3323,21 @@ describe("TELC C1 mock exam", () => {
     expect(showTranslation.querySelector("svg")).not.toBeInTheDocument();
     expect(showTranslation).toHaveAttribute("title", "翻译");
     expect(screen.getByText("中文引语翻译")).toBeInTheDocument();
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
+    expectVocabularyCard(container, "der Beitrag", "贡献");
 
     const collapse = screen.getByRole("button", { name: "收起词汇表" });
     expect(collapse).toHaveTextContent(/^$/);
     expect(collapse).toHaveAttribute("title", "收起词汇表");
     expect(collapse).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(collapse);
-    expect(container.querySelector(".writing-detail-vocabulary p")).not.toBeInTheDocument();
+    expect(container.querySelector(".exam-vocabulary-card")).not.toBeInTheDocument();
     expect(container.querySelector(".writing-detail-vocabulary footer")).not.toBeInTheDocument();
     const expand = screen.getByRole("button", { name: "展开词汇表" });
     expect(expand).toHaveAttribute("aria-expanded", "false");
     expect(expand).toHaveTextContent(/^$/);
     expect(expand).toHaveAttribute("title", "展开词汇表");
     fireEvent.click(expand);
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
+    expectVocabularyCard(container, "der Beitrag", "贡献");
     expect(container.querySelector(".writing-detail-vocabulary footer")).toHaveTextContent("1 / 1");
   });
 
@@ -3332,7 +3353,7 @@ describe("TELC C1 mock exam", () => {
 
     expect(await screen.findByRole("complementary", { name: "词汇表" })).toBeInTheDocument();
     expect(screen.getByText("die Möglichkeit")).toBeInTheDocument();
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("可能性");
+    expectVocabularyCard(container, "die Möglichkeit", "可能性");
     expect(screen.getByRole("heading", { name: "相关词汇" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Wortschatz 1" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /中文翻译/ })).not.toBeInTheDocument();
@@ -3343,7 +3364,7 @@ describe("TELC C1 mock exam", () => {
     expect(screen.getByRole("button", { name: "展开词汇表" })).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(screen.getByRole("button", { name: "展开词汇表" }));
     expect(screen.getByRole("button", { name: "收起词汇表" })).toHaveAttribute("aria-expanded", "true");
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("可能性");
+    expectVocabularyCard(container, "die Möglichkeit", "可能性");
   });
 
   it("keeps Wortschatz Chinese visible when C1 writing translations are hidden", async () => {
@@ -3352,7 +3373,7 @@ describe("TELC C1 mock exam", () => {
     expect(await screen.findByText("Ein deutsches Zitat.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "隐藏 Zitate 1 中文翻译" }));
     expect(screen.queryByText("中文引语翻译")).not.toBeInTheDocument();
-    expect(container.querySelector(".writing-detail-vocabulary p")).toHaveTextContent("der Beitrag · 贡献");
+    expectVocabularyCard(container, "der Beitrag", "贡献");
   });
 
   it("keeps the writing review vocabulary panel in the modal scroll flow", () => {

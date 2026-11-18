@@ -690,18 +690,17 @@
 
 .writing-detail-vocabulary__header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
 .writing-detail-vocabulary__header > strong { color: #2f2a25; font-size: 1.1rem; }
-.writing-detail-vocabulary__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .75rem; margin-top: 1rem; }
+.writing-detail-vocabulary__cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 22rem)); justify-content: start; gap: .75rem; margin-top: 1rem; }
 .writing-detail-vocabulary p { margin: 0; }
-.writing-detail-vocabulary__card { min-width: 0; padding: .9rem 1rem; border: 1px solid #e5e7eb; border-radius: .875rem; background: #fff; }
-.writing-detail-vocabulary__card strong { display: block; color: #111827; font-size: 1.05rem; line-height: 1.45; overflow-wrap: anywhere; }
-.writing-detail-vocabulary__card > span { display: block; margin-top: .45rem; color: #4b5563; font-size: .92rem; line-height: 1.5; overflow-wrap: anywhere; }
-.writing-detail-vocabulary__card i { display: none; }
 .writing-detail-vocabulary__pagination { display: flex; align-items: center; justify-content: center; gap: .75rem; margin-top: .55rem; }
-.writing-detail-vocabulary button { min-width: 2.5rem; min-height: 2.35rem; border: 1px solid #dce3df; border-radius: .6rem; background: white; }
-.writing-detail-vocabulary button:disabled { opacity: .4; }
+.writing-detail-vocabulary__header button, .writing-detail-vocabulary__pagination button { min-width: 2.5rem; min-height: 2.35rem; border: 1px solid #dce3df; border-radius: .6rem; background: white; }
+.writing-detail-vocabulary__header button:disabled, .writing-detail-vocabulary__pagination button:disabled { opacity: .4; }
 
 @media (max-width: 700px) {
   .writing-detail-c1-quotes { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 1024px) {
   .writing-detail-vocabulary__cards { grid-template-columns: minmax(0, 1fr); }
 }
 .writing-detail-b1-examples { display: grid; gap: 1rem; }

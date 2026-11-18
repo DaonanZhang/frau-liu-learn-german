@@ -28,7 +28,7 @@ describe("ExamPreparationVocabularyPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "取消收藏 Wort" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "收藏 Wort" })).toBeInTheDocument());
     expect(screen.getByText("Wort")).toBeInTheDocument();
-    expect(fetchVocabularyCards).toHaveBeenCalledWith({ page: 1 });
+    expect(fetchVocabularyCards).toHaveBeenCalledWith({ page: 1, collectionKey: "exam:TELC:C1" });
   });
 
   it("loads the next page", async () => {
@@ -36,7 +36,8 @@ describe("ExamPreparationVocabularyPage", () => {
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "加载更多" }));
     expect(await screen.findByText("Sprache")).toBeInTheDocument();
-    expect(fetchVocabularyCards).toHaveBeenLastCalledWith({ page: 2 });
+    expect(fetchVocabularyCards.mock.calls.map(([request]) => request.collectionKey)).toEqual(["exam:TELC:C1", "exam:TELC:C1"]);
+    expect(fetchVocabularyCards).toHaveBeenLastCalledWith({ page: 2, collectionKey: "exam:TELC:C1" });
   });
 
   it("uses the single empty state when there are no cards", async () => {

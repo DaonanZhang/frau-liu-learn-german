@@ -4,6 +4,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+vi.mock("../../../components/examPreparation/DictionaryLookupOverlay.jsx", () => ({
+  default: ({ collectionKey }) => <div data-testid="dictionary-overlay" data-collection-key={collectionKey} />,
+}));
+
 import TelcMockExamPage from "./TelcMockExamPage.jsx";
 import TelcMockExamAnswerSheet from "./TelcMockExamAnswerSheet.jsx";
 import { mockAnnotationScope } from "../../../utils/examTextAnnotations.js";
@@ -585,6 +589,7 @@ describe("mock exam exercise layout", () => {
     render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Lesen 2" });
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
     expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
     expect(document.querySelector('[data-exam-annotation-region="reading_understanding:passage"]')).toHaveTextContent("Lesetext");
     expect(document.querySelector('[data-exam-annotation-region="reading_understanding:question:101"]')).toHaveTextContent("Lesefrage");
@@ -1876,6 +1881,7 @@ describe("mock exam answer review", () => {
     const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     const feedback = await screen.findByText("未作答");
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
     const feedbackCard = feedback.closest(".reading-understanding-feedback");
 
     expect(feedbackCard).toHaveClass("reading-understanding-feedback--wrong");
@@ -2491,6 +2497,14 @@ describe("mock exam annotation scope acceptance", () => {
       "answers", "is_favorite", "progress", "writing_assessment", "writing_text",
     ].sort());
     expect(payload).not.toHaveProperty("annotations");
+  });
+
+  it("enables dictionary lookup during the mock writing review", async () => {
+    saveSnapshot(writingReviewState());
+
+    render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+
+    expect(await screen.findByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
   });
 
   it.each([

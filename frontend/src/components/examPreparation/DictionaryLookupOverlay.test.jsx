@@ -15,10 +15,10 @@ function wordAt(text, offset) {
   return getWordAtCaret(root, root.firstChild, offset);
 }
 
-function setup({ targetTag = "span" } = {}) {
-  const view = render(<><div data-exam-annotation-region="region">
+function setup({ targetTag = "span", regionAttribute = "data-exam-annotation-region", collectionKey } = {}) {
+  const view = render(<><div {...{ [regionAttribute]: "region" }}>
     {targetTag === "button" ? <button>ging</button> : <span>ging</span>}
-  </div><DictionaryLookupOverlay /></>);
+  </div><DictionaryLookupOverlay collectionKey={collectionKey} /></>);
   const target = screen.getByText("ging");
   document.caretPositionFromPoint = () => ({ offsetNode: target.firstChild, offset: 2 });
   return { ...view, target };
@@ -26,6 +26,16 @@ function setup({ targetTag = "span" } = {}) {
 
 function coarsePointer() {
   window.matchMedia = vi.fn((query) => ({ matches: query === "(pointer: coarse)" }));
+}
+
+function setupVideoSubtitle() {
+  const view = render(<><article role="button"><div data-dictionary-region="subtitle">
+    <span>ging </span><button>gehen</button>
+  </div></article><DictionaryLookupOverlay collectionKey="video:64" /></>);
+  const word = screen.getByText("ging");
+  const button = screen.getByRole("button", { name: "gehen" });
+  document.caretPositionFromPoint = () => ({ offsetNode: word.firstChild, offset: 2 });
+  return { ...view, word, button };
 }
 
 describe("dictionary lookup word handling", () => {
@@ -69,8 +79,21 @@ describe("dictionary lookup overlay", () => {
     });
     expect(screen.getByText("去")).toBeInTheDocument();
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "收藏" })); await Promise.resolve(); });
-    expect(setDictionaryFavorite).toHaveBeenCalledWith(4, true);
+    expect(setDictionaryFavorite).toHaveBeenCalledWith(4, true, undefined);
     expect(screen.getByRole("button", { name: "取消收藏" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("accepts dictionary regions and carries their video collection key", async () => {
+    setDictionaryFavorite.mockResolvedValue({ card: { id: 7, is_favorite: true } });
+    setup({ regionAttribute: "data-dictionary-region", collectionKey: "video:7" });
+    await act(async () => {
+      fireEvent.pointerUp(screen.getByText("ging"), { pointerType: "touch", clientX: 1, clientY: 1 });
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+    });
+    expect(lookupDictionaryWord).toHaveBeenCalledWith("ging", "video:7");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "收藏" })); await Promise.resolve(); });
+    expect(setDictionaryFavorite).toHaveBeenCalledWith(4, true, "video:7");
   });
 
   it("shows one compact HanDeDict license attribution for all matches", async () => {
@@ -117,7 +140,7 @@ describe("dictionary lookup overlay", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "取消收藏" }));
     await act(async () => { await Promise.resolve(); });
-    expect(setDictionaryFavorite).toHaveBeenCalledWith(4, false);
+    expect(setDictionaryFavorite).toHaveBeenCalledWith(4, false, undefined);
   });
 
   it("debounces desktop movement and caches successful responses", async () => {
@@ -133,6 +156,44 @@ describe("dictionary lookup overlay", () => {
     fireEvent.pointerMove(region, { clientX: 1, clientY: 1 });
     await vi.advanceTimersByTimeAsync(350);
     expect(lookupDictionaryWord).toHaveBeenCalledTimes(1);
+  });
+
+  it("looks up ordinary subtitle text on desktop outside a button-like row", async () => {
+    window.matchMedia = vi.fn((query) => ({ matches: query.includes("hover: hover") }));
+    const { word } = setupVideoSubtitle();
+
+    fireEvent.pointerMove(word, { clientX: 1, clientY: 1 });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+      await Promise.resolve();
+    });
+
+    expect(lookupDictionaryWord).toHaveBeenCalledWith("ging", "video:64");
+  });
+
+  it("looks up ordinary subtitle text on touch outside a button-like row", async () => {
+    const { word } = setupVideoSubtitle();
+    await act(async () => {
+      fireEvent.pointerUp(word, { pointerType: "touch", clientX: 1, clientY: 1 });
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+    });
+    expect(lookupDictionaryWord).toHaveBeenCalledWith("ging", "video:64");
+  });
+
+  it.each(["desktop", "touch"])("ignores a nested subtitle button on %s", async (inputType) => {
+    if (inputType === "desktop") {
+      window.matchMedia = vi.fn((query) => ({ matches: query.includes("hover: hover") }));
+    }
+    const { button } = setupVideoSubtitle();
+    if (inputType === "desktop") {
+      fireEvent.pointerMove(button, { clientX: 1, clientY: 1 });
+      await act(async () => { await vi.advanceTimersByTimeAsync(300); });
+    } else {
+      fireEvent.pointerUp(button, { pointerType: "touch", clientX: 1, clientY: 1 });
+      await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+    }
+    expect(lookupDictionaryWord).not.toHaveBeenCalled();
   });
 
   it("shows a no-result state", async () => {

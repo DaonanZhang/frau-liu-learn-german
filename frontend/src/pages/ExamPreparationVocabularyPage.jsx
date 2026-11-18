@@ -18,7 +18,7 @@ export default function ExamPreparationVocabularyPage() {
     if (append) setLoadingMore(true);
     else { setLoading(true); setError(""); }
     try {
-      const data = await fetchVocabularyCards({ page: nextPage });
+      const data = await fetchVocabularyCards({ page: nextPage, collectionKey: "exam:TELC:C1" });
       const results = Array.isArray(data) ? data : data?.results || [];
       setCards((current) => append ? [...current, ...results] : results);
       setPage(nextPage);

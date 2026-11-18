@@ -15,6 +15,7 @@ import FormattedExplanation from "../components/examPreparation/FormattedExplana
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
+  examDictionaryCollectionKey,
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
@@ -185,6 +186,8 @@ export default function ReadingTitleMatchingPage() {
   return (
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
+      dictionaryEnabled={isChecked}
     >
       <div className="reading-title-page">
         <div className="reading-title-shell">

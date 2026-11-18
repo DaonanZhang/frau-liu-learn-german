@@ -20,6 +20,10 @@ import "./Sidebar.css";
  * @returns {JSX.Element}
  */
 export default function Sidebar({
+	source = "video",
+	examType = null,
+	examLevel = null,
+	onSelectExam,
 	isCollapsed,
 	isLoading,
 	videos,
@@ -52,9 +56,9 @@ export default function Sidebar({
 			{!isCollapsed ? (
 				<div className="lp-sidebarBody">
 					<div className="lp-sidebarHeader">
-						<div className="lp-sidebarTitle">视频库</div>
+						<div className="lp-sidebarTitle">{source === "exam" ? "考试目录" : "视频库"}</div>
 						<div className="lp-sidebarHint">
-							{isLoading
+							{source === "exam" ? "TELC · B1 / B2 / C1" : isLoading
 								? "加载中…"
 								: activeGroup
 									? activeGroup.videos.length > 0
@@ -67,6 +71,23 @@ export default function Sidebar({
 					</div>
 
 					<div className="lp-videoList" role="list">
+                        <button
+                          type="button"
+                          className={["lp-videoItem", (source === "exam" ? !examType : !activeModuleKey) ? "is-active" : ""].filter(Boolean).join(" ")}
+                          onClick={() => source === "exam" ? onSelectExam(null) : onBackToModules()}
+                        >
+                          {source === "exam" ? "全部考试词汇" : "全部视频词汇"}
+                        </button>
+                        {source === "exam" ? (
+                          <>
+                            {examType ? <button type="button" className="lp-moduleBackBtn" onClick={() => onSelectExam(null)}>返回考试类型</button> : null}
+                            <button type="button" className={`lp-moduleItem ${examType && !examLevel ? "is-active" : ""}`} onClick={() => onSelectExam("TELC")}>TELC</button>
+                            {examType ? ["B1", "B2", "C1"].map((level) => (
+                              <button type="button" key={level} className={`lp-videoItem ${examLevel === level ? "is-active" : ""}`} onClick={() => onSelectExam("TELC", level)}>{level}</button>
+                            )) : null}
+                          </>
+                        ) : <>
+
 						{activeGroup ? (
 							<>
 								<button
@@ -79,7 +100,7 @@ export default function Sidebar({
 								</button>
 
 								<section className="lp-videoGroup" aria-label={activeGroup.label}>
-									<div className="lp-videoGroupTitle">{activeGroup.label}</div>
+									<button type="button" className={`lp-videoItem ${!selectedVideoId ? "is-active" : ""}`} onClick={() => onSelectModule(activeGroup.key)}>{activeGroup.label}</button>
 									<div className="lp-videoGroupItems">
 										{activeGroup.videos.map((video) => {
 											const isActive = video.id === selectedVideoId;
@@ -155,6 +176,7 @@ export default function Sidebar({
 								);
 							})
 						)}
+              </>}
 					</div>
 				</div>
 			) : null}

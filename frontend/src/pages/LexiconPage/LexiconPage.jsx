@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { addRedeemActionToPurchaseModal } from "../../utils/modulePurchaseRedeem.js";
-import { fetchAllFavoriteVocabularyCards, setVocabularyCardFavorite } from "../../api/exam_preparation/vocabularyCards.js";
+import { fetchAllFavoriteVocabularyCards, setVocabularyCardFavorite, setVocabularyCardKnowledge } from "../../api/exam_preparation/vocabularyCards.js";
 
 import { fetchVideoList } from "../../api/learning_by_video/videos";
 import {
@@ -314,16 +314,17 @@ function resolveUiStateFromOccurrence(occurrence) {
 }
 
 /**
+ * @param {"word"|"expression"} kind - Occurrence kind.
  * @param {number[]} occurrenceIds - occurrence ids.
- * @param {Record<number, "known"|"not_known"|"elsewhere"|"unmarked">} uiStateByOccurrenceId - state map.
+ * @param {Record<string, "known"|"not_known"|"elsewhere"|"unmarked">} uiStateByOccurrenceId - state map.
  * @returns {"known"|"not_known"|"elsewhere"|"unmarked"}
  */
-function aggregateEntryStateByOccurrences(occurrenceIds, uiStateByOccurrenceId) {
+function aggregateEntryStateByOccurrences(kind, occurrenceIds, uiStateByOccurrenceId) {
   let hasElsewhere = false;
 
   for (const occurrenceIdValue of occurrenceIds || []) {
     const occurrenceId = Number(occurrenceIdValue);
-    const state = uiStateByOccurrenceId[occurrenceId];
+    const state = uiStateByOccurrenceId[`${kind}:${occurrenceId}`];
 
     if (state === "known") {
       return "known";
@@ -424,10 +425,17 @@ function mapExamVocabularyCard(card) {
     example_de: normalizeText(card?.example_de),
     example_zh: normalizeText(card?.example_zh),
     entityId: toIntOrNull(card?.id),
+    vocabularyCardId: toIntOrNull(card?.id),
+    knowledge: card?.knowledge || "UNMARKED",
     subtitleIds: [],
     occurrenceIds: [],
     examFavorite: Boolean(card?.is_favorite),
   };
+}
+
+function mergeVideoFavoriteCards(entries, cards) {
+  return [...entries, ...cards.map(mapExamVocabularyCard).filter((entry) => entry.entityId && entry.title)
+    .map((entry) => ({ ...entry, key: `video-card:${entry.entityId}`, videoFavorite: true }))];
 }
 
 /**
@@ -541,6 +549,9 @@ export default function LexiconPage() {
 
   const [entries, setEntries] = useState([]);
   const [source, setSource] = useState("video");
+  const [examType, setExamType] = useState(null);
+  const [examLevel, setExamLevel] = useState(null);
+  const examCollectionKey = examType && examLevel ? `exam:${examType}:${examLevel}` : null;
   const [examFavoritePendingByKey, setExamFavoritePendingByKey] = useState({});
   const [activeKind, setActiveKind] = useState("word");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -650,44 +661,14 @@ export default function LexiconPage() {
     }));
   }, [groupedVideos]);
 
-  const activeModuleVideos = useMemo(() => {
-    if (!activeModuleKey) {
-      return [];
-    }
-    const activeGroup = groupedVideos.find((group) => group.key === activeModuleKey);
-    return activeGroup ? activeGroup.videos : [];
-  }, [activeModuleKey, groupedVideos]);
-
   const activeModuleConfig = useMemo(() => {
     const activeGroup = groupedVideos.find((group) => group.key === activeModuleKey);
     return activeGroup?.module || null;
   }, [activeModuleKey, groupedVideos]);
 
   useEffect(() => {
-    if (!activeModuleKey) {
-      if (selectedVideoId !== null) {
-        setSelectedVideoId(null);
-      }
-      return;
-    }
-
-    const selectedVideo = activeModuleVideos.find((video) => video.id === selectedVideoId) || null;
-    if (selectedVideo && !selectedVideo.isLocked) {
-      return;
-    }
-
-    const firstUnlockedVideo = activeModuleVideos.find((video) => !video.isLocked) || null;
-    const nextVideoId = firstUnlockedVideo ? firstUnlockedVideo.id : null;
-    if (nextVideoId !== selectedVideoId) {
-      setSelectedVideoId(nextVideoId);
-    }
-  }, [activeModuleKey, activeModuleVideos, selectedVideoId]);
-
-  useEffect(() => {
-    if (!effectiveSidebarCollapsed) {
-      loadVideos();
-    }
-  }, [effectiveSidebarCollapsed, loadVideos]);
+    loadVideos();
+  }, [loadVideos]);
 
   useEffect(() => {
     let aborted = false;
@@ -697,25 +678,31 @@ export default function LexiconPage() {
         setIsLoading(true);
         setErrorText("");
 
-        const [wordResponse, expressionResponse, subtitleResponse, favoriteResponse] = await Promise.all([
-          fetchWordOccurrences({ video: videoId }),
-          fetchExpressionOccurrences({ video: videoId }),
-          fetchSubtitlesByVideo(videoId),
-          fetchUserSubtitleFavoritesByVideo(videoId),
+        const [wordResponse, expressionResponse, subtitleResponse, favoriteResponse, vocabularyCardResponse] = await Promise.all([
+          fetchWordOccurrences(videoId ? { video: videoId } : {}),
+          fetchExpressionOccurrences(videoId ? { video: videoId } : {}),
+          videoId ? fetchSubtitlesByVideo(videoId) : Promise.resolve([]),
+          videoId ? fetchUserSubtitleFavoritesByVideo(videoId) : Promise.resolve([]),
+          fetchAllFavoriteVocabularyCards(videoId ? { collectionKey: `video:${videoId}` } : { collectionPrefix: "video:" }),
         ]);
 
         if (aborted) {
           return;
         }
 
-        const wordOccurrences = safeArray(wordResponse);
-        const expressionOccurrences = safeArray(expressionResponse);
+        const allowedIds = new Set(videos.filter((video) => !video.isLocked && (!activeModuleKey || video.moduleKey === activeModuleKey)).map((video) => String(video.id)));
+        const inScope = (occurrence) => allowedIds.has(String(occurrence.video));
+        const wordOccurrences = safeArray(wordResponse).filter(inScope);
+        const expressionOccurrences = safeArray(expressionResponse).filter(inScope);
         const subtitleItems = safeArray(subtitleResponse);
         const favoriteItems = safeArray(favoriteResponse);
 
-        const nextEntries = buildLexiconEntries(wordOccurrences, expressionOccurrences);
+        const nextEntries = mergeVideoFavoriteCards(
+          buildLexiconEntries(wordOccurrences, expressionOccurrences),
+          safeArray(vocabularyCardResponse).filter((card) => allowedIds.has(String(card.collection_key || "").slice(6)))
+        );
 
-        /** @type {Record<number, "known"|"not_known"|"elsewhere"|"unmarked">} */
+        /** @type {Record<string, "known"|"not_known"|"elsewhere"|"unmarked">} */
         const uiStateByOccurrenceId = {};
 
         for (const occurrence of wordOccurrences) {
@@ -723,7 +710,7 @@ export default function LexiconPage() {
           if (!Number.isFinite(occurrenceId) || occurrenceId <= 0) {
             continue;
           }
-          uiStateByOccurrenceId[occurrenceId] = resolveUiStateFromOccurrence(occurrence);
+          uiStateByOccurrenceId[`word:${occurrenceId}`] = resolveUiStateFromOccurrence(occurrence);
         }
 
         for (const occurrence of expressionOccurrences) {
@@ -731,14 +718,15 @@ export default function LexiconPage() {
           if (!Number.isFinite(occurrenceId) || occurrenceId <= 0) {
             continue;
           }
-          uiStateByOccurrenceId[occurrenceId] = resolveUiStateFromOccurrence(occurrence);
+          uiStateByOccurrenceId[`expression:${occurrenceId}`] = resolveUiStateFromOccurrence(occurrence);
         }
 
         /** @type {Record<string, "known"|"not_known"|"elsewhere"|"unmarked">} */
         const nextKnowledgeByKey = {};
 
         for (const entry of nextEntries) {
-          nextKnowledgeByKey[entry.key] = aggregateEntryStateByOccurrences(
+          nextKnowledgeByKey[entry.key] = entry.vocabularyCardId ? mapOccurrenceStateToUi(entry.knowledge, "unmarked") : aggregateEntryStateByOccurrences(
+            entry.kind,
             entry.occurrenceIds,
             uiStateByOccurrenceId
           );
@@ -790,47 +778,26 @@ export default function LexiconPage() {
       }
     }
 
-    if (source !== "video") {
-      setEntries([]);
-      setKnowledgeByKey({});
-      setSubtitlesById({});
-      setSubtitleItems([]);
-      setFavoriteSubtitleIds(new Set());
-      setFavoritePendingBySubtitleId({});
-      setHiddenChineseByKey({});
-      setIsLoading(false);
-      setErrorText("");
-      return () => { aborted = true; };
-    }
+    if (source !== "video") return () => { aborted = true; };
 
-    if (selectedVideoId !== null && selectedVideoId !== undefined) {
-      loadAllData(selectedVideoId);
-    } else {
-      setEntries([]);
-      setKnowledgeByKey({});
-      setSubtitlesById({});
-      setSubtitleItems([]);
-      setFavoriteSubtitleIds(new Set());
-      setFavoritePendingBySubtitleId({});
-      setHiddenChineseByKey({});
-      setIsLoading(false);
-      setErrorText("");
-    }
+    loadAllData(selectedVideoId);
 
     return () => {
       aborted = true;
     };
-  }, [selectedVideoId, source]);
+  }, [selectedVideoId, source, activeModuleKey, videos]);
 
   useEffect(() => {
     if (source !== "exam") return undefined;
     let aborted = false;
     setIsLoading(true);
     setErrorText("");
-    fetchAllFavoriteVocabularyCards()
+    fetchAllFavoriteVocabularyCards(examCollectionKey ? { collectionKey: examCollectionKey } : { collectionPrefix: examType ? `exam:${examType}:` : "exam:" })
       .then((cards) => {
         if (!aborted) {
-          setEntries(cards.map(mapExamVocabularyCard).filter((entry) => entry.entityId && entry.title));
+          const mapped = cards.map(mapExamVocabularyCard).filter((entry) => entry.entityId && entry.title);
+          setEntries(mapped);
+          setKnowledgeByKey(Object.fromEntries(mapped.map((entry) => [entry.key, mapOccurrenceStateToUi(entry.knowledge, "unmarked")])));
           setHiddenChineseByKey({});
         }
       })
@@ -844,7 +811,7 @@ export default function LexiconPage() {
         if (!aborted) setIsLoading(false);
       });
     return () => { aborted = true; };
-  }, [source]);
+  }, [source, examCollectionKey, examType]);
 
   const selectedVideoName = useMemo(() => {
     if (selectedVideoId === null) {
@@ -932,6 +899,7 @@ export default function LexiconPage() {
 
   const onSelectModule = useCallback((moduleKey) => {
     setActiveModuleKey(moduleKey);
+    setSelectedVideoId(null);
   }, []);
 
   const onBackToModules = useCallback(() => {
@@ -1108,12 +1076,16 @@ export default function LexiconPage() {
   );
 
   const onToggleExamFavorite = useCallback(async (entry) => {
-    const cardId = toIntOrNull(entry?.entityId);
+    const cardId = toIntOrNull(entry?.vocabularyCardId || entry?.entityId);
     if (!cardId || examFavoritePendingByKey[entry.key]) return;
     setExamFavoritePendingByKey((previous) => ({ ...previous, [entry.key]: true }));
     try {
       await setVocabularyCardFavorite(cardId, false);
-      setEntries((previous) => previous.filter((item) => item.key !== entry.key));
+      setEntries((previous) => previous.flatMap((item) => item.key !== entry.key
+        ? [item]
+        : source === "video" && item.occurrenceIds?.length
+          ? [{ ...item, videoFavorite: false, vocabularyCardId: null }]
+          : []));
     } catch {
       throw new Error("取消收藏失败，请重试。");
     } finally {
@@ -1123,11 +1095,15 @@ export default function LexiconPage() {
         return next;
       });
     }
-  }, [examFavoritePendingByKey]);
+  }, [examFavoritePendingByKey, source]);
 
   const onChangeSource = useCallback((nextSource) => {
     if (nextSource === source) return;
+    setEntries([]);
     setSource(nextSource);
+    setActiveModuleKey(null);
+    setExamType(null);
+    setExamLevel(null);
     setSelectedVideoId(null);
     setActiveKind("word");
     setStatusFilter("all");
@@ -1145,6 +1121,11 @@ export default function LexiconPage() {
       return;
     }
 
+    if (entry.vocabularyCardId) {
+      const result = await setVocabularyCardKnowledge(entry.vocabularyCardId, knowledge);
+      setKnowledgeByKey((previous) => ({ ...previous, [entry.key]: mapOccurrenceStateToUi(result.knowledge, "unmarked") }));
+      return;
+    }
     const entityId = toIntOrNull(entry.entityId);
     const occurrenceId =
       Array.isArray(entry.occurrenceIds) && entry.occurrenceIds.length > 0
@@ -1178,7 +1159,7 @@ export default function LexiconPage() {
     (entry) => {
       const currentState = knowledgeByKey[entry.key] || "unmarked";
       const nextKnowledge = currentState === "known" ? "UNMARKED" : "KNOWN";
-      postOccurrenceMark(entry, nextKnowledge);
+      return postOccurrenceMark(entry, nextKnowledge);
     },
     [knowledgeByKey, postOccurrenceMark]
   );
@@ -1187,7 +1168,7 @@ export default function LexiconPage() {
     (entry) => {
       const currentState = knowledgeByKey[entry.key] || "unmarked";
       const nextKnowledge = currentState === "not_known" ? "UNMARKED" : "UNKNOWN";
-      postOccurrenceMark(entry, nextKnowledge);
+      return postOccurrenceMark(entry, nextKnowledge);
     },
     [knowledgeByKey, postOccurrenceMark]
   );
@@ -1302,6 +1283,7 @@ export default function LexiconPage() {
     return (
       <div className={["lp-carouselCard", `lp-carouselCard--${slot}`].join(" ")}>
         <LexiconCard
+          key={entry.key}
           entry={entry}
           knowledgeState={knowledgeState}
           isChineseHidden={isChineseHidden}
@@ -1312,9 +1294,9 @@ export default function LexiconPage() {
           }}
           subtitleContent={subtitleContent}
           subtitleTranslation={subtitleTranslation}
-          isFavorited={source === "exam" && entry.examFavorite}
+          isFavorited={Boolean(entry.examFavorite || entry.videoFavorite)}
           favoritePending={Boolean(examFavoritePendingByKey[entry.key])}
-          onToggleFavorite={source === "exam" ? onToggleExamFavorite : undefined}
+          onToggleFavorite={entry.examFavorite || entry.videoFavorite ? onToggleExamFavorite : undefined}
         />
       </div>
     );
@@ -1348,9 +1330,13 @@ export default function LexiconPage() {
         ]
           .filter(Boolean)
           .join(" ")}
-        aria-hidden={source === "exam" || (isMobileView && !isMobileSidebarOpen)}
+        aria-hidden={isMobileView && !isMobileSidebarOpen}
       >
-        {source === "video" ? <Sidebar
+        <Sidebar
+          source={source}
+          examType={examType}
+          examLevel={examLevel}
+          onSelectExam={(type, level = null) => { setExamType(type); setExamLevel(level); if (level) setIsMobileSidebarOpen(false); }}
           isCollapsed={effectiveSidebarCollapsed}
           isLoading={isVideosLoading}
           videos={videos}
@@ -1363,7 +1349,7 @@ export default function LexiconPage() {
           onBackToModules={onBackToModules}
           onToggleCollapsed={onToggleSidebar}
           onGoHome={onClickGoHome}
-        /> : null}
+        />
       </aside>
 
       <main className="lp-main">
@@ -1375,18 +1361,18 @@ export default function LexiconPage() {
           <div className="lp-headerLeft">
             <div className="lp-title">词库</div>
             {source === "exam" ? (
-              <div className="lp-subtitle">备考季收藏词汇</div>
+              <div className="lp-subtitle">{examCollectionKey ? `${examType} ${examLevel}` : examType || "全部考试词汇"}</div>
             ) : selectedVideoName ? (
               <div className="lp-subtitle">{selectedVideoName}</div>
             ) : activeModuleConfig ? (
               <div className="lp-subtitle">{activeModuleConfig.title}</div>
             ) : (
-              <div className="lp-subtitle">请选择一个模块进入对应视频词库</div>
+              <div className="lp-subtitle">全部视频词汇</div>
             )}
           </div>
 
           <div className="lp-headerActions">
-            {source === "video" && isMobileView ? (
+            {isMobileView ? (
               <button
                 type="button"
                 className="lp-sidebarToggle"
@@ -1452,10 +1438,9 @@ export default function LexiconPage() {
           </button>
         </div>
 
+        {source === "exam" ? <div className="lp-savedCount">已收藏 {entries.length}</div> : null}
         <div className="lp-filtersRow">
-          {source === "exam" ? (
-            <div className="lp-savedCount">已收藏 {entries.length}</div>
-          ) : activeKind === "sentence" ? (
+          {source === "video" && activeKind === "sentence" ? (
             <>
               <button
                 type="button"
@@ -1541,21 +1526,15 @@ export default function LexiconPage() {
 
         {isLoading ? <div className="lp-stateBox">Loading…</div> : null}
         {!isLoading && errorText ? <div className="lp-stateBox">Failed to load: {errorText}</div> : null}
-        {!isLoading && !errorText && source === "video" && !selectedVideoId ? (
-          <div className="lp-stateBox">
-            {activeModuleConfig
-              ? "当前模块里的视频尚未解锁，请点击左侧带锁视频查看购买入口。"
-              : "左侧先选择“科普季”或“Vlog季”，再进入具体视频词库。"}
-          </div>
-        ) : null}
-        {!isLoading && !errorText && source === "video" && activeKind === "sentence" && filteredSentenceItems.length <= 0 ? (
+        {!isLoading && !errorText && source === "video" && !selectedVideoId && activeKind === "sentence" ? <div className="lp-stateBox">请选择具体视频查看句子</div> : null}
+        {!isLoading && !errorText && source === "video" && activeKind === "sentence" && selectedVideoId && filteredSentenceItems.length <= 0 ? (
           <div className="lp-stateBox">暂无句子</div>
         ) : null}
-        {!isLoading && !errorText && (activeKind !== "sentence" || source === "exam") && filteredEntries.length <= 0 && (source === "exam" || selectedVideoId) ? (
+        {!isLoading && !errorText && (activeKind !== "sentence" || source === "exam") && filteredEntries.length <= 0 ? (
           <div className="lp-stateBox">{source === "exam" ? "暂无收藏词汇" : ""}</div>
         ) : null}
 
-        {!isLoading && !errorText && (source === "exam" || selectedVideoId) ? (
+        {!isLoading && !errorText ? (
           <>
             {source === "video" && activeKind === "sentence" ? (
               <section className="lp-sentenceList" aria-label="Sentence cards">
@@ -1684,9 +1663,9 @@ export default function LexiconPage() {
                       }}
                       subtitleContent={subtitleContent}
                       subtitleTranslation={subtitleTranslation}
-                      isFavorited={source === "exam" && entry.examFavorite}
+                      isFavorited={Boolean(entry.examFavorite || entry.videoFavorite)}
                       favoritePending={Boolean(examFavoritePendingByKey[entry.key])}
-                      onToggleFavorite={source === "exam" ? onToggleExamFavorite : undefined}
+                      onToggleFavorite={entry.examFavorite || entry.videoFavorite ? onToggleExamFavorite : undefined}
                     />
                   );
                 })}

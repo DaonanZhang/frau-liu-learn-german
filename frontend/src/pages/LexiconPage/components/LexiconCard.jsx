@@ -94,6 +94,14 @@ export default function LexiconCard({
  favoritePending = false,
  onToggleFavorite,
 }) {
+	const [knowledgeError, setKnowledgeError] = useState("");
+	const [knowledgePending, setKnowledgePending] = useState(false);
+	async function mark(callback) {
+		if (knowledgePending) return;
+		setKnowledgePending(true);
+		setKnowledgeError("");
+		try { await callback(entry); } catch { setKnowledgeError("更新认识状态失败，请重试。"); } finally { setKnowledgePending(false); }
+	}
 	const [favoriteError, setFavoriteError] = useState("");
 	const posLabel = useMemo(() => {
 		return posToLabel(entry?.pos);
@@ -127,7 +135,7 @@ export default function LexiconCard({
 					<span className="lp-wordText">{entry?.title || ""}</span>
 				</div>
 
-				{typeof onToggleFavorite !== "function" ? <div className="lp-cardMarkActions" aria-label="Knowledge actions">
+				<div className="lp-cardMarkActions" aria-label="Knowledge actions">
 					<button
 						type="button"
 						className={[
@@ -137,8 +145,9 @@ export default function LexiconCard({
 						]
 							.filter(Boolean)
 							.join(" ")}
+						disabled={knowledgePending}
 						onClick={() => {
-							onToggleKnown(entry);
+							return mark(onToggleKnown);
 						}}
 					>
 						认识
@@ -153,13 +162,14 @@ export default function LexiconCard({
 						]
 							.filter(Boolean)
 							.join(" ")}
+						disabled={knowledgePending}
 						onClick={() => {
-							onToggleNotKnown(entry);
+							return mark(onToggleNotKnown);
 						}}
 					>
 						不认识
 					</button>
-				</div> : null}
+				</div>
 				{typeof onToggleFavorite === "function" ? (
 					<span className="lp-cardExamFavorite"><ExerciseFavoriteButton
 						isFavorited={isFavorited}
@@ -176,6 +186,7 @@ export default function LexiconCard({
 					/></span>
 				) : null}
 			</div>
+			{knowledgeError ? <div className="lp-favoriteError" role="alert">{knowledgeError}</div> : null}
 			{favoriteError ? <div className="lp-favoriteError" role="alert">{favoriteError}</div> : null}
 
 			{!isChineseHidden && entry?.translation ? (

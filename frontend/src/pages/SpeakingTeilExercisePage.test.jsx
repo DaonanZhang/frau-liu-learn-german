@@ -11,6 +11,10 @@ import {
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import SpeakingTeilExercisePage from "./SpeakingTeilExercisePage.jsx";
 
+vi.mock("../components/examPreparation/DictionaryLookupOverlay.jsx", () => ({
+  default: ({ collectionKey }) => <div data-testid="dictionary-overlay" data-collection-key={collectionKey} />,
+}));
+
 vi.mock("../api/exam_preparation/speakingExercises.js", () => ({
   fetchSpeakingTeilExerciseDetail: vi.fn(),
 }));
@@ -337,7 +341,9 @@ describe("SpeakingTeilExercisePage text annotations", () => {
 
     const outline = await screen.findByRole("heading", { name: "参考提纲" });
     expect(screen.queryByText("Zuerst möchte ich die Situation beschreiben.")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "完成并查看参考答案" }));
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:C1");
     const answer = screen.getByText("Zuerst möchte ich die Situation beschreiben.");
     expect(outline.closest(".speaking-detail-card").parentElement).toBe(answer.closest(".speaking-detail-card").parentElement);
     expect(answer.closest(".speaking-detail-card")).toHaveClass("speaking-detail-c1-answer");
@@ -360,6 +366,7 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     fireEvent.click(screen.getByRole("button", { name: "显示参考提纲" }));
     expect(screen.getByText("Ausgangslage")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "隐藏答案" }));
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Beispielantwort" })).toBeInTheDocument();
     expect(screen.queryByText("Zuerst möchte ich die Situation beschreiben.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "record c1-teil-1-71-1" })).not.toBeInTheDocument();
@@ -368,6 +375,7 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     expect(screen.getByRole("button", { name: "显示答案" })).toHaveAttribute("title", "显示答案");
 
     fireEvent.click(screen.getByRole("button", { name: "显示答案" }));
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:C1");
     expect(screen.getByText("Zuerst möchte ich die Situation beschreiben.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "record c1-teil-1-71-1" })).toBeInTheDocument();
     expect(screen.getByText("Ausgangslage")).toBeInTheDocument();
@@ -565,10 +573,17 @@ describe("SpeakingTeilExercisePage text annotations", () => {
   });
 
   it("keeps the task text for B1 Sprechen Teil 1", async () => {
-    fetchSpeakingTeilExerciseDetail.mockResolvedValue(teil1Exercise);
+    fetchSpeakingTeilExerciseDetail.mockResolvedValue({
+      ...teil1Exercise,
+      content: {
+        ...teil1Exercise.content,
+        dialogue: [{ sequence: 1, role: "TN1", text: "Ich heiße Anna." }],
+      },
+    });
     renderPage(1, 47);
 
     expect(await screen.findByText("Stellen Sie sich vor.")).toBeInTheDocument();
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
     expect(screen.getByRole("heading", { level: 2, name: "Einander kennenlernen" })).toBeInTheDocument();
     expect(screen.getByText("Sprechen Sie über sich.")).toBeInTheDocument();
   });
@@ -646,6 +661,7 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     renderPage(3, 48);
 
     expect(await screen.findByText("Sprechen Sie gemeinsam über die Planung.")).toBeInTheDocument();
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B2");
     expect(screen.queryByText("Planen Sie gemeinsam.")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Prüfen" })).not.toBeInTheDocument();
     expect(screen.queryByText("对话排序")).not.toBeInTheDocument();
@@ -705,6 +721,7 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     renderPage(2, 45);
 
     const task = await screen.findByText("Sprechen Sie über das Thema Urlaub.");
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
     selectText(task, 0, 8);
     act(() => document.dispatchEvent(new Event("selectionchange")));
     fireEvent.click(await screen.findByRole("button", { name: "高亮" }));
@@ -717,6 +734,7 @@ describe("SpeakingTeilExercisePage text annotations", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Prüfen" }));
     await screen.findByRole("button", { name: "Wiederholen" });
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
     expect(JSON.parse(sessionStorage.getItem(scope)).regions["material:task"]).toHaveLength(1);
     expect(screen.getByText("Was möchtest du im Urlaub machen?", { selector: '[data-exam-annotation-region="explanation:first"]' }))
       .toBeInTheDocument();
@@ -724,6 +742,7 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Wiederholen" }));
     await waitFor(() => expect(sessionStorage.getItem(scope)).toBeNull());
     expect(sessionStorage.getItem(unrelatedScope)).not.toBeNull();
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Prüfen" })).toBeInTheDocument();
   });
 

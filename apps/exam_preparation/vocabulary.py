@@ -53,6 +53,7 @@ def sync_writing_vocabulary(writing_exercise):
                 if not normalized:
                     continue
                 values = {
+                    "collection_key": f"exam:{base.exam_type}:{base.level}",
                     "exam_type": base.exam_type,
                     "level": base.level,
                     "term": term,
@@ -65,8 +66,7 @@ def sync_writing_vocabulary(writing_exercise):
                     if entry.get(key) and (not isinstance(entry[key], str) or entry[key].strip())
                 })
                 identity = {
-                    "exam_type": base.exam_type,
-                    "level": base.level,
+                    "collection_key": f"exam:{base.exam_type}:{base.level}",
                     "normalized_term": normalized,
                     "translation_zh": translation,
                 }

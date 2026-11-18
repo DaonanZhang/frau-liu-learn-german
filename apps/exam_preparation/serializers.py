@@ -810,12 +810,16 @@ class WritingExerciseDetailSerializer(serializers.ModelSerializer):
 
 class ExamVocabularyCardSerializer(serializers.ModelSerializer):
     is_favorite = serializers.BooleanField(read_only=True)
+    knowledge = serializers.SerializerMethodField()
+
+    def get_knowledge(self, card):
+        return card.favorite_knowledge or UserExamVocabularyFavorite.Knowledge.UNMARKED
 
     class Meta:
         model = ExamVocabularyCard
         fields = [
-            "id", "exam_type", "level", "kind", "term", "translation_zh", "part_of_speech", "article",
-            "plural", "verb_forms", "note", "example_de", "example_zh", "is_favorite",
+            "id", "collection_key", "exam_type", "level", "kind", "term", "translation_zh", "part_of_speech", "article",
+            "plural", "verb_forms", "note", "example_de", "example_zh", "is_favorite", "knowledge",
         ]
         read_only_fields = fields
 

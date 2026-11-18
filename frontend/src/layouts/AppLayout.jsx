@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import Navigator from "../components/Navigator";
 import SiteFooter from "../components/SiteFooter";
 import ReferralNoticeModal from "../components/ReferralNoticeModal.jsx";
+import { DictionaryPreferenceProvider } from "../components/dictionary/DictionaryPreference.jsx";
 import { useAuth } from "../api/auth";
 import "./AppLayout.css";
 
@@ -32,29 +33,31 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="app-layout">
-      <Navigator />
+    <DictionaryPreferenceProvider>
+      <div className="app-layout">
+        <Navigator />
 
-      <div className={["app-body", isManualPage ? "app-body--manual" : ""].filter(Boolean).join(" ")}>
-        <div className="app-container">
-          {/*TODO: Sidebar for later*/}
-          {/*<aside className="app-sidebar">*/}
-          {/*  <div className="sidebar-title">Frau Liu</div>*/}
+        <div className={["app-body", isManualPage ? "app-body--manual" : ""].filter(Boolean).join(" ")}>
+          <div className="app-container">
+            {/*TODO: Sidebar for later*/}
+            {/*<aside className="app-sidebar">*/}
+            {/*  <div className="sidebar-title">Frau Liu</div>*/}
 
-          {/*  <nav className="sidebar-nav">*/}
-          {/*    <Link to="/">Home</Link>*/}
-          {/*    <Link to="/videos/1">Video #1</Link>*/}
-          {/*  </nav>*/}
-          {/*</aside>*/}
+            {/*  <nav className="sidebar-nav">*/}
+            {/*    <Link to="/">Home</Link>*/}
+            {/*    <Link to="/videos/1">Video #1</Link>*/}
+            {/*  </nav>*/}
+            {/*</aside>*/}
 
-          <main className="app-main">
-            <Outlet />
-          </main>
+            <main className="app-main">
+              <Outlet />
+            </main>
+          </div>
         </div>
-      </div>
 
-      <SiteFooter />
-      <ReferralNoticeModal />
-    </div>
+        <SiteFooter />
+        <ReferralNoticeModal />
+      </div>
+    </DictionaryPreferenceProvider>
   );
 }

@@ -16,6 +16,7 @@ import { hasScopedExplanation } from "../components/examPreparation/explanationV
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
+  examDictionaryCollectionKey,
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import {
@@ -282,6 +283,8 @@ export default function ClozeChoicePage() {
   return (
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
+      dictionaryEnabled={isChecked}
     >
       <div className="cloze-page">
         <div className="cloze-shell">

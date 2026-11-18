@@ -10,6 +10,7 @@ class ExamVocabularyCard(models.Model):
         EXPRESSION = "expression", "Expression"
         SENTENCE = "sentence", "Sentence"
 
+    collection_key = models.CharField(max_length=255)
     exam_type = models.CharField(max_length=128, db_index=True)
     level = models.CharField(max_length=8, db_index=True)
     kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.WORD, db_index=True)
@@ -28,7 +29,7 @@ class ExamVocabularyCard(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(
-            fields=("exam_type", "level", "normalized_term", "translation_zh"),
+            fields=("collection_key", "normalized_term", "translation_zh"),
             name="exam_vocab_card_identity_uq",
         )]
         ordering = ["term", "id"]
@@ -51,8 +52,14 @@ class ExamVocabularySource(models.Model):
 
 
 class UserExamVocabularyFavorite(models.Model):
+    class Knowledge(models.TextChoices):
+        UNMARKED = "UNMARKED", "Unmarked"
+        KNOWN = "KNOWN", "Known"
+        UNKNOWN = "UNKNOWN", "Unknown"
+
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="exam_vocabulary_favorites")
     card = models.ForeignKey(ExamVocabularyCard, on_delete=models.CASCADE, related_name="favorites")
+    knowledge = models.CharField(max_length=8, choices=Knowledge.choices, default=Knowledge.UNMARKED)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

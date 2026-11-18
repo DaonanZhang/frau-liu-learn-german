@@ -8,6 +8,7 @@ import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavori
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
+  examDictionaryCollectionKey,
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import SpeakingPracticeRecorder from "../components/examPreparation/SpeakingPracticeRecorder.jsx";
@@ -662,6 +663,15 @@ export default function SpeakingTeilExercisePage({ teil }) {
       && (orders[index] || []).length === sectionTurns.length
       && Boolean(checked[index]);
   });
+  const dictionaryEnabled = isC1Telc
+    ? showC1Answer && (!isC1SpeakingAttempt || c1AttemptComplete)
+    : Number(teil) === 1
+      ? dialogue.length > 0
+      : Number(teil) === 2
+        ? Boolean(checked.all)
+        : isB2Teil3
+          ? directTeil3Dialogue.length > 0
+          : Boolean(checked[activeSection]);
 
   async function toggleFavorite(turn) {
     const key = turnKey(turn);
@@ -728,6 +738,8 @@ export default function SpeakingTeilExercisePage({ teil }) {
   return (
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
+      dictionaryEnabled={dictionaryEnabled}
     >
     <div className="speaking-detail-page">
       <div className="speaking-detail-topbar"><Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/sprechen/teil-${teil}`} className="speaking-detail-back">← Zurück zu Sprechen {isC1Telc ? taskTitle : ["Teil 1", "Teil 2", "Teil 3"][Number(teil) - 1]}</Link></div>

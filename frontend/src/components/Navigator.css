@@ -102,6 +102,43 @@
   color: #fff;
 }
 
+.nav-dictionarySwitch {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.nav-btn.nav-dictionarySwitch:hover {
+  background: #e8effe;
+  color: #1e40af;
+}
+
+.nav-dictionaryTrack {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 24px;
+  height: 14px;
+  padding: 2px;
+  border-radius: 999px;
+  background: #64748b;
+}
+
+.nav-dictionaryTrack::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.nav-dictionarySwitch[aria-checked="true"] .nav-dictionaryTrack {
+  justify-content: flex-end;
+  background: #2563eb;
+}
+
 .nav-btn.nav-btn--gradient:hover {
   background: linear-gradient(
     90deg,

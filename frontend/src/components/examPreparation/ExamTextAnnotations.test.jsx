@@ -1,9 +1,19 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import AppLayout from "../../layouts/AppLayout.jsx";
+
+vi.mock("./DictionaryLookupOverlay.jsx", () => ({
+  default: ({ collectionKey }) => <div data-testid="dictionary-overlay" data-collection-key={collectionKey} />,
+}));
+vi.mock("../../api/auth", () => ({ useAuth: () => ({ isAuthenticated: true, loading: false }) }));
+vi.mock("../../hooks/useMaxWidth.js", () => ({ default: () => false }));
+vi.mock("../ReferralNoticeModal.jsx", () => ({ default: () => null }));
 
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
+  examDictionaryCollectionKey,
   useExamTextAnnotations,
 } from "./ExamTextAnnotations.jsx";
 
@@ -41,6 +51,65 @@ function ClearButton() {
   const { clearAnnotations } = useExamTextAnnotations();
   return <button type="button" onClick={clearAnnotations}>clear-state</button>;
 }
+
+describe("exam dictionary collection routing", () => {
+  afterEach(() => localStorage.clear());
+
+  it.each([
+    ["B1", "telc", "exam:TELC:B1"],
+    ["b2", "TELC", "exam:TELC:B2"],
+    ["C1", "TELC", "exam:TELC:C1"],
+  ])("routes %s exercises to the matching TELC collection", (level, examType, expected) => {
+    expect(examDictionaryCollectionKey({ exercise_base: { level, exam_type: examType } }, null)).toBe(expected);
+  });
+
+  it("does not create a collection for unsupported exams or levels", () => {
+    expect(examDictionaryCollectionKey({ exercise_base: { level: "A2", exam_type: "TELC" } }, null)).toBeNull();
+    expect(examDictionaryCollectionKey({ exercise_base: { level: "B1", exam_type: "GOETHE" } }, null)).toBeNull();
+    expect(examDictionaryCollectionKey(null, { level: "B2", examType: "TELC" })).toBe("exam:TELC:B2");
+  });
+
+  it("keeps dictionary lookup disabled by default and passes the collection when enabled", () => {
+    const view = mount(<SelectableRegion />);
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
+    view.rerender(
+      <ExamTextAnnotationProvider
+        scope="exam-annotations:v1:exercise:READING:1"
+        dictionaryCollectionKey="exam:TELC:B2"
+        dictionaryEnabled
+      >
+        <SelectableRegion />
+      </ExamTextAnnotationProvider>,
+    );
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B2");
+    expect(screen.getByText("The passage")).toHaveAttribute("data-exam-annotation-region", "passage");
+  });
+
+  it("requires both the page gate and navigator preference while keeping annotation text available", () => {
+    function page(dictionaryEnabled) {
+      return (
+        <MemoryRouter initialEntries={["/modules/exam-preparation/b2/lesen/understanding/1"]}>
+          <Routes><Route element={<AppLayout />}><Route path="*" element={(
+            <ExamTextAnnotationProvider dictionaryCollectionKey="exam:TELC:B2" dictionaryEnabled={dictionaryEnabled}>
+              <SelectableRegion />
+            </ExamTextAnnotationProvider>
+          )} /></Route></Routes>
+        </MemoryRouter>
+      );
+    }
+    const view = render(page(false));
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
+    view.rerender(page(true));
+    expect(screen.getByTestId("dictionary-overlay")).toBeInTheDocument();
+
+    const toggle = screen.getByRole("switch", { name: "词典" });
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
+    expect(screen.getByText("The passage")).toHaveAttribute("data-exam-annotation-region", "passage");
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B2");
+  });
+});
 
 describe("exam text annotation controller", () => {
   let registry;

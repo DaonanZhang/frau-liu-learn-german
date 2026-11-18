@@ -7,9 +7,9 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from apps.accounts.models import Entitlement, Module
 from apps.exam_preparation.models import ExamVocabularyCard, UserExamVocabularyFavorite
 from apps.exam_preparation.vocabulary import normalize_vocabulary_term
+from apps.learning_by_video.models import Video
 from apps.lexicon.models import DictionaryEntry, DictionaryForm
 from apps.lexicon.models.dictionary import normalize_dictionary_form
 
@@ -19,18 +19,10 @@ class DictionaryApiTests(TestCase):
         User = get_user_model()
         self.user = User.objects.create_user(telephone="13800139881", password="pw")
         self.other_user = User.objects.create_user(telephone="13800139882", password="pw")
-        self.module, _ = Module.objects.get_or_create(
-            key="exam_preparation", defaults={"name": "备考季"}
-        )
-        Entitlement.objects.create(
-            user=self.user,
-            module=self.module,
-            plan=Entitlement.Plan.MONTH_1,
-            status=Entitlement.Status.ACTIVE,
-        )
         self.client = APIClient()
         self.client.force_authenticate(self.user)
         self.lookup_url = reverse("lexicon-dictionary-lookup")
+        self.exam_collection = "exam:TELC:C1"
         self.gehen = self.make_entry("gehen", "走", "verb", 20)
         self.haus = self.make_entry("Haus", "房子", "noun", 10)
         self.duerfen = self.make_entry("dürfen", "可以", "verb", 8)
@@ -62,6 +54,7 @@ class DictionaryApiTests(TestCase):
     def test_legacy_nfd_vocabulary_card_is_reused_after_normalization(self):
         legacy_term = "du\u0308rfen"
         card = ExamVocabularyCard.objects.create(
+            collection_key=self.exam_collection,
             exam_type="TELC",
             level="C1",
             kind=ExamVocabularyCard.Kind.WORD,
@@ -74,9 +67,9 @@ class DictionaryApiTests(TestCase):
         migration.normalize_existing_cards(django_apps, None)
 
         for word in ("dürfen", legacy_term):
-            match = self.client.get(self.lookup_url, {"word": word}).data["matches"][0]
+            match = self.client.get(self.lookup_url, {"word": word, "collection_key": self.exam_collection}).data["matches"][0]
             self.assertEqual(match["card"], {"id": card.pk, "is_favorite": True})
-        response = self.client.post(self.favorite_url(self.duerfen))
+        response = self.client.post(self.favorite_url(self.duerfen), {"collection_key": self.exam_collection}, format="json")
         self.assertEqual(response.data, {"card": {"id": card.pk, "is_favorite": True}})
         self.assertEqual(
             ExamVocabularyCard.objects.filter(
@@ -118,6 +111,7 @@ class DictionaryApiTests(TestCase):
 
     def make_card(self, entry):
         return ExamVocabularyCard.objects.create(
+            collection_key=self.exam_collection,
             exam_type="TELC",
             level="C1",
             kind=ExamVocabularyCard.Kind.WORD,
@@ -130,7 +124,7 @@ class DictionaryApiTests(TestCase):
     def test_exact_and_morphology_lookup_deduplicates_forms_and_returns_favorite(self):
         card = self.make_card(self.gehen)
         UserExamVocabularyFavorite.objects.create(user=self.user, card=card)
-        response = self.client.get(self.lookup_url, {"word": " ging "})
+        response = self.client.get(self.lookup_url, {"word": " ging ", "collection_key": self.exam_collection})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["query"], "ging")
@@ -183,11 +177,10 @@ class DictionaryApiTests(TestCase):
 
     def test_post_delete_favorite_are_idempotent_and_isolated_by_user(self):
         post_url = self.favorite_url(self.gehen)
-        first = self.client.post(post_url)
-        second = self.client.post(post_url)
+        first = self.client.post(post_url, {"collection_key": self.exam_collection}, format="json")
+        second = self.client.post(post_url, {"collection_key": self.exam_collection}, format="json")
         card = ExamVocabularyCard.objects.get(
-            exam_type="TELC",
-            level="C1",
+            collection_key=self.exam_collection,
             normalized_term="gehen",
             translation_zh="走",
         )
@@ -198,23 +191,60 @@ class DictionaryApiTests(TestCase):
         self.assertEqual(card.part_of_speech, "verb")
 
         UserExamVocabularyFavorite.objects.create(user=self.other_user, card=card)
-        self.assertEqual(self.client.delete(post_url).data, {"card": {"id": card.pk, "is_favorite": False}})
-        self.assertEqual(self.client.delete(post_url).data, {"card": {"id": card.pk, "is_favorite": False}})
+        self.assertEqual(self.client.delete(post_url, {"collection_key": self.exam_collection}, format="json").data, {"card": {"id": card.pk, "is_favorite": False}})
+        self.assertEqual(self.client.delete(post_url, {"collection_key": self.exam_collection}, format="json").data, {"card": {"id": card.pk, "is_favorite": False}})
         self.assertFalse(UserExamVocabularyFavorite.objects.filter(user=self.user, card=card).exists())
         self.assertTrue(UserExamVocabularyFavorite.objects.filter(user=self.other_user, card=card).exists())
 
     def test_delete_without_existing_card_and_unknown_entry(self):
-        self.assertEqual(self.client.delete(self.favorite_url(self.haus)).data, {"card": None})
+        self.assertEqual(self.client.delete(self.favorite_url(self.haus), {"collection_key": self.exam_collection}, format="json").data, {"card": None})
         missing = reverse("lexicon-dictionary-entry-favorite", args=[999999])
-        self.assertEqual(self.client.post(missing).status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(self.client.delete(missing).status_code, status.HTTP_404_NOT_FOUND)
+        payload = {"collection_key": self.exam_collection}
+        self.assertEqual(self.client.post(missing, payload, format="json").status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.client.delete(missing, payload, format="json").status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_endpoints_require_authentication_and_module_entitlement(self):
+    def test_endpoints_require_authentication_but_not_exam_entitlement(self):
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get(self.lookup_url, {"word": "ging"}).status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(self.client.post(self.favorite_url(self.gehen)).status_code, status.HTTP_401_UNAUTHORIZED)
-        self.assertEqual(self.client.delete(self.favorite_url(self.gehen)).status_code, status.HTTP_401_UNAUTHORIZED)
+        payload = {"collection_key": self.exam_collection}
+        self.assertEqual(self.client.post(self.favorite_url(self.gehen), payload, format="json").status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.client.delete(self.favorite_url(self.gehen), payload, format="json").status_code, status.HTTP_401_UNAUTHORIZED)
         self.client.force_authenticate(self.other_user)
-        self.assertEqual(self.client.get(self.lookup_url, {"word": "ging"}).status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(self.client.post(self.favorite_url(self.gehen)).status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(self.client.delete(self.favorite_url(self.gehen)).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get(self.lookup_url, {"word": "ging"}).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.post(self.favorite_url(self.gehen), payload, format="json").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.delete(self.favorite_url(self.gehen), payload, format="json").status_code, status.HTTP_200_OK)
+
+    def test_lookup_only_attaches_card_from_requested_collection(self):
+        card = self.make_card(self.gehen)
+        UserExamVocabularyFavorite.objects.create(user=self.user, card=card)
+        no_context = self.client.get(self.lookup_url, {"word": "gehen"}).data["matches"][0]
+        self.assertIsNone(no_context["card"])
+        video = Video.objects.create(title="Test video")
+        other_card = ExamVocabularyCard.objects.create(
+            collection_key=f"video:{video.pk}", exam_type="", level="", term="gehen",
+            normalized_term="gehen", translation_zh="走",
+        )
+        context = self.client.get(self.lookup_url, {"word": "gehen", "collection_key": f"video:{video.pk}"})
+        self.assertEqual(context.data["matches"][0]["card"], {"id": other_card.pk, "is_favorite": False})
+        UserExamVocabularyFavorite.objects.create(user=self.user, card=other_card)
+        context = self.client.get(self.lookup_url, {"word": "gehen", "collection_key": f"video:{video.pk}"})
+        self.assertEqual(context.data["matches"][0]["card"], {"id": other_card.pk, "is_favorite": True})
+
+    def test_collection_key_validation_for_lookup_and_favorite(self):
+        for key in ("", "exam:TELC:B3", "exam:Goethe:C1", "video:0", "video:nope", "unknown:1"):
+            self.assertEqual(self.client.get(self.lookup_url, {"word": "gehen", "collection_key": key}).status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertEqual(self.client.post(self.favorite_url(self.gehen), {"collection_key": key}, format="json").status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.client.post(self.favorite_url(self.gehen), {}, format="json").status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.client.delete(self.favorite_url(self.gehen), {}, format="json").status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_video_collection_favorite_is_scoped_and_missing_video_is_rejected(self):
+        video = Video.objects.create(title="A video")
+        key = f"video:{video.pk}"
+        post_url = self.favorite_url(self.gehen)
+        response = self.client.post(post_url, {"collection_key": key}, format="json")
+        card = ExamVocabularyCard.objects.get(collection_key=key, normalized_term="gehen", translation_zh="走")
+        self.assertEqual(response.data, {"card": {"id": card.pk, "is_favorite": True}})
+        self.assertEqual((card.exam_type, card.level), ("", ""))
+        self.assertEqual(self.client.delete(post_url, {"collection_key": self.exam_collection}, format="json").data, {"card": None})
+        self.assertTrue(UserExamVocabularyFavorite.objects.filter(card=card, user=self.user).exists())
+        self.assertEqual(self.client.post(post_url, {"collection_key": "video:999999"}, format="json").status_code, status.HTTP_400_BAD_REQUEST)

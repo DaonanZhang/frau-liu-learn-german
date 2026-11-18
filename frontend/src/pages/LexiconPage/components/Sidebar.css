@@ -229,3 +229,8 @@
 	border-color: #cfd7e4;
 	background: #eef1f5;
 }
+
+.lp-moduleItem.is-active {
+  background: #f3f6f3;
+  border-color: #b8c8ba;
+}

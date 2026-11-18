@@ -672,7 +672,7 @@ export default function SubtitlePanel({
     return (
       <>
         {showDe && item.de ? (
-          <div className="vs-subDe">
+          <div className="vs-subDe" data-dictionary-region={activePanelShape === "cloze" ? undefined : ""}>
             {activePanelShape === "cloze" ? (
               renderWithClozeMask({
                 text: item.de,
@@ -1693,12 +1693,12 @@ function renderWithClozeMask({ text, patterns, subtitleId, onOpenExercise }) {
   }
 
   if (!patterns || patterns.length === 0) {
-    return text;
+    return <span data-dictionary-region>{text}</span>;
   }
 
   const merged = computeMergedRanges(text, patterns);
   if (merged.length === 0) {
-    return text;
+    return <span data-dictionary-region>{text}</span>;
   }
 
   const parts = [];
@@ -1706,7 +1706,7 @@ function renderWithClozeMask({ text, patterns, subtitleId, onOpenExercise }) {
 
   merged.forEach((m, index) => {
     if (m.start > cursor) {
-      parts.push(<span key={`t-${index}-${cursor}`}>{text.slice(cursor, m.start)}</span>);
+      parts.push(<span key={`t-${index}-${cursor}`} data-dictionary-region>{text.slice(cursor, m.start)}</span>);
     }
 
     const answerText = text.slice(m.start, m.end);
@@ -1734,7 +1734,7 @@ function renderWithClozeMask({ text, patterns, subtitleId, onOpenExercise }) {
   });
 
   if (cursor < text.length) {
-    parts.push(<span key={`t-end-${cursor}`}>{text.slice(cursor)}</span>);
+    parts.push(<span key={`t-end-${cursor}`} data-dictionary-region>{text.slice(cursor)}</span>);
   }
 
   return parts;

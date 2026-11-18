@@ -9,6 +9,8 @@ import LexiconPanel from "./components/LexiconPanel.jsx";
 import ExercisePanel from "./components/ExercisePanel.jsx";
 import VideoNotePanel from "./components/VideoNotePanel.jsx";
 import SpeakingPracticeModal from "./components/SpeakingPracticeModal.jsx";
+import DictionaryLookupOverlay from "../../components/examPreparation/DictionaryLookupOverlay.jsx";
+import { useDictionaryPreference } from "../../components/dictionary/DictionaryPreference.jsx";
 import { useAuth } from "../../api/auth/useAuth.js";
 import useBodyScrollLock from "../../hooks/useBodyScrollLock";
 
@@ -126,6 +128,7 @@ function getTopicTags(video) {
 }
 
 export default function VideoStudyPage() {
+  const { enabled: dictionaryEnabled } = useDictionaryPreference();
   const { videoId } = useParams();
   const location = useLocation();
   const {
@@ -1053,6 +1056,7 @@ export default function VideoStudyPage() {
 
   return (
     <div className="vs-page">
+      {dictionaryEnabled ? <DictionaryLookupOverlay key={`video:${videoId}`} collectionKey={`video:${videoId}`} /> : null}
       <div
         className={[
           "vs-grid",

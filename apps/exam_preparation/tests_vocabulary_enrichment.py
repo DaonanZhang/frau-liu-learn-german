@@ -17,6 +17,7 @@ from apps.exam_preparation.models import ExamVocabularyCard
 
 def make_card(term, **kwargs):
     defaults = {
+        "collection_key": "exam:TELC:C1",
         "exam_type": "TELC",
         "level": "C1",
         "term": term,

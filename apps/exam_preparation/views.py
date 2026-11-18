@@ -7,7 +7,7 @@ import uuid
 
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
-from django.db.models import Count, Exists, F, OuterRef, Q
+from django.db.models import Count, Exists, F, OuterRef, Q, Subquery
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -1245,10 +1245,23 @@ class ExamVocabularyCardViewSet(ReadOnlyModelViewSet):
     required_module_key = "exam_preparation"
     pagination_class = ExamVocabularyCardPagination
 
+    def get_permissions(self):
+        if self.action == "knowledge" or (self.action == "favorite" and self.request.method == "DELETE") or (
+            self.action == "list" and self.request.query_params.get("favorites") == "true"
+        ):
+            return [IsAuthenticated()]
+        return super().get_permissions()
+
     def get_queryset(self):
         user = self.request.user
         favorite = UserExamVocabularyFavorite.objects.filter(user=user, card_id=OuterRef("pk"))
-        queryset = ExamVocabularyCard.objects.annotate(is_favorite=Exists(favorite))
+        queryset = ExamVocabularyCard.objects.annotate(
+            is_favorite=Exists(favorite),
+            favorite_knowledge=Subquery(favorite.values("knowledge")[:1]),
+        )
+        collection_key = self.request.query_params.get("collection_key")
+        if collection_key:
+            queryset = queryset.filter(collection_key=collection_key)
         for field in ("exam_type", "level"):
             value = self.request.query_params.get(field)
             if value:
@@ -1271,6 +1284,19 @@ class ExamVocabularyCardViewSet(ReadOnlyModelViewSet):
             UserExamVocabularyFavorite.objects.filter(user=request.user, card=card).delete()
             is_favorite = False
         return Response({"is_favorite": is_favorite})
+
+    @action(detail=True, methods=["patch"])
+    def knowledge(self, request, pk=None):
+        value = request.data.get("knowledge")
+        if value not in UserExamVocabularyFavorite.Knowledge.values:
+            raise ValidationError({"knowledge": "Must be UNMARKED, KNOWN, or UNKNOWN."})
+        card = self.get_object()
+        favorite = UserExamVocabularyFavorite.objects.filter(user=request.user, card=card).first()
+        if favorite is None:
+            raise NotFound()
+        favorite.knowledge = value
+        favorite.save(update_fields=["knowledge"])
+        return Response({"knowledge": favorite.knowledge})
 
 
 class WritingExampleTextViewSet(BaseExamPreparationViewSet):

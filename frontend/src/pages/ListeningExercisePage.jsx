@@ -13,6 +13,7 @@ import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavori
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
+  examDictionaryCollectionKey,
   useExamTextAnnotations,
 } from "../components/examPreparation/ExamTextAnnotations.jsx";
 import ListeningTranscript from "../components/examPreparation/ListeningTranscript.jsx";
@@ -449,6 +450,8 @@ export default function ListeningExercisePage({
   return (
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
+      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
+      dictionaryEnabled={isChecked}
     >
       <div className="listening-exercise-page">
       <div className="listening-exercise-shell">

@@ -5,11 +5,21 @@ import useMaxWidth from "../hooks/useMaxWidth.js";
 import { EXAM_PREPARATION_MODULE } from "../pages/Homepage/homeShared.js";
 import { hasModuleAccess } from "../utils/moduleAccess.js";
 import { examPreparationPurchasePath, examPreparationScope } from "../utils/examPreparationScope.js";
+import { useDictionaryPreference } from "./dictionary/DictionaryPreference.jsx";
+
+const EXAM_EXERCISE_SECTIONS = new Set([
+  "schreiben",
+  "sprachbausteine/cloze-choice", "sprachbausteine/cloze-matching",
+  "hoeren/short-text-prep", "hoeren/short-text-once", "hoeren/dialog-twice",
+  "lesen/cloze-matching", "lesen/title-matching", "lesen/understanding", "lesen/ad-matching",
+  "sprechen/teil-1", "sprechen/teil-2", "sprechen/teil-3",
+]);
 
 export default function Navigator() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { enabled: dictionaryEnabled, toggle: toggleDictionary } = useDictionaryPreference();
 
   const isMobileView = useMaxWidth(990);
 
@@ -36,6 +46,10 @@ export default function Navigator() {
   const examLevelPath = pathname.match(/^\/modules\/exam-preparation\/(?:telc\/)?(b1|b2|c1)(?:\/|$)/i)?.[1]?.toLowerCase() || null;
   const examScope = examPreparationScope(examLevelPath);
   const isExamPreparationRecordsActive = /^\/modules\/exam-preparation\/telc\/(b1|b2|c1)\/mock-exams(?:\/|$)/i.test(pathname);
+  const exerciseSection = pathname.match(/^\/modules\/exam-preparation\/(?:b1|b2|c1)\/(.+)\/\d+\/?$/i)?.[1]?.toLowerCase();
+  const showDictionaryToggle = /^\/videos\/\d+\/?$/i.test(pathname)
+    || EXAM_EXERCISE_SECTIONS.has(exerciseSection)
+    || /^\/modules\/exam-preparation\/telc\/(?:b1|b2|c1)\/mock-exam\/?$/i.test(pathname);
 
   const titleText = isMobileView ? "符号刘" : "符号刘的德语素材库";
   const manualText = isMobileView ? "手册" : "操作手册";
@@ -70,6 +84,18 @@ export default function Navigator() {
         </div>
 
         <nav className="nav-right">
+          {showDictionaryToggle && toggleDictionary ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={dictionaryEnabled}
+              className="nav-btn nav-dictionarySwitch"
+              onClick={toggleDictionary}
+            >
+              词典<span className="nav-dictionaryTrack" aria-hidden="true" />
+            </button>
+          ) : null}
+
           {isExamPreparationActive ? (
             <button
               className={[

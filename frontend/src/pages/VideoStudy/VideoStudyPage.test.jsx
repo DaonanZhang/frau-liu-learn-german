@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   fetchUserVideoNote: vi.fn(),
@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../api/auth/useAuth.js", () => ({ useAuth: mocks.useAuth }));
+vi.mock("../../api/auth", () => ({ useAuth: mocks.useAuth }));
+vi.mock("../../components/ReferralNoticeModal.jsx", () => ({ default: () => null }));
 vi.mock("../../api/learning_by_video/videos.js", () => ({
   fetchVideoDetail: mocks.fetchVideoDetail,
 }));
@@ -25,17 +27,20 @@ vi.mock("./components/LexiconPanel.jsx", () => ({ default: () => null }));
 vi.mock("./components/ExercisePanel.jsx", () => ({ default: () => null }));
 vi.mock("./components/VideoNotePanel.jsx", () => ({ default: () => null }));
 vi.mock("./components/SpeakingPracticeModal.jsx", () => ({ default: () => null }));
+vi.mock("../../components/examPreparation/DictionaryLookupOverlay.jsx", () => ({
+  default: ({ collectionKey }) => <div data-testid="dictionary-overlay" data-collection-key={collectionKey} />,
+}));
 
 import VideoStudyPage from "./VideoStudyPage.jsx";
+import AppLayout from "../../layouts/AppLayout.jsx";
 
-function renderPage() {
-  return render(
-    <MemoryRouter initialEntries={["/videos/7"]}>
-      <Routes>
-        <Route path="/videos/:videoId" element={<VideoStudyPage />} />
-      </Routes>
-    </MemoryRouter>,
+function renderPage({ withLayout = false } = {}) {
+  const videoRoute = { path: "/videos/:videoId", element: <VideoStudyPage /> };
+  const router = createMemoryRouter(
+    withLayout ? [{ element: <AppLayout />, children: [videoRoute] }] : [videoRoute],
+    { initialEntries: ["/videos/7"] },
   );
+  return { ...render(<RouterProvider router={router} />), router };
 }
 
 describe("VideoStudyPage device session fallback", () => {
@@ -55,9 +60,16 @@ describe("VideoStudyPage device session fallback", () => {
     });
     mocks.useAuth.mockReturnValue({
       user: { id: 1 },
+      isAuthenticated: true,
       deviceSessionExpired: false,
       reloadAfterSessionExpiry: mocks.reloadAfterSessionExpiry,
     });
+  });
+
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+    vi.restoreAllMocks();
   });
 
   it("shows the explicit login-expired state and stops rendering subtitle requests", async () => {
@@ -88,5 +100,22 @@ describe("VideoStudyPage device session fallback", () => {
       expect(screen.getByText("Failed to load video: metadata unavailable")).toBeInTheDocument();
     });
     expect(screen.queryByText("登录状态已过期，请重新登录后继续观看")).not.toBeInTheDocument();
+  });
+
+  it("mounts one dictionary overlay with the current video collection", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "video:7"));
+    expect(screen.getAllByTestId("dictionary-overlay")).toHaveLength(1);
+  });
+
+  it("removes and restores lookup without leaving the current video", async () => {
+    renderPage({ withLayout: true });
+    await screen.findByTestId("dictionary-overlay");
+    const toggle = screen.getByRole("switch", { name: "词典" });
+    fireEvent.click(toggle);
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
+    expect(screen.getByTestId("subtitle-panel")).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "video:7");
   });
 });

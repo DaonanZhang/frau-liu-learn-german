@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { lookupDictionaryWord, setDictionaryFavorite } from "../../api/lexicon/dictionary.js";
 import "./DictionaryLookupOverlay.css";
 
-const REGION_SELECTOR = "[data-exam-annotation-region]";
+const REGION_SELECTOR = "[data-exam-annotation-region], [data-dictionary-region]";
 const INTERACTIVE_SELECTOR = "button,a,input,label,[role=button]";
 const WORD_PATTERN = /[\p{L}\p{M}]+(?:[-'’][\p{L}\p{M}]+)*/gu;
 
@@ -89,7 +89,7 @@ function isCoarsePointer() {
   return typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
 }
 
-export default function DictionaryLookupOverlay() {
+export default function DictionaryLookupOverlay({ collectionKey }) {
   const [lookup, setLookup] = useState(null);
   const [favorites, setFavorites] = useState({});
   const [favoritePending, setFavoritePending] = useState({});
@@ -134,30 +134,38 @@ export default function DictionaryLookupOverlay() {
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         const requestId = ++requestRef.current;
-        const cached = cacheRef.current.get(key);
+        const cacheKey = `${collectionKey || ""}:${key}`;
+        const cached = cacheRef.current.get(cacheKey);
         if (cached) {
           setLookup({ word, anchor, status: cached.matches.length ? "matched" : "empty", data: cached });
           return;
         }
         setLookup({ word, anchor, status: "loading", data: null });
-        lookupDictionaryWord(word).then((data) => {
+        lookupDictionaryWord(word, collectionKey).then((data) => {
           if (requestRef.current !== requestId) return;
-          cacheRef.current.set(key, data);
+          cacheRef.current.set(cacheKey, data);
           setLookup({ word, anchor, status: data.matches?.length ? "matched" : "empty", data });
         }).catch(() => {
           if (requestRef.current === requestId) setLookup({ word, anchor, status: "error", data: null });
         });
       }, delay);
     };
+    const isInteractiveRegionTarget = (target) => {
+      const root = target.closest?.(REGION_SELECTOR);
+      const interactive = target.closest?.(INTERACTIVE_SELECTOR);
+      return Boolean(root && interactive && root.contains(interactive));
+    };
 
     const onPointerMove = (event) => {
-      if (isDesktopHover()) processPoint(event, 300);
+      if (!isDesktopHover()) return;
+      if (isInteractiveRegionTarget(event.target)) return;
+      processPoint(event, 300);
     };
     const onPointerUp = (event) => {
       if (!(event.pointerType === "touch" || isCoarsePointer())) return;
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) return;
-      if (event.target.closest?.(INTERACTIVE_SELECTOR)
+      if (isInteractiveRegionTarget(event.target)
         || event.target.closest?.(".exam-text-annotation-toolbar")) return;
       processPoint(event, 0);
     };
@@ -175,13 +183,14 @@ export default function DictionaryLookupOverlay() {
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
     return () => {
+      requestRef.current += 1;
       if (timerRef.current) clearTimeout(timerRef.current);
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, []);
+  }, [collectionKey]);
 
   function close() {
     requestRef.current += 1;
@@ -197,7 +206,7 @@ export default function DictionaryLookupOverlay() {
     setFavoritePending((state) => ({ ...state, [matchId]: true }));
     setFavoriteError((state) => ({ ...state, [matchId]: false }));
     try {
-      const result = await setDictionaryFavorite(matchId, nextFavorite);
+      const result = await setDictionaryFavorite(matchId, nextFavorite, collectionKey);
       const nextCard = result?.card || { id: card?.id || matchId, is_favorite: nextFavorite };
       setFavorites((state) => ({ ...state, [matchId]: nextCard }));
     } catch {

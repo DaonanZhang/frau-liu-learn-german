@@ -8,6 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import Entitlement, Module
+from apps.learning_by_video.models import Video
 from apps.exam_preparation.models import (
     ExerciseBase,
     ExamVocabularyCard,
@@ -37,6 +38,7 @@ class ExamVocabularyNormalizationMigrationTests(TestCase):
         nfd = "du\u0308rfen"
         nfc = "dürfen"
         canonical = ExamVocabularyCard.objects.create(
+            collection_key="",
             exam_type="TELC",
             level="C1",
             term=nfd,
@@ -44,6 +46,7 @@ class ExamVocabularyNormalizationMigrationTests(TestCase):
             translation_zh="可以",
         )
         duplicate = ExamVocabularyCard.objects.create(
+            collection_key="",
             exam_type="TELC",
             level="C1",
             term=nfc,
@@ -112,6 +115,7 @@ class ExamVocabularyModelAndSyncTests(TestCase):
         card.refresh_from_db()
         self.assertEqual(card.kind, ExamVocabularyCard.Kind.WORD)
         self.assertEqual(card.note, "编辑者备注")
+        self.assertEqual(card.collection_key, "exam:TELC:C1")
 
     def test_sentence_sync_uses_complete_sentence_note(self):
         exercise = make_writing({"vocabulary_pages": [{"entries": [
@@ -124,21 +128,49 @@ class ExamVocabularyModelAndSyncTests(TestCase):
 
     def test_card_identity_preserves_homonyms_with_different_meanings(self):
         first = ExamVocabularyCard.objects.create(
-            exam_type="TELC", level="C1", term="Vermögen", normalized_term="vermögen", translation_zh="财产"
+            collection_key="exam:TELC:C1", exam_type="TELC", level="C1", term="Vermögen", normalized_term="vermögen", translation_zh="财产"
         )
         second = ExamVocabularyCard.objects.create(
-            exam_type="TELC", level="C1", term="Vermögen", normalized_term="vermögen", translation_zh="能力"
+            collection_key="exam:TELC:C1", exam_type="TELC", level="C1", term="Vermögen", normalized_term="vermögen", translation_zh="能力"
         )
         self.assertNotEqual(first.pk, second.pk)
 
     def test_card_identity_rejects_duplicate_meaning(self):
         ExamVocabularyCard.objects.create(
-            exam_type="TELC", level="C1", term="Vermögen", normalized_term="vermögen", translation_zh="财产"
+            collection_key="exam:TELC:C1", exam_type="TELC", level="C1", term="Vermögen", normalized_term="vermögen", translation_zh="财产"
         )
         with self.assertRaises(IntegrityError), transaction.atomic():
             ExamVocabularyCard.objects.create(
-                exam_type="TELC", level="C1", term="vermögen", normalized_term="vermögen", translation_zh="财产"
+                collection_key="exam:TELC:C1", exam_type="TELC", level="C1", term="vermögen", normalized_term="vermögen", translation_zh="财产"
             )
+
+    def test_card_identity_allows_same_meaning_in_different_collections(self):
+        first = ExamVocabularyCard.objects.create(
+            collection_key="exam:TELC:C1", exam_type="TELC", level="C1", term="Antrag", normalized_term="antrag", translation_zh="申请"
+        )
+        second = ExamVocabularyCard.objects.create(
+            collection_key="exam:Goethe:C1", exam_type="Goethe", level="C1", term="Antrag", normalized_term="antrag", translation_zh="申请"
+        )
+        self.assertNotEqual(first.pk, second.pk)
+
+    def test_collection_key_migration_backfills_without_losing_relations(self):
+        user = get_user_model().objects.create_user(telephone="13800138803", password="pw")
+        exercise = make_writing({"vocabulary_pages": []}, external_id="collection-key-migration")
+        card = ExamVocabularyCard.objects.create(
+            collection_key="", exam_type="TELC", level="C1", term="Antrag", normalized_term="antrag", translation_zh="申请"
+        )
+        favorite = UserExamVocabularyFavorite.objects.create(user=user, card=card)
+        source = ExamVocabularySource.objects.create(writing_exercise=exercise, card=card, page_index=0, entry_index=0)
+
+        migration = import_module("apps.exam_preparation.migrations.0034_examvocabularycard_collection_key")
+        migration.backfill_collection_keys(django_apps, None)
+
+        card.refresh_from_db()
+        favorite.refresh_from_db()
+        source.refresh_from_db()
+        self.assertEqual(card.collection_key, "exam:TELC:C1")
+        self.assertEqual(favorite.card_id, card.pk)
+        self.assertEqual(source.card_id, card.pk)
 
     def test_sync_keeps_order_removes_stale_source_and_preserves_enrichment(self):
         exercise = make_writing({"vocabulary_pages": [{"entries": [
@@ -202,6 +234,7 @@ class ExamVocabularyApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 2)
         self.assertTrue(response.data["results"][0]["is_favorite"] is False)
+        self.assertEqual(response.data["results"][0]["collection_key"], "exam:TELC:C1")
         self.assertIn(response.data["results"][0]["kind"], {"word", "expression", "sentence"})
 
         favorite_url = reverse("exam-prep-vocabulary-cards-favorite", args=[self.cards[0].pk])
@@ -213,8 +246,92 @@ class ExamVocabularyApiTests(APITestCase):
         self.assertFalse(self.client.delete(favorite_url).data["is_favorite"])
         self.assertFalse(self.client.delete(favorite_url).data["is_favorite"])
 
-    def test_list_requires_authentication_and_entitlement(self):
+    def test_list_requires_authentication_and_entitlement_except_favorites(self):
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get(self.list_url).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(self.client.get(self.list_url, {"favorites": "true"}).status_code, status.HTTP_401_UNAUTHORIZED)
         self.client.force_authenticate(get_user_model().objects.create_user(telephone="13800139992", password="x"))
         self.assertEqual(self.client.get(self.list_url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get(self.list_url, {"favorites": "true"}).status_code, status.HTTP_200_OK)
+
+    def test_favorites_list_is_scoped_to_current_user_and_collection(self):
+        video = Video.objects.create(title="Favorite-only video")
+        video_card = ExamVocabularyCard.objects.create(
+            collection_key=f"video:{video.pk}", exam_type="", level="", term="Video word",
+            normalized_term="video word", translation_zh="视频词",
+        )
+        video_only_user = get_user_model().objects.create_user(telephone="13800139993", password="x")
+        UserExamVocabularyFavorite.objects.create(user=video_only_user, card=video_card)
+        other_user = get_user_model().objects.create_user(telephone="13800139995", password="x")
+        UserExamVocabularyFavorite.objects.create(user=other_user, card=self.cards[1])
+        self.client.force_authenticate(video_only_user)
+
+        response = self.client.get(self.list_url, {"favorites": "true"})
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["collection_key"], f"video:{video.pk}")
+        filtered = self.client.get(self.list_url, {
+            "favorites": "true", "collection_key": "exam:TELC:C1", "search": "beantragen"
+        })
+        self.assertEqual(filtered.data["count"], 0)
+        filtered = self.client.get(self.list_url, {
+            "favorites": "true", "collection_key": f"video:{video.pk}", "search": "视频词"
+        })
+        self.assertEqual(filtered.data["count"], 1)
+        self.assertEqual(filtered.data["results"][0]["id"], video_card.pk)
+
+    def test_video_only_user_can_manage_own_favorites_without_touching_another_user(self):
+        video = Video.objects.create(title="Contextual favorite")
+        video_card = ExamVocabularyCard.objects.create(
+            collection_key=f"video:{video.pk}", exam_type="", level="", term="Video word",
+            normalized_term="video word", translation_zh="视频词",
+        )
+        other_user = get_user_model().objects.create_user(telephone="13800139994", password="x")
+        UserExamVocabularyFavorite.objects.create(user=other_user, card=video_card)
+        UserExamVocabularyFavorite.objects.create(user=self.user, card=video_card)
+        self.client.force_authenticate(other_user)
+        exam_favorite_url = reverse("exam-prep-vocabulary-cards-favorite", args=[self.cards[1].pk])
+        video_favorite_url = reverse("exam-prep-vocabulary-cards-favorite", args=[video_card.pk])
+
+        self.assertEqual(self.client.post(exam_favorite_url).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(UserExamVocabularyFavorite.objects.filter(user=other_user, card=self.cards[1]).exists())
+        self.assertFalse(self.client.delete(video_favorite_url).data["is_favorite"])
+        self.assertFalse(UserExamVocabularyFavorite.objects.filter(user=other_user, card=video_card).exists())
+        self.assertTrue(UserExamVocabularyFavorite.objects.filter(user=self.user, card=video_card).exists())
+
+    def test_favorite_knowledge_defaults_and_can_be_toggled(self):
+        favorite_url = reverse("exam-prep-vocabulary-cards-favorite", args=[self.cards[0].pk])
+        knowledge_url = reverse("exam-prep-vocabulary-cards-knowledge", args=[self.cards[0].pk])
+        self.client.post(favorite_url)
+
+        listed = self.client.get(self.list_url, {"favorites": "true"})
+        self.assertEqual(listed.data["results"][0]["knowledge"], "UNMARKED")
+        for value in ("KNOWN", "UNKNOWN", "UNMARKED"):
+            response = self.client.patch(knowledge_url, {"knowledge": value}, format="json")
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            self.assertEqual(response.data, {"knowledge": value})
+            self.assertEqual(self.client.get(self.list_url, {"favorites": "true"}).data["results"][0]["knowledge"], value)
+
+        self.client.delete(favorite_url)
+        self.client.post(favorite_url)
+        self.assertEqual(self.client.get(self.list_url, {"favorites": "true"}).data["results"][0]["knowledge"], "UNMARKED")
+
+    def test_knowledge_requires_an_existing_current_user_favorite_and_valid_value(self):
+        knowledge_url = reverse("exam-prep-vocabulary-cards-knowledge", args=[self.cards[0].pk])
+        self.assertEqual(self.client.patch(knowledge_url, {"knowledge": "KNOWN"}, format="json").status_code, status.HTTP_404_NOT_FOUND)
+        self.client.post(reverse("exam-prep-vocabulary-cards-favorite", args=[self.cards[0].pk]))
+        self.assertEqual(self.client.patch(knowledge_url, {"knowledge": "other"}, format="json").status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_knowledge_is_user_scoped_and_available_to_video_only_user(self):
+        video = Video.objects.create(title="Knowledge favorite")
+        card = ExamVocabularyCard.objects.create(
+            collection_key=f"video:{video.pk}", exam_type="", level="", term="Video word",
+            normalized_term="video word", translation_zh="视频词",
+        )
+        video_only_user = get_user_model().objects.create_user(telephone="13800139996", password="x")
+        favorite = UserExamVocabularyFavorite.objects.create(user=video_only_user, card=card)
+        url = reverse("exam-prep-vocabulary-cards-knowledge", args=[card.pk])
+        self.client.force_authenticate(video_only_user)
+        self.assertEqual(self.client.patch(url, {"knowledge": "KNOWN"}, format="json").status_code, status.HTTP_200_OK)
+        favorite.refresh_from_db()
+        self.assertEqual(favorite.knowledge, "KNOWN")
+        self.assertFalse(UserExamVocabularyFavorite.objects.filter(user=self.user, card=card).exists())

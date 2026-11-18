@@ -25,6 +25,7 @@ import WritingExerciseWorkspace, { TranslationVisibilityIcon, VocabularyPages } 
 import {
   AnnotatableTextRegion,
   ExamTextAnnotationProvider,
+  examDictionaryCollectionKey,
 } from "../../../components/examPreparation/ExamTextAnnotations.jsx";
 import ScopedExplanation from "../../../components/examPreparation/ScopedExplanation.jsx";
 import { hasScopedExplanation } from "../../../components/examPreparation/explanationVisibility.js";
@@ -2188,5 +2189,13 @@ export default function TelcMockExamPage() {
   );
   }
 
-  return <ExamTextAnnotationProvider scope={annotationScope}>{phaseContent}</ExamTextAnnotationProvider>;
+  return (
+    <ExamTextAnnotationProvider
+      scope={annotationScope}
+      dictionaryCollectionKey={examDictionaryCollectionKey(null, currentScope)}
+      dictionaryEnabled={phase === "results" || phase === "writing_review"}
+    >
+      {phaseContent}
+    </ExamTextAnnotationProvider>
+  );
 }

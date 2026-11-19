@@ -411,7 +411,7 @@ export default function VideoStudyPage() {
       return;
     }
 
-    if (!isProbablyHlsUrl(playbackUrl) || videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+    if (!isProbablyHlsUrl(playbackUrl)) {
       videoElement.src = playbackUrl;
       videoElement.load();
       return () => {
@@ -437,6 +437,15 @@ export default function VideoStudyPage() {
           hlsRef.current.destroy();
           hlsRef.current = null;
         }
+      };
+    }
+
+    if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+      videoElement.src = playbackUrl;
+      videoElement.load();
+      return () => {
+        videoElement.removeAttribute("src");
+        videoElement.load();
       };
     }
 
@@ -1104,6 +1113,7 @@ export default function VideoStudyPage() {
                     controls={!isMobile}
                     loop={playbackSettings.videoMode === "single_loop"}
                     playsInline
+                    crossOrigin="anonymous"
                     controlsList="nodownload"
                     onContextMenu={(event) => event.preventDefault()}
                     preload="metadata"

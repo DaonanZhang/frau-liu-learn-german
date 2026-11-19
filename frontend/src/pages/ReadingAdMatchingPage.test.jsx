@@ -148,6 +148,17 @@ describe("ReadingAdMatchingPage annotations", () => {
     expect(screen.getByRole("button", { name: "Wiederholen" })).toBeInTheDocument();
   });
 
+  it("shows the exercise title on the C1 detail page", async () => {
+    fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
+      ...detail,
+      exercise_base: { ...detail.exercise_base, level: "C1", title: "Studieren mal anders" },
+    });
+    renderPage("c1");
+
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Studieren mal anders");
+    expect(screen.queryByRole("heading", { level: 1, name: "Übung ad-77" })).not.toBeInTheDocument();
+  });
+
   it("uses the two-column article layout and allows the same paragraph for multiple C1 questions", async () => {
     fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
       ...detail,

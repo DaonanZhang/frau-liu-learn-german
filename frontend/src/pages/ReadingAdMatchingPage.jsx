@@ -120,8 +120,11 @@ export default function ReadingAdMatchingPage() {
     return Array.isArray(exercise?.items) ? exercise.items : [];
   }, [exercise]);
   const heroTitle = useMemo(() => {
+    if (scope?.level === "C1" && exercise?.exercise_base?.title?.trim()) {
+      return exercise.exercise_base.title.trim();
+    }
     return `Übung ${exercise?.exercise_base?.external_id || exercise?.id || exerciseId || ""}`.trim();
-  }, [exercise, exerciseId]);
+  }, [exercise, exerciseId, scope?.level]);
 
   const answeredCount = useMemo(() => {
     return Object.values(answers).filter(Boolean).length;

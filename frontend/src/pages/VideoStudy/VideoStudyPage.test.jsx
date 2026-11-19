@@ -190,4 +190,16 @@ describe("VideoStudyPage", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(destroy).toHaveBeenCalledOnce();
   });
+
+  it("prefers hls.js when the browser only reports possible native HLS support", async () => {
+    vi.spyOn(Hls, "isSupported").mockReturnValue(true);
+    vi.spyOn(HTMLMediaElement.prototype, "canPlayType").mockReturnValue("maybe");
+    const loadSource = vi.spyOn(Hls.prototype, "loadSource").mockImplementation(() => {});
+    const attachMedia = vi.spyOn(Hls.prototype, "attachMedia").mockImplementation(() => {});
+    mocks.fetchVideoDetail.mockResolvedValue({ title: "Test video", video_url: "/video-7.m3u8" });
+    const { container } = renderPage();
+
+    await waitFor(() => expect(loadSource).toHaveBeenCalledWith("/video-7.m3u8"));
+    expect(attachMedia).toHaveBeenCalledWith(container.querySelector("video"));
+  });
 });

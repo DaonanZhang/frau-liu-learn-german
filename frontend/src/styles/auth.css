@@ -138,6 +138,18 @@ body {
   font-size: 13px;
 }
 
+.auth-labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.auth-link--quiet {
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .auth-input {
   width: 100%;
   height: 40px;
@@ -340,6 +352,13 @@ body {
   transform: translateY(1px);
 }
 
+.auth-btn--link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 /* =========================
    Footer
    ========================= */
@@ -376,6 +395,132 @@ body {
 
 .auth-link:hover {
   text-decoration: underline;
+}
+
+.auth-link:focus-visible,
+.auth-btn:focus-visible,
+.auth-recoveryEntry:focus-visible {
+  outline: 3px solid var(--auth-focus-ring);
+  outline-offset: 3px;
+}
+
+.auth-recoveryEntry {
+  min-height: 64px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid rgba(31, 111, 98, 0.18);
+  border-radius: 14px;
+  background: rgba(240, 253, 250, 0.72);
+  color: var(--auth-text);
+  text-decoration: none;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 120ms ease;
+}
+
+.auth-recoveryEntry:active {
+  transform: translateY(1px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .auth-recoveryEntry:hover {
+    border-color: rgba(31, 111, 98, 0.34);
+    background: rgba(236, 253, 245, 0.96);
+  }
+}
+
+.auth-recoveryEntry > svg {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  color: #1f6f62;
+}
+
+.auth-recoveryEntryText {
+  min-width: 0;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.auth-recoveryEntryText strong {
+  font-size: 13px;
+}
+
+.auth-recoveryEntryText span {
+  color: var(--auth-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.auth-recoveryEntryArrow {
+  flex: 0 0 auto;
+  color: #1f6f62;
+  font-size: 18px;
+}
+
+.auth-recoveryIntro {
+  margin: 10px auto 20px;
+  max-width: 360px;
+  color: var(--auth-muted);
+  font-size: 13px;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.auth-recoveryForm .auth-label {
+  margin-bottom: 6px;
+}
+
+.auth-fieldHint {
+  margin: 7px 2px 0;
+  color: var(--auth-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.auth-recoverySuccess {
+  text-align: center;
+}
+
+.auth-recoveryBack {
+  top: 14px;
+  left: 14px;
+  width: 44px;
+  height: 44px;
+}
+
+.auth-recoverySuccessIcon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 14px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #dff7ee;
+  color: #13715f;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.auth-recoveryStatus {
+  margin: 14px 0 8px;
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.auth-recoveryActions {
+  margin-top: 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.auth-recoveryActions .auth-btn {
+  margin-top: 0;
 }
 
 .auth-hint {
@@ -518,4 +663,11 @@ body {
 
 .step-line.active {
   background: rgba(16, 185, 129, 0.75);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-recoveryEntry,
+  .auth-btn {
+    transition: none;
+  }
 }

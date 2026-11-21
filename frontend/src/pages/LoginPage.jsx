@@ -130,10 +130,16 @@ export default function LoginPage() {
           </div>
         </label>
 
-        <label className="auth-label">
-          密码
+        <div className="auth-label">
+          <span className="auth-labelRow">
+            <label htmlFor="login-password">密码</label>
+            <Link className="auth-link auth-link--quiet" to="/forgot-password">
+              忘记密码？
+            </Link>
+          </span>
           <div className="auth-passwordField">
             <input
+              id="login-password"
               className="auth-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -190,24 +196,33 @@ export default function LoginPage() {
               )}
             </button>
           </div>
-        </label>
+        </div>
 
         <button className="auth-btn gradient" type="submit" disabled={!canSubmit}>
           登录
         </button>
 
+        <Link className="auth-recoveryEntry" to="/recover-phone">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M9 6h6M10 18h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+          <span className="auth-recoveryEntryText">
+            <strong>找回手机号</strong>
+            <span>通过绑定邮箱接收登录号码</span>
+          </span>
+          <span className="auth-recoveryEntryArrow" aria-hidden="true">→</span>
+        </Link>
+
         <div className="auth-divider" />
 
-        <div className="auth-footer auth-footer--split">
+        <div className="auth-footer">
           <div className="auth-footerGroup">
             <span>还没有账号？</span>
             <Link className="auth-link" to="/activate">
               立即注册
             </Link>
           </div>
-          <Link className="auth-link" to="/forgot-password">
-            忘记密码？
-          </Link>
         </div>
       </form>
     </AuthLayout>

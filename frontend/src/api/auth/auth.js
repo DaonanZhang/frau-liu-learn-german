@@ -39,13 +39,21 @@ function getLoginErrorPresentation(err) {
   const errorCode = String(err?.data?.code || "").trim();
   const errorMessage = pickErrorMessage(err, "");
 
+  if (errorCode === "account_not_found") {
+    return {
+      title: "登录失败",
+      text: "手机号不存在。",
+    };
+  }
+
   if (
+    errorCode === "invalid_password" ||
     errorCode === "no_active_account" ||
     errorMessage === "账号或密码输入错误。"
   ) {
     return {
       title: "登录失败",
-      text: "账号或密码输入错误。",
+      text: errorCode === "invalid_password" ? "密码错误。" : "账号或密码输入错误。",
     };
   }
 
@@ -280,6 +288,27 @@ export async function requestPasswordReset(email) {
     await Swal.fire({
       icon: "error",
       title: "暂时无法发送验证码",
+      text: err?.data?.detail || "请稍后再试。",
+    });
+
+    return { ok: false };
+  }
+}
+
+export async function requestPhoneRecovery(email) {
+  try {
+    const data = await apiFetch("/accounts/auth/phone-recovery/request/", {
+      method: "POST",
+      body: { email },
+    });
+
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[phone-recovery-request] failed:", err);
+
+    await Swal.fire({
+      icon: "error",
+      title: "暂时无法发送",
       text: err?.data?.detail || "请稍后再试。",
     });
 

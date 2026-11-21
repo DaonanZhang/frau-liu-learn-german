@@ -39,6 +39,7 @@ from apps.accounts.views.password_reset import (
     PasswordResetConfirmAPIView,
     PasswordResetRequestAPIView,
 )
+from apps.accounts.views.phone_recovery import PhoneRecoveryRequestAPIView
 from apps.accounts.views.public_status import PublicStatusAPIView
 from apps.accounts.views.bug_report import BugReportCreateAPIView
 
@@ -131,6 +132,11 @@ urlpatterns += [
         "auth/password-reset/confirm/",
         PasswordResetConfirmAPIView.as_view(),
         name="password-reset-confirm",
+    ),
+    path(
+        "auth/phone-recovery/request/",
+        PhoneRecoveryRequestAPIView.as_view(),
+        name="phone-recovery-request",
     ),
     path(
         "payments/alipay/debug-create/",

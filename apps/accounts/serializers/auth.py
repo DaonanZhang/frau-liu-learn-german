@@ -46,7 +46,8 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
     )
     default_error_messages = {
         **TokenObtainPairSerializer.default_error_messages,
-        "no_active_account": "账号或密码输入错误。",
+        "account_not_found": "手机号不存在。",
+        "invalid_password": "密码错误。",
     }
 
     def validate(self, attrs):
@@ -58,17 +59,22 @@ class TelephoneTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         cleaned = "".join(ch for ch in str(telephone or "").strip() if ch.isdigit())
         if not cleaned:
-            raise AuthenticationFailed(
-                self.error_messages["no_active_account"],
-                "no_active_account",
+            raise _session_authentication_failed(
+                self.error_messages["account_not_found"],
+                "account_not_found",
             )
 
         User = get_user_model()
         user = User.objects.filter(telephone=cleaned, country_code=country_code).first()
-        if not user or not user.is_active or not user.check_password(password):
-            raise AuthenticationFailed(
-                self.error_messages["no_active_account"],
-                "no_active_account",
+        if not user:
+            raise _session_authentication_failed(
+                self.error_messages["account_not_found"],
+                "account_not_found",
+            )
+        if not user.is_active or not user.check_password(password):
+            raise _session_authentication_failed(
+                self.error_messages["invalid_password"],
+                "invalid_password",
             )
         if not user_allowed_during_maintenance(user):
             raise AuthenticationFailed(

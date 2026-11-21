@@ -39,7 +39,10 @@ from apps.accounts.services.activation_codes import (
     store_activation_code,
     verify_activation_code,
 )
-from apps.accounts.services.email_service import send_password_reset_email
+from apps.accounts.services.email_service import (
+    send_password_reset_email,
+    send_phone_recovery_email,
+)
 from apps.accounts.services.password_reset_codes import verify_password_reset_code
 
 
@@ -161,6 +164,46 @@ class MaintenanceModeAllowlistTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class LoginErrorApiTests(APITestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.user = get_user_model().objects.create_user(
+            telephone="13800138000",
+            country_code="+86",
+            password="pass-123456",
+        )
+
+    def test_missing_phone_has_distinct_error(self) -> None:
+        response = self.client.post(
+            "/api/accounts/auth/login/",
+            {
+                "telephone": "13900139000",
+                "country_code": "+86",
+                "password": "pass-123456",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["code"], "account_not_found")
+        self.assertEqual(response.data["detail"], "手机号不存在。")
+
+    def test_wrong_password_has_distinct_error(self) -> None:
+        response = self.client.post(
+            "/api/accounts/auth/login/",
+            {
+                "telephone": self.user.telephone,
+                "country_code": self.user.country_code,
+                "password": "wrong-password",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data["code"], "invalid_password")
+        self.assertEqual(response.data["detail"], "密码错误。")
 
 
 @override_settings(DEVICE_LIMIT_ENABLED=True, MAX_CONCURRENT_LOGIN_SESSIONS=3)
@@ -633,6 +676,83 @@ class PasswordResetApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(mail.outbox), 0)
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    EMAIL_ENABLED=True,
+    FRONTEND_BASE_URL="https://example.com/login",
+)
+class PhoneRecoveryApiTests(APITestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.email_patcher = patch(
+            "apps.accounts.views.phone_recovery.send_phone_recovery_email_async",
+            side_effect=send_phone_recovery_email,
+        )
+        self.email_patcher.start()
+        self.user = get_user_model().objects.create_user(
+            telephone="01234567890",
+            country_code="+49",
+            password="pass-123456",
+            email="learner@example.com",
+        )
+
+    def tearDown(self) -> None:
+        self.email_patcher.stop()
+        super().tearDown()
+
+    def test_known_email_sends_exact_login_phone(self) -> None:
+        response = self.client.post(
+            "/api/accounts/auth/phone-recovery/request/",
+            {"email": "LEARNER@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("找回注册手机号", mail.outbox[0].subject)
+        self.assertEqual(mail.outbox[0].to, ["learner@example.com"])
+        html_body = mail.outbox[0].alternatives[0][0]
+        self.assertIn("+49", html_body)
+        self.assertIn("01234567890", html_body)
+        self.assertIn("+4901234567890", html_body)
+        self.assertIn("国家区号", html_body)
+        self.assertIn("注册手机号", html_body)
+        self.assertIn("0 必须保留", html_body)
+        self.assertIn('href="https://example.com/login"', html_body)
+        self.assertIn("前往登录", html_body)
+
+    def test_unknown_email_returns_same_success_without_email(self) -> None:
+        known_response = self.client.post(
+            "/api/accounts/auth/phone-recovery/request/",
+            {"email": "learner@example.com"},
+            format="json",
+        )
+        known_detail = known_response.data["detail"]
+        mail.outbox.clear()
+
+        response = self.client.post(
+            "/api/accounts/auth/phone-recovery/request/",
+            {"email": "missing@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["detail"], known_detail)
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(FRONTEND_BASE_URL="")
+    def test_email_omits_login_cta_without_frontend_base_url(self) -> None:
+        response = self.client.post(
+            "/api/accounts/auth/phone-recovery/request/",
+            {"email": "learner@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        html_body = mail.outbox[0].alternatives[0][0]
+        self.assertNotIn("前往登录", html_body)
 
 
 @override_settings(

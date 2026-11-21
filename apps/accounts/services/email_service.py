@@ -111,3 +111,46 @@ def send_password_reset_email_async(
             logger.exception("Failed to send password reset email asynchronously", exc_info=exc)
 
     future.add_done_callback(_log_failure)
+
+
+def send_phone_recovery_email(
+    *,
+    to_email: str,
+    country_code: str,
+    telephone: str,
+) -> None:
+    login_number = f"{country_code}{telephone}"
+    preview_text = f"您的注册手机号是 {login_number}"
+    send_templated_email(
+        subject="符号刘的德语素材库 找回注册手机号",
+        to_email=to_email,
+        template_name="accounts/emails/phone_recovery_email.html",
+        context={
+            "country_code": country_code,
+            "telephone": telephone,
+            "login_number": login_number,
+            "preview_text": preview_text,
+            "text_body": f"{preview_text}。登录时请选择 {country_code}，并输入手机号 {telephone}。",
+        },
+    )
+
+
+def send_phone_recovery_email_async(
+    *,
+    to_email: str,
+    country_code: str,
+    telephone: str,
+) -> None:
+    future = email_executor.submit(
+        send_phone_recovery_email,
+        to_email=to_email,
+        country_code=country_code,
+        telephone=telephone,
+    )
+
+    def _log_failure(task):
+        exc = task.exception()
+        if exc:
+            logger.exception("Failed to send phone recovery email asynchronously", exc_info=exc)
+
+    future.add_done_callback(_log_failure)

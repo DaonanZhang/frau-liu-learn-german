@@ -4,6 +4,7 @@ import Home from "./pages/Home.jsx";
 import VideoStudyPage from "./pages/VideoStudy/VideoStudyPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage.jsx";
+import RecoverPhonePage from "./pages/RecoverPhonePage.jsx";
 import ActivatePage from "./pages/ActivatePage.jsx";
 import ActivateEntitlementPage from "./pages/ActivateEntitlementPage.jsx";
 import LexiconPage from "./pages/LexiconPage/LexiconPage.jsx";
@@ -140,6 +141,7 @@ function protectExamPreparationRoutes(routes) {
 const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
+  { path: "/recover-phone", element: <RecoverPhonePage /> },
   { path: "/activate", element: <ActivatePage /> },
   { path: "/activate-entitlement", element: <Navigate to="/redeem-code" replace /> },
   { path: "/payments/alipay/return", element: <AlipayReturnPage /> },

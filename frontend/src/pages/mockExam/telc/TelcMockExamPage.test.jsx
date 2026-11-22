@@ -18,6 +18,7 @@ import {
   submitSavedMockExam,
   updateSavedMockExam,
 } from "../../../api/exam_preparation/mockExams.js";
+import { reportAudioLoadError } from "../../../api/audioLoadErrors.js";
 
 function expectVocabularyCard(container, term, translation) {
   const card = container.querySelector(".exam-vocabulary-card");
@@ -70,6 +71,10 @@ vi.mock("../../../api/exam_preparation/mockExams.js", async (importOriginal) => 
     updateSavedMockExam: vi.fn(),
   };
 });
+
+vi.mock("../../../api/audioLoadErrors.js", () => ({
+  reportAudioLoadError: vi.fn().mockResolvedValue(undefined),
+}));
 
 function answerSheetExam() {
   return {
@@ -568,6 +573,7 @@ describe("mock exam exercise layout", () => {
     playSpy.mockReset().mockResolvedValue(undefined);
     loadSpy.mockClear();
     vi.stubGlobal("fetch", vi.fn(async (url) => successfulAudioResponse(url)));
+    reportAudioLoadError.mockReset().mockResolvedValue(undefined);
   });
 
   it("uses one attempt annotation scope and exposes prefixed learning-text regions", async () => {
@@ -985,6 +991,54 @@ describe("mock exam exercise layout", () => {
     expect(audio).toHaveAttribute("src", "blob:/b2-teil1.m4a");
     expect(audio.currentTime).toBe(23);
     expect(playSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("reports a terminal mock-exam audio failure once without changing the failure UI", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 504 }));
+    playSpy.mockRejectedValue(new Error("mock stream failed"));
+    reportAudioLoadError.mockRejectedValueOnce(new Error("report unavailable"));
+    const exam = listeningRangeExam();
+    exam.parts.listening_teil1.audio_file_url = "/teil1.m4a";
+    sessionStorage.setItem("exam-preparation-written-mock-v1:TELC:B1:7", JSON.stringify({
+      exam,
+      phase: "listening",
+      deadline: Date.now() + 60_000,
+      activePart: "listening_teil1",
+      answers: {},
+      writingText: "",
+      writingAssessment: {},
+      audioStep: 0,
+      audioStepStartedAt: Date.now(),
+      attemptId: null,
+      isFavorite: false,
+      wasEarlySubmitted: false,
+    }));
+
+    const { container } = render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(4_000); });
+    const audio = container.querySelector("audio");
+    fireEvent.canPlay(audio);
+    await act(async () => {
+      for (let index = 0; index < 6; index += 1) await Promise.resolve();
+    });
+
+    expect(screen.getByText("听力音频加载失败，请刷新页面后重试。")).toBeInTheDocument();
+    expect(reportAudioLoadError).toHaveBeenCalledTimes(1);
+    expect(reportAudioLoadError).toHaveBeenCalledWith(expect.objectContaining({
+      audio_url: "/teil1.m4a",
+      entry_point: "telc_mock_exam",
+      backup_status: 504,
+      backup_error: "Audio request failed: 504",
+      media_error_message: "mock stream failed",
+    }));
+
+    fireEvent.error(audio);
+    await act(async () => { await Promise.resolve(); });
+    expect(reportAudioLoadError).toHaveBeenCalledTimes(1);
   });
 
   it("enables available part arrows after listening audio has finished", async () => {

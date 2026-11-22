@@ -41,7 +41,7 @@ from apps.accounts.views.password_reset import (
 )
 from apps.accounts.views.phone_recovery import PhoneRecoveryRequestAPIView
 from apps.accounts.views.public_status import PublicStatusAPIView
-from apps.accounts.views.bug_report import BugReportCreateAPIView
+from apps.accounts.views.bug_report import AudioLoadErrorAPIView, BugReportCreateAPIView
 
 
 router = DefaultRouter()
@@ -88,6 +88,11 @@ urlpatterns += [
 
 # Login Urls
 urlpatterns += [
+    path(
+        "audio-load-errors/",
+        AudioLoadErrorAPIView.as_view(),
+        name="audio-load-error-create",
+    ),
     path(
         "bug-reports/",
         BugReportCreateAPIView.as_view(),

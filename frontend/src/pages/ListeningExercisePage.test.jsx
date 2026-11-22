@@ -9,6 +9,7 @@ import {
   fetchListeningQuestionStates,
   saveListeningQuestionState,
 } from "../api/exam_preparation/userExerciseStates.js";
+import { reportAudioLoadError } from "../api/audioLoadErrors.js";
 import ListeningExercisePage from "./ListeningExercisePage.jsx";
 
 const listeningExerciseStyles = readFileSync(resolve("src/pages/ListeningExercisePage.css"), "utf8");
@@ -20,6 +21,10 @@ vi.mock("../api/exam_preparation/listeningExercises.js", () => ({
 vi.mock("../api/exam_preparation/userExerciseStates.js", () => ({
   fetchListeningQuestionStates: vi.fn(),
   saveListeningQuestionState: vi.fn(),
+}));
+
+vi.mock("../api/audioLoadErrors.js", () => ({
+  reportAudioLoadError: vi.fn().mockResolvedValue(undefined),
 }));
 
 const originalCreateObjectURL = URL.createObjectURL;
@@ -89,6 +94,7 @@ describe("listening exercise audio loading", () => {
     fetchListeningQuestionStates.mockResolvedValue({ results: [] });
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
     vi.spyOn(HTMLMediaElement.prototype, "load").mockImplementation(() => {});
+    reportAudioLoadError.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -385,6 +391,39 @@ describe("listening exercise audio loading", () => {
 
     expect(playSpy).toHaveBeenCalledTimes(2);
     expect(screen.getByText("听力音频加载失败，请刷新页面后重试。")).toBeInTheDocument();
+    expect(reportAudioLoadError).toHaveBeenCalledTimes(1);
+    expect(reportAudioLoadError).toHaveBeenCalledWith(expect.objectContaining({
+      audio_url: "/teil2.m4a",
+      entry_point: "listening_exercise",
+      backup_status: null,
+      backup_error: "offline",
+      media_error_message: "stream failed",
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Audio abspielen" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(reportAudioLoadError).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the failure UI when diagnostic reporting fails", async () => {
+    vi.useFakeTimers();
+    reportAudioLoadError.mockRejectedValueOnce(new Error("report unavailable"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValue(new Error("decode failed"));
+
+    renderExercise("short_text_true_false_once");
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(4_000); });
+    fireEvent.click(screen.getByRole("button", { name: "Audio abspielen" }));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(screen.getByText("听力音频加载失败，请刷新页面后重试。")).toBeInTheDocument();
+    expect(reportAudioLoadError).toHaveBeenCalledWith(expect.objectContaining({
+      backup_status: 503,
+      backup_error: "Audio request failed: 503",
+    }));
   });
 
   it("reloads a failed stream once before waiting for the backup Blob", async () => {

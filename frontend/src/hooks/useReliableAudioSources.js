@@ -29,7 +29,11 @@ async function loadAudio(url, signal) {
     if (attempt > 0) await wait(RETRY_DELAYS[attempt - 1], signal);
     try {
       const response = await fetch(url, { signal });
-      if (!response.ok) throw new Error(`Audio request failed: ${response.status}`);
+      if (!response.ok) {
+        const error = new Error(`Audio request failed: ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
       return await response.blob();
     } catch (error) {
       if (signal.aborted) throw error;
@@ -43,6 +47,7 @@ export default function useReliableAudioSources(urls) {
   const key = useMemo(() => [...new Set(urls.filter(Boolean))].join("\n"), [urls]);
   const [sources, setSources] = useState({});
   const [statuses, setStatuses] = useState({});
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     const requestedUrls = key ? key.split("\n") : [];
@@ -53,6 +58,7 @@ export default function useReliableAudioSources(urls) {
       if (!controller.signal.aborted) {
         setSources({});
         setStatuses(Object.fromEntries(requestedUrls.map((url) => [url, "loading"])));
+        setErrors({});
       }
     });
 
@@ -66,9 +72,16 @@ export default function useReliableAudioSources(urls) {
           setSources((previous) => ({ ...previous, [url]: objectUrl }));
           setStatuses((previous) => ({ ...previous, [url]: "ready" }));
         }
-      } catch {
+      } catch (error) {
         if (!controller.signal.aborted) {
           setStatuses((previous) => ({ ...previous, [url]: "error" }));
+          setErrors((previous) => ({
+            ...previous,
+            [url]: {
+              status: Number.isInteger(error?.status) ? error.status : null,
+              message: String(error?.message || error || "Audio request failed").slice(0, 1000),
+            },
+          }));
         }
       }
     });
@@ -79,5 +92,5 @@ export default function useReliableAudioSources(urls) {
     };
   }, [key]);
 
-  return { sources, statuses };
+  return { sources, statuses, errors };
 }

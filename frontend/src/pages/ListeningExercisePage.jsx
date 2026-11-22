@@ -8,6 +8,7 @@ import {
   fetchListeningQuestionStates,
   saveListeningQuestionState,
 } from "../api/exam_preparation/userExerciseStates.js";
+import { reportAudioLoadError } from "../api/audioLoadErrors.js";
 import ExamActionButton from "../components/examPreparation/ExamActionButton.jsx";
 import ExerciseFavoriteButton from "../components/examPreparation/ExerciseFavoriteButton.jsx";
 import {
@@ -84,6 +85,8 @@ export default function ListeningExercisePage({
   const streamRetriedRef = useRef(false);
   const recoveryPositionRef = useRef(0);
   const playIntentRef = useRef(false);
+  const lastMediaErrorRef = useRef(null);
+  const reportedAudioFailureRef = useRef("");
   const [exercise, setExercise] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState("");
@@ -102,10 +105,15 @@ export default function ListeningExercisePage({
   const isTelcC1 = scope?.examType === "TELC" && scope.level === "C1";
   const c1Format = exercise?.content?.format;
   const audioUrls = useMemo(() => [exercise?.audio_file_url].filter(Boolean), [exercise?.audio_file_url]);
-  const { sources: audioSources, statuses: audioStatuses } = useReliableAudioSources(audioUrls);
+  const {
+    sources: audioSources,
+    statuses: audioStatuses,
+    errors: audioErrors,
+  } = useReliableAudioSources(audioUrls);
   const audioUrl = exercise?.audio_file_url || "";
   const backupAudioSource = audioSources[audioUrl] || "";
   const backupAudioStatus = audioUrl ? (audioStatuses[audioUrl] || "loading") : "error";
+  const backupAudioError = audioErrors[audioUrl] || null;
   const [audioMode, setAudioMode] = useState("stream");
   const [audioRecoveryState, setAudioRecoveryState] = useState("idle");
   const audioSource = audioMode === "blob" ? backupAudioSource : audioUrl;
@@ -196,10 +204,27 @@ export default function ListeningExercisePage({
     streamRetriedRef.current = false;
     recoveryPositionRef.current = 0;
     playIntentRef.current = false;
+    lastMediaErrorRef.current = null;
+    reportedAudioFailureRef.current = "";
     setAudioMode("stream");
     setAudioRecoveryState("idle");
     resetAudioProgress();
   }, [audioUrl]);
+
+  useEffect(() => {
+    if (!audioFailed || !audioUrl || reportedAudioFailureRef.current === audioUrl) return;
+    reportedAudioFailureRef.current = audioUrl;
+    const mediaError = lastMediaErrorRef.current;
+    reportAudioLoadError({
+      audio_url: audioUrl,
+      page_url: typeof window === "undefined" ? "" : window.location.href,
+      entry_point: "listening_exercise",
+      backup_status: backupAudioError?.status ?? null,
+      backup_error: backupAudioError?.message || "",
+      media_error_code: Number.isInteger(mediaError?.code) ? mediaError.code : null,
+      media_error_message: mediaError?.message || "",
+    }).catch(() => {});
+  }, [audioFailed, audioUrl, backupAudioError]);
 
   useEffect(() => {
     if (audioRecoveryState === "switching" && backupAudioStatus === "ready") {
@@ -277,6 +302,10 @@ export default function ListeningExercisePage({
       setErrorText(error?.message || "Audio playback failed.");
       return;
     }
+    lastMediaErrorRef.current = {
+      code: Number.isInteger(error?.code) ? error.code : null,
+      message: String(error?.message || "Audio playback failed").slice(0, 1000),
+    };
     recoveryPositionRef.current = Number.isFinite(audioElement.currentTime) ? audioElement.currentTime : 0;
     setIsPlaying(false);
     if (audioMode === "stream" && !streamRetriedRef.current) {
@@ -293,6 +322,10 @@ export default function ListeningExercisePage({
         setAudioRecoveryState("idle");
         return;
       } catch (retryError) {
+        lastMediaErrorRef.current = {
+          code: Number.isInteger(retryError?.code) ? retryError.code : null,
+          message: String(retryError?.message || "Audio playback failed").slice(0, 1000),
+        };
         if (retryError?.name === "NotAllowedError") {
           setAudioRecoveryState("idle");
           setErrorText(retryError.message || "Audio playback failed.");

@@ -13,6 +13,7 @@ import {
 } from "../../../api/exam_preparation/mockExams.js";
 import { normalizeExamPreparationContent } from "../../../api/exam_preparation/contentText.js";
 import { useAuth } from "../../../api/auth/useAuth.js";
+import { reportAudioLoadError } from "../../../api/audioLoadErrors.js";
 import TelcMockExamAnswerSheet from "./TelcMockExamAnswerSheet.jsx";
 import ExerciseOptionSheet from "../../../components/examPreparation/ExerciseOptionSheet.jsx";
 import ExerciseFavoriteButton from "../../../components/examPreparation/ExerciseFavoriteButton.jsx";
@@ -1266,6 +1267,8 @@ export default function TelcMockExamPage() {
   const streamRetriedRef = useRef(false);
   const recoveryPositionRef = useRef(0);
   const pausedListeningRemainingRef = useRef(null);
+  const lastMediaErrorRef = useRef(null);
+  const reportedAudioFailureRef = useRef("");
   const [exam, setExam] = useState(null);
   const [phase, setPhase] = useState("loading");
   const [deadline, setDeadline] = useState(0);
@@ -1311,9 +1314,14 @@ export default function TelcMockExamPage() {
   const listeningAudioUrls = useMemo(() => ["reading", "collection", "listening"].includes(phase)
     ? examPartKeys(currentScope.level, "listening").map((partKey) => exam?.parts?.[partKey]?.audio_file_url).filter(Boolean)
     : [], [exam, phase, currentScope.level]);
-  const { sources: audioSources, statuses: audioStatuses } = useReliableAudioSources(listeningAudioUrls);
+  const {
+    sources: audioSources,
+    statuses: audioStatuses,
+    errors: audioErrors,
+  } = useReliableAudioSources(listeningAudioUrls);
   const currentBackupAudioSource = audioSources[currentAudioUrl] || "";
   const currentBackupAudioStatus = currentAudioUrl ? (audioStatuses[currentAudioUrl] || "loading") : "error";
+  const currentBackupAudioError = audioErrors[currentAudioUrl] || null;
   const currentAudioSource = audioMode === "blob" ? currentBackupAudioSource : currentAudioUrl;
 
   const persist = useCallback((next = {}) => {
@@ -1577,6 +1585,10 @@ export default function TelcMockExamPage() {
   const recoverCurrentAudio = useCallback(async (error, pausedRemaining) => {
     const element = audioRef.current;
     if (!element || error?.name === "NotAllowedError") return;
+    lastMediaErrorRef.current = {
+      code: Number.isInteger(error?.code) ? error.code : null,
+      message: String(error?.message || "Audio playback failed").slice(0, 1000),
+    };
     const token = playRetryTokenRef.current;
     pausedListeningRemainingRef.current = pausedRemaining ?? pauseListeningCountdown();
     recoveryPositionRef.current = Number.isFinite(element.currentTime) ? element.currentTime : 0;
@@ -1598,6 +1610,10 @@ export default function TelcMockExamPage() {
         pausedListeningRemainingRef.current = null;
         return;
       } catch (retryError) {
+        lastMediaErrorRef.current = {
+          code: Number.isInteger(retryError?.code) ? retryError.code : null,
+          message: String(retryError?.message || "Audio playback failed").slice(0, 1000),
+        };
         if (token !== playRetryTokenRef.current) return;
         if (retryError?.name === "NotAllowedError") {
           awaitingAudioGestureRef.current = true;
@@ -1662,6 +1678,8 @@ export default function TelcMockExamPage() {
     streamRetriedRef.current = false;
     recoveryPositionRef.current = 0;
     pausedListeningRemainingRef.current = null;
+    lastMediaErrorRef.current = null;
+    reportedAudioFailureRef.current = "";
     setAudioMode("stream");
     setAudioBuffering(false);
     setAudioProgress({ currentTime: 0, duration: 0 });
@@ -1672,6 +1690,22 @@ export default function TelcMockExamPage() {
       playRequestRef.current = false;
     };
   }, [currentAudioUrl]);
+
+  useEffect(() => {
+    if (audioPlaybackState !== "error" || !currentAudioUrl
+      || reportedAudioFailureRef.current === currentAudioUrl) return;
+    reportedAudioFailureRef.current = currentAudioUrl;
+    const mediaError = lastMediaErrorRef.current;
+    reportAudioLoadError({
+      audio_url: currentAudioUrl,
+      page_url: typeof window === "undefined" ? "" : window.location.href,
+      entry_point: "telc_mock_exam",
+      backup_status: currentBackupAudioError?.status ?? null,
+      backup_error: currentBackupAudioError?.message || "",
+      media_error_code: Number.isInteger(mediaError?.code) ? mediaError.code : null,
+      media_error_message: mediaError?.message || "",
+    }).catch(() => {});
+  }, [audioPlaybackState, currentAudioUrl, currentBackupAudioError]);
 
   useEffect(() => {
     if (phase === "listening") return;

@@ -27,3 +27,13 @@ class BugReportCreateSerializer(serializers.Serializer):
         if len(serialized) > 50000:
             raise serializers.ValidationError("Console 错误信息过长。")
         return value
+
+
+class AudioLoadErrorSerializer(serializers.Serializer):
+    audio_url = serializers.CharField(max_length=2000)
+    page_url = serializers.CharField(max_length=2000, required=False, allow_blank=True)
+    entry_point = serializers.ChoiceField(choices=("listening_exercise", "telc_mock_exam"))
+    backup_status = serializers.IntegerField(required=False, allow_null=True, min_value=100, max_value=599)
+    backup_error = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    media_error_code = serializers.IntegerField(required=False, allow_null=True, min_value=0, max_value=4)
+    media_error_message = serializers.CharField(max_length=500, required=False, allow_blank=True)

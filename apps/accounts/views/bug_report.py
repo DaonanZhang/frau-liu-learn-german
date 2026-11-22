@@ -1,4 +1,6 @@
+import logging
 from ipaddress import ip_address
+from urllib.parse import urlsplit
 
 from django.utils import timezone
 from rest_framework import status
@@ -8,7 +10,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import BugReport
-from apps.accounts.serializers.bug_report import BugReportCreateSerializer
+from apps.accounts.serializers.bug_report import AudioLoadErrorSerializer, BugReportCreateSerializer
+
+
+logger = logging.getLogger(__name__)
 
 
 def _request_ip(request: Request) -> str | None:
@@ -45,3 +50,28 @@ class BugReportCreateAPIView(APIView):
             consented_at=timezone.now(),
         )
         return Response({"id": report.pk}, status=status.HTTP_201_CREATED)
+
+
+class AudioLoadErrorAPIView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request: Request) -> Response:
+        serializer = AudioLoadErrorSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        audio_url = urlsplit(data["audio_url"])._replace(query="", fragment="").geturl()
+        page_url = urlsplit(data.get("page_url", ""))._replace(query="", fragment="").geturl()
+        logger.warning(
+            "Client audio load failure user_id=%s entry_point=%s audio_url=%r page_url=%r "
+            "backup_status=%s backup_error=%r media_error_code=%s media_error_message=%r",
+            request.user.pk,
+            data["entry_point"],
+            audio_url,
+            page_url,
+            data.get("backup_status"),
+            data.get("backup_error", ""),
+            data.get("media_error_code"),
+            data.get("media_error_message", ""),
+        )
+        return Response(status=status.HTTP_201_CREATED)

@@ -12,6 +12,10 @@ import {
 import { reportAudioLoadError } from "../api/audioLoadErrors.js";
 import ListeningExercisePage from "./ListeningExercisePage.jsx";
 
+vi.mock("../components/examPreparation/DictionaryLookupOverlay.jsx", () => ({
+  default: ({ collectionKey }) => <div data-testid="dictionary-overlay" data-collection-key={collectionKey} />,
+}));
+
 const listeningExerciseStyles = readFileSync(resolve("src/pages/ListeningExercisePage.css"), "utf8");
 
 vi.mock("../api/exam_preparation/listeningExercises.js", () => ({
@@ -585,6 +589,9 @@ describe("listening exercise text annotations", () => {
       "data-exam-annotation-region",
       "task",
     );
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
+    expect(screen.queryByText("Das ist der Hörtext.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Die erste Aussage passt zum Gespräch.")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Welche Aussage stimmt?" })).toHaveAttribute(
       "data-exam-annotation-region",
       "question:41",
@@ -600,6 +607,17 @@ describe("listening exercise text annotations", () => {
       "data-exam-annotation-region",
     );
     expect(sessionStorage.getItem("exam-annotations:v1:exercise:LISTENING_TEIL2:17")).toBeNull();
+  });
+
+  it("keeps the dictionary disabled outside supported TELC levels", async () => {
+    fetchListeningExerciseDetail.mockResolvedValue(createListeningExercise({
+      exercise_base: { level: "A2", exam_type: "GOETHE", exercise_type: "LISTENING_TEIL2" },
+    }));
+
+    renderExercise("short_text_true_false_once");
+
+    expect(await screen.findByText(/Sie hören nun ein Gespräch\./)).toBeInTheDocument();
+    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
   });
 
   it("keeps ordinary option clicks and audio controls usable", async () => {

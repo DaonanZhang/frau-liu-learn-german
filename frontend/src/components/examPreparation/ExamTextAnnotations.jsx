@@ -411,7 +411,7 @@ function activateExistingMark(event, regions, annotationState, onActivate) {
   return true;
 }
 
-function ExamTextAnnotationToolbar({ active, onAction, onDismiss }) {
+function ExamTextAnnotationToolbar({ active, dictionaryEnabled, onAction, onDismiss }) {
   const toolbarRef = useRef(null);
   const [position, setPosition] = useState({ left: 8, top: 8, placement: "above" });
 
@@ -485,6 +485,9 @@ function ExamTextAnnotationToolbar({ active, onAction, onDismiss }) {
         if (event.key === "Escape") onDismiss();
       }}
     >
+      {dictionaryEnabled
+        ? <button type="button" data-annotation-action="dictionary" aria-pressed={false}>查词</button>
+        : null}
       <button type="button" data-annotation-action="highlight" aria-pressed={pressed("highlight")}>高亮</button>
       <button type="button" data-annotation-action="underline" aria-pressed={pressed("underline")}>下划线</button>
       <button type="button" data-annotation-action="clear" aria-pressed={false}>清除</button>
@@ -496,7 +499,9 @@ function AnnotationController({ children, dictionaryCollectionKey, dictionaryEna
   const context = useExamTextAnnotations();
   const { state } = context;
   const [active, setActive] = useState(null);
+  const [lookupRequest, setLookupRequest] = useState(null);
   const activeRef = useRef(active);
+  const lookupRequestIdRef = useRef(0);
   const pointerMovingRef = useRef(false);
   const pointerGestureRef = useRef(null);
   const suppressClickRef = useRef(null);
@@ -505,6 +510,10 @@ function AnnotationController({ children, dictionaryCollectionKey, dictionaryEna
   useEffect(() => {
     activeRef.current = active;
   }, [active]);
+
+  useEffect(() => {
+    if (!dictionaryEnabled) setLookupRequest(null);
+  }, [dictionaryEnabled]);
 
   useEffect(() => {
     const supported = customHighlightsAvailable();
@@ -631,6 +640,16 @@ function AnnotationController({ children, dictionaryCollectionKey, dictionaryEna
   const handleAction = useCallback((action) => {
     const selection = activeRef.current;
     if (!selection) return;
+    if (action === "dictionary") {
+      setLookupRequest({
+        id: ++lookupRequestIdRef.current,
+        text: selection.text.trim(),
+        anchor: selection.rect,
+      });
+      setActive(null);
+      window.getSelection()?.removeAllRanges();
+      return;
+    }
     const nextRegions = { ...state.regions };
     const style = action === "clear" ? null : action;
     const isActive = style && selection.styleState[style] === "active";
@@ -660,9 +679,16 @@ function AnnotationController({ children, dictionaryCollectionKey, dictionaryEna
   return (
     <AnnotationContext.Provider value={controllerContext}>
       {children}
-      {dictionaryEnabled ? <DictionaryLookupOverlay collectionKey={dictionaryCollectionKey} /> : null}
+      {dictionaryEnabled ? (
+        <DictionaryLookupOverlay
+          collectionKey={dictionaryCollectionKey}
+          lookupRequest={lookupRequest}
+          pointRegionSelector="[data-dictionary-region]"
+        />
+      ) : null}
       <ExamTextAnnotationToolbar
         active={active}
+        dictionaryEnabled={dictionaryEnabled}
         onAction={handleAction}
         onDismiss={() => setActive(null)}
       />

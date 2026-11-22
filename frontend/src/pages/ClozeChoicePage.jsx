@@ -108,6 +108,7 @@ function ClozeChoiceSlotTrigger({
   return (
     <button
       type="button"
+      data-dictionary-region="cloze-choice-slot"
       className={[
         "cloze-choice-slot-trigger",
         selectedKey ? "cloze-drop-slot__chip" : "cloze-choice-slot-trigger--empty",
@@ -284,7 +285,7 @@ export default function ClozeChoicePage() {
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
       dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
-      dictionaryEnabled={isChecked}
+      dictionaryEnabled={Boolean(examDictionaryCollectionKey(exercise, scope))}
     >
       <div className="cloze-page">
         <div className="cloze-shell">
@@ -402,7 +403,7 @@ export default function ClozeChoicePage() {
                           label: option.option_text,
                         })) || []}
                         renderOptionLabel={(option) => (
-                          <span>{option.label}</span>
+                          <span data-dictionary-region="cloze-choice-option">{option.label}</span>
                         )}
                         onClose={() => {
                           setActiveBlankSlotKey("");

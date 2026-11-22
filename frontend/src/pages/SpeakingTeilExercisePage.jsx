@@ -38,6 +38,12 @@ function isTelcB2Exercise(exercise) {
     && String(base.exam_type || "").trim().toUpperCase() === "TELC";
 }
 
+function isTelcB1Exercise(exercise) {
+  const base = exercise?.exercise_base || {};
+  return String(base.level || "").trim().toUpperCase() === "B1"
+    && String(base.exam_type || "").trim().toUpperCase() === "TELC";
+}
+
 function isTelcC1Exercise(exercise) {
   const base = exercise?.exercise_base || {};
   return String(base.level || "").trim().toUpperCase() === "C1"
@@ -629,6 +635,8 @@ export default function SpeakingTeilExercisePage({ teil }) {
     ? content.outline.length > 0
     : typeof content.outline === "string" && content.outline.trim().length > 0;
   const base = exercise?.exercise_base || {};
+  const dictionaryCollectionKey = examDictionaryCollectionKey(exercise, scope);
+  const isB1Telc = isTelcB1Exercise(exercise);
   const isB2Telc = isTelcB2Exercise(exercise);
   const isC1Telc = isTelcC1Exercise(exercise);
   const c1SpeakingSeconds = isC1Telc ? C1_SPEAKING_SECONDS[Number(teil)] || 0 : 0;
@@ -664,16 +672,6 @@ export default function SpeakingTeilExercisePage({ teil }) {
       && (orders[index] || []).length === sectionTurns.length
       && Boolean(checked[index]);
   });
-  const dictionaryEnabled = isC1Telc
-    ? showC1Answer && (!isC1SpeakingAttempt || c1AttemptComplete)
-    : Number(teil) === 1
-      ? dialogue.length > 0
-      : Number(teil) === 2
-        ? Boolean(checked.all)
-        : isB2Teil3
-          ? directTeil3Dialogue.length > 0
-          : Boolean(checked[activeSection]);
-
   async function toggleFavorite(turn) {
     const key = turnKey(turn);
     const nextValue = !favorites[key];
@@ -739,8 +737,8 @@ export default function SpeakingTeilExercisePage({ teil }) {
   return (
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
-      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
-      dictionaryEnabled={dictionaryEnabled}
+      dictionaryCollectionKey={dictionaryCollectionKey}
+      dictionaryEnabled={Boolean(dictionaryCollectionKey)}
     >
     <div className="speaking-detail-page">
       <div className="speaking-detail-topbar"><Link to={`/modules/exam-preparation/${scope?.levelPath || "b1"}/sprechen/teil-${teil}`} className="speaking-detail-back">← Zurück zu Sprechen {isC1Telc ? taskTitle : ["Teil 1", "Teil 2", "Teil 3"][Number(teil) - 1]}</Link></div>
@@ -750,7 +748,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
         <div className="speaking-detail-badges"><span>{base.level || scope?.level}</span>{base.is_real_exam ? <span className="speaking-detail-badge--exam">真题</span> : null}</div>
       </header>
       <div className={isC1Telc ? `speaking-detail-c1-layout speaking-detail-c1-layout--teil-${teil}` : undefined}>
-      <section className={`speaking-detail-card speaking-detail-task${isC1Telc && [1, 2].includes(Number(teil)) ? " speaking-detail-task--c1-topic" : ""}`}>
+      {!isB1Telc ? <section className={`speaking-detail-card speaking-detail-task${isC1Telc && [1, 2].includes(Number(teil)) ? " speaking-detail-task--c1-topic" : ""}`}>
         <p className="speaking-detail-card__eyebrow">Aufgabe</p><h2>{taskTitle}</h2>
         <AnnotatableTextRegion as="p" className="speaking-detail-task__instruction" regionId="task">{exercise.instruction}</AnnotatableTextRegion>
         {!hideB2Task ? <SpeakingTaskBox text={replaceLegacyLineBreaks(content.task)} /> : null}
@@ -779,7 +777,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
             return <blockquote className="speaking-detail-c1-quote" key={`${index}-${quote.text}`}><div className="speaking-detail-c1-quote__row"><p>{quote.text}</p>{quote.translation_zh ? <button type="button" className="speaking-detail-c1-translation-toggle" aria-label={translationVisible ? "隐藏中文翻译" : "显示中文翻译"} title="翻译" aria-pressed={translationVisible} onClick={() => setVisibleC1QuoteTranslations((previous) => ({ ...previous, [index]: !previous[index] }))}><img src="/images/translate_icon.png" alt="" aria-hidden="true" /></button> : null}</div>{translationVisible && quote.translation_zh ? <p className="speaking-detail-c1-quote__translation">{quote.translation_zh}</p> : null}</blockquote>;
           })}
         </div> : null}
-      </section>
+      </section> : null}
       {isC1Telc && (!isC1SpeakingAttempt || c1AttemptComplete) ? (
         <section className="speaking-detail-card speaking-detail-example speaking-detail-c1-answer">
           <div className="speaking-detail-c1-section-header"><h3>Beispielantwort</h3><button type="button" className="speaking-detail-c1-visibility" aria-label={showC1Answer ? "隐藏答案" : "显示答案"} title={showC1Answer ? "隐藏答案" : "显示答案"} aria-expanded={showC1Answer} onClick={() => setShowC1Answer((visible) => !visible)}><EyeIcon isHidden={!showC1Answer} /></button></div>
@@ -800,7 +798,23 @@ export default function SpeakingTeilExercisePage({ teil }) {
       {!isC1Telc && Number(teil) === 1 ? (
         <section className="speaking-detail-card speaking-detail-example"><div className="speaking-detail-dialogue speaking-detail-dialogue--flush">{dialogue.map((turn) => <DialogueTurn key={turnKey(turn)} turn={turn} showPractice recorderId={`teil-1-${exerciseId}-${turn.sequence}`} annotationRegionId={turnAnnotationId(turn)} />)}</div></section>
       ) : null}
-      {!isC1Telc && Number(teil) === 2 ? (
+      {isB1Telc && Number(teil) === 2 ? (
+        <section className="speaking-detail-card speaking-detail-example">
+          <div className="speaking-detail-dialogue speaking-detail-dialogue--flush">
+            {dialogue.map((turn) => (
+              <DialogueTurn
+                key={turnKey(turn)}
+                turn={turn}
+                showPractice
+                recorderId={`teil-2-${exerciseId}-${turn.sequence}`}
+                favoriteProps={favoriteForTurn(turn)}
+                annotationRegionId={turnAnnotationId(turn)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
+      {!isC1Telc && !isB1Telc && Number(teil) === 2 ? (
         <section className="speaking-detail-card speaking-detail-example">
           {examinerTurns.length ? (
             <div className="speaking-detail-dialogue speaking-detail-dialogue--flush speaking-detail-examiner-turns">
@@ -837,7 +851,29 @@ export default function SpeakingTeilExercisePage({ teil }) {
           </div>
         </section>
       ) : null}
-      {!isC1Telc && Number(teil) === 3 && !isB2Teil3 && currentSection ? (
+      {isB1Telc && Number(teil) === 3 ? (
+        <section className="speaking-detail-card speaking-detail-example">
+          {sections.map((section, sectionIndex) => {
+            const key = sectionKey(section);
+            return <section key={key}>
+              <AnnotatableTextRegion as="h2" regionId={`section:${key}`}>{section.type}</AnnotatableTextRegion>
+              <div className="speaking-detail-dialogue speaking-detail-dialogue--flush">
+                {(section.turns || []).map((turn) => (
+                  <DialogueTurn
+                    key={turnKey(turn)}
+                    turn={turn}
+                    showPractice
+                    recorderId={`teil-3-${exerciseId}-${sectionIndex}-${turn.sequence}`}
+                    favoriteProps={favoriteForTurn(turn)}
+                    annotationRegionId={turnAnnotationId(turn, key)}
+                  />
+                ))}
+              </div>
+            </section>;
+          })}
+        </section>
+      ) : null}
+      {!isC1Telc && !isB1Telc && Number(teil) === 3 && !isB2Teil3 && currentSection ? (
         <section className="speaking-detail-card speaking-detail-example">
           <div className="speaking-detail-carousel-header">
             <h2 className="speaking-detail-carousel-title">

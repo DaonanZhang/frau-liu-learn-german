@@ -1,3 +1,13 @@
+[data-dictionary-region]:not(button, a, input, label, [role="button"]),
+[data-dictionary-region] :not(button, button *, a, a *, input, input *, label, label *, [role="button"], [role="button"] *) {
+  cursor: help !important;
+}
+
+:is(button, a, input, label, [role="button"]) [data-dictionary-region],
+:is(button, a, input, label, [role="button"]) [data-dictionary-region] * {
+  cursor: inherit !important;
+}
+
 .dictionary-lookup-overlay {
   position: fixed;
   z-index: 1200;
@@ -13,6 +23,7 @@
   color: #20242a;
   box-shadow: 0 8px 28px rgb(15 23 42 / 18%);
   font-size: 14px;
+  cursor: auto;
 }
 
 .dictionary-lookup-overlay p { margin: 8px 0; }
@@ -45,6 +56,17 @@
 
 @media (hover: hover) and (pointer: fine) {
   .dictionary-lookup-overlay button:hover { background: #e8ebef; }
+}
+
+@media (any-pointer: coarse) {
+  [data-dictionary-region]:is(button, a, label, [role="button"]),
+  [data-dictionary-region] :is(button, a, label, [role="button"]),
+  :is(button, a, label, [role="button"]) [data-dictionary-region],
+  :is(button, a, label, [role="button"]) [data-dictionary-region] * {
+    -webkit-touch-callout: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
 }
 
 @media (pointer: coarse) {

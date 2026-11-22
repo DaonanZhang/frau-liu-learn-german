@@ -195,7 +195,7 @@ export default function ReadingUnderstandingPage() {
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
       dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
-      dictionaryEnabled={isChecked}
+      dictionaryEnabled={Boolean(examDictionaryCollectionKey(exercise, scope))}
     >
       <div className="reading-understanding-page">
         <div className={`reading-understanding-shell${scope?.level === "C1" ? " reading-understanding-shell--c1" : ""}`}>

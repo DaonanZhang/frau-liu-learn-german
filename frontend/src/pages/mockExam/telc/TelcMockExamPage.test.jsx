@@ -584,6 +584,7 @@ describe("mock exam exercise layout", () => {
         id: 101,
         question_number: 1,
         question_text: "Lesefrage",
+        explanation: "Nur nach der Abgabe sichtbar.",
         answer_options: [{ id: 1, option_key: "A", option_text: "Ja", is_correct: true }],
       }],
     };
@@ -595,7 +596,8 @@ describe("mock exam exercise layout", () => {
     render(<MemoryRouter><TelcMockExamPage /></MemoryRouter>);
 
     await screen.findByRole("heading", { name: "Lesen 2" });
-    expect(screen.queryByTestId("dictionary-overlay")).not.toBeInTheDocument();
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
+    expect(screen.queryByText("Nur nach der Abgabe sichtbar.")).not.toBeInTheDocument();
     expect(sessionStorage.getItem(mockAnnotationScope(31))).toBeNull();
     expect(document.querySelector('[data-exam-annotation-region="reading_understanding:passage"]')).toHaveTextContent("Lesetext");
     expect(document.querySelector('[data-exam-annotation-region="reading_understanding:question:101"]')).toHaveTextContent("Lesefrage");
@@ -3063,6 +3065,7 @@ describe("TELC C1 mock exam", () => {
   it("uses the practice flow for C1 Lesen Teil 1 and saves both answer keys", async () => {
     const { container } = renderC1();
     await screen.findByText("C1 Lesen 1");
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:C1");
     expect(container.querySelector(".telc-c1-cloze-matching")).toBeInTheDocument();
     const exampleGuide = screen.getByText("将 Beispiel 拖到标有 0 的空格中");
     const exampleOption = screen.getByRole("button", { name: "选择“Das vollständige Beispielsatzende.”并填入当前空格" });

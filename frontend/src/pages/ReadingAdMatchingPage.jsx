@@ -198,7 +198,7 @@ export default function ReadingAdMatchingPage() {
     <ExamTextAnnotationProvider
       scope={annotationScope}
       dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
-      dictionaryEnabled={isChecked}
+      dictionaryEnabled={Boolean(examDictionaryCollectionKey(exercise, scope))}
     >
       <div className="reading-ad-page">
         <div className="reading-ad-shell">

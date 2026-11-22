@@ -364,7 +364,7 @@ export default function ClozeMatchingPage() {
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
       dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
-      dictionaryEnabled={isChecked}
+      dictionaryEnabled={Boolean(examDictionaryCollectionKey(exercise, scope))}
     >
       <div className="cloze-page">
         <div className={`cloze-shell${scope?.level === "C1" ? " cloze-shell--c1" : ""}`}>
@@ -438,6 +438,7 @@ export default function ClozeMatchingPage() {
               <button
                 key={option.id}
                 type="button"
+                data-dictionary-region="cloze-matching-option"
                 className={[
                   "cloze-pool-chip",
                   !isChecked ? "cloze-draggable-chip" : "",
@@ -559,6 +560,7 @@ export default function ClozeMatchingPage() {
                         {selectedKey ? (
                           <button
                             type="button"
+                            data-dictionary-region="cloze-matching-selected-option"
                             className={[
                               "cloze-drop-slot__chip",
                               !isChecked ? "cloze-draggable-chip" : "",

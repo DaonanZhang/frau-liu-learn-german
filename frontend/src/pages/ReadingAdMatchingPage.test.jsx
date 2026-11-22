@@ -98,6 +98,25 @@ describe("ReadingAdMatchingPage annotations", () => {
 
     const scope = exerciseAnnotationScope(detail.exercise_base.exercise_type, detail.id);
     expect(scope).toBe("exam-annotations:v1:exercise:READING_AD_MATCHING:77");
+
+    const task = document.querySelector('[data-exam-annotation-region="task"]');
+    selectText(task, 0, 5);
+    expect(await screen.findByRole("button", { name: "查词" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prüfen" })).toBeInTheDocument();
+  });
+
+  it("keeps selection lookup disabled for an unsupported exam collection", async () => {
+    fetchReadingAdMatchingExerciseDetail.mockResolvedValue({
+      ...detail,
+      exercise_base: { ...detail.exercise_base, level: "A2" },
+    });
+    renderPage();
+    const task = await screen.findByText("Lesen Sie die Situationen.");
+
+    selectText(task, 0, 5);
+
+    expect(await screen.findByRole("button", { name: "高亮" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查词" })).not.toBeInTheDocument();
   });
 
   it("creates a mark in the current scope, preserves it through checking, and clears only it on Wiederholen", async () => {

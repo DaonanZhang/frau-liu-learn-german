@@ -78,13 +78,80 @@ class DictionaryApiTests(TestCase):
             1,
         )
 
-    def test_wikdict_results_precede_handedict_regardless_of_importance(self):
-        self.add_form(self.handedict_match, "ging", "VER:1:SIN:PRT:NON")
+    def test_lookup_keeps_distinct_simplified_translations_from_mixed_sources(self):
+        handedict = self.make_entry("gehen", "前往", source="handedict")
+        self.add_form(handedict, "ging", "VER:1:SIN:PRT:NON")
         response = self.client.get(self.lookup_url, {"word": "ging"})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual([match["id"] for match in response.data["matches"]], [self.gehen.pk])
-        self.assertEqual(response.data["matches"][0]["lemma"], "gehen")
+        self.assertEqual(
+            [match["translation_zh"] for match in response.data["matches"]],
+            ["走", "前往"],
+        )
+
+    def test_lookup_hides_traditional_when_simplified_translation_exists(self):
+        traditional = self.make_entry("gehen", "貓", source="handedict")
+        simplified = self.make_entry("gehen", "猫", source="wikdict")
+        for entry in (traditional, simplified):
+            self.add_form(entry, "shared", "")
+
+        matches = self.client.get(self.lookup_url, {"word": "shared"}).data["matches"]
+
+        self.assertEqual([match["id"] for match in matches], [simplified.pk])
+
+    def test_lookup_hides_traditional_contextual_translation_when_simplified_exists(self):
+        traditional = self.make_entry("gehen", "受到表揚", source="handedict")
+        simplified = self.make_entry("gehen", "受到表扬", source="wikdict")
+        for entry in (traditional, simplified):
+            self.add_form(entry, "contextual", "")
+
+        matches = self.client.get(self.lookup_url, {"word": "contextual"}).data["matches"]
+
+        self.assertEqual([match["id"] for match in matches], [simplified.pk])
+
+    def test_lookup_keeps_simplified_advantage_translation_with_reverse_pairs(self):
+        traditional = self.make_entry("gehen", "優點", source="handedict")
+        simplified = self.make_entry("gehen", "优点", source="wikdict")
+        other = self.make_entry("gehen", "好处", source="wikdict")
+        for entry in (traditional, simplified, other):
+            self.add_form(entry, "advantages", "")
+
+        matches = self.client.get(self.lookup_url, {"word": "advantages"}).data["matches"]
+        translations = [match["translation_zh"] for match in matches]
+
+        self.assertIn("优点", translations)
+        self.assertIn("好处", translations)
+        self.assertNotIn("優點", translations)
+
+    def test_lookup_keeps_distinct_simplified_aal_translations(self):
+        first = self.make_entry("Aal", "鲡", source="handedict")
+        second = self.make_entry("Aal", "鳝鱼", source="handedict")
+        for entry in (first, second):
+            self.add_form(entry, "aal", "")
+
+        matches = self.client.get(self.lookup_url, {"word": "aal"}).data["matches"]
+
+        self.assertEqual([match["translation_zh"] for match in matches], ["鲡", "鳝鱼"])
+
+    def test_lookup_deduplicates_displayed_translations_after_stripping_whitespace(self):
+        first = self.make_entry("gehen", "走路", source="wikdict")
+        duplicate = self.make_entry("laufen", " 走路 ", source="handedict")
+        for entry in (first, duplicate):
+            self.add_form(entry, "shared", "")
+
+        matches = self.client.get(self.lookup_url, {"word": "shared"}).data["matches"]
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["id"], first.pk)
+        self.assertEqual(matches[0]["translation_zh"], "走路")
+
+    def test_lookup_keeps_traditional_when_no_simplified_candidate_exists(self):
+        traditional = self.make_entry("gehen", "貓", source="wikdict")
+        self.add_form(traditional, "traditional-only", "")
+
+        matches = self.client.get(self.lookup_url, {"word": "traditional-only"}).data["matches"]
+
+        self.assertEqual([match["id"] for match in matches], [traditional.pk])
 
     @staticmethod
     def make_entry(headword, translation, pos="", importance=None, source="wikdict"):

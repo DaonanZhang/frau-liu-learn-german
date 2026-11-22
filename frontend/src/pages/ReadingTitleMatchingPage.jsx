@@ -187,7 +187,7 @@ export default function ReadingTitleMatchingPage() {
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
       dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
-      dictionaryEnabled={isChecked}
+      dictionaryEnabled={Boolean(examDictionaryCollectionKey(exercise, scope))}
     >
       <div className="reading-title-page">
         <div className="reading-title-shell">

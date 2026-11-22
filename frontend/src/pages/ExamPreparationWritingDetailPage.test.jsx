@@ -18,6 +18,10 @@ import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
 import { updateMyProfile } from "../api/auth/profile.js";
 import ExamPreparationWritingDetailPage from "./ExamPreparationWritingDetailPage.jsx";
 
+vi.mock("../components/examPreparation/DictionaryLookupOverlay.jsx", () => ({
+  default: ({ collectionKey }) => <div data-testid="dictionary-overlay" data-collection-key={collectionKey} />,
+}));
+
 const writingStyles = readFileSync(resolve("src/pages/ExamPreparationWritingDetailPage.css"), "utf8");
 
 vi.mock("../api/auth/index.js", () => ({
@@ -116,6 +120,8 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     renderPage();
 
     const emailHeading = await screen.findByRole("heading", { name: "E-Mail" });
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
+    expect(screen.queryByRole("button", { name: "Wiederholen" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /中文翻译/ })).not.toBeInTheDocument();
     expect(emailHeading.closest(".writing-detail-request-panel"))
       .toHaveClass("writing-detail-request-panel--email");
@@ -178,6 +184,7 @@ describe("ExamPreparationWritingDetailPage text annotations", () => {
     renderPage();
 
     const requestText = await screen.findByText("Schreiben Sie eine Reklamation.");
+    expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B2");
     const requestPanel = requestText.closest(".writing-detail-request-panel");
     expect(requestPanel).toHaveClass("writing-detail-request-panel--announcement");
     const announcementTitle = requestPanel.querySelector(".writing-detail-request-panel__announcement-title");

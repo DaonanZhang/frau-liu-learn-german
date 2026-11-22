@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -17,6 +17,7 @@ import { layoutClozeAnnotations, useClozeAnnotationLayout } from "./clozeAnnotat
 import ClozeChoicePage from "./ClozeChoicePage.jsx";
 import ClozeMatchingPage from "./ClozeMatchingPage.jsx";
 import { exerciseAnnotationScope } from "../utils/examTextAnnotations.js";
+import { lookupDictionaryWord, setDictionaryFavorite } from "../api/lexicon/dictionary.js";
 
 vi.mock("../api/exam_preparation/clozeExercises.js", () => ({
   fetchClozeChoiceExerciseDetail: vi.fn(),
@@ -28,6 +29,11 @@ vi.mock("../api/exam_preparation/userExerciseStates.js", () => ({
   fetchClozeMatchingBlankStates: vi.fn(),
   saveClozeChoiceBlankState: vi.fn(),
   saveClozeMatchingBlankState: vi.fn(),
+}));
+
+vi.mock("../api/lexicon/dictionary.js", () => ({
+  lookupDictionaryWord: vi.fn(),
+  setDictionaryFavorite: vi.fn(),
 }));
 
 const appLayoutStyles = readFileSync(resolve("src/layouts/AppLayout.css"), "utf8");
@@ -237,6 +243,16 @@ describe("Cloze exercise layout", () => {
   });
 
   beforeEach(() => {
+    lookupDictionaryWord.mockReset();
+    lookupDictionaryWord.mockResolvedValue({ matches: [{
+      id: 9,
+      matched_form: "Antwort",
+      lemma: "Antwort",
+      translation_zh: "答案",
+      part_of_speech: "noun",
+      card: null,
+    }] });
+    setDictionaryFavorite.mockReset();
     fetchClozeChoiceExerciseDetail.mockResolvedValue({
       id: 17,
       exercise_base: { title: "Cloze", external_id: "17", level: "B1", exercise_type: "CLOZE_CHOICE" },
@@ -300,6 +316,87 @@ describe("Cloze exercise layout", () => {
   it("keeps unanswered cloze slots compact", () => {
     expect(clozeStyles).toMatch(/\.cloze-drop-slot--empty\s*\{[^}]*min-width:\s*6rem/);
     expect(clozeStyles).toMatch(/\.cloze-drop-slot--empty\s*\{[^}]*width:\s*6rem[^}]*height:\s*3\.5rem/);
+  });
+
+  it("looks up a real Cloze choice control on hover and long press while preserving short tap", async () => {
+    fetchClozeChoiceExerciseDetail.mockResolvedValue({
+      id: 17,
+      exercise_base: {
+        title: "Cloze",
+        external_id: "17",
+        level: "B1",
+        exam_type: "TELC",
+        exercise_type: "CLOZE_CHOICE",
+      },
+      content_with_placeholders: "Vor {{blank_1}} nach.",
+      blanks: [{
+        id: 101,
+        blank_key: "blank_1",
+        blank_number: 1,
+        options: [{ option_key: "A", option_text: "Antwort", is_correct: true }],
+      }],
+    });
+    fetchClozeChoiceBlankStates.mockResolvedValue({
+      results: [{
+        blank: 101,
+        answer_payload: { selected_option_key: "A" },
+        is_favorited: false,
+      }],
+    });
+    render(
+      <MemoryRouter initialEntries={["/exercise/b1/17"]}>
+        <Routes>
+          <Route path="/exercise/:level/:exerciseId" element={<ClozeChoicePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const control = await screen.findByRole("button", { name: "Antwort" });
+    const word = control.querySelector("span");
+    expect(control).toHaveAttribute("data-dictionary-region", "cloze-choice-slot");
+    document.caretPositionFromPoint = () => ({ offsetNode: word.firstChild, offset: 2 });
+    const originalMatchMedia = window.matchMedia;
+    vi.useFakeTimers();
+
+    try {
+      window.matchMedia = vi.fn((query) => ({ matches: query.includes("hover: hover") }));
+      fireEvent.pointerMove(word, { clientX: 10, clientY: 10 });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300);
+        await Promise.resolve();
+      });
+      expect(lookupDictionaryWord).toHaveBeenCalledWith("Antwort", "exam:TELC:B1");
+      expect(screen.getByText("答案")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "关闭词典查询" }));
+
+      window.matchMedia = vi.fn((query) => ({ matches: query === "(pointer: coarse)" }));
+      fireEvent.pointerDown(word, {
+        pointerType: "touch", pointerId: 81, clientX: 10, clientY: 10,
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(501);
+        await Promise.resolve();
+      });
+      expect(screen.getByText("答案")).toBeInTheDocument();
+      fireEvent.pointerUp(word, {
+        pointerType: "touch", pointerId: 81, clientX: 10, clientY: 10,
+      });
+      fireEvent.click(control);
+      expect(control).toHaveAttribute("aria-expanded", "false");
+      fireEvent.click(screen.getByRole("button", { name: "关闭词典查询" }));
+
+      fireEvent.pointerDown(word, {
+        pointerType: "touch", pointerId: 82, clientX: 10, clientY: 10,
+      });
+      fireEvent.pointerUp(word, {
+        pointerType: "touch", pointerId: 82, clientX: 10, clientY: 10,
+      });
+      fireEvent.click(control);
+      expect(control).toHaveAttribute("aria-expanded", "true");
+    } finally {
+      vi.useRealTimers();
+      window.matchMedia = originalMatchMedia;
+      delete document.caretPositionFromPoint;
+    }
   });
 
   it("renders C1 options compactly and placed answers as inline bold text", () => {

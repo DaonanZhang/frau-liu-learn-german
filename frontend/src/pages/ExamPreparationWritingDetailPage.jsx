@@ -322,11 +322,12 @@ export default function ExamPreparationWritingDetailPage() {
     return <div className="writing-detail-page"><div className="writing-detail-shell"><p className="writing-detail-error">{errorText}</p></div></div>;
   }
 
+  const dictionaryCollectionKey = examDictionaryCollectionKey(exercise, scope);
   return (
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
-      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
-      dictionaryEnabled={isChecked}
+      dictionaryCollectionKey={dictionaryCollectionKey}
+      dictionaryEnabled={Boolean(dictionaryCollectionKey)}
     >
       <div className="writing-detail-page">
       <div className="writing-detail-shell">

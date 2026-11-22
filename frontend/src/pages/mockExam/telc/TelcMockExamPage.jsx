@@ -2223,11 +2223,12 @@ export default function TelcMockExamPage() {
   );
   }
 
+  const dictionaryCollectionKey = examDictionaryCollectionKey(null, currentScope);
   return (
     <ExamTextAnnotationProvider
       scope={annotationScope}
-      dictionaryCollectionKey={examDictionaryCollectionKey(null, currentScope)}
-      dictionaryEnabled={phase === "results" || phase === "writing_review"}
+      dictionaryCollectionKey={dictionaryCollectionKey}
+      dictionaryEnabled={Boolean(dictionaryCollectionKey)}
     >
       {phaseContent}
     </ExamTextAnnotationProvider>

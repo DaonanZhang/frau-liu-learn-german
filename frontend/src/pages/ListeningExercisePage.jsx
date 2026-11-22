@@ -480,11 +480,12 @@ export default function ListeningExercisePage({
     );
   }
 
+  const dictionaryCollectionKey = examDictionaryCollectionKey(exercise, scope);
   return (
     <ExamTextAnnotationProvider
       scope={exerciseAnnotationScope(exercise.exercise_base.exercise_type, exercise.id)}
-      dictionaryCollectionKey={examDictionaryCollectionKey(exercise, scope)}
-      dictionaryEnabled={isChecked}
+      dictionaryCollectionKey={dictionaryCollectionKey}
+      dictionaryEnabled={Boolean(dictionaryCollectionKey)}
     >
       <div className="listening-exercise-page">
       <div className="listening-exercise-shell">

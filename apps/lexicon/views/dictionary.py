@@ -1,6 +1,9 @@
 import re
 import unicodedata
+from functools import lru_cache
+from pathlib import Path
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Exists, OuterRef
 from django.shortcuts import get_object_or_404
@@ -14,6 +17,53 @@ from apps.exam_preparation.vocabulary import normalize_vocabulary_term
 from apps.learning_by_video.models import Video
 from apps.lexicon.models import DictionaryEntry, DictionaryForm
 from apps.lexicon.models.dictionary import normalize_dictionary_form
+
+
+@lru_cache(maxsize=1)
+def _traditional_to_simplified_characters():
+    path = Path(settings.BASE_DIR) / "apps/lexicon/data/external/handedict/handedict.u8"
+    candidates = {}
+    pair_counts = {}
+    with path.open(encoding="utf-8-sig") as source:
+        for line in source:
+            if line.startswith("#"):
+                continue
+            columns = line.split(maxsplit=2)
+            if len(columns) < 3:
+                continue
+            traditional, simplified = columns[:2]
+            if len(traditional) != len(simplified):
+                continue
+            for traditional_char, simplified_char in zip(traditional, simplified):
+                if traditional_char != simplified_char:
+                    candidates.setdefault(traditional_char, set()).add(simplified_char)
+                    pair = (traditional_char, simplified_char)
+                    pair_counts[pair] = pair_counts.get(pair, 0) + 1
+    mapping = {}
+    for traditional_char, simplified_chars in candidates.items():
+        recurring_chars = {
+            simplified_char
+            for simplified_char in simplified_chars
+            if pair_counts[(traditional_char, simplified_char)] > 1
+        }
+        if len(recurring_chars) != 1:
+            continue
+        simplified_char = next(iter(recurring_chars))
+        # Ignore isolated malformed rows while retaining recurring character pairs.
+        pair_count = pair_counts[(traditional_char, simplified_char)]
+        reverse_count = pair_counts.get((simplified_char, traditional_char), 0)
+        if pair_count > 1 and pair_count > reverse_count:
+            mapping[traditional_char] = simplified_char
+    return mapping
+
+
+def _is_traditional_chinese(value):
+    value = value.strip()
+    converted = "".join(
+        _traditional_to_simplified_characters().get(char, char)
+        for char in value
+    )
+    return converted != value
 
 
 def _parse_collection_key(value):
@@ -63,13 +113,15 @@ class DictionaryLookupView(APIView):
                 form.form,
             ),
         )
+        if any(not _is_traditional_chinese(form.entry.translation_zh) for form in candidates):
+            candidates = [
+                form for form in candidates
+                if not _is_traditional_chinese(form.entry.translation_zh)
+            ]
         matches = []
         seen = set()
         for form in candidates:
-            identity = (
-                normalize_vocabulary_term(form.entry.headword),
-                form.entry.translation_zh,
-            )
+            identity = form.entry.translation_zh.strip()
             if identity not in seen:
                 seen.add(identity)
                 matches.append((form.entry, form.form))

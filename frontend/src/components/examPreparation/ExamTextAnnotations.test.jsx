@@ -4,7 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AppLayout from "../../layouts/AppLayout.jsx";
 
 vi.mock("./DictionaryLookupOverlay.jsx", () => ({
-  default: ({ collectionKey }) => <div data-testid="dictionary-overlay" data-collection-key={collectionKey} />,
+  default: ({ collectionKey, lookupRequest, pointRegionSelector }) => (
+    <div
+      data-testid="dictionary-overlay"
+      data-collection-key={collectionKey}
+      data-lookup-id={lookupRequest?.id}
+      data-lookup-text={lookupRequest?.text}
+      data-anchor-left={lookupRequest?.anchor?.left}
+      data-point-region-selector={pointRegionSelector}
+    />
+  ),
 }));
 vi.mock("../../api/auth", () => ({ useAuth: () => ({ isAuthenticated: true, loading: false }) }));
 vi.mock("../../hooks/useMaxWidth.js", () => ({ default: () => false }));
@@ -155,6 +164,30 @@ describe("exam text annotation controller", () => {
     expect(await screen.findByRole("button", { name: "高亮" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "下划线" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "清除" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查词" })).not.toBeInTheDocument();
+  });
+
+  it("shows selection lookup only when enabled and sends its text, anchor, and collection", async () => {
+    mount(<SelectableRegion> gehen </SelectableRegion>, {
+      dictionaryCollectionKey: "exam:TELC:B2",
+      dictionaryEnabled: true,
+    });
+    const region = screen.getByText("gehen");
+    region.getBoundingClientRect = () => ({ left: 120, right: 180, top: 40, bottom: 60 });
+    selectText(region, 0, region.textContent.length);
+    document.dispatchEvent(new Event("selectionchange"));
+
+    const lookup = await screen.findByRole("button", { name: "查词" });
+    fireEvent.pointerDown(lookup);
+    fireEvent.click(lookup);
+
+    const overlay = screen.getByTestId("dictionary-overlay");
+    expect(overlay).toHaveAttribute("data-collection-key", "exam:TELC:B2");
+    expect(overlay).toHaveAttribute("data-lookup-text", "gehen");
+    expect(overlay).toHaveAttribute("data-anchor-left", "120");
+    expect(overlay).toHaveAttribute("data-point-region-selector", "[data-dictionary-region]");
+    expect(screen.queryByRole("toolbar")).not.toBeInTheDocument();
+    expect(window.getSelection().isCollapsed).toBe(true);
   });
 
   it("opens one toolbar for a selection spanning registered roots in one flow", async () => {

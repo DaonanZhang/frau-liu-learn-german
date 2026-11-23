@@ -540,7 +540,7 @@ describe("SpeakingTeilExercisePage text annotations", () => {
     expect(screen.getByText("Name")).toBeInTheDocument();
   });
 
-  it("shows only the answer for TELC B1 Sprechen Teil 1", async () => {
+  it("keeps the Aufgabe metadata and shows only the answer for TELC B1 Sprechen Teil 1", async () => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue({
       ...teil1Exercise,
       content: {
@@ -548,14 +548,16 @@ describe("SpeakingTeilExercisePage text annotations", () => {
         dialogue: [{ sequence: 1, role: "TN1", text: "Ich heiße Anna.", audio_url: "/audio/b1-teil1.mp3" }],
       },
     });
-    renderPage(1, 47);
+    const { container } = renderPage(1, 47);
 
     expect(await screen.findByText("Ich heiße Anna.")).toHaveAttribute("data-exam-annotation-region", "turn:1");
+    expect(container.querySelector(".speaking-detail-b1-layout")).toBeInTheDocument();
     expect(screen.getByTestId("dictionary-overlay")).toHaveAttribute("data-collection-key", "exam:TELC:B1");
     expect(screen.getByRole("button", { name: "record teil-1-47-1" })).toHaveAttribute("data-audio-url", "/audio/b1-teil1.mp3");
-    expect(screen.queryByText("Stellen Sie sich vor.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Sprechen Sie über sich.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Aufgabe")).not.toBeInTheDocument();
+    expect(screen.getByText("Stellen Sie sich vor.")).toBeInTheDocument();
+    expect(screen.getByText("Sprechen Sie über sich.")).toBeInTheDocument();
+    expect(screen.getByText("Aufgabe")).toBeInTheDocument();
+    expect(screen.getByText("Name")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Prüfen" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Wiederholen" })).not.toBeInTheDocument();
   });
@@ -664,18 +666,20 @@ describe("SpeakingTeilExercisePage text annotations", () => {
 
   it("shows the TELC B1 Teil 2 answer directly with annotations, recording, and favorites", async () => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue(teil2Exercise);
-    renderPage(2, 45);
+    const { container } = renderPage(2, 45);
 
     const firstText = await screen.findByText("Was möchtest du im Urlaub machen?");
     const secondText = screen.getByText("Ich möchte wandern.");
     expect(firstText).toHaveAttribute("data-exam-annotation-region", "turn:first");
     expect(secondText).toHaveAttribute("data-exam-annotation-region", "turn:second");
+    expect(container.querySelector(".speaking-detail-b1-layout")).toBeInTheDocument();
     expect(Array.from(document.querySelectorAll(".speaking-detail-turn p")).map((element) => element.textContent))
       .toEqual(["Was möchtest du im Urlaub machen?", "Ich möchte wandern."]);
     expect(screen.getByRole("button", { name: "record teil-2-45-1" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "收藏句子" })).toHaveLength(2);
-    expect(screen.queryByText("Ordnen Sie die Gesprächsteile.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Sprechen Sie über das Thema Urlaub.")).not.toBeInTheDocument();
+    expect(screen.getByText("Ordnen Sie die Gesprächsteile.")).toBeInTheDocument();
+    expect(screen.getByText("Sprechen Sie über das Thema Urlaub.")).toBeInTheDocument();
+    expect(screen.getByText("Ich fahre gern ans Meer.")).toBeInTheDocument();
     expect(screen.queryByText("对话排序")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Prüfen" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Wiederholen" })).not.toBeInTheDocument();
@@ -683,17 +687,20 @@ describe("SpeakingTeilExercisePage text annotations", () => {
 
   it("shows all TELC B1 Teil 3 section answers directly in source order", async () => {
     fetchSpeakingTeilExerciseDetail.mockResolvedValue(teil3MultiSectionExercise);
-    renderPage(3, 46);
+    const { container } = renderPage(3, 46);
 
     expect(await screen.findByRole("heading", { level: 2, name: "Erster Termin" })).toHaveAttribute("data-exam-annotation-region", "section:first-section");
+    expect(container.querySelector(".speaking-detail-b1-layout")).toBeInTheDocument();
+    const speakingCss = readFileSync("src/pages/SpeakingTeilExercisePage.css", "utf8");
+    expect(speakingCss).toMatch(/\.speaking-detail-b1-layout\s*\{\s*display:\s*flex;\s*flex-direction:\s*column;\s*gap:\s*1rem;\s*\}/);
     expect(screen.getByRole("heading", { level: 2, name: "Zweiter Termin" })).toHaveAttribute("data-exam-annotation-region", "section:second-section");
     expect(Array.from(document.querySelectorAll(".speaking-detail-turn p")).map((element) => element.textContent))
       .toEqual(["Wann treffen wir uns?", "Am Montag.", "Wo treffen wir uns?", "Am Bahnhof."]);
     expect(screen.getByText("Wo treffen wir uns?")).toHaveAttribute("data-exam-annotation-region", "turn:second-a");
     expect(screen.getByRole("button", { name: "record teil-3-46-1-1" })).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "收藏句子" })).toHaveLength(4);
-    expect(screen.queryByText("Ordnen Sie die Gespräche.")).not.toBeInTheDocument();
-    expect(screen.queryByText("Planen Sie zwei Termine.")).not.toBeInTheDocument();
+    expect(screen.getByText("Ordnen Sie die Gespräche.")).toBeInTheDocument();
+    expect(screen.getByText("Planen Sie zwei Termine.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Prüfen" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Wiederholen" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /进入第/ })).not.toBeInTheDocument();

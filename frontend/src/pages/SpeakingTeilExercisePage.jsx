@@ -747,8 +747,8 @@ export default function SpeakingTeilExercisePage({ teil }) {
         <div className="speaking-detail-hero__title-row"><h1>{base.title || taskTitle}</h1>{base.exam_type ? <span className="speaking-detail-title-badge">{base.exam_type}</span> : null}</div>
         <div className="speaking-detail-badges"><span>{base.level || scope?.level}</span>{base.is_real_exam ? <span className="speaking-detail-badge--exam">真题</span> : null}</div>
       </header>
-      <div className={isC1Telc ? `speaking-detail-c1-layout speaking-detail-c1-layout--teil-${teil}` : undefined}>
-      {!isB1Telc ? <section className={`speaking-detail-card speaking-detail-task${isC1Telc && [1, 2].includes(Number(teil)) ? " speaking-detail-task--c1-topic" : ""}`}>
+      <div className={isC1Telc ? `speaking-detail-c1-layout speaking-detail-c1-layout--teil-${teil}` : isB1Telc ? "speaking-detail-b1-layout" : undefined}>
+      <section className={`speaking-detail-card speaking-detail-task${isC1Telc && [1, 2].includes(Number(teil)) ? " speaking-detail-task--c1-topic" : ""}`}>
         <p className="speaking-detail-card__eyebrow">Aufgabe</p><h2>{taskTitle}</h2>
         <AnnotatableTextRegion as="p" className="speaking-detail-task__instruction" regionId="task">{exercise.instruction}</AnnotatableTextRegion>
         {!hideB2Task ? <SpeakingTaskBox text={replaceLegacyLineBreaks(content.task)} /> : null}
@@ -777,7 +777,7 @@ export default function SpeakingTeilExercisePage({ teil }) {
             return <blockquote className="speaking-detail-c1-quote" key={`${index}-${quote.text}`}><div className="speaking-detail-c1-quote__row"><p>{quote.text}</p>{quote.translation_zh ? <button type="button" className="speaking-detail-c1-translation-toggle" aria-label={translationVisible ? "隐藏中文翻译" : "显示中文翻译"} title="翻译" aria-pressed={translationVisible} onClick={() => setVisibleC1QuoteTranslations((previous) => ({ ...previous, [index]: !previous[index] }))}><img src="/images/translate_icon.png" alt="" aria-hidden="true" /></button> : null}</div>{translationVisible && quote.translation_zh ? <p className="speaking-detail-c1-quote__translation">{quote.translation_zh}</p> : null}</blockquote>;
           })}
         </div> : null}
-      </section> : null}
+      </section>
       {isC1Telc && (!isC1SpeakingAttempt || c1AttemptComplete) ? (
         <section className="speaking-detail-card speaking-detail-example speaking-detail-c1-answer">
           <div className="speaking-detail-c1-section-header"><h3>Beispielantwort</h3><button type="button" className="speaking-detail-c1-visibility" aria-label={showC1Answer ? "隐藏答案" : "显示答案"} title={showC1Answer ? "隐藏答案" : "显示答案"} aria-expanded={showC1Answer} onClick={() => setShowC1Answer((visible) => !visible)}><EyeIcon isHidden={!showC1Answer} /></button></div>
